@@ -1,0 +1,6 @@
+export enum AIPlatform {
+  CHATGPT = 'CHATGPT',
+  CLAUDE = 'CLAUDE',
+  PERPLEXITY = 'PERPLEXITY',
+  GEMINI = 'GEMINI',
+}

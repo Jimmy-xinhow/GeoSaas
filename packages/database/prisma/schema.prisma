@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== Enums ====================
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum ScanStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ContentType {
+  FAQ
+  ARTICLE
+  KNOWLEDGE_BASE
+  NEWS_RELEASE
+}
+
+enum ContentStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PublishStatus {
+  PENDING
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+// ==================== Models ====================
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  name             String?
+  passwordHash     String?
+  avatarUrl        String?
+  role             UserRole  @default(USER)
+  plan             Plan      @default(FREE)
+  stripeCustomerId String?   @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  sites         Site[]
+  contents      Content[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Site {
+  id        String   @id @default(cuid())
+  url       String
+  name      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scans       Scan[]
+  monitors    Monitor[]
+  competitors Competitor[]
+  contents    Content[]
+
+  @@map("sites")
+}
+
+model Scan {
+  id          String     @id @default(cuid())
+  siteId      String
+  site        Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  totalScore  Int        @default(0)
+  status      ScanStatus @default(PENDING)
+  createdAt   DateTime   @default(now())
+  completedAt DateTime?
+
+  results ScanResult[]
+
+  @@map("scans")
+}
+
+model ScanResult {
+  id            String  @id @default(cuid())
+  scanId        String
+  scan          Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  indicator     String
+  score         Int
+  status        String  // pass | warning | fail
+  details       Json
+  suggestion    String?
+  autoFixable   Boolean @default(false)
+  generatedCode String? @db.Text
+
+  @@map("scan_results")
+}
+
+model Content {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId      String?
+  site        Site?         @relation(fields: [siteId], references: [id])
+  title       String
+  body        String        @db.Text
+  type        ContentType
+  language    String        @default("zh-TW")
+  seoScore    Int?
+  status      ContentStatus @default(DRAFT)
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  publications Publication[]
+
+  @@map("contents")
+}
+
+model Publication {
+  id          String        @id @default(cuid())
+  contentId   String
+  content     Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  platform    String
+  externalUrl String?
+  status      PublishStatus @default(PENDING)
+  publishedAt DateTime?
+  metrics     Json?
+
+  @@map("publications")
+}
+
+model Monitor {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  platform  String
+  query     String
+  mentioned Boolean  @default(false)
+  position  Int?
+  response  String?  @db.Text
+  checkedAt DateTime @default(now())
+
+  @@map("monitors")
+}
+
+model Competitor {
+  id            String @id @default(cuid())
+  siteId        String
+  site          Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  competitorUrl String
+  name          String
+  latestScore   Int?
+
+  @@map("competitors")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  message   String   @db.Text
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}

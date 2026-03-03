@@ -1,0 +1,37 @@
+{
+  "name": "@geo-saas/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^14.2",
+    "react": "^18.3",
+    "react-dom": "^18.3",
+    "tailwindcss": "^3.4",
+    "postcss": "^8",
+    "autoprefixer": "^10",
+    "@tanstack/react-query": "^5.51",
+    "zustand": "^4.5",
+    "axios": "^1.7",
+    "recharts": "^2.12",
+    "lucide-react": "^0.400",
+    "clsx": "^2.1",
+    "tailwind-merge": "^2.4",
+    "class-variance-authority": "^0.7",
+    "zod": "^3.23",
+    "@hookform/resolvers": "^3.9",
+    "react-hook-form": "^7.52",
+    "sonner": "^1.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.5",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@types/node": "^20"
+  }
+}

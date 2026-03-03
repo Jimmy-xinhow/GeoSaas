@@ -1,0 +1,23 @@
+{
+  "name": "geo-saas",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:generate": "turbo db:generate",
+    "db:migrate": "pnpm --filter @geo-saas/database prisma migrate dev",
+    "db:seed": "pnpm --filter @geo-saas/database prisma db seed",
+    "db:studio": "pnpm --filter @geo-saas/database prisma studio",
+    "clean": "turbo clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.0"
+  },
+  "packageManager": "pnpm@9.1.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,6 @@
+export enum ContentType {
+  FAQ = 'FAQ',
+  ARTICLE = 'ARTICLE',
+  KNOWLEDGE_BASE = 'KNOWLEDGE_BASE',
+  NEWS_RELEASE = 'NEWS_RELEASE',
+}

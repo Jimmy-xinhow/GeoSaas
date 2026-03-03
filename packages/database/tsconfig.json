@@ -1,0 +1,7 @@
+{
+  "extends": "@geo-saas/tsconfig/base.json",
+  "include": ["src"],
+  "compilerOptions": {
+    "outDir": "dist"
+  }
+}
