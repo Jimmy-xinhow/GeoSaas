@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { User, CreditCard, Lock } from 'lucide-react'
+import { User, CreditCard, Lock, AlertCircle } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,11 +29,18 @@ const PLAN_LIMITS: Record<string, { scans: number; sites: number; label: string;
 }
 
 export default function SettingsPage() {
-  const { data: profile, isLoading: profileLoading } = useProfile()
-  const { data: subscription, isLoading: subLoading } = useSubscription()
+  const { data: profile, isLoading: profileLoading, error: profileError } = useProfile()
+  const { data: subscription, isLoading: subLoading, error: subError } = useSubscription()
   const updateProfile = useUpdateProfile()
   const changePassword = useChangePassword()
   const createCheckout = useCreateCheckout()
+
+  if (profileError) {
+    toast.error('無法載入個人資料', { id: 'profile-error' })
+  }
+  if (subError) {
+    toast.error('無法載入訂閱資訊', { id: 'sub-error' })
+  }
 
   const [profileName, setProfileName] = useState('')
   const [profileEmail, setProfileEmail] = useState('')
@@ -110,6 +118,11 @@ export default function SettingsPage() {
               <div className="h-10 bg-gray-100 rounded animate-pulse" />
               <div className="h-10 bg-gray-100 rounded animate-pulse" />
             </div>
+          ) : profileError ? (
+            <div className="flex items-center gap-2 text-sm text-red-600 py-4">
+              <AlertCircle className="h-4 w-4" />
+              <span>無法載入個人資料，請重新整理頁面</span>
+            </div>
           ) : (
             <>
               <div className="space-y-2">
@@ -166,6 +179,11 @@ export default function SettingsPage() {
                 <div className="h-16 bg-gray-100 rounded animate-pulse" />
                 <div className="h-16 bg-gray-100 rounded animate-pulse" />
               </div>
+            </div>
+          ) : subError ? (
+            <div className="flex items-center gap-2 text-sm text-red-600 py-4">
+              <AlertCircle className="h-4 w-4" />
+              <span>無法載入訂閱資訊，請重新整理頁面</span>
             </div>
           ) : (
             <>

@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
+jobs:
+  ci:
+    name: Lint, Typecheck, Test & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── pnpm ──────────────────────────────────────────────────
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.1.0
+
+      # ── Node.js + cache ──────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      # ── Install dependencies ─────────────────────────────────
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Generate Prisma Client ───────────────────────────────
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      # ── Lint ─────────────────────────────────────────────────
+      - name: Lint
+        run: pnpm lint
+
+      # ── Typecheck ────────────────────────────────────────────
+      - name: Typecheck (apps/api)
+        run: pnpm --filter @geo-saas/api exec tsc --noEmit
+
+      - name: Typecheck (apps/web)
+        run: pnpm --filter @geo-saas/web exec tsc --noEmit
+
+      # ── Test ─────────────────────────────────────────────────
+      - name: Test (apps/api)
+        run: pnpm --filter @geo-saas/api test -- --passWithNoTests --ci
+
+      # ── Build ────────────────────────────────────────────────
+      - name: Build
+        run: pnpm build

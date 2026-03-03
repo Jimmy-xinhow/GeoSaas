@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Link2, Link2Off, ExternalLink, CheckCircle2, Clock, XCircle, Send } from 'lucide-react'
+import { Link2, Link2Off, ExternalLink, CheckCircle2, Clock, XCircle, Send, AlertCircle } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -10,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { usePublications, usePublishContent } from '@/hooks/use-publish'
 import { useContents } from '@/hooks/use-content'
@@ -62,12 +64,19 @@ const STATUS_MAP: Record<string, { label: string; icon: React.ReactNode; style: 
 }
 
 export default function PublishPage() {
-  const { data: publications, isLoading: pubLoading } = usePublications()
-  const { data: contents } = useContents()
+  const { data: publications, isLoading: pubLoading, error: pubError } = usePublications()
+  const { data: contents, isLoading: contentsLoading, error: contentsError } = useContents()
   const publishContent = usePublishContent()
 
   const [selectedContentId, setSelectedContentId] = useState('')
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
+
+  if (pubError) {
+    toast.error('無法載入發布記錄', { id: 'pub-error' })
+  }
+  if (contentsError) {
+    toast.error('無法載入內容資料', { id: 'contents-error' })
+  }
 
   // Compute which platforms have been used (have at least one PUBLISHED record)
   const connectedPlatforms = PLATFORMS.map((p) => {
@@ -120,18 +129,26 @@ export default function PublishPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">選擇內容</label>
-            <select
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              value={selectedContentId}
-              onChange={(e) => setSelectedContentId(e.target.value)}
-            >
-              <option value="">-- 選擇要發布的內容 --</option>
-              {publishedContents.map((c: any) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
-                </option>
-              ))}
-            </select>
+            {contentsLoading ? (
+              <Skeleton className="h-10 w-full rounded-md" />
+            ) : publishedContents.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">
+                尚無可發布的內容，請先前往「內容引擎」生成內容
+              </p>
+            ) : (
+              <select
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                value={selectedContentId}
+                onChange={(e) => setSelectedContentId(e.target.value)}
+              >
+                <option value="">-- 選擇要發布的內容 --</option>
+                {publishedContents.map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">選擇平台</label>

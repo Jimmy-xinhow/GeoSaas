@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import useAuthStore from '@/stores/auth-store'
 import Sidebar from '@/components/layout/sidebar'
 import Header from '@/components/layout/header'
+import ErrorBoundary from '@/components/error-boundary'
 
 export default function DashboardLayout({
   children,
@@ -46,7 +47,9 @@ export default function DashboardLayout({
       <Sidebar />
       <main className="flex-1 flex flex-col">
         <Header />
-        <div className="flex-1 overflow-auto p-6 bg-gray-50">{children}</div>
+        <div className="flex-1 overflow-auto p-6 bg-gray-50">
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </div>
       </main>
     </div>
   )

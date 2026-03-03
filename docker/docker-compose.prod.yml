@@ -1,0 +1,41 @@
+version: '3.8'
+
+# ===========================================================
+# GEO-SaaS Production Docker Compose
+# - API service only (DB hosted on Neon, Redis on Upstash)
+# - Build context is the monorepo root
+# ===========================================================
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    container_name: geo-saas-api
+    restart: unless-stopped
+    ports:
+      - '4000:4000'
+    env_file:
+      - ../apps/api/.env.production
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:4000/api/health']
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
