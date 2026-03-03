@@ -49,6 +49,13 @@ enum PublishStatus {
   FAILED
 }
 
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
 // ==================== Models ====================
 
 model User {
@@ -59,13 +66,13 @@ model User {
   avatarUrl        String?
   role             UserRole  @default(USER)
   plan             Plan      @default(FREE)
-  stripeCustomerId String?   @unique
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   sites         Site[]
   contents      Content[]
   notifications Notification[]
+  orders        Order[]
 
   @@map("users")
 }
@@ -173,6 +180,24 @@ model Competitor {
   latestScore   Int?
 
   @@map("competitors")
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  merchantOrderNo String      @unique
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan            String
+  amount          Int
+  status          OrderStatus @default(PENDING)
+  tradeNo         String?
+  paymentType     String?
+  paidAt          DateTime?
+  rawResponse     Json?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("orders")
 }
 
 model Notification {

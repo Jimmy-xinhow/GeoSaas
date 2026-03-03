@@ -23,11 +23,18 @@ interface ChangePasswordPayload {
 
 interface SubscriptionInfo {
   plan: string;
-  stripeCustomerId?: string;
   usage: {
     scansThisMonth: number;
     sitesCount: number;
   };
+}
+
+interface CheckoutFormData {
+  paymentUrl: string;
+  MerchantID: string;
+  TradeInfo: string;
+  TradeSha: string;
+  Version: string;
 }
 
 export function useProfile() {
@@ -74,16 +81,39 @@ export function useSubscription() {
   });
 }
 
+function submitNewebPayForm(formData: CheckoutFormData) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = formData.paymentUrl;
+  form.style.display = 'none';
+
+  const fields = {
+    MerchantID: formData.MerchantID,
+    TradeInfo: formData.TradeInfo,
+    TradeSha: formData.TradeSha,
+    Version: formData.Version,
+  };
+
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+
+  document.body.appendChild(form);
+  form.submit();
+}
+
 export function useCreateCheckout() {
   return useMutation({
     mutationFn: async (plan: string) => {
-      const { data } = await apiClient.post<{ url: string }>('/billing/checkout', { plan });
+      const { data } = await apiClient.post<CheckoutFormData>('/billing/checkout', { plan });
       return data;
     },
     onSuccess: (data) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      submitNewebPayForm(data);
     },
   });
 }

@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Body, Req, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Body, Res, HttpCode } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { BillingService } from './billing.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
-import { Request } from 'express';
 
 @ApiTags('Billing')
 @Controller('billing')
@@ -13,13 +13,35 @@ export class BillingController {
   @ApiBearerAuth()
   @Post('checkout')
   createCheckout(@Body('plan') plan: string, @CurrentUser('userId') userId: string) {
-    return this.billingService.createCheckout(plan, userId);
+    return this.billingService.createOrder(plan, userId);
   }
 
   @Public()
-  @Post('webhook')
-  handleWebhook(@Req() req: Request, @Headers('stripe-signature') signature: string) {
-    return this.billingService.handleWebhook(req.body, signature);
+  @Post('notify')
+  @HttpCode(200)
+  handleNotify(
+    @Body('TradeInfo') tradeInfo: string,
+    @Body('TradeSha') tradeSha: string,
+  ) {
+    return this.billingService.handleNotify(tradeInfo, tradeSha);
+  }
+
+  @Public()
+  @Post('return')
+  @HttpCode(200)
+  async handleReturn(
+    @Body('TradeInfo') tradeInfo: string,
+    @Body('TradeSha') tradeSha: string,
+    @Res() res: Response,
+  ) {
+    const result = await this.billingService.handleReturn(tradeInfo, tradeSha);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const params = new URLSearchParams({
+      success: result.success.toString(),
+      orderNo: result.orderNo || '',
+      message: result.message,
+    });
+    res.redirect(302, `${frontendUrl}/settings/billing/result?${params.toString()}`);
   }
 
   @ApiBearerAuth()

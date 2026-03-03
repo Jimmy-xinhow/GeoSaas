@@ -1,24 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { BadRequestException } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import * as newebpayUtil from './newebpay.util';
 
-// Mock the Stripe module before importing BillingService
-jest.mock('stripe', () => {
-  const mockCheckoutSessionsCreate = jest.fn();
-  const mockWebhooksConstructEvent = jest.fn();
-
-  return jest.fn().mockImplementation(() => ({
-    checkout: {
-      sessions: {
-        create: mockCheckoutSessionsCreate,
-      },
-    },
-    webhooks: {
-      constructEvent: mockWebhooksConstructEvent,
-    },
-  }));
-});
+jest.mock('./newebpay.util');
 
 describe('BillingService', () => {
   let service: BillingService;
@@ -26,179 +13,151 @@ describe('BillingService', () => {
     user: { findUnique: jest.Mock; update: jest.Mock };
     scan: { count: jest.Mock };
     site: { count: jest.Mock };
+    order: { create: jest.Mock; findUnique: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
   };
-  let configService: { get: jest.Mock };
-  let stripeMock: any;
 
   const userId = 'user-1';
 
   beforeEach(async () => {
     prisma = {
-      user: {
-        findUnique: jest.fn(),
-        update: jest.fn(),
-      },
+      user: { findUnique: jest.fn(), update: jest.fn() },
       scan: { count: jest.fn() },
       site: { count: jest.fn() },
+      order: { create: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     };
-    configService = {
-      get: jest.fn((key: string) => {
-        const map: Record<string, string> = {
-          STRIPE_SECRET_KEY: 'sk_test_123',
-          STRIPE_WEBHOOK_SECRET: 'whsec_test_123',
-          FRONTEND_URL: 'http://localhost:3000',
-        };
-        return map[key] || '';
-      }),
-    };
+
+    const configGet = jest.fn((key: string) => {
+      const map: Record<string, string> = {
+        NEWEBPAY_MERCHANT_ID: 'TestMerchant',
+        NEWEBPAY_HASH_KEY: '12345678901234567890123456789012',
+        NEWEBPAY_HASH_IV: '1234567890123456',
+        NEWEBPAY_API_URL: 'https://ccore.newebpay.com/MPG/mpg_gateway',
+        FRONTEND_URL: 'http://localhost:3001',
+        API_PUBLIC_URL: 'http://localhost:4000',
+      };
+      return map[key] || '';
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BillingService,
         { provide: PrismaService, useValue: prisma },
-        { provide: ConfigService, useValue: configService },
+        { provide: ConfigService, useValue: { get: configGet } },
       ],
     }).compile();
 
     service = module.get<BillingService>(BillingService);
-
-    // Access the mocked stripe instance
-    stripeMock = (service as any).stripe;
   });
 
-  describe('createCheckout', () => {
-    it('should create a Stripe checkout session and return the URL', async () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  describe('createOrder', () => {
+    it('should create order and return encrypted form data', async () => {
       prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
-      stripeMock.checkout.sessions.create.mockResolvedValue({
-        url: 'https://checkout.stripe.com/session-123',
-      });
+      prisma.order.create.mockResolvedValue({});
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('encrypted_data');
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('SHA_HASH');
 
-      const result = await service.createCheckout('PRO', userId);
+      const result = await service.createOrder('PRO', userId);
 
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: userId } });
-      expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
+      expect(prisma.order.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          mode: 'subscription',
-          customer_email: 'test@test.com',
-          line_items: [{ price: 'price_pro_id', quantity: 1 }],
-          metadata: { userId },
+          data: expect.objectContaining({ userId, plan: 'PRO', amount: 1490, status: 'PENDING' }),
         }),
       );
-      expect(result).toEqual({ url: 'https://checkout.stripe.com/session-123' });
+      expect(result).toEqual({
+        paymentUrl: 'https://ccore.newebpay.com/MPG/mpg_gateway',
+        MerchantID: 'TestMerchant',
+        TradeInfo: 'encrypted_data',
+        TradeSha: 'SHA_HASH',
+        Version: '2.0',
+      });
     });
 
-    it('should handle user not found gracefully with undefined email', async () => {
-      prisma.user.findUnique.mockResolvedValue(null);
-      stripeMock.checkout.sessions.create.mockResolvedValue({
-        url: 'https://checkout.stripe.com/session-456',
-      });
-
-      const result = await service.createCheckout('STARTER', userId);
-
-      expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          customer_email: undefined,
-          line_items: [{ price: 'price_starter_id', quantity: 1 }],
-        }),
-      );
-      expect(result).toEqual({ url: 'https://checkout.stripe.com/session-456' });
+    it('should throw for invalid plan', async () => {
+      await expect(service.createOrder('INVALID', userId)).rejects.toThrow(BadRequestException);
     });
   });
 
-  describe('handleWebhook', () => {
-    it('should update user plan when checkout.session.completed event is received', async () => {
-      const mockEvent = {
-        type: 'checkout.session.completed',
-        data: {
-          object: {
-            metadata: { userId },
-            customer: 'cus_123',
-          },
-        },
-      };
-      stripeMock.webhooks.constructEvent.mockReturnValue(mockEvent);
+  describe('handleNotify', () => {
+    it('should verify SHA, decrypt, and upgrade user on success', async () => {
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('VALID_SHA');
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: { MerchantOrderNo: 'GEO123', TradeNo: 'TN123', PaymentType: 'CREDIT' },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'GEO123', userId, plan: 'PRO', status: 'PENDING',
+      });
+      prisma.order.update.mockResolvedValue({});
       prisma.user.update.mockResolvedValue({});
 
-      await service.handleWebhook(Buffer.from('body'), 'sig-header');
+      const result = await service.handleNotify('encrypted', 'VALID_SHA');
 
-      expect(stripeMock.webhooks.constructEvent).toHaveBeenCalledWith(
-        Buffer.from('body'),
-        'sig-header',
-        'whsec_test_123',
-      );
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { merchantOrderNo: 'GEO123' },
+        data: expect.objectContaining({ status: 'PAID', tradeNo: 'TN123' }),
+      });
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: userId },
-        data: { plan: 'PRO', stripeCustomerId: 'cus_123' },
+        data: { plan: 'PRO' },
       });
+      expect(result).toEqual({ message: 'OK' });
     });
 
-    it('should not update user when event type is not checkout.session.completed', async () => {
-      const mockEvent = {
-        type: 'invoice.payment_succeeded',
-        data: { object: {} },
-      };
-      stripeMock.webhooks.constructEvent.mockReturnValue(mockEvent);
+    it('should throw when TradeSha verification fails', async () => {
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('EXPECTED');
+      await expect(service.handleNotify('encrypted', 'WRONG')).rejects.toThrow(BadRequestException);
+    });
 
-      await service.handleWebhook(Buffer.from('body'), 'sig');
+    it('should skip already paid orders', async () => {
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('SHA');
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS', Result: { MerchantOrderNo: 'GEO123' },
+      });
+      prisma.order.findUnique.mockResolvedValue({ merchantOrderNo: 'GEO123', status: 'PAID' });
 
+      const result = await service.handleNotify('encrypted', 'SHA');
       expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(result).toEqual({ message: 'OK' });
     });
 
-    it('should not update user when metadata has no userId', async () => {
-      const mockEvent = {
-        type: 'checkout.session.completed',
-        data: {
-          object: {
-            metadata: {},
-            customer: 'cus_999',
-          },
-        },
-      };
-      stripeMock.webhooks.constructEvent.mockReturnValue(mockEvent);
+    it('should mark order as FAILED when payment fails', async () => {
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('SHA');
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'FAILED', Result: { MerchantOrderNo: 'GEO456' },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'GEO456', userId, status: 'PENDING',
+      });
+      prisma.order.update.mockResolvedValue({});
 
-      await service.handleWebhook(Buffer.from('body'), 'sig');
-
+      await service.handleNotify('encrypted', 'SHA');
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { merchantOrderNo: 'GEO456' },
+        data: expect.objectContaining({ status: 'FAILED' }),
+      });
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 
   describe('getSubscription', () => {
-    it('should return the user plan with usage data', async () => {
-      prisma.user.findUnique.mockResolvedValue({
-        id: userId,
-        plan: 'PRO',
-        stripeCustomerId: 'cus_123',
-      });
+    it('should return plan with usage data', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'PRO' });
       prisma.scan.count.mockResolvedValue(15);
       prisma.site.count.mockResolvedValue(3);
 
       const result = await service.getSubscription(userId);
-
-      expect(result).toEqual({
-        plan: 'PRO',
-        stripeCustomerId: 'cus_123',
-        usage: {
-          scansThisMonth: 15,
-          sitesCount: 3,
-        },
-      });
+      expect(result).toEqual({ plan: 'PRO', usage: { scansThisMonth: 15, sitesCount: 3 } });
     });
 
-    it('should return undefined plan when user is not found', async () => {
+    it('should return undefined plan when user not found', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.scan.count.mockResolvedValue(0);
       prisma.site.count.mockResolvedValue(0);
 
       const result = await service.getSubscription(userId);
-
-      expect(result).toEqual({
-        plan: undefined,
-        stripeCustomerId: undefined,
-        usage: {
-          scansThisMonth: 0,
-          sitesCount: 0,
-        },
-      });
+      expect(result).toEqual({ plan: undefined, usage: { scansThisMonth: 0, sitesCount: 0 } });
     });
   });
 });
