@@ -18,6 +18,9 @@ import { PublishModule } from './modules/publish/publish.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
+import { LlmsHostingModule } from './modules/llms-hosting/llms-hosting.module';
+import { DirectoryModule } from './modules/directory/directory.module';
+import { CrawlerTrackingModule } from './modules/crawler-tracking/crawler-tracking.module';
 
 @Module({
   imports: [
@@ -48,6 +51,9 @@ import { KnowledgeModule } from './modules/knowledge/knowledge.module';
     BillingModule,
     NotificationsModule,
     KnowledgeModule,
+    LlmsHostingModule,
+    DirectoryModule,
+    CrawlerTrackingModule,
   ],
   controllers: [HealthController],
   providers: [

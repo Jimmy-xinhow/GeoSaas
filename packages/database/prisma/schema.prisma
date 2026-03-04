@@ -87,14 +87,31 @@ model Site {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  scans       Scan[]
-  monitors    Monitor[]
-  competitors Competitor[]
-  contents    Content[]
-  qas         SiteQa[]
+  // llms.txt hosting
+  llmsTxt          String?   @db.Text
+  llmsTxtUpdatedAt DateTime?
+
+  // Directory & Leaderboard
+  isPublic    Boolean  @default(false)
+  industry    String?
+  tier        String?
+  bestScore   Int      @default(0)
+  bestScoreAt DateTime?
+
+  // Crawler tracking
+  crawlerToken String? @unique
+
+  scans               Scan[]
+  monitors            Monitor[]
+  competitors         Competitor[]
+  contents            Content[]
+  qas                 SiteQa[]
+  crawlerVisits       CrawlerVisit[]
+  crawlerRobotsChecks CrawlerRobotsCheck[]
 
   @@map("sites")
 }
+
 
 model Scan {
   id          String     @id @default(cuid())
@@ -214,6 +231,34 @@ model SiteQa {
   updatedAt DateTime @updatedAt
 
   @@map("site_qas")
+}
+
+model CrawlerVisit {
+  id         String   @id @default(cuid())
+  siteId     String
+  site       Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  botName    String
+  botOrg     String
+  url        String
+  statusCode Int?
+  userAgent  String?  @db.Text
+  visitedAt  DateTime @default(now())
+
+  @@index([siteId, visitedAt])
+  @@index([siteId, botName])
+  @@map("crawler_visits")
+}
+
+model CrawlerRobotsCheck {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  robotsTxt   String?  @db.Text
+  allowedBots Json?
+  sitemapUrls Json?
+  checkedAt   DateTime @default(now())
+
+  @@map("crawler_robots_checks")
 }
 
 model Notification {

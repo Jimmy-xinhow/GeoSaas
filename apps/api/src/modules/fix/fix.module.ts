@@ -11,5 +11,6 @@ import { KnowledgeModule } from '../knowledge/knowledge.module';
   imports: [KnowledgeModule],
   controllers: [FixController],
   providers: [FixService, JsonLdGenerator, LlmsTxtGenerator, OgTagsGenerator, FaqSchemaGenerator],
+  exports: [FixService],
 })
 export class FixModule {}

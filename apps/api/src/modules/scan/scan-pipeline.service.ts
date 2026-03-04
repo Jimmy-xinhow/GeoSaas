@@ -132,6 +132,24 @@ export class ScanPipelineService {
         }),
       ]);
 
+      // Update bestScore if this score is higher
+      const scan = await this.prisma.scan.findUnique({
+        where: { id: scanId },
+        select: { siteId: true },
+      });
+      if (scan) {
+        const site = await this.prisma.site.findUnique({
+          where: { id: scan.siteId },
+          select: { bestScore: true },
+        });
+        if (site && totalScore > site.bestScore) {
+          await this.prisma.site.update({
+            where: { id: scan.siteId },
+            data: { bestScore: totalScore, bestScoreAt: new Date() },
+          });
+        }
+      }
+
       this.logger.log(`Scan ${scanId} completed with score ${totalScore}`);
     } catch (error) {
       this.logger.error(`Scan ${scanId} failed: ${error}`);

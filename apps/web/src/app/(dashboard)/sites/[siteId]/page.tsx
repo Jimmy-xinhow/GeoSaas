@@ -17,6 +17,8 @@ import {
   ChevronDown,
   ChevronRight,
   BookOpen,
+  FileText,
+  Bot,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
@@ -474,6 +476,18 @@ export default function SiteDetailPage() {
               <Button variant="outline">
                 <Wrench className="h-4 w-4 mr-2" />
                 修復工具
+              </Button>
+            </Link>
+            <Link href={`/sites/${siteId}/llms-txt`}>
+              <Button variant="outline">
+                <FileText className="h-4 w-4 mr-2" />
+                llms.txt
+              </Button>
+            </Link>
+            <Link href={`/sites/${siteId}/crawler`}>
+              <Button variant="outline">
+                <Bot className="h-4 w-4 mr-2" />
+                爬蟲追蹤
               </Button>
             </Link>
             <Button

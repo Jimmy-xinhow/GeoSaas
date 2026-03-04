@@ -9,6 +9,7 @@ import {
   Eye,
   Share2,
   Settings,
+  Trophy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,7 @@ const navItems = [
   { href: '/content', icon: FileText, label: '內容引擎' },
   { href: '/monitor', icon: Eye, label: 'AI 監控' },
   { href: '/publish', icon: Share2, label: '多平台佈局' },
+  { href: '/directory', icon: Trophy, label: '公開目錄' },
   { href: '/settings', icon: Settings, label: '設定' },
 ]
 
