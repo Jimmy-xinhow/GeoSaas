@@ -7,6 +7,7 @@ import {
   GenerateLlmsTxtDto,
   GenerateFaqSchemaDto,
   ApplyFixDto,
+  SmartGenerateDto,
 } from './dto';
 
 @ApiTags('Fix')
@@ -41,6 +42,14 @@ export class FixController {
   @ApiResponse({ status: 201, description: 'Returns generated FAQ schema HTML snippet' })
   generateFaqSchema(@Body() dto: GenerateFaqSchemaDto) {
     return this.fixService.generateFaqSchema(dto.faqs);
+  }
+
+  @Post('smart-generate')
+  @ApiOperation({ summary: 'AI-powered smart fix generation based on actual website content' })
+  @ApiResponse({ status: 201, description: 'Returns AI-generated fix code' })
+  @ApiResponse({ status: 404, description: 'Site or scan result not found' })
+  smartGenerate(@Body() dto: SmartGenerateDto) {
+    return this.fixService.smartGenerate(dto.siteId, dto.indicator, dto.scanResultId);
   }
 
   @Patch(':scanResultId/apply')

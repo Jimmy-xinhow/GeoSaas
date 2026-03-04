@@ -17,6 +17,7 @@ import { MonitorModule } from './modules/monitor/monitor.module';
 import { PublishModule } from './modules/publish/publish.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     PublishModule,
     BillingModule,
     NotificationsModule,
+    KnowledgeModule,
   ],
   controllers: [HealthController],
   providers: [

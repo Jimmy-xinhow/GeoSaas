@@ -54,7 +54,31 @@ export interface ApplyFixPayload {
   generatedCode: string;
 }
 
+export interface SmartGeneratePayload {
+  siteId: string;
+  indicator: string;
+  scanResultId: string;
+}
+
 // ── Hooks ──
+
+export function useSmartGenerate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: SmartGeneratePayload) => {
+      const { data } = await apiClient.post<FixGenerateResponse>(
+        '/fix/smart-generate',
+        payload,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scan-results'] });
+      queryClient.invalidateQueries({ queryKey: ['scan'] });
+    },
+  });
+}
 
 export function useGenerateJsonLd() {
   return useMutation({

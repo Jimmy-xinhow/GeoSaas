@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -16,8 +16,10 @@ import {
   XCircle,
   ChevronDown,
   ChevronRight,
+  BookOpen,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -40,32 +42,26 @@ import {
   type Scan,
   type ScanResultItem,
 } from '@/hooks/use-scan'
-import {
-  useGenerateJsonLd,
-  useGenerateLlmsTxt,
-  useGenerateOgTags,
-  useGenerateFaqSchema,
-  type FixGenerateResponse,
-} from '@/hooks/use-fix'
+import { useSmartGenerate } from '@/hooks/use-fix'
 
-// ── Indicator display name mapping ──
+// ── Indicator display name mapping (DB stores underscores) ──
 const indicatorNames: Record<string, string> = {
-  'json-ld': '結構化資料 (JSON-LD)',
-  'llms-txt': 'llms.txt',
-  'og-tags': 'Open Graph 標籤',
-  'meta-description': 'Meta 描述',
-  'faq-schema': 'FAQ Schema',
-  'title-optimization': '標題最佳化',
-  'contact-info': '聯絡資訊',
-  'image-alt': '圖片 Alt 文字',
+  'json_ld': '結構化資料 (JSON-LD)',
+  'llms_txt': 'llms.txt',
+  'og_tags': 'Open Graph 標籤',
+  'meta_description': 'Meta 描述',
+  'faq_schema': 'FAQ Schema',
+  'title_optimization': '標題最佳化',
+  'contact_info': '聯絡資訊',
+  'image_alt': '圖片 Alt 文字',
 }
 
 // ── Which indicators can generate fixes ──
 const fixableIndicators = new Set([
-  'json-ld',
-  'llms-txt',
-  'og-tags',
-  'faq-schema',
+  'json_ld',
+  'llms_txt',
+  'og_tags',
+  'faq_schema',
 ])
 
 // ── Status icon helper ──
@@ -94,69 +90,27 @@ function ScanStatusBadge({ status }: { status: string }) {
   return <Badge className={c.className}>{c.label}</Badge>
 }
 
-// ── Generate Fix Button (per indicator) ──
+// ── Generate Fix Button (per indicator, AI-powered) ──
 function GenerateFixButton({
   indicator,
-  site,
+  siteId,
   onGenerated,
 }: {
   indicator: ScanResultItem
-  site: { name: string; url: string }
+  siteId: string
   onGenerated: (code: string, language: string) => void
 }) {
-  const genJsonLd = useGenerateJsonLd()
-  const genLlmsTxt = useGenerateLlmsTxt()
-  const genOgTags = useGenerateOgTags()
-  const genFaqSchema = useGenerateFaqSchema()
-
-  const isPending =
-    genJsonLd.isPending ||
-    genLlmsTxt.isPending ||
-    genOgTags.isPending ||
-    genFaqSchema.isPending
+  const smartGenerate = useSmartGenerate()
 
   const handleGenerate = async () => {
     try {
-      let result: FixGenerateResponse | undefined
-
-      switch (indicator.indicator) {
-        case 'json-ld':
-          result = await genJsonLd.mutateAsync({
-            type: 'Organization',
-            name: site.name,
-            url: site.url,
-          })
-          break
-        case 'llms-txt':
-          result = await genLlmsTxt.mutateAsync({
-            title: site.name,
-            description: `${site.name} 的官方網站`,
-            url: site.url,
-          })
-          break
-        case 'og-tags':
-          result = await genOgTags.mutateAsync({
-            title: site.name,
-            description: `${site.name} 的官方網站`,
-            url: site.url,
-          })
-          break
-        case 'faq-schema':
-          result = await genFaqSchema.mutateAsync({
-            faqs: [
-              {
-                question: `什麼是 ${site.name}？`,
-                answer: `${site.name} 是一個位於 ${site.url} 的網站。`,
-              },
-            ],
-          })
-          break
-      }
-
-      if (result) {
-        onGenerated(result.code, result.language)
-        toast.success('修復程式碼已生成')
-      }
+      const result = await smartGenerate.mutateAsync({
+        siteId,
+        indicator: indicator.indicator,
+        scanResultId: indicator.id,
+      })
+      onGenerated(result.code, result.language)
+      toast.success('AI 已根據網站內容生成修復程式碼')
     } catch (err: any) {
       toast.error(err?.response?.data?.message || '生成修復失敗，請稍後再試')
     }
@@ -168,14 +122,14 @@ function GenerateFixButton({
       size="sm"
       className="text-blue-600 border-blue-200 hover:bg-blue-50"
       onClick={handleGenerate}
-      disabled={isPending}
+      disabled={smartGenerate.isPending}
     >
-      {isPending ? (
+      {smartGenerate.isPending ? (
         <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
       ) : (
         <Sparkles className="h-3.5 w-3.5 mr-1.5" />
       )}
-      生成修復
+      AI 生成修復
     </Button>
   )
 }
@@ -184,9 +138,11 @@ function GenerateFixButton({
 function IndicatorRow({
   result,
   site,
+  siteId,
 }: {
   result: ScanResultItem
   site: { name: string; url: string }
+  siteId: string
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [generatedFix, setGeneratedFix] = useState<{
@@ -271,7 +227,7 @@ function IndicatorRow({
             <div onClick={(e) => e.stopPropagation()}>
               <GenerateFixButton
                 indicator={result}
-                site={site}
+                siteId={siteId}
                 onGenerated={(code, language) =>
                   setGeneratedFix({ code, language })
                 }
@@ -292,10 +248,13 @@ function IndicatorRow({
           <div className="border-t bg-gray-50/50 p-4 pl-[3.75rem] space-y-3">
             {generatedFix ? (
               <>
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>修復程式碼已就緒 -- 複製並貼入您的網頁中</span>
+                <div className="flex items-center gap-2 text-sm text-blue-600">
+                  <Sparkles className="h-4 w-4" />
+                  <span>程式碼已生成 — 尚未修復</span>
                 </div>
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  請點擊「複製」按鈕複製程式碼，貼入您網站的 HTML 中，然後重新掃描以驗證修復效果
+                </p>
                 <CodeSnippetViewer
                   code={generatedFix.code}
                   language={generatedFix.language}
@@ -309,7 +268,7 @@ function IndicatorRow({
                 <div className="mt-2" onClick={(e) => e.stopPropagation()}>
                   <GenerateFixButton
                     indicator={result}
-                    site={site}
+                    siteId={siteId}
                     onGenerated={(code, language) =>
                       setGeneratedFix({ code, language })
                     }
@@ -366,15 +325,34 @@ export default function SiteDetailPage() {
   const siteId = params.siteId as string
 
   const { data: site, isLoading: siteLoading } = useSite(siteId)
+  const queryClient = useQueryClient()
   const {
     data: scans,
     isLoading: scansLoading,
     isRefetching: scansRefetching,
   } = useScanHistory(siteId)
   const triggerScanMutation = useTriggerScan()
-  const [isScanning, setIsScanning] = useState(false)
 
-  // Get the latest completed scan
+  // Derive scanning state from actual scan data
+  const hasActiveScan = useMemo(() => {
+    if (!scans) return false
+    return scans.some((s) => s.status === 'PENDING' || s.status === 'RUNNING')
+  }, [scans])
+
+  // Track previous active scan state to detect completion
+  const prevActiveRef = useRef(hasActiveScan)
+  useEffect(() => {
+    if (prevActiveRef.current && !hasActiveScan) {
+      // Scan just completed — invalidate all related queries
+      queryClient.invalidateQueries({ queryKey: ['sites'] })
+      queryClient.invalidateQueries({ queryKey: ['sites', siteId] })
+      queryClient.invalidateQueries({ queryKey: ['scan-results'] })
+      toast.success('掃描已完成！')
+    }
+    prevActiveRef.current = hasActiveScan
+  }, [hasActiveScan, queryClient, siteId])
+
+  // Get the latest scan (prefer completed, fallback to latest)
   const latestScan = useMemo(() => {
     if (!scans || scans.length === 0) return null
     // scans are ordered by createdAt desc from the API
@@ -412,14 +390,11 @@ export default function SiteDetailPage() {
   }, [scanResults])
 
   const handleScan = async () => {
-    setIsScanning(true)
     try {
       await triggerScanMutation.mutateAsync(siteId)
-      toast.success('掃描已啟動，結果將在數秒後顯示')
+      toast.success('掃描已啟動，系統將自動更新結果')
     } catch (err: any) {
       toast.error(err?.response?.data?.message || '掃描失敗，請稍後再試')
-    } finally {
-      setIsScanning(false)
     }
   }
 
@@ -489,6 +464,12 @@ export default function SiteDetailPage() {
             </div>
           </div>
           <div className="flex gap-3">
+            <Link href={`/sites/${siteId}/knowledge`}>
+              <Button variant="outline">
+                <BookOpen className="h-4 w-4 mr-2" />
+                知識庫
+              </Button>
+            </Link>
             <Link href={`/sites/${siteId}/fix`}>
               <Button variant="outline">
                 <Wrench className="h-4 w-4 mr-2" />
@@ -498,18 +479,35 @@ export default function SiteDetailPage() {
             <Button
               className="bg-blue-600 hover:bg-blue-700 text-white"
               onClick={handleScan}
-              disabled={isScanning}
+              disabled={hasActiveScan || triggerScanMutation.isPending}
             >
-              {isScanning ? (
+              {hasActiveScan || triggerScanMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              {isScanning ? '掃描中...' : '重新掃描'}
+              {hasActiveScan ? '掃描中...' : triggerScanMutation.isPending ? '啟動中...' : '重新掃描'}
             </Button>
           </div>
         </div>
       </div>
+
+      {/* Scan progress banner */}
+      {hasActiveScan && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="flex items-center gap-3 py-4">
+            <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+            <div>
+              <p className="text-sm font-medium text-blue-900">
+                掃描進行中...
+              </p>
+              <p className="text-xs text-blue-700">
+                系統正在分析您的網站，完成後將自動更新結果
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Score overview row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -579,6 +577,7 @@ export default function SiteDetailPage() {
                     key={result.id}
                     result={result}
                     site={{ name: site.name, url: site.url }}
+                    siteId={siteId}
                   />
                 ))}
               </div>

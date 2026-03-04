@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { Plus, ExternalLink, RefreshCw, Loader2, Trash2, Globe } from 'lucide-react'
 import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -75,17 +76,62 @@ function SiteCardSkeleton() {
   )
 }
 
+// Helper: extract score and scan info from site data
+function getSiteLatestScan(site: any) {
+  const latestScan = site.scans?.[0]
+  if (!latestScan) return { score: 0, status: null, scanDate: null }
+  return {
+    score: latestScan.totalScore ?? 0,
+    status: latestScan.status as string | null,
+    scanDate: latestScan.createdAt,
+  }
+}
+
+function ScanStatusBadge({ status }: { status: string }) {
+  const config: Record<string, { label: string; className: string }> = {
+    PENDING: { label: '排隊中', className: 'bg-gray-100 text-gray-600' },
+    RUNNING: { label: '掃描中', className: 'bg-blue-100 text-blue-600' },
+    COMPLETED: { label: '已完成', className: 'bg-green-100 text-green-600' },
+    FAILED: { label: '失敗', className: 'bg-red-100 text-red-600' },
+  }
+  const c = config[status] || config.PENDING
+  return <Badge className={c.className}>{c.label}</Badge>
+}
+
 export default function SitesPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [newSiteUrl, setNewSiteUrl] = useState('')
   const [newSiteName, setNewSiteName] = useState('')
-  const [scanningId, setScanningId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const { data: sites, isLoading, error } = useSites()
   const createSiteMutation = useCreateSite()
   const deleteSiteMutation = useDeleteSite()
   const triggerScanMutation = useTriggerScan()
+
+  // Detect which sites have active scans (PENDING or RUNNING)
+  const activeScanSiteIds = useMemo(() => {
+    if (!sites) return new Set<string>()
+    const ids = new Set<string>()
+    for (const site of sites as any[]) {
+      const latestScan = site.scans?.[0]
+      if (latestScan && (latestScan.status === 'PENDING' || latestScan.status === 'RUNNING')) {
+        ids.add(site.id)
+      }
+    }
+    return ids
+  }, [sites])
+
+  const hasAnyActiveScan = activeScanSiteIds.size > 0
+
+  // Track previous active state to detect completion
+  const prevActiveCountRef = useRef(activeScanSiteIds.size)
+  useEffect(() => {
+    if (prevActiveCountRef.current > 0 && activeScanSiteIds.size === 0) {
+      toast.success('掃描已完成！')
+    }
+    prevActiveCountRef.current = activeScanSiteIds.size
+  }, [activeScanSiteIds.size])
 
   if (error) {
     toast.error('無法載入網站資料', { id: 'sites-error' })
@@ -124,14 +170,11 @@ export default function SitesPage() {
   }
 
   const handleScan = async (siteId: string) => {
-    setScanningId(siteId)
     try {
       await triggerScanMutation.mutateAsync(siteId)
-      toast.success('掃描已啟動')
+      toast.success('掃描已啟動，系統將自動更新結果')
     } catch (err: any) {
       toast.error(err?.response?.data?.message || '掃描失敗，請稍後再試')
-    } finally {
-      setScanningId(null)
     }
   }
 
@@ -227,62 +270,78 @@ export default function SitesPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sites.map((site: any) => (
-            <Card key={site.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg truncate">{site.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                      <ExternalLink className="h-3 w-3 flex-shrink-0" />
-                      <span className="truncate">{site.url}</span>
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
-                    onClick={() => handleDelete(site.id)}
-                    disabled={deletingId === site.id}
-                  >
-                    {deletingId === site.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="flex items-center justify-center py-4">
-                <ScoreGauge score={site.overallScore ?? site.score ?? 0} size={80} />
-              </CardContent>
-              <CardFooter className="flex flex-col gap-3">
-                <p className="text-xs text-muted-foreground w-full">
-                  上次掃描: {site.updatedAt ? new Date(site.updatedAt).toLocaleString('zh-TW') : '尚未掃描'}
-                </p>
-                <div className="flex gap-2 w-full">
-                  <Link href={`/sites/${site.id}`} className="flex-1">
-                    <Button variant="outline" className="w-full" size="sm">
-                      查看詳情
+          {sites.map((site: any) => {
+            const { score, status, scanDate } = getSiteLatestScan(site)
+            const isSiteScanning = activeScanSiteIds.has(site.id)
+            const isTriggeringThis = triggerScanMutation.isPending && triggerScanMutation.variables === site.id
+
+            return (
+              <Card key={site.id} className={`hover:shadow-md transition-shadow ${isSiteScanning ? 'ring-2 ring-blue-200' : ''}`}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg truncate">{site.name}</CardTitle>
+                        {status && <ScanStatusBadge status={status} />}
+                      </div>
+                      <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                        <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate">{site.url}</span>
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                      onClick={() => handleDelete(site.id)}
+                      disabled={deletingId === site.id}
+                    >
+                      {deletingId === site.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
                     </Button>
-                  </Link>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleScan(site.id)}
-                    disabled={scanningId === site.id}
-                  >
-                    {scanningId === site.id ? (
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4 mr-1" />
-                    )}
-                    掃描
-                  </Button>
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
+                  </div>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center py-4">
+                  {isSiteScanning ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="h-10 w-10 text-blue-500 animate-spin" />
+                      <span className="text-sm text-blue-600 font-medium">掃描中...</span>
+                    </div>
+                  ) : (
+                    <ScoreGauge score={score} size={80} />
+                  )}
+                </CardContent>
+                <CardFooter className="flex flex-col gap-3">
+                  <p className="text-xs text-muted-foreground w-full">
+                    上次掃描: {scanDate ? new Date(scanDate).toLocaleString('zh-TW') : '尚未掃描'}
+                  </p>
+                  <div className="flex gap-2 w-full">
+                    <Link href={`/sites/${site.id}`} className="flex-1">
+                      <Button variant="outline" className="w-full" size="sm">
+                        查看詳情
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleScan(site.id)}
+                      disabled={isSiteScanning || isTriggeringThis}
+                    >
+                      {isSiteScanning || isTriggeringThis ? (
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4 mr-1" />
+                      )}
+                      {isSiteScanning ? '掃描中' : '掃描'}
+                    </Button>
+                  </div>
+                </CardFooter>
+              </Card>
+            )
+          })}
         </div>
       )}
     </div>

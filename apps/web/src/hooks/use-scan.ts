@@ -40,6 +40,12 @@ export function useTriggerScan() {
       queryClient.invalidateQueries({
         queryKey: ['sites'],
       });
+      queryClient.invalidateQueries({
+        queryKey: ['sites', data.siteId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['scan-results'],
+      });
     },
   });
 }
@@ -54,6 +60,14 @@ export function useScanHistory(siteId: string) {
       return data;
     },
     enabled: !!siteId,
+    refetchInterval: (query) => {
+      const scans = query.state.data;
+      if (!scans) return false;
+      const hasActiveScan = scans.some(
+        (s: Scan) => s.status === 'PENDING' || s.status === 'RUNNING'
+      );
+      return hasActiveScan ? 3000 : false;
+    },
   });
 }
 

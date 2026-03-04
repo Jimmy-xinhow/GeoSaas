@@ -23,35 +23,28 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { CodeSnippetViewer } from '@/components/fix/code-snippet-viewer'
+import { FixGuide } from '@/components/fix/fix-guide'
 import { useSite } from '@/hooks/use-sites'
 import {
   useScanHistory,
   useScanResults,
   type ScanResultItem,
 } from '@/hooks/use-scan'
-import {
-  useGenerateJsonLd,
-  useGenerateLlmsTxt,
-  useGenerateOgTags,
-  useGenerateFaqSchema,
-  useApplyFix,
-  type FixGenerateResponse,
-} from '@/hooks/use-fix'
+import { useSmartGenerate } from '@/hooks/use-fix'
 
-// ── Indicator display names ──
+// ── Indicator display names (DB stores underscores) ──
 const indicatorNames: Record<string, string> = {
-  'json-ld': '結構化資料 (JSON-LD)',
-  'llms-txt': 'llms.txt',
-  'og-tags': 'Open Graph 標籤',
-  'meta-description': 'Meta 描述',
-  'faq-schema': 'FAQ Schema',
-  'title-optimization': '標題最佳化',
-  'contact-info': '聯絡資訊',
-  'image-alt': '圖片 Alt 文字',
+  'json_ld': '結構化資料 (JSON-LD)',
+  'llms_txt': 'llms.txt',
+  'og_tags': 'Open Graph 標籤',
+  'meta_description': 'Meta 描述',
+  'faq_schema': 'FAQ Schema',
+  'title_optimization': '標題最佳化',
+  'contact_info': '聯絡資訊',
+  'image_alt': '圖片 Alt 文字',
 }
 
 // ── Severity mapping from indicator status ──
@@ -92,19 +85,21 @@ function getSeverityLabel(severity: string) {
 
 // ── Which indicators support code generation ──
 const fixableIndicators = new Set([
-  'json-ld',
-  'llms-txt',
-  'og-tags',
-  'faq-schema',
+  'json_ld',
+  'llms_txt',
+  'og_tags',
+  'faq_schema',
 ])
 
 // ── Fix Item Card ──
 function FixItemCard({
   result,
   site,
+  siteId,
 }: {
   result: ScanResultItem
   site: { name: string; url: string }
+  siteId: string
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [generatedFix, setGeneratedFix] = useState<{
@@ -116,17 +111,8 @@ function FixItemCard({
       : null,
   )
 
-  const genJsonLd = useGenerateJsonLd()
-  const genLlmsTxt = useGenerateLlmsTxt()
-  const genOgTags = useGenerateOgTags()
-  const genFaqSchema = useGenerateFaqSchema()
-  const applyFixMutation = useApplyFix()
-
-  const isGenerating =
-    genJsonLd.isPending ||
-    genLlmsTxt.isPending ||
-    genOgTags.isPending ||
-    genFaqSchema.isPending
+  const smartGenerate = useSmartGenerate()
+  const isGenerating = smartGenerate.isPending
 
   const displayName = indicatorNames[result.indicator] || result.indicator
   const severity = getSeverity(result.status, result.score)
@@ -134,61 +120,15 @@ function FixItemCard({
 
   const handleGenerate = async () => {
     try {
-      let res: FixGenerateResponse | undefined
-
-      switch (result.indicator) {
-        case 'json-ld':
-          res = await genJsonLd.mutateAsync({
-            type: 'Organization',
-            name: site.name,
-            url: site.url,
-          })
-          break
-        case 'llms-txt':
-          res = await genLlmsTxt.mutateAsync({
-            title: site.name,
-            description: `${site.name} 的官方網站`,
-            url: site.url,
-          })
-          break
-        case 'og-tags':
-          res = await genOgTags.mutateAsync({
-            title: site.name,
-            description: `${site.name} 的官方網站`,
-            url: site.url,
-          })
-          break
-        case 'faq-schema':
-          res = await genFaqSchema.mutateAsync({
-            faqs: [
-              {
-                question: `什麼是 ${site.name}？`,
-                answer: `${site.name} 是一個位於 ${site.url} 的網站。`,
-              },
-            ],
-          })
-          break
-      }
-
-      if (res) {
-        setGeneratedFix({ code: res.code, language: res.language })
-        toast.success('修復程式碼已生成')
-      }
+      const res = await smartGenerate.mutateAsync({
+        siteId,
+        indicator: result.indicator,
+        scanResultId: result.id,
+      })
+      setGeneratedFix({ code: res.code, language: res.language })
+      toast.success('AI 已根據網站內容生成修復程式碼')
     } catch (err: any) {
       toast.error(err?.response?.data?.message || '生成修復失敗')
-    }
-  }
-
-  const handleApply = async () => {
-    if (!generatedFix) return
-    try {
-      await applyFixMutation.mutateAsync({
-        scanResultId: result.id,
-        generatedCode: generatedFix.code,
-      })
-      toast.success('修復已套用至掃描結果')
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || '套用修復失敗')
     }
   }
 
@@ -234,50 +174,46 @@ function FixItemCard({
             {/* If already has generated code */}
             {generatedFix ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>修復程式碼已就緒</span>
+                <div className="flex items-center gap-2 text-sm text-blue-600">
+                  <Sparkles className="h-4 w-4" />
+                  <span>程式碼已生成 — 尚未修復，請依照以下步驟操作</span>
+                </div>
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                  <p className="font-medium">操作步驟：</p>
+                  <ol className="list-decimal list-inside mt-1 space-y-1">
+                    <li>點擊右上角「複製」按鈕複製程式碼</li>
+                    <li>將程式碼貼入您網站的 HTML 對應位置</li>
+                    <li>回到網站詳情頁點擊「重新掃描」以驗證修復是否成功</li>
+                  </ol>
                 </div>
                 <CodeSnippetViewer
                   code={generatedFix.code}
                   language={generatedFix.language}
                 />
-                <div className="flex gap-2">
-                  {canGenerate && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleGenerate}
-                      disabled={isGenerating}
-                    >
-                      {isGenerating ? (
-                        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4 mr-1.5" />
-                      )}
-                      重新生成
-                    </Button>
-                  )}
+                {canGenerate && (
                   <Button
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    variant="outline"
                     size="sm"
-                    onClick={handleApply}
-                    disabled={applyFixMutation.isPending}
+                    onClick={handleGenerate}
+                    disabled={isGenerating}
                   >
-                    {applyFixMutation.isPending ? (
+                    {isGenerating ? (
                       <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                     ) : (
-                      <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                      <Sparkles className="h-4 w-4 mr-1.5" />
                     )}
-                    套用修復
+                    重新生成
                   </Button>
-                </div>
+                )}
               </div>
             ) : canGenerate ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  點擊下方按鈕，系統將根據您的網站資訊自動生成修復程式碼。
-                </p>
+              <div className="space-y-4">
+                <FixGuide
+                  indicator={result.indicator}
+                  siteName={site.name}
+                  siteUrl={site.url}
+                  details={result.details}
+                />
                 <Button
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                   size="sm"
@@ -289,17 +225,17 @@ function FixItemCard({
                   ) : (
                     <Sparkles className="h-4 w-4 mr-1.5" />
                   )}
-                  生成修復程式碼
+                  一鍵生成修復程式碼
                 </Button>
               </div>
             ) : (
-              <div className="text-sm text-muted-foreground">
-                <p>此指標目前不支援自動生成修復。請參考以下建議手動修正：</p>
-                {result.suggestion && (
-                  <p className="mt-2 p-3 bg-gray-50 rounded-lg border text-gray-700">
-                    {result.suggestion}
-                  </p>
-                )}
+              <div className="space-y-4">
+                <FixGuide
+                  indicator={result.indicator}
+                  siteName={site.name}
+                  siteUrl={site.url}
+                  details={result.details}
+                />
               </div>
             )}
           </div>
@@ -470,6 +406,7 @@ export default function FixPage() {
               key={result.id}
               result={result}
               site={{ name: site.name, url: site.url }}
+              siteId={siteId}
             />
           ))}
         </div>

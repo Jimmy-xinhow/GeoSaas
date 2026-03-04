@@ -17,7 +17,7 @@ export class SitesService {
     return this.prisma.site.findMany({
       where: { userId },
       include: {
-        scans: { orderBy: { createdAt: 'desc' }, take: 1, select: { totalScore: true, createdAt: true } },
+        scans: { orderBy: { createdAt: 'desc' }, take: 1, select: { totalScore: true, status: true, createdAt: true } },
         _count: { select: { scans: true, monitors: true } },
       },
       orderBy: { createdAt: 'desc' },

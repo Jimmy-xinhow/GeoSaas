@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChatgptDetector } from './platforms/chatgpt.detector';
 import { ClaudeDetector } from './platforms/claude.detector';
@@ -7,6 +7,8 @@ import { GeminiDetector } from './platforms/gemini.detector';
 
 @Injectable()
 export class MonitorService {
+  private readonly logger = new Logger(MonitorService.name);
+
   constructor(
     private prisma: PrismaService,
     private chatgptDetector: ChatgptDetector,
@@ -20,7 +22,16 @@ export class MonitorService {
   }
 
   async create(data: { siteId: string; platform: string; query: string }) {
-    return this.prisma.monitor.create({ data: { ...data, checkedAt: new Date() } });
+    const monitor = await this.prisma.monitor.create({
+      data: { ...data, platform: data.platform.toUpperCase(), checkedAt: new Date() },
+    });
+
+    // Auto-run first citation check in background (don't block the response)
+    this.checkCitation(monitor.id).catch((err) => {
+      this.logger.warn(`Auto-check failed for monitor ${monitor.id}: ${err.message}`);
+    });
+
+    return monitor;
   }
 
   async checkCitation(id: string) {
@@ -58,14 +69,47 @@ export class MonitorService {
       orderBy: { checkedAt: 'desc' },
     });
 
-    const platforms = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI'];
-    const summary = platforms.map((p) => {
-      const pMonitors = monitors.filter((m) => m.platform === p);
-      const mentioned = pMonitors.filter((m) => m.mentioned).length;
-      return { platform: p, total: pMonitors.length, mentioned, rate: pMonitors.length ? Math.round((mentioned / pMonitors.length) * 100) : 0 };
+    const platformNames: Record<string, string> = {
+      CHATGPT: 'ChatGPT', CLAUDE: 'Claude', PERPLEXITY: 'Perplexity', GEMINI: 'Gemini',
+    };
+    const platformKeys = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI'];
+
+    const platforms = platformKeys.map((p) => {
+      const pMonitors = monitors.filter((m) => m.platform.toUpperCase() === p);
+      const checked = pMonitors.filter((m) => m.response && !m.response.startsWith('[Error]'));
+      const mentioned = checked.filter((m) => m.mentioned).length;
+      const total = pMonitors.length;
+      const errorCount = pMonitors.filter((m) => m.response?.startsWith('[Error]')).length;
+      const rate = checked.length ? Math.round((mentioned / checked.length) * 100) : 0;
+      return {
+        name: platformNames[p] || p,
+        rate,
+        total,
+        checked: checked.length,
+        mentioned,
+        errorCount,
+        trend: 'stable' as const,
+        trendValue: '--',
+      };
     });
 
-    return { summary, recentChecks: monitors.slice(0, 20) };
+    const queries = monitors.slice(0, 50).map((m) => {
+      const hasError = m.response?.startsWith('[Error]') || false;
+      const notChecked = !m.response;
+      return {
+        id: m.id,
+        query: m.query,
+        platform: platformNames[m.platform.toUpperCase()] || m.platform,
+        cited: m.mentioned,
+        position: m.position,
+        status: hasError ? 'error' as const : notChecked ? 'pending' as const : 'checked' as const,
+        errorMessage: hasError ? m.response!.replace('[Error] ', '').substring(0, 100) : undefined,
+        response: hasError || notChecked ? undefined : m.response,
+        lastCheck: m.checkedAt?.toISOString() || null,
+      };
+    });
+
+    return { platforms, queries };
   }
 
   async remove(id: string) {

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { matchBrand } from './match-brand';
 
 @Injectable()
 export class ChatgptDetector {
@@ -8,10 +9,12 @@ export class ChatgptDetector {
   private logger = new Logger(ChatgptDetector.name);
 
   constructor(private config: ConfigService) {
-    this.client = new OpenAI({ apiKey: this.config.get('OPENAI_API_KEY') });
+    this.client = new OpenAI({ apiKey: this.config.get('OPENAI_API_KEY') || 'missing' });
   }
 
   async detect(query: string, brandName: string, brandUrl: string): Promise<{ mentioned: boolean; position: number | null; response: string }> {
+    const key = this.config.get('OPENAI_API_KEY');
+    if (!key) return { mentioned: false, position: null, response: '[Error] OPENAI_API_KEY 未設定' };
     try {
       const completion = await this.client.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -20,14 +23,7 @@ export class ChatgptDetector {
       });
 
       const text = completion.choices[0]?.message?.content || '';
-      const mentioned = text.toLowerCase().includes(brandName.toLowerCase()) || text.includes(brandUrl);
-
-      let position: number | null = null;
-      if (mentioned) {
-        const idx = text.toLowerCase().indexOf(brandName.toLowerCase());
-        position = Math.ceil((idx / text.length) * 10);
-      }
-
+      const { mentioned, position } = matchBrand(text, brandName, brandUrl);
       return { mentioned, position, response: text };
     } catch (error) {
       this.logger.error(`ChatGPT detection failed: ${error}`);

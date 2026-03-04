@@ -83,6 +83,7 @@ model Site {
   name      String
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile   Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -90,6 +91,7 @@ model Site {
   monitors    Monitor[]
   competitors Competitor[]
   contents    Content[]
+  qas         SiteQa[]
 
   @@map("sites")
 }
@@ -198,6 +200,20 @@ model Order {
   updatedAt       DateTime    @updatedAt
 
   @@map("orders")
+}
+
+model SiteQa {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  question  String
+  answer    String   @db.Text
+  category  String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("site_qas")
 }
 
 model Notification {

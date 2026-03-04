@@ -1,6 +1,6 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,6 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useLogout } from '@/hooks/use-auth'
+import useAuthStore from '@/stores/auth-store'
 
 const pathTitles: Record<string, string> = {
   '/dashboard': '總覽',
@@ -31,7 +33,20 @@ function getPageTitle(pathname: string): string {
 
 export default function Header() {
   const pathname = usePathname()
+  const router = useRouter()
   const title = getPageTitle(pathname)
+  const user = useAuthStore((s) => s.user)
+  const logoutMutation = useLogout()
+
+  const avatarChar = user?.name?.charAt(0) || '?'
+
+  const handleLogout = () => {
+    logoutMutation.mutate(undefined, {
+      onSettled: () => {
+        router.push('/login')
+      },
+    })
+  }
 
   return (
     <header className="h-16 border-b bg-white flex items-center justify-between px-6 shrink-0">
@@ -48,14 +63,20 @@ export default function Header() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="h-9 w-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium hover:bg-blue-700 transition-colors">
-              王
+              {avatarChar}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem>個人資料</DropdownMenuItem>
-            <DropdownMenuItem>帳號設定</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/settings')}>
+              個人資料
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/settings')}>
+              帳號設定
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-600">登出</DropdownMenuItem>
+            <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
+              登出
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
