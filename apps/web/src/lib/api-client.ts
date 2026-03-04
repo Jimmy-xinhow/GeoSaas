@@ -24,9 +24,15 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor: handle errors globally
+// Response interceptor: unwrap { success, data } wrapper and handle errors
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Unwrap TransformInterceptor's { success, data } wrapper
+    if (response.data && typeof response.data === 'object' && 'success' in response.data && 'data' in response.data) {
+      response.data = response.data.data;
+    }
+    return response;
+  },
   (error) => {
     if (typeof window !== 'undefined') {
       const status = error.response?.status;
