@@ -5,6 +5,7 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -47,6 +48,10 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm db:generate
 
+      # ── Dependency Audit ─────────────────────────────────────
+      - name: Security audit
+        run: pnpm audit --audit-level=high || true
+
       # ── Lint ─────────────────────────────────────────────────
       - name: Lint
         run: pnpm lint
@@ -65,3 +70,64 @@ jobs:
       # ── Build ────────────────────────────────────────────────
       - name: Build
         run: pnpm build
+
+  # ── E2E Tests (separate job) ──────────────────────────────
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: ci
+    timeout-minutes: 15
+    if: github.event_name != 'workflow_call'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @geo-saas/web exec playwright install --with-deps chromium
+
+      - name: Build API
+        run: pnpm --filter @geo-saas/api build
+
+      - name: Start API server
+        run: pnpm --filter @geo-saas/api start:prod &
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST }}
+          REDIS_PORT: ${{ secrets.REDIS_PORT }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          FRONTEND_URL: http://localhost:3001
+          PORT: 4000
+          NODE_ENV: test
+
+      - name: Run E2E tests
+        run: pnpm --filter @geo-saas/web test:e2e
+        env:
+          E2E_BASE_URL: http://localhost:3001
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+
+      - name: Upload E2E report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
