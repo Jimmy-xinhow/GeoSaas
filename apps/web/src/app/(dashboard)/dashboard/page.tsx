@@ -30,7 +30,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useSites, useCreateSite } from '@/hooks/use-sites'
-import { useTriggerScan } from '@/hooks/use-scan'
+import { useTriggerScan, useScoreTrend } from '@/hooks/use-scan'
 import { useContents } from '@/hooks/use-content'
 import { useMonitorDashboard } from '@/hooks/use-monitor'
 
@@ -173,21 +173,17 @@ export default function DashboardPage() {
       }))
   }, [sites])
 
-  // Build trend data from sites (placeholder based on current data)
+  const { data: scoreTrend } = useScoreTrend()
   const trendData = useMemo(() => {
-    const avgScore = sites && sites.length > 0
-      ? Math.round(
-          sites.reduce((sum: number, s: any) => sum + (s.overallScore ?? s.score ?? 0), 0) / sites.length
-        )
-      : 0
-    // Generate a simple trend leading to the current average score
-    const months = ['10月', '11月', '12月', '1月', '2月', '3月']
-    const baseScore = Math.max(0, avgScore - 25)
-    return months.map((month, i) => ({
-      month,
-      score: Math.round(baseScore + ((avgScore - baseScore) * (i + 1)) / months.length),
+    if (!scoreTrend || scoreTrend.length === 0) return []
+    return scoreTrend.map((t) => ({
+      month: new Date(t.date).toLocaleDateString('zh-TW', {
+        month: 'short',
+        day: 'numeric',
+      }),
+      score: t.score,
     }))
-  }, [sites])
+  }, [scoreTrend])
 
   const handleQuickScan = async () => {
     if (!url.trim()) {

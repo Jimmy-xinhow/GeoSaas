@@ -10,10 +10,22 @@ import {
   Share2,
   Check,
   ArrowRight,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Send,
+  Globe,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useGuestScan, useGuestScanStatus } from '@/hooks/use-guest-scan'
+import { useSubmitIndexNow } from '@/hooks/use-indexnow'
+import { useCrawlerFeed } from '@/hooks/use-directory'
+import { LanguageSwitcher } from '@/components/language-switcher'
+import { useTranslations } from 'next-intl'
 
 const features = [
   {
@@ -93,9 +105,209 @@ const pricingPlans = [
   },
 ]
 
+const STATUS_ICON = {
+  pass: CheckCircle2,
+  warning: AlertTriangle,
+  fail: XCircle,
+}
+
+const STATUS_COLOR = {
+  pass: 'text-green-600',
+  warning: 'text-yellow-600',
+  fail: 'text-red-500',
+}
+
+function CrawlerMarquee() {
+  const { data: crawlerFeed } = useCrawlerFeed()
+
+  if (!crawlerFeed || crawlerFeed.feed.length === 0) return null
+
+  const items = crawlerFeed.feed
+  // Duplicate for seamless scrolling
+  const doubled = [...items, ...items]
+
+  return (
+    <div className="bg-gray-900 text-white py-2.5 overflow-hidden">
+      <div className="flex items-center gap-8 animate-marquee whitespace-nowrap">
+        {doubled.map((item, i) => (
+          <span key={`${item.id}-${i}`} className="inline-flex items-center gap-2 text-xs">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-purple-300 font-medium">{item.botName}</span>
+            <span className="text-gray-400">→</span>
+            <span className="text-gray-300">{item.site?.name || item.url}</span>
+          </span>
+        ))}
+      </div>
+      <style jsx>{`
+        @keyframes marquee {
+          0% { transform: translateX(0%); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+          animation: marquee ${Math.max(items.length * 3, 20)}s linear infinite;
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function IndexNowButton({ url }: { url: string }) {
+  const submitIndexNow = useSubmitIndexNow()
+  const successCount = submitIndexNow.data?.results?.filter((r) => r.success).length ?? 0
+  const totalCount = submitIndexNow.data?.results?.length ?? 0
+
+  return (
+    <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+      <button
+        onClick={() => submitIndexNow.mutate(url)}
+        disabled={submitIndexNow.isPending || submitIndexNow.isSuccess}
+        className={cn(
+          'w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold transition-all text-sm',
+          submitIndexNow.isSuccess
+            ? 'bg-green-500/30 text-green-200 cursor-default'
+            : 'bg-orange-500/30 text-orange-200 hover:bg-orange-500/50 cursor-pointer',
+          submitIndexNow.isPending && 'opacity-60 cursor-wait',
+        )}
+      >
+        {submitIndexNow.isPending ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            通知中...
+          </>
+        ) : submitIndexNow.isSuccess ? (
+          <>
+            <CheckCircle2 className="h-4 w-4" />
+            已通知 {successCount}/{totalCount} 個搜尋引擎
+          </>
+        ) : (
+          <>
+            <Send className="h-4 w-4" />
+            通知搜尋引擎更新（IndexNow）
+          </>
+        )}
+      </button>
+      {submitIndexNow.isSuccess && (
+        <div className="mt-2 space-y-1">
+          {submitIndexNow.data?.results?.map((r) => (
+            <div key={r.engine} className="flex items-center justify-between text-xs px-2">
+              <span className="text-white/60">{r.engine}</span>
+              <span className={r.success ? 'text-green-400' : 'text-red-400'}>
+                {r.success ? '✓' : '✗'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GuestScanResults({ scanId }: { scanId: string }) {
+  const { data: scan } = useGuestScanStatus(scanId)
+
+  if (!scan) return null
+
+  if (scan.status === 'PENDING' || scan.status === 'RUNNING') {
+    return (
+      <div className="mt-8 bg-white/10 backdrop-blur-sm rounded-2xl p-8 max-w-2xl mx-auto">
+        <div className="flex items-center justify-center gap-3 text-white">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-lg">
+            {scan.status === 'PENDING' ? '排隊中...' : '掃描進行中...'}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  if (scan.status === 'FAILED') {
+    return (
+      <div className="mt-8 bg-red-500/20 backdrop-blur-sm rounded-2xl p-6 max-w-2xl mx-auto">
+        <div className="flex items-center justify-center gap-2 text-white">
+          <AlertCircle className="h-5 w-5" />
+          <span>掃描失敗，請稍後再試</span>
+        </div>
+      </div>
+    )
+  }
+
+  const indicators = scan.results?.indicators
+  if (!indicators) return null
+
+  const scoreColor =
+    scan.totalScore >= 80
+      ? 'text-green-300'
+      : scan.totalScore >= 60
+      ? 'text-blue-200'
+      : scan.totalScore >= 40
+      ? 'text-yellow-300'
+      : 'text-red-300'
+
+  return (
+    <div className="mt-8 max-w-2xl mx-auto space-y-4">
+      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center">
+        <p className="text-blue-200 text-sm mb-1">您的 GEO 分數</p>
+        <p className={`text-6xl font-bold ${scoreColor}`}>
+          {scan.totalScore}
+        </p>
+        <p className="text-blue-200 text-sm mt-2">/ 100</p>
+      </div>
+
+      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
+        <h3 className="text-white font-semibold mb-4">指標詳情</h3>
+        <div className="space-y-3">
+          {Object.entries(indicators).map(([name, result]) => {
+            const Icon = STATUS_ICON[result.status]
+            const color = STATUS_COLOR[result.status]
+            return (
+              <div
+                key={name}
+                className="flex items-center justify-between py-2 px-3 bg-white/5 rounded-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 ${color}`} />
+                  <span className="text-white text-sm">{name}</span>
+                </div>
+                <span className="text-white font-semibold tabular-nums">
+                  {result.score}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <IndexNowButton url={scan.url} />
+
+      <div className="text-center">
+        <Link href="/register">
+          <Button
+            size="lg"
+            className="bg-white text-blue-600 hover:bg-blue-50 font-semibold h-12 px-10"
+          >
+            註冊解鎖完整報告 & 自動修復
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Button>
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 export default function LandingPage() {
   const [scanUrl, setScanUrl] = useState('')
+  const [scanId, setScanId] = useState<string | null>(null)
   const router = useRouter()
+  const guestScan = useGuestScan()
+
+  const handleScan = () => {
+    if (!scanUrl.trim()) return
+    let url = scanUrl.trim()
+    if (!/^https?:\/\//.test(url)) url = `https://${url}`
+    guestScan.mutate(url, {
+      onSuccess: (data) => setScanId(data.id),
+    })
+  }
 
   return (
     <div className="min-h-screen">
@@ -127,6 +339,7 @@ export default function LandingPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <LanguageSwitcher />
           <Link href="/login">
             <Button variant="ghost" size="sm">
               登入
@@ -163,26 +376,42 @@ export default function LandingPage() {
               placeholder="輸入您的網址，免費掃描..."
               value={scanUrl}
               onChange={(e) => setScanUrl(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleScan()}
               className="h-12 bg-white/10 border-white/20 text-white placeholder:text-blue-200 backdrop-blur-sm flex-1"
             />
             <Button
               size="lg"
               className="bg-white text-blue-600 hover:bg-blue-50 font-semibold h-12 px-8 shrink-0"
-              onClick={() => {
-                const params = scanUrl ? `?url=${encodeURIComponent(scanUrl)}` : ''
-                router.push(`/register${params}`)
-              }}
+              onClick={handleScan}
+              disabled={guestScan.isPending}
             >
+              {guestScan.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
               免費掃描
-              <ArrowRight className="h-4 w-4 ml-2" />
+              {!guestScan.isPending && <ArrowRight className="h-4 w-4 ml-2" />}
             </Button>
           </div>
 
-          <p className="mt-6 text-sm text-blue-200">
-            已有 1,200+ 品牌使用 GEO SaaS 提升 AI 可見度
-          </p>
+          {guestScan.isError && (
+            <p className="mt-4 text-sm text-red-300">
+              {(guestScan.error as any)?.response?.data?.message ||
+                '掃描請求失敗，請稍後再試'}
+            </p>
+          )}
+
+          {!scanId && (
+            <p className="mt-6 text-sm text-blue-200">
+              無需註冊，每日可免費掃描 3 次
+            </p>
+          )}
+
+          {scanId && <GuestScanResults scanId={scanId} />}
         </div>
       </section>
+
+      {/* Crawler Marquee */}
+      <CrawlerMarquee />
 
       {/* Features */}
       <section id="features" className="py-20 bg-white">

@@ -273,3 +273,18 @@ model Notification {
 
   @@map("notifications")
 }
+
+model GuestScan {
+  id          String     @id @default(cuid())
+  url         String
+  ipHash      String
+  totalScore  Int        @default(0)
+  status      ScanStatus @default(PENDING)
+  results     Json?
+  createdAt   DateTime   @default(now())
+  completedAt DateTime?
+
+  @@index([ipHash, createdAt])
+  @@index([url, createdAt])
+  @@map("guest_scans")
+}

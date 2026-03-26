@@ -1,0 +1,101 @@
+{
+  "common": {
+    "login": "ログイン",
+    "register": "無料で始める",
+    "logout": "ログアウト",
+    "loading": "読み込み中...",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "search": "検索",
+    "back": "戻る",
+    "noData": "データなし"
+  },
+  "nav": {
+    "features": "機能",
+    "pricing": "料金",
+    "directory": "ディレクトリ",
+    "dashboard": "ダッシュボード",
+    "sites": "マイサイト",
+    "content": "コンテンツ",
+    "monitor": "AI モニター",
+    "publish": "公開",
+    "settings": "設定"
+  },
+  "landing": {
+    "hero": {
+      "title": "AIに優先的に\nあなたのブランドを推薦させよう",
+      "subtitle": "オールインワンのGEO（Generative Engine Optimization）ソリューション — ChatGPT、Claude、Perplexityなどに推薦されましょう。",
+      "scanPlaceholder": "URLを入力して無料スキャン...",
+      "scanButton": "無料スキャン",
+      "scanLimit": "登録不要 — 1日3回無料スキャン",
+      "scanFailed": "スキャンに失敗しました。後でもう一度お試しください",
+      "scanning": "スキャン中...",
+      "queuing": "キュー待ち..."
+    },
+    "results": {
+      "yourScore": "あなたのGEOスコア",
+      "indicatorDetails": "指標の詳細",
+      "notifyEngines": "検索エンジンに通知（IndexNow）",
+      "notifying": "通知中...",
+      "notified": "{success}/{total} の検索エンジンに通知済み",
+      "registerCta": "登録してフルレポート＆自動修正を解除"
+    },
+    "features": {
+      "title": "GEO SaaSを選ぶ理由",
+      "subtitle": "診断から修正、コンテンツ生成からマルチプラットフォーム配信まで、GEOの全てをワンストップで"
+    },
+    "pricing": {
+      "title": "プランを選択",
+      "subtitle": "あらゆる規模に対応",
+      "free": "無料",
+      "month": "/月",
+      "current": "現在のプラン",
+      "start": "始める",
+      "contact": "お問い合わせ"
+    }
+  },
+  "directory": {
+    "title": "GEO ディレクトリ",
+    "subtitle": "AI SEO最適化認定サイトを探索、ランキングと業種カテゴリーを表示",
+    "totalSites": "登録サイト",
+    "avgScore": "平均スコア",
+    "goldAbove": "ゴールド以上",
+    "crawlerFeed": "リアルタイムAIクローラー",
+    "visits24h": "24時間: {count} 訪問",
+    "noCrawlerData": "クローラー活動データなし",
+    "leaderboard": {
+      "score": "スコアランキング",
+      "today": "本日のAI注目",
+      "crawled": "クロール数",
+      "recent": "最近の更新"
+    },
+    "progressStars": {
+      "title": "進歩の星",
+      "subtitle": "スコアの伸びが最も大きいサイト",
+      "points": "点",
+      "scans": "回スキャン",
+      "days": "日"
+    },
+    "searchPlaceholder": "サイト名またはURLで検索...",
+    "allIndustries": "全業種",
+    "allTiers": "全ランク",
+    "noSites": "登録サイトなし",
+    "noSitesDesc": "条件に一致する公開サイトはありません",
+    "page": "{current} / {total} ページ",
+    "newcomers": "新着サイト（過去30日）"
+  },
+  "auth": {
+    "loginTitle": "おかえりなさい",
+    "registerTitle": "アカウント作成",
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "name": "名前",
+    "confirmPassword": "パスワード確認",
+    "forgotPassword": "パスワードをお忘れですか？",
+    "noAccount": "アカウントをお持ちでないですか？",
+    "hasAccount": "すでにアカウントをお持ちですか？",
+    "loginButton": "ログイン",
+    "registerButton": "アカウント作成"
+  }
+}

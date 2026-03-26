@@ -21,6 +21,8 @@ import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { LlmsHostingModule } from './modules/llms-hosting/llms-hosting.module';
 import { DirectoryModule } from './modules/directory/directory.module';
 import { CrawlerTrackingModule } from './modules/crawler-tracking/crawler-tracking.module';
+import { GuestScanModule } from './modules/guest-scan/guest-scan.module';
+import { IndexNowModule } from './modules/indexnow/indexnow.module';
 
 @Module({
   imports: [
@@ -54,6 +56,8 @@ import { CrawlerTrackingModule } from './modules/crawler-tracking/crawler-tracki
     LlmsHostingModule,
     DirectoryModule,
     CrawlerTrackingModule,
+    GuestScanModule,
+    IndexNowModule,
   ],
   controllers: [HealthController],
   providers: [

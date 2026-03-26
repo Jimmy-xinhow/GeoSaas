@@ -1,0 +1,101 @@
+{
+  "common": {
+    "login": "Login",
+    "register": "Get Started",
+    "logout": "Logout",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "search": "Search",
+    "back": "Back",
+    "noData": "No data"
+  },
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "directory": "Directory",
+    "dashboard": "Dashboard",
+    "sites": "My Sites",
+    "content": "Content",
+    "monitor": "AI Monitor",
+    "publish": "Publish",
+    "settings": "Settings"
+  },
+  "landing": {
+    "hero": {
+      "title": "Get AI to Recommend\nYour Brand First",
+      "subtitle": "All-in-one GEO (Generative Engine Optimization) solution — get recommended by ChatGPT, Claude, Perplexity and more.",
+      "scanPlaceholder": "Enter your URL for a free scan...",
+      "scanButton": "Free Scan",
+      "scanLimit": "No registration needed — 3 free scans per day",
+      "scanFailed": "Scan failed, please try again later",
+      "scanning": "Scanning...",
+      "queuing": "Queuing..."
+    },
+    "results": {
+      "yourScore": "Your GEO Score",
+      "indicatorDetails": "Indicator Details",
+      "notifyEngines": "Notify Search Engines (IndexNow)",
+      "notifying": "Notifying...",
+      "notified": "Notified {success}/{total} search engines",
+      "registerCta": "Register to unlock full report & auto-fix"
+    },
+    "features": {
+      "title": "Why Choose GEO SaaS?",
+      "subtitle": "From diagnosis to fix, content generation to multi-platform distribution — your all-in-one GEO solution"
+    },
+    "pricing": {
+      "title": "Choose Your Plan",
+      "subtitle": "Plans for every scale",
+      "free": "Free",
+      "month": "/mo",
+      "current": "Current Plan",
+      "start": "Get Started",
+      "contact": "Contact Us"
+    }
+  },
+  "directory": {
+    "title": "GEO Directory",
+    "subtitle": "Explore AI SEO optimized sites, view rankings and industry categories",
+    "totalSites": "Listed Sites",
+    "avgScore": "Avg Score",
+    "goldAbove": "Gold & Above",
+    "crawlerFeed": "Live AI Crawler Activity",
+    "visits24h": "24h: {count} visits",
+    "noCrawlerData": "No crawler activity yet",
+    "leaderboard": {
+      "score": "Score Ranking",
+      "today": "Today's AI Focus",
+      "crawled": "Most Crawled",
+      "recent": "Recently Updated"
+    },
+    "progressStars": {
+      "title": "Progress Stars",
+      "subtitle": "Sites with the biggest score improvement",
+      "points": "pts",
+      "scans": "scans",
+      "days": "days"
+    },
+    "searchPlaceholder": "Search by site name or URL...",
+    "allIndustries": "All Industries",
+    "allTiers": "All Tiers",
+    "noSites": "No Sites Listed",
+    "noSitesDesc": "No public sites match your criteria",
+    "page": "Page {current} / {total}",
+    "newcomers": "New Sites (last 30 days)"
+  },
+  "auth": {
+    "loginTitle": "Welcome Back",
+    "registerTitle": "Create Account",
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "confirmPassword": "Confirm Password",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "loginButton": "Login",
+    "registerButton": "Create Account"
+  }
+}

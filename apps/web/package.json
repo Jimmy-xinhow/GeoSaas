@@ -21,6 +21,7 @@
     "clsx": "^2.1",
     "lucide-react": "^0.400",
     "next": "^14.2",
+    "next-intl": "^4.8.3",
     "postcss": "^8",
     "react": "^18.3",
     "react-dom": "^18.3",

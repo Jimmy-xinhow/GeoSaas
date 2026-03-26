@@ -84,6 +84,22 @@ export function useScanById(scanId: string) {
   });
 }
 
+export interface ScoreTrendPoint {
+  date: string;
+  score: number;
+  site: string;
+}
+
+export function useScoreTrend() {
+  return useQuery({
+    queryKey: ['scans', 'trend'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ScoreTrendPoint[]>('/scans/trend');
+      return data;
+    },
+  });
+}
+
 export function useScanResults(scanId: string) {
   return useQuery({
     queryKey: ['scan-results', scanId],

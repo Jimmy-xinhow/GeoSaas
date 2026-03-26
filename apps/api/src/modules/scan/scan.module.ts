@@ -40,6 +40,6 @@ const coreProviders = [
   imports: [BullModule.registerQueue({ name: 'scan' })],
   controllers: [ScanController],
   providers: [...coreProviders, ScanProcessor],
-  exports: [ScanService],
+  exports: [ScanService, ScanPipelineService],
 })
 export class ScanModule {}

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import {
   Search,
   Trophy,
@@ -9,6 +10,11 @@ import {
   Star,
   ChevronLeft,
   ChevronRight,
+  Bot,
+  Activity,
+  Flame,
+  Clock,
+  Zap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,7 +38,15 @@ import {
   useLeaderboard,
   useDirectoryStats,
   useNewcomers,
+  useCrawlerFeed,
+  useTodayHottest,
+  useMostCrawled,
+  useRecentlyActive,
+  useProgressStars,
   type DirectorySite,
+  type RankedSite,
+  type ProgressStar,
+  type CrawlerFeedItem,
 } from '@/hooks/use-directory'
 import { INDUSTRIES } from '@geo-saas/shared'
 
@@ -81,35 +95,32 @@ function ScoreBar({ score }: { score: number }) {
 function SiteCard({ site }: { site: DirectorySite }) {
   const industryLabel = INDUSTRIES.find((i) => i.value === site.industry)?.label
   return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-5 space-y-3">
-        <div className="flex items-start justify-between">
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-gray-900 truncate">{site.name}</h3>
-            <a
-              href={site.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-600 hover:underline truncate block"
-            >
-              {site.url}
-            </a>
+    <Link href={`/directory/${site.id}`}>
+      <Card className="hover:shadow-md transition-shadow cursor-pointer">
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-start justify-between">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-semibold text-gray-900 truncate">{site.name}</h3>
+              <span className="text-xs text-blue-600 truncate block">
+                {site.url}
+              </span>
+            </div>
+            <TierBadge tier={site.tier} />
           </div>
-          <TierBadge tier={site.tier} />
-        </div>
-        <ScoreBar score={site.bestScore} />
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          {industryLabel && (
-            <span className="bg-gray-100 px-2 py-0.5 rounded">{industryLabel}</span>
-          )}
-          <span>
-            {site.bestScoreAt
-              ? new Date(site.bestScoreAt).toLocaleDateString('zh-TW')
-              : ''}
-          </span>
-        </div>
-      </CardContent>
-    </Card>
+          <ScoreBar score={site.bestScore} />
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            {industryLabel && (
+              <span className="bg-gray-100 px-2 py-0.5 rounded">{industryLabel}</span>
+            )}
+            <span>
+              {site.bestScoreAt
+                ? new Date(site.bestScoreAt).toLocaleDateString('zh-TW')
+                : ''}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   )
 }
 
@@ -124,17 +135,188 @@ function LeaderboardRow({
     rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}`
 
   return (
-    <div className="flex items-center gap-4 py-3 px-4 hover:bg-gray-50 rounded-lg">
-      <span className="text-lg font-bold w-8 text-center">{medalEmoji}</span>
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm truncate">{site.name}</p>
-        <p className="text-xs text-muted-foreground truncate">{site.url}</p>
+    <Link href={`/directory/${site.id}`}>
+      <div className="flex items-center gap-4 py-3 px-4 hover:bg-gray-50 rounded-lg cursor-pointer">
+        <span className="text-lg font-bold w-8 text-center">{medalEmoji}</span>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-sm truncate">{site.name}</p>
+          <p className="text-xs text-muted-foreground truncate">{site.url}</p>
+        </div>
+        <TierBadge tier={site.tier} />
+        <span className="text-lg font-bold tabular-nums text-blue-600">
+          {site.bestScore}
+        </span>
       </div>
-      <TierBadge tier={site.tier} />
-      <span className="text-lg font-bold tabular-nums text-blue-600">
-        {site.bestScore}
+    </Link>
+  )
+}
+
+function CrawlerFeedRow({ item }: { item: CrawlerFeedItem }) {
+  const timeAgo = getTimeAgo(item.visitedAt)
+  return (
+    <div className="flex items-center gap-3 py-2.5 px-3 hover:bg-gray-50 rounded-lg text-sm">
+      <Bot className="h-4 w-4 text-purple-500 shrink-0" />
+      <span className="font-medium text-gray-900 shrink-0">{item.botName}</span>
+      <span className="text-muted-foreground truncate flex-1">
+        {item.site.name}
       </span>
+      <span className="text-xs text-muted-foreground shrink-0">{timeAgo}</span>
     </div>
+  )
+}
+
+function getTimeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '剛剛'
+  if (mins < 60) return `${mins} 分鐘前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours} 小時前`
+  return `${Math.floor(hours / 24)} 天前`
+}
+
+function ProgressStarsSection() {
+  const { data: stars } = useProgressStars()
+
+  if (!stars || stars.length === 0) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Star className="h-5 w-5 text-yellow-500" />
+          進步之星
+          <span className="text-sm font-normal text-muted-foreground ml-1">
+            分數提升最多的網站
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex gap-4 overflow-x-auto pb-2 -mx-2 px-2 snap-x">
+          {stars.map((star) => (
+            <Link key={star.id} href={`/directory/${star.id}`} className="snap-start">
+              <div className="w-[220px] shrink-0 bg-gradient-to-br from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer">
+                <p className="font-semibold text-sm truncate text-gray-900">
+                  {star.name}
+                </p>
+                <p className="text-xs text-muted-foreground truncate mb-3">
+                  {star.url}
+                </p>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span className="text-lg font-bold text-red-400">{star.firstScore}</span>
+                  <span className="text-muted-foreground">→</span>
+                  <span className="text-lg font-bold text-green-600">{star.bestScore}</span>
+                </div>
+                <div className="text-center">
+                  <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                    +{star.improvement} 分
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                  <span>{star.scanCount} 次掃描</span>
+                  <span>{star.daysToImprove} 天</span>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+const LEADERBOARD_TABS = [
+  { key: 'score', label: '分數排行', icon: Trophy, color: 'text-yellow-500' },
+  { key: 'today', label: '今日 AI 關注', icon: Flame, color: 'text-orange-500' },
+  { key: 'crawled', label: '爬蟲造訪', icon: Zap, color: 'text-purple-500' },
+  { key: 'recent', label: '最近更新', icon: Clock, color: 'text-blue-500' },
+] as const
+
+type LeaderboardTab = (typeof LEADERBOARD_TABS)[number]['key']
+
+function LeaderboardTabs() {
+  const [tab, setTab] = useState<LeaderboardTab>('score')
+  const { data: leaderboard, isLoading: lbLoading } = useLeaderboard()
+  const { data: todayHottest } = useTodayHottest()
+  const { data: mostCrawled } = useMostCrawled()
+  const { data: recentlyActive } = useRecentlyActive()
+
+  const currentData = useMemo(() => {
+    switch (tab) {
+      case 'score':
+        return leaderboard?.map((s) => ({ ...s, metric: s.bestScore, metricLabel: '分' })) || []
+      case 'today':
+        return todayHottest?.map((s) => ({ ...s, metric: s.todayVisits ?? 0, metricLabel: '次' })) || []
+      case 'crawled':
+        return mostCrawled?.map((s) => ({ ...s, metric: s.totalVisits ?? 0, metricLabel: '次' })) || []
+      case 'recent':
+        return recentlyActive?.map((s) => ({ ...s, metric: s.lastScanScore ?? 0, metricLabel: '分' })) || []
+    }
+  }, [tab, leaderboard, todayHottest, mostCrawled, recentlyActive])
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap gap-2">
+          {LEADERBOARD_TABS.map((t) => {
+            const Icon = t.icon
+            const active = tab === t.key
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Icon className={`h-3.5 w-3.5 ${active ? 'text-white' : t.color}`} />
+                {t.label}
+              </button>
+            )
+          })}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {lbLoading && tab === 'score' ? (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
+          </div>
+        ) : currentData.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">
+            尚無數據
+          </p>
+        ) : (
+          <div className="divide-y">
+            {currentData.map((site, i) => {
+              const medalEmoji =
+                i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`
+              return (
+                <Link key={site.id} href={`/directory/${site.id}`}>
+                  <div className="flex items-center gap-4 py-3 px-4 hover:bg-gray-50 rounded-lg cursor-pointer">
+                    <span className="text-lg font-bold w-8 text-center">{medalEmoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{site.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{site.url}</p>
+                    </div>
+                    <TierBadge tier={site.tier} />
+                    <span className="text-lg font-bold tabular-nums text-blue-600">
+                      {site.metric}
+                      <span className="text-xs font-normal text-muted-foreground ml-0.5">
+                        {site.metricLabel}
+                      </span>
+                    </span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -151,9 +333,9 @@ export default function DirectoryPage() {
     page,
     limit: 12,
   })
-  const { data: leaderboard, isLoading: lbLoading } = useLeaderboard()
   const { data: stats, isLoading: statsLoading } = useDirectoryStats()
   const { data: newcomers } = useNewcomers()
+  const { data: crawlerFeed, isLoading: feedLoading } = useCrawlerFeed()
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -215,34 +397,57 @@ export default function DirectoryPage() {
         </Card>
       </div>
 
-      {/* Leaderboard */}
+      {/* Crawler Feed */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-yellow-500" />
-            排行榜 Top 10
+            <Activity className="h-5 w-5 text-purple-500" />
+            即時 AI 爬蟲動態
+            {crawlerFeed?.stats && (
+              <Badge variant="secondary" className="ml-auto text-xs font-normal">
+                24h: {crawlerFeed.stats.last24h} 次造訪
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {lbLoading ? (
-            <div className="space-y-3">
+          {feedLoading ? (
+            <div className="space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full" />
+                <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
-          ) : !leaderboard || leaderboard.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              尚無數據
+          ) : !crawlerFeed || crawlerFeed.feed.length === 0 ? (
+            <p className="text-center text-muted-foreground py-6">
+              尚無爬蟲活動數據
             </p>
           ) : (
-            <div className="divide-y">
-              {leaderboard.map((site, i) => (
-                <LeaderboardRow key={site.id} site={site} rank={i + 1} />
-              ))}
+            <div>
+              {crawlerFeed.stats.activeBots.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {crawlerFeed.stats.activeBots.map((bot) => (
+                    <Badge key={bot.name} variant="outline" className="text-xs">
+                      <Bot className="h-3 w-3 mr-1" />
+                      {bot.name}: {bot.count}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="divide-y max-h-[300px] overflow-y-auto">
+                {crawlerFeed.feed.map((item) => (
+                  <CrawlerFeedRow key={item.id} item={item} />
+                ))}
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Multi-dimension Leaderboards */}
+      <LeaderboardTabs />
+
+      {/* Progress Stars */}
+      <ProgressStarsSection />
 
       {/* Search + Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

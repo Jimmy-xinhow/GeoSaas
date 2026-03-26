@@ -19,6 +19,11 @@ export class ScanController {
     return this.scanService.getScanHistory(siteId, userId);
   }
 
+  @Get('scans/trend')
+  getScoreTrend(@CurrentUser('userId') userId: string) {
+    return this.scanService.getScoreTrend(userId);
+  }
+
   @Get('scans/:scanId')
   getScan(@Param('scanId') scanId: string) {
     return this.scanService.getScanById(scanId);

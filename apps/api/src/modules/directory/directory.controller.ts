@@ -38,6 +38,48 @@ export class DirectoryController {
     return this.service.getNewcomers();
   }
 
+  @Public()
+  @Get('directory/today-hottest')
+  @ApiOperation({ summary: 'Top 10 sites by AI crawler visits today' })
+  todayHottest() {
+    return this.service.getTodayHottest();
+  }
+
+  @Public()
+  @Get('directory/most-crawled')
+  @ApiOperation({ summary: 'Top 10 most crawled sites (all time)' })
+  mostCrawled() {
+    return this.service.getMostCrawled();
+  }
+
+  @Public()
+  @Get('directory/recently-active')
+  @ApiOperation({ summary: 'Recently active sites (last 7 days)' })
+  recentlyActive() {
+    return this.service.getRecentlyActive();
+  }
+
+  @Public()
+  @Get('directory/progress-stars')
+  @ApiOperation({ summary: 'Get top sites with biggest score improvement' })
+  progressStars() {
+    return this.service.getProgressStars();
+  }
+
+  @Public()
+  @Get('directory/crawler-feed')
+  @ApiOperation({ summary: 'Get real-time AI crawler activity feed for public sites' })
+  crawlerFeed(@Query('limit') limit?: string) {
+    return this.service.getCrawlerFeed(limit ? parseInt(limit, 10) : 20);
+  }
+
+  @Public()
+  @Get('directory/:siteId')
+  @ApiOperation({ summary: 'Get public site detail for directory' })
+  detail(@Param('siteId') siteId: string) {
+    return this.service.getSiteDetail(siteId);
+  }
+
   @ApiBearerAuth()
   @Patch('sites/:siteId/directory')
   @ApiOperation({ summary: 'Toggle public directory listing + set industry' })

@@ -65,6 +65,29 @@ export class ScanService {
     return scan;
   }
 
+  /** Get aggregated score trend across all user's sites (last 30 scans) */
+  async getScoreTrend(userId: string) {
+    const scans = await this.prisma.scan.findMany({
+      where: {
+        status: 'COMPLETED',
+        site: { userId },
+      },
+      orderBy: { completedAt: 'asc' },
+      take: 30,
+      select: {
+        totalScore: true,
+        completedAt: true,
+        site: { select: { name: true } },
+      },
+    });
+
+    return scans.map((s) => ({
+      date: s.completedAt,
+      score: s.totalScore,
+      site: s.site.name,
+    }));
+  }
+
   async getScanResults(scanId: string) {
     return this.prisma.scanResult.findMany({
       where: { scanId },

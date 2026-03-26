@@ -118,6 +118,286 @@ export class DirectoryService {
     });
   }
 
+  /** Top 10 sites by crawler visits in the last 24h */
+  async getTodayHottest() {
+    const oneDayAgo = new Date(Date.now() - 86400000);
+
+    const topSites = await this.prisma.crawlerVisit.groupBy({
+      by: ['siteId'],
+      where: {
+        site: { isPublic: true },
+        visitedAt: { gte: oneDayAgo },
+      },
+      _count: true,
+      orderBy: { _count: { siteId: 'desc' } },
+      take: 10,
+    });
+
+    if (topSites.length === 0) return [];
+
+    const siteIds = topSites.map((s) => s.siteId);
+    const sites = await this.prisma.site.findMany({
+      where: { id: { in: siteIds } },
+      select: { id: true, name: true, url: true, industry: true, tier: true, bestScore: true },
+    });
+
+    const siteMap = new Map(sites.map((s) => [s.id, s]));
+    return topSites.map((t) => ({
+      ...siteMap.get(t.siteId),
+      todayVisits: t._count,
+    }));
+  }
+
+  /** Top 10 sites by total crawler visits (all time) */
+  async getMostCrawled() {
+    const topSites = await this.prisma.crawlerVisit.groupBy({
+      by: ['siteId'],
+      where: {
+        site: { isPublic: true },
+      },
+      _count: true,
+      orderBy: { _count: { siteId: 'desc' } },
+      take: 10,
+    });
+
+    if (topSites.length === 0) return [];
+
+    const siteIds = topSites.map((s) => s.siteId);
+    const sites = await this.prisma.site.findMany({
+      where: { id: { in: siteIds } },
+      select: { id: true, name: true, url: true, industry: true, tier: true, bestScore: true },
+    });
+
+    const siteMap = new Map(sites.map((s) => [s.id, s]));
+    return topSites.map((t) => ({
+      ...siteMap.get(t.siteId),
+      totalVisits: t._count,
+    }));
+  }
+
+  /** Sites with recent scan activity (last 7 days) */
+  async getRecentlyActive() {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const recentScans = await this.prisma.scan.findMany({
+      where: {
+        status: 'COMPLETED',
+        completedAt: { gte: sevenDaysAgo },
+        site: { isPublic: true },
+      },
+      orderBy: { completedAt: 'desc' },
+      distinct: ['siteId'],
+      take: 10,
+      select: {
+        siteId: true,
+        totalScore: true,
+        completedAt: true,
+        site: {
+          select: { id: true, name: true, url: true, industry: true, tier: true, bestScore: true },
+        },
+      },
+    });
+
+    return recentScans.map((s) => ({
+      ...s.site,
+      lastScanScore: s.totalScore,
+      lastScanAt: s.completedAt,
+    }));
+  }
+
+  async getCrawlerFeed(limit = 20) {
+    const recentVisits = await this.prisma.crawlerVisit.findMany({
+      where: {
+        site: { isPublic: true },
+      },
+      select: {
+        id: true,
+        botName: true,
+        botOrg: true,
+        url: true,
+        statusCode: true,
+        visitedAt: true,
+        site: {
+          select: {
+            name: true,
+            url: true,
+            industry: true,
+          },
+        },
+      },
+      orderBy: { visitedAt: 'desc' },
+      take: limit,
+    });
+
+    // Aggregate: total visits last 24h, active bots count
+    const oneDayAgo = new Date(Date.now() - 86400000);
+    const [last24hCount, activeBots] = await Promise.all([
+      this.prisma.crawlerVisit.count({
+        where: {
+          site: { isPublic: true },
+          visitedAt: { gte: oneDayAgo },
+        },
+      }),
+      this.prisma.crawlerVisit.groupBy({
+        by: ['botName'],
+        where: {
+          site: { isPublic: true },
+          visitedAt: { gte: oneDayAgo },
+        },
+        _count: true,
+      }),
+    ]);
+
+    return {
+      feed: recentVisits,
+      stats: {
+        last24h: last24hCount,
+        activeBots: activeBots.map((b) => ({
+          name: b.botName,
+          count: b._count,
+        })),
+      },
+    };
+  }
+
+  async getSiteDetail(siteId: string) {
+    const site = await this.prisma.site.findFirst({
+      where: { id: siteId, isPublic: true },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        industry: true,
+        tier: true,
+        bestScore: true,
+        bestScoreAt: true,
+        profile: true,
+        createdAt: true,
+        scans: {
+          where: { status: 'COMPLETED' },
+          orderBy: { completedAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            totalScore: true,
+            completedAt: true,
+            results: {
+              select: {
+                indicator: true,
+                score: true,
+                status: true,
+                suggestion: true,
+              },
+            },
+          },
+        },
+        qas: {
+          take: 5,
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            question: true,
+            answer: true,
+            category: true,
+          },
+        },
+      },
+    });
+
+    if (!site) throw new NotFoundException('Site not found');
+
+    const [scoreTrend, crawlerStats, totalCrawlerVisits] = await Promise.all([
+      this.prisma.scan.findMany({
+        where: { siteId, status: 'COMPLETED' },
+        orderBy: { completedAt: 'asc' },
+        take: 10,
+        select: { totalScore: true, completedAt: true },
+      }),
+      this.prisma.crawlerVisit.groupBy({
+        by: ['botName', 'botOrg'],
+        where: { siteId },
+        _count: true,
+        _max: { visitedAt: true },
+      }),
+      this.prisma.crawlerVisit.count({ where: { siteId } }),
+    ]);
+
+    const { scans, ...siteData } = site;
+
+    return {
+      ...siteData,
+      latestScan: scans[0] || null,
+      scoreTrend: scoreTrend.map((s) => ({
+        date: s.completedAt,
+        score: s.totalScore,
+      })),
+      crawlerActivity: {
+        totalVisits: totalCrawlerVisits,
+        bots: crawlerStats.map((b) => ({
+          name: b.botName,
+          org: b.botOrg,
+          visitCount: b._count,
+          lastVisit: b._max.visitedAt,
+        })),
+      },
+    };
+  }
+
+  /** Sites with the biggest score improvement (first scan → best scan) */
+  async getProgressStars() {
+    // Get public sites that have at least 2 scans
+    const sites = await this.prisma.site.findMany({
+      where: {
+        isPublic: true,
+        bestScore: { gt: 0 },
+        scans: { some: { status: 'COMPLETED' } },
+      },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        industry: true,
+        tier: true,
+        bestScore: true,
+        scans: {
+          where: { status: 'COMPLETED' },
+          orderBy: { completedAt: 'asc' },
+          select: { totalScore: true, completedAt: true },
+        },
+      },
+    });
+
+    const stars = sites
+      .filter((s) => s.scans.length >= 2)
+      .map((s) => {
+        const firstScan = s.scans[0];
+        const bestScan = s.scans.reduce((a, b) => (b.totalScore > a.totalScore ? b : a), s.scans[0]);
+        const improvement = bestScan.totalScore - firstScan.totalScore;
+        const daysBetween = Math.ceil(
+          (new Date(bestScan.completedAt!).getTime() - new Date(firstScan.completedAt!).getTime()) / 86400000,
+        );
+
+        return {
+          id: s.id,
+          name: s.name,
+          url: s.url,
+          industry: s.industry,
+          tier: s.tier,
+          firstScore: firstScan.totalScore,
+          bestScore: bestScan.totalScore,
+          improvement,
+          scanCount: s.scans.length,
+          daysToImprove: Math.max(daysBetween, 1),
+        };
+      })
+      .filter((s) => s.improvement > 0)
+      .sort((a, b) => b.improvement - a.improvement)
+      .slice(0, 10);
+
+    return stars;
+  }
+
   async togglePublic(siteId: string, dto: TogglePublicDto) {
     const site = await this.prisma.site.findUnique({ where: { id: siteId } });
     if (!site) throw new NotFoundException('Site not found');

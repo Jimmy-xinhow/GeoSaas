@@ -160,4 +160,56 @@ export class ScanPipelineService {
       throw error;
     }
   }
+
+  /**
+   * Execute a lightweight scan for guest users (no DB scan record needed).
+   * Returns results directly without persisting to Scan/ScanResult tables.
+   */
+  async executeGuestScan(url: string): Promise<{
+    totalScore: number;
+    indicators: Record<string, IndicatorResult>;
+  }> {
+    this.logger.log(`Starting guest scan for ${url}`);
+
+    const [crawlResult, llmsTxtContent] = await Promise.all([
+      this.crawler.crawl(url),
+      this.crawler.fetchLlmsTxt(url),
+    ]);
+
+    const $ = this.parser.load(crawlResult.html);
+    const input: AnalysisInput = {
+      url,
+      html: crawlResult.html,
+      $,
+      headers: crawlResult.headers,
+      llmsTxt: llmsTxtContent,
+    };
+
+    const resultsMap = new Map<string, IndicatorResult>();
+
+    await Promise.all(
+      this.indicators.map(async (indicator) => {
+        try {
+          const result = await indicator.analyze(input);
+          resultsMap.set(indicator.name, result);
+        } catch (error) {
+          this.logger.warn(`Guest scan indicator "${indicator.name}" failed: ${error}`);
+          resultsMap.set(indicator.name, {
+            score: 0,
+            status: 'fail',
+            details: { error: true, message: error instanceof Error ? error.message : String(error) },
+            suggestion: `分析 ${indicator.name} 時發生錯誤`,
+            autoFixable: false,
+          });
+        }
+      }),
+    );
+
+    const totalScore = this.scoring.calculateTotalScore(resultsMap);
+    const indicators: Record<string, IndicatorResult> = {};
+    resultsMap.forEach((v, k) => (indicators[k] = v));
+
+    this.logger.log(`Guest scan for ${url} completed with score ${totalScore}`);
+    return { totalScore, indicators };
+  }
 }

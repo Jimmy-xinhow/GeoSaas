@@ -81,6 +81,153 @@ export function useNewcomers() {
   });
 }
 
+export interface RankedSite extends DirectorySite {
+  todayVisits?: number;
+  totalVisits?: number;
+  lastScanScore?: number;
+  lastScanAt?: string;
+}
+
+export function useTodayHottest() {
+  return useQuery({
+    queryKey: ['directory', 'today-hottest'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<RankedSite[]>('/directory/today-hottest');
+      return data;
+    },
+  });
+}
+
+export function useMostCrawled() {
+  return useQuery({
+    queryKey: ['directory', 'most-crawled'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<RankedSite[]>('/directory/most-crawled');
+      return data;
+    },
+  });
+}
+
+export function useRecentlyActive() {
+  return useQuery({
+    queryKey: ['directory', 'recently-active'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<RankedSite[]>('/directory/recently-active');
+      return data;
+    },
+  });
+}
+
+export interface ProgressStar {
+  id: string;
+  name: string;
+  url: string;
+  industry: string | null;
+  tier: string | null;
+  firstScore: number;
+  bestScore: number;
+  improvement: number;
+  scanCount: number;
+  daysToImprove: number;
+}
+
+export function useProgressStars() {
+  return useQuery({
+    queryKey: ['directory', 'progress-stars'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ProgressStar[]>('/directory/progress-stars');
+      return data;
+    },
+  });
+}
+
+export interface CrawlerFeedItem {
+  id: string;
+  botName: string;
+  botOrg: string;
+  url: string;
+  statusCode: number;
+  visitedAt: string;
+  site: {
+    name: string;
+    url: string;
+    industry: string | null;
+  };
+}
+
+export interface CrawlerFeedResult {
+  feed: CrawlerFeedItem[];
+  stats: {
+    last24h: number;
+    activeBots: { name: string; count: number }[];
+  };
+}
+
+export function useCrawlerFeed() {
+  return useQuery({
+    queryKey: ['directory', 'crawler-feed'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<CrawlerFeedResult>(
+        '/directory/crawler-feed',
+      );
+      return data;
+    },
+    refetchInterval: 30000,
+  });
+}
+
+export interface DirectorySiteDetail {
+  id: string;
+  name: string;
+  url: string;
+  industry: string | null;
+  tier: string | null;
+  bestScore: number;
+  bestScoreAt: string | null;
+  profile: Record<string, any> | null;
+  createdAt: string;
+  latestScan: {
+    id: string;
+    totalScore: number;
+    completedAt: string;
+    results: {
+      indicator: string;
+      score: number;
+      status: string;
+      suggestion: string | null;
+    }[];
+  } | null;
+  qas: {
+    id: string;
+    question: string;
+    answer: string;
+    category: string | null;
+  }[];
+  scoreTrend: { date: string; score: number }[];
+  crawlerActivity: {
+    totalVisits: number;
+    bots: {
+      name: string;
+      org: string;
+      visitCount: number;
+      lastVisit: string;
+    }[];
+  };
+}
+
+export function useSiteDetail(siteId: string) {
+  return useQuery({
+    queryKey: ['directory', 'site', siteId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<DirectorySiteDetail>(
+        `/directory/${siteId}`,
+      );
+      return data;
+    },
+    enabled: !!siteId,
+  });
+}
+
 export function useTogglePublic() {
   const queryClient = useQueryClient();
 

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from 'sonner';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages } from 'next-intl/server';
 import './globals.css';
 import QueryProvider from '@/providers/query-provider';
 
@@ -11,15 +13,20 @@ export const metadata: Metadata = {
   description: 'AI-powered search optimization platform for modern businesses',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="zh-TW" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <body className={inter.className}>
-        <QueryProvider>{children}</QueryProvider>
+        <NextIntlClientProvider messages={messages}>
+          <QueryProvider>{children}</QueryProvider>
+        </NextIntlClientProvider>
         <Toaster richColors position="top-right" />
       </body>
     </html>
