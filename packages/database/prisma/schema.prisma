@@ -108,6 +108,7 @@ model Site {
   qas                 SiteQa[]
   crawlerVisits       CrawlerVisit[]
   crawlerRobotsChecks CrawlerRobotsCheck[]
+  blogArticles        BlogArticle[]
 
   @@map("sites")
 }
@@ -272,6 +273,49 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@map("notifications")
+}
+
+model BlogArticle {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description String
+  content     String   @db.Text
+  category    String   @default("analysis")
+  locale      String   @default("zh-TW")
+  siteId      String?
+  site        Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  published   Boolean  @default(true)
+  readTime    String   @default("5 分鐘")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([siteId])
+  @@index([published, createdAt])
+  @@map("blog_articles")
+}
+
+model NewsArticle {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  title         String
+  titleEn       String?
+  titleJa       String?
+  summary       String   @db.Text
+  summaryEn     String?  @db.Text
+  summaryJa     String?  @db.Text
+  sourceUrl     String
+  sourceName    String
+  category      String   @default("ai-seo")
+  imageUrl      String?
+  published     Boolean  @default(true)
+  publishedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([category, publishedAt])
+  @@index([published, publishedAt])
+  @@map("news_articles")
 }
 
 model GuestScan {

@@ -369,6 +369,12 @@ export default function LandingPage() {
             >
               Blog
             </Link>
+            <Link
+              href="/news"
+              className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              News
+            </Link>
           </div>
         </div>
         <div className="flex items-center gap-3">

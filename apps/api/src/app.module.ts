@@ -23,6 +23,8 @@ import { DirectoryModule } from './modules/directory/directory.module';
 import { CrawlerTrackingModule } from './modules/crawler-tracking/crawler-tracking.module';
 import { GuestScanModule } from './modules/guest-scan/guest-scan.module';
 import { IndexNowModule } from './modules/indexnow/indexnow.module';
+import { BlogArticleModule } from './modules/blog-article/blog-article.module';
+import { NewsModule } from './modules/news/news.module';
 
 @Module({
   imports: [
@@ -58,6 +60,8 @@ import { IndexNowModule } from './modules/indexnow/indexnow.module';
     CrawlerTrackingModule,
     GuestScanModule,
     IndexNowModule,
+    BlogArticleModule,
+    NewsModule,
   ],
   controllers: [HealthController],
   providers: [
