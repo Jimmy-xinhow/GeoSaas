@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useGuestScan, useGuestScanStatus } from '@/hooks/use-guest-scan'
 import { useSubmitIndexNow } from '@/hooks/use-indexnow'
-import { useCrawlerFeed } from '@/hooks/use-directory'
+import { useCrawlerFeed, usePlatformStats } from '@/hooks/use-directory'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { useTranslations } from 'next-intl'
 
@@ -115,6 +115,33 @@ const STATUS_COLOR = {
   pass: 'text-green-600',
   warning: 'text-yellow-600',
   fail: 'text-red-500',
+}
+
+function PlatformStatsBar() {
+  const { data: stats } = usePlatformStats()
+
+  const items = [
+    { label: '收錄網站', value: stats?.totalSites ?? 0 },
+    { label: '完成掃描', value: stats?.totalScans ?? 0 },
+    { label: '爬蟲造訪', value: stats?.totalCrawlerVisits ?? 0 },
+    { label: '24h 造訪', value: stats?.crawlerVisits24h ?? 0 },
+    { label: '活躍 Bot', value: stats?.activeBots ?? 0 },
+  ]
+
+  return (
+    <div className="bg-white border-b border-gray-100 py-4">
+      <div className="max-w-5xl mx-auto flex items-center justify-around px-4">
+        {items.map((item) => (
+          <div key={item.label} className="text-center">
+            <p className="text-2xl font-bold text-gray-900 tabular-nums">
+              {item.value.toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">{item.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function CrawlerMarquee() {
@@ -336,6 +363,12 @@ export default function LandingPage() {
             >
               目錄
             </Link>
+            <Link
+              href="/blog"
+              className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              Blog
+            </Link>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -409,6 +442,9 @@ export default function LandingPage() {
           {scanId && <GuestScanResults scanId={scanId} />}
         </div>
       </section>
+
+      {/* Platform Stats */}
+      <PlatformStatsBar />
 
       {/* Crawler Marquee */}
       <CrawlerMarquee />

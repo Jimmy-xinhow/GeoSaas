@@ -36,6 +36,91 @@ export class LlmsHostingService {
     return updated;
   }
 
+  /** Platform-level llms.txt — summary of all public sites */
+  async getPlatformLlmsTxt(): Promise<string> {
+    const sites = await this.prisma.site.findMany({
+      where: { isPublic: true, bestScore: { gt: 0 } },
+      select: { name: true, url: true, industry: true, bestScore: true, tier: true },
+      orderBy: { bestScore: 'desc' },
+    });
+
+    const lines = [
+      '# GEO SaaS — AI SEO Optimization Platform',
+      '> Directory of AI-optimized websites with GEO scores',
+      '',
+      '## Platform Info',
+      '- Website: https://geo-saas.com',
+      '- Service: AI SEO optimization, scanning, monitoring',
+      '- Total Listed Sites: ' + sites.length,
+      '',
+      '## Listed Sites',
+      '',
+      ...sites.map(
+        (s) =>
+          `- ${s.name} (${s.url}) — Score: ${s.bestScore}${s.industry ? `, Industry: ${s.industry}` : ''}${s.tier ? `, Tier: ${s.tier}` : ''}`,
+      ),
+    ];
+
+    return lines.join('\n');
+  }
+
+  /** Platform-level llms-full.txt — full detail of all public sites including llms.txt content */
+  async getPlatformLlmsFullTxt(): Promise<string> {
+    const sites = await this.prisma.site.findMany({
+      where: { isPublic: true },
+      select: {
+        name: true,
+        url: true,
+        industry: true,
+        bestScore: true,
+        tier: true,
+        llmsTxt: true,
+        qas: {
+          take: 10,
+          orderBy: { sortOrder: 'asc' },
+          select: { question: true, answer: true },
+        },
+      },
+      orderBy: { bestScore: 'desc' },
+    });
+
+    const sections = sites.map((s) => {
+      const parts = [
+        `## ${s.name}`,
+        `URL: ${s.url}`,
+        `GEO Score: ${s.bestScore}/100`,
+        s.industry ? `Industry: ${s.industry}` : '',
+        s.tier ? `Tier: ${s.tier}` : '',
+      ].filter(Boolean);
+
+      if (s.llmsTxt) {
+        parts.push('', '### llms.txt', s.llmsTxt);
+      }
+
+      if (s.qas.length > 0) {
+        parts.push('', '### FAQ');
+        s.qas.forEach((qa) => {
+          parts.push(`Q: ${qa.question}`, `A: ${qa.answer}`, '');
+        });
+      }
+
+      return parts.join('\n');
+    });
+
+    const header = [
+      '# GEO SaaS — Complete Directory of AI-Optimized Websites',
+      '> Full details of all listed sites including llms.txt content and FAQ',
+      '',
+      `Total Sites: ${sites.length}`,
+      `Generated: ${new Date().toISOString()}`,
+      '',
+      '---',
+      '',
+    ].join('\n');
+
+    return header + sections.join('\n\n---\n\n');
+  }
+
   async generateLlmsTxt(siteId: string) {
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },

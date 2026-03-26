@@ -39,6 +39,13 @@ export class DirectoryController {
   }
 
   @Public()
+  @Get('directory/platform-stats')
+  @ApiOperation({ summary: 'Get platform-wide statistics for landing page' })
+  platformStats() {
+    return this.service.getPlatformStats();
+  }
+
+  @Public()
   @Get('directory/today-hottest')
   @ApiOperation({ summary: 'Top 10 sites by AI crawler visits today' })
   todayHottest() {

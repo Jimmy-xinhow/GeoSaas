@@ -11,6 +11,24 @@ export class LlmsHostingController {
   constructor(private readonly service: LlmsHostingService) {}
 
   @Public()
+  @Get('llms.txt')
+  @ApiOperation({ summary: 'Platform-level llms.txt — summary of all public sites' })
+  async getPlatformLlmsTxt(@Res() res: Response) {
+    const content = await this.service.getPlatformLlmsTxt();
+    res.set('Cache-Control', 'public, max-age=3600');
+    return res.type('text/plain').send(content);
+  }
+
+  @Public()
+  @Get('llms-full.txt')
+  @ApiOperation({ summary: 'Platform-level llms-full.txt — full detail of all public sites' })
+  async getPlatformLlmsFullTxt(@Res() res: Response) {
+    const content = await this.service.getPlatformLlmsFullTxt();
+    res.set('Cache-Control', 'public, max-age=3600');
+    return res.type('text/plain').send(content);
+  }
+
+  @Public()
   @Get('llms/:siteId/llms.txt')
   @ApiOperation({ summary: 'Get hosted llms.txt (public, plain text)' })
   @ApiResponse({ status: 200, description: 'Returns llms.txt content as plain text' })

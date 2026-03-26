@@ -206,6 +206,36 @@ export class DirectoryService {
     }));
   }
 
+  /** Platform-wide stats for landing page */
+  async getPlatformStats() {
+    const oneDayAgo = new Date(Date.now() - 86400000);
+
+    const [
+      totalPublicSites,
+      totalScans,
+      totalCrawlerVisits,
+      crawlerVisits24h,
+      activeBotCount,
+    ] = await Promise.all([
+      this.prisma.site.count({ where: { isPublic: true } }),
+      this.prisma.scan.count({ where: { status: 'COMPLETED' } }),
+      this.prisma.crawlerVisit.count(),
+      this.prisma.crawlerVisit.count({ where: { visitedAt: { gte: oneDayAgo } } }),
+      this.prisma.crawlerVisit.groupBy({
+        by: ['botName'],
+        where: { visitedAt: { gte: oneDayAgo } },
+      }).then((r) => r.length),
+    ]);
+
+    return {
+      totalSites: totalPublicSites,
+      totalScans,
+      totalCrawlerVisits,
+      crawlerVisits24h,
+      activeBots: activeBotCount,
+    };
+  }
+
   async getCrawlerFeed(limit = 20) {
     const recentVisits = await this.prisma.crawlerVisit.findMany({
       where: {

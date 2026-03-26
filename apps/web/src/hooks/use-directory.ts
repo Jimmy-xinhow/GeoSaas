@@ -141,6 +141,25 @@ export function useProgressStars() {
   });
 }
 
+export interface PlatformStats {
+  totalSites: number;
+  totalScans: number;
+  totalCrawlerVisits: number;
+  crawlerVisits24h: number;
+  activeBots: number;
+}
+
+export function usePlatformStats() {
+  return useQuery({
+    queryKey: ['directory', 'platform-stats'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<PlatformStats>('/directory/platform-stats');
+      return data;
+    },
+    refetchInterval: 60000, // refresh every minute
+  });
+}
+
 export interface CrawlerFeedItem {
   id: string;
   botName: string;
