@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
+import { BadgeModule } from '../badge/badge.module';
 import { ScanController } from './scan.controller';
 import { ScanService } from './scan.service';
 import { ScanProcessor } from './scan.processor';
@@ -37,7 +38,7 @@ const coreProviders = [
 ];
 
 @Module({
-  imports: [BullModule.registerQueue({ name: 'scan' })],
+  imports: [BullModule.registerQueue({ name: 'scan' }), BadgeModule],
   controllers: [ScanController],
   providers: [...coreProviders, ScanProcessor],
   exports: [ScanService, ScanPipelineService],

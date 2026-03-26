@@ -1,5 +1,6 @@
 import { MetadataRoute } from 'next';
 import { getAllPosts } from '@/content/blog/posts';
+import { INDUSTRIES } from '@geo-saas/shared';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://geo-saas.com';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -35,6 +36,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     });
   }
+
+  // Industry pages
+  for (const ind of INDUSTRIES) {
+    entries.push({
+      url: `${BASE_URL}/directory/industry/${ind.value}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.7,
+    });
+  }
+
+  // News page
+  entries.push({
+    url: `${BASE_URL}/news`,
+    lastModified: new Date(),
+    changeFrequency: 'daily',
+    priority: 0.7,
+  });
 
   // Directory sites (fetch from API)
   try {

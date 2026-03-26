@@ -141,6 +141,41 @@ export function useProgressStars() {
   });
 }
 
+export interface IndustryStats {
+  industry: string;
+  totalSites: number;
+  avgScore: number;
+  maxScore: number;
+  topSites: { id: string; name: string; url: string; tier: string | null; bestScore: number }[];
+}
+
+export interface IndustryOverview {
+  industry: string;
+  count: number;
+  avgScore: number;
+}
+
+export function useIndustryStats(industry: string) {
+  return useQuery({
+    queryKey: ['directory', 'industry', industry],
+    queryFn: async () => {
+      const { data } = await apiClient.get<IndustryStats>(`/directory/industry/${industry}`);
+      return data;
+    },
+    enabled: !!industry,
+  });
+}
+
+export function useAllIndustryStats() {
+  return useQuery({
+    queryKey: ['directory', 'industry-stats'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<IndustryOverview[]>('/directory/industry-stats');
+      return data;
+    },
+  });
+}
+
 export interface PlatformStats {
   totalSites: number;
   totalScans: number;
@@ -223,6 +258,7 @@ export interface DirectorySiteDetail {
     category: string | null;
   }[];
   scoreTrend: { date: string; score: number }[];
+  badges: { badge: string; label: string; awardedAt: string }[];
   crawlerActivity: {
     totalVisits: number;
     bots: {

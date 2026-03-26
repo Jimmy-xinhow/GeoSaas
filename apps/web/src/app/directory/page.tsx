@@ -449,6 +449,17 @@ export default function DirectoryPage() {
       {/* Progress Stars */}
       <ProgressStarsSection />
 
+      {/* Industry Quick Links */}
+      <div className="flex flex-wrap gap-2">
+        {INDUSTRIES.map((ind) => (
+          <Link key={ind.value} href={`/directory/industry/${ind.value}`}>
+            <Badge variant="outline" className="cursor-pointer hover:bg-gray-100 px-3 py-1.5 text-sm">
+              {ind.label}
+            </Badge>
+          </Link>
+        ))}
+      </div>
+
       {/* Search + Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">

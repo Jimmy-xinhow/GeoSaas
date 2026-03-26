@@ -8,6 +8,7 @@ import {
   Globe,
   Calendar,
   MessageSquare,
+  Award,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -226,6 +227,21 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Badges */}
+      {site.badges && site.badges.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {site.badges.map((b) => (
+            <div
+              key={b.badge}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-full text-sm"
+            >
+              <Award className="h-3.5 w-3.5 text-yellow-600" />
+              <span className="font-medium text-yellow-800">{b.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Indicator Breakdown */}
       {site.latestScan && site.latestScan.results.length > 0 && (

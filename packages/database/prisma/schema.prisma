@@ -109,6 +109,7 @@ model Site {
   crawlerVisits       CrawlerVisit[]
   crawlerRobotsChecks CrawlerRobotsCheck[]
   blogArticles        BlogArticle[]
+  badges              SiteBadge[]
 
   @@map("sites")
 }
@@ -294,6 +295,19 @@ model BlogArticle {
   @@index([siteId])
   @@index([published, createdAt])
   @@map("blog_articles")
+}
+
+model SiteBadge {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  badge     String   // e.g. "first_scan", "score_50", "score_80", "score_100", "crawler_visited", "top_10", "improver"
+  label     String   // Display label
+  awardedAt DateTime @default(now())
+
+  @@unique([siteId, badge])
+  @@index([siteId])
+  @@map("site_badges")
 }
 
 model NewsArticle {

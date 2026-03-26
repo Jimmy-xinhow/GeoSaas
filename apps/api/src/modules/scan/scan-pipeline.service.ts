@@ -12,6 +12,7 @@ import { TitleOptimizationIndicator } from './indicators/title-optimization.indi
 import { ContactInfoIndicator } from './indicators/contact-info.indicator';
 import { ImageAltIndicator } from './indicators/image-alt.indicator';
 import { IIndicatorAnalyzer, IndicatorResult, AnalysisInput } from './indicators/indicator.interface';
+import { BadgeService } from '../badge/badge.service';
 
 @Injectable()
 export class ScanPipelineService {
@@ -31,6 +32,7 @@ export class ScanPipelineService {
     private readonly titleOptimization: TitleOptimizationIndicator,
     private readonly contactInfo: ContactInfoIndicator,
     private readonly imageAlt: ImageAltIndicator,
+    private readonly badgeService: BadgeService,
   ) {
     this.indicators = [
       this.jsonLd,
@@ -148,6 +150,13 @@ export class ScanPipelineService {
             data: { bestScore: totalScore, bestScoreAt: new Date() },
           });
         }
+      }
+
+      // Evaluate and award badges (fire-and-forget)
+      if (scan) {
+        this.badgeService.evaluateBadges(scan.siteId).catch((err) => {
+          this.logger.warn(`Badge evaluation failed for site ${scan.siteId}: ${err}`);
+        });
       }
 
       this.logger.log(`Scan ${scanId} completed with score ${totalScore}`);

@@ -39,6 +39,20 @@ export class DirectoryController {
   }
 
   @Public()
+  @Get('directory/industry-stats')
+  @ApiOperation({ summary: 'Get stats per industry (overview)' })
+  allIndustryStats() {
+    return this.service.getAllIndustryStats();
+  }
+
+  @Public()
+  @Get('directory/industry/:industry')
+  @ApiOperation({ summary: 'Get stats for a specific industry' })
+  industryStats(@Param('industry') industry: string) {
+    return this.service.getIndustryStats(industry);
+  }
+
+  @Public()
   @Get('directory/platform-stats')
   @ApiOperation({ summary: 'Get platform-wide statistics for landing page' })
   platformStats() {

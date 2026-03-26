@@ -207,6 +207,51 @@ export class DirectoryService {
   }
 
   /** Platform-wide stats for landing page */
+  /** Stats for a specific industry */
+  async getIndustryStats(industry: string) {
+    const [totalSites, avgResult, topSites] = await Promise.all([
+      this.prisma.site.count({ where: { isPublic: true, industry } }),
+      this.prisma.site.aggregate({
+        where: { isPublic: true, industry },
+        _avg: { bestScore: true },
+        _max: { bestScore: true },
+      }),
+      this.prisma.site.findMany({
+        where: { isPublic: true, industry, bestScore: { gt: 0 } },
+        select: { id: true, name: true, url: true, tier: true, bestScore: true },
+        orderBy: { bestScore: 'desc' },
+        take: 5,
+      }),
+    ]);
+
+    return {
+      industry,
+      totalSites,
+      avgScore: Math.round(avgResult._avg.bestScore || 0),
+      maxScore: avgResult._max.bestScore || 0,
+      topSites,
+    };
+  }
+
+  /** Stats per industry (for overview) */
+  async getAllIndustryStats() {
+    const stats = await this.prisma.site.groupBy({
+      by: ['industry'],
+      where: { isPublic: true, industry: { not: null } },
+      _count: true,
+      _avg: { bestScore: true },
+    });
+
+    return stats
+      .filter((s) => s.industry)
+      .map((s) => ({
+        industry: s.industry!,
+        count: s._count,
+        avgScore: Math.round(s._avg.bestScore || 0),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }
+
   async getPlatformStats() {
     const oneDayAgo = new Date(Date.now() - 86400000);
 
@@ -331,6 +376,10 @@ export class DirectoryService {
             answer: true,
             category: true,
           },
+        },
+        badges: {
+          orderBy: { awardedAt: 'asc' },
+          select: { badge: true, label: true, awardedAt: true },
         },
       },
     });

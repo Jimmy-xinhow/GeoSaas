@@ -25,6 +25,7 @@ import { GuestScanModule } from './modules/guest-scan/guest-scan.module';
 import { IndexNowModule } from './modules/indexnow/indexnow.module';
 import { BlogArticleModule } from './modules/blog-article/blog-article.module';
 import { NewsModule } from './modules/news/news.module';
+import { BadgeModule } from './modules/badge/badge.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { NewsModule } from './modules/news/news.module';
     IndexNowModule,
     BlogArticleModule,
     NewsModule,
+    BadgeModule,
   ],
   controllers: [HealthController],
   providers: [
