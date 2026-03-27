@@ -10,9 +10,11 @@ import {
   Share2,
   Settings,
   Trophy,
+  Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import useAuthStore from '@/stores/auth-store'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: '總覽' },
@@ -26,6 +28,7 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const user = useAuthStore((s) => s.user)
 
   return (
     <aside className="w-64 h-screen bg-gray-900 text-white flex flex-col sticky top-0">
@@ -55,6 +58,20 @@ export default function Sidebar() {
             </Link>
           )
         })}
+        {user?.role === 'ADMIN' && (
+          <Link
+            href="/admin"
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors mt-4 border border-red-800/30',
+              pathname?.startsWith('/admin')
+                ? 'bg-red-900/30 text-red-400'
+                : 'text-red-400/70 hover:text-red-400 hover:bg-red-900/20'
+            )}
+          >
+            <Shield className="h-5 w-5 shrink-0" />
+            管理後台
+          </Link>
+        )}
       </nav>
 
       {/* Bottom usage section */}
