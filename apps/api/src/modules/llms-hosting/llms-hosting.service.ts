@@ -58,7 +58,7 @@ export class LlmsHostingService {
       '## Listed Sites',
       '',
       ...sites.map(
-        (s) =>
+        (s: any) =>
           `- ${s.name} (${s.url}) — Score: ${s.bestScore}${s.industry ? `, Industry: ${s.industry}` : ''}${s.tier ? `, Tier: ${s.tier}` : ''}`,
       ),
     ];

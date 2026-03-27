@@ -166,7 +166,7 @@ export class KnowledgeService {
       select: { question: true },
     });
     const existingQuestions = [
-      ...existing.map((q) => q.question),
+      ...existing.map((q: any) => q.question),
       ...(excludeQuestions || []),
     ];
 

@@ -339,7 +339,7 @@ export class DirectoryService {
         count: s._count,
         avgScore: Math.round(s._avg.bestScore || 0),
       }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a: any, b: any) => b.count - a.count);
   }
 
   async getPlatformStats() {
@@ -561,7 +561,7 @@ export class DirectoryService {
         };
       })
       .filter((s: any) => s.improvement > 0)
-      .sort((a, b) => b.improvement - a.improvement)
+      .sort((a: any, b: any) => b.improvement - a.improvement)
       .slice(0, 10);
 
     return stars;

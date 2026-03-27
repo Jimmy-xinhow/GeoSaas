@@ -63,7 +63,7 @@ export class MonitorService {
 
   async getDashboard(userId: string) {
     const sites = await this.prisma.site.findMany({ where: { userId }, select: { id: true } });
-    const siteIds = sites.map((s) => s.id);
+    const siteIds = sites.map((s: any) => s.id);
     const monitors = await this.prisma.monitor.findMany({
       where: { siteId: { in: siteIds } },
       orderBy: { checkedAt: 'desc' },
@@ -75,7 +75,7 @@ export class MonitorService {
     const platformKeys = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI'];
 
     const platforms = platformKeys.map((p) => {
-      const pMonitors = monitors.filter((m) => m.platform.toUpperCase() === p);
+      const pMonitors = monitors.filter((m: any) => m.platform.toUpperCase() === p);
       const checked = pMonitors.filter((m: any) => m.response && !m.response.startsWith('[Error]'));
       const mentioned = checked.filter((m: any) => m.mentioned).length;
       const total = pMonitors.length;
