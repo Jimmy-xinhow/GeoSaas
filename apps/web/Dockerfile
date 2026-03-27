@@ -27,17 +27,13 @@ RUN pnpm install --frozen-lockfile
 COPY packages/ packages/
 COPY apps/web/ apps/web/
 
-# Build-time env vars (NEXT_PUBLIC_* must exist at build time)
-ARG NEXT_PUBLIC_API_URL=https://api.geovault.app
-ARG NEXT_PUBLIC_SITE_URL=https://geovault.app
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
-
 # Build shared package (web depends on it)
 RUN pnpm --filter @geovault/shared build
 
-# Build the Next.js app
-RUN pnpm --filter @geovault/web build
+# Build the Next.js app with production env vars hardcoded
+ENV NEXT_PUBLIC_API_URL=https://api.geovault.app
+ENV NEXT_PUBLIC_SITE_URL=https://geovault.app
+RUN NEXT_PUBLIC_API_URL=https://api.geovault.app NEXT_PUBLIC_SITE_URL=https://geovault.app pnpm --filter @geovault/web build
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
@@ -45,6 +41,8 @@ FROM node:20-alpine AS runner
 RUN apk add --no-cache dumb-init
 
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_API_URL=https://api.geovault.app
+ENV NEXT_PUBLIC_SITE_URL=https://geovault.app
 WORKDIR /app
 
 # Create non-root user
