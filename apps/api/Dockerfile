@@ -42,8 +42,8 @@ RUN pnpm --filter @geovault/api build
 # Create standalone production bundle
 RUN pnpm --filter @geovault/api --prod deploy /app/pruned
 
-# Generate Prisma client inside pruned (prisma is now a prod dependency)
-RUN cd /app/pruned && npx prisma generate --schema=/app/packages/database/prisma/schema.prisma
+# Generate Prisma client inside pruned (prisma is a prod dependency, use its binary directly)
+RUN cd /app/pruned && node_modules/.bin/prisma generate --schema=/app/packages/database/prisma/schema.prisma
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
