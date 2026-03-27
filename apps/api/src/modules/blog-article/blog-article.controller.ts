@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, Body } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { BlogArticleService } from './blog-article.service';
@@ -66,6 +66,14 @@ export class BlogArticleController {
       console.error('Bulk generation failed:', err);
     });
     return { message: 'Bulk generation started' };
+  }
+
+  @ApiBearerAuth()
+  @Delete('quality-audit')
+  @ApiOperation({ summary: 'Delete articles below quality threshold and return stats' })
+  async qualityAudit(@Query('threshold') threshold?: string) {
+    const minScore = threshold ? parseInt(threshold, 10) : 85;
+    return this.service.qualityAudit(minScore);
   }
 
   @ApiBearerAuth()

@@ -497,4 +497,33 @@ export class BlogArticleService {
       totalSites: result._count.id,
     };
   }
+
+  /**
+   * Quality audit: scan all articles, delete those below threshold.
+   */
+  async qualityAudit(minScore: number = 85) {
+    const articles = await this.prisma.blogArticle.findMany({
+      where: { published: true },
+      select: { id: true, title: true, content: true, siteId: true, slug: true },
+    });
+
+    let deleted = 0;
+    let kept = 0;
+    const deletedTitles: string[] = [];
+
+    for (const article of articles) {
+      const siteName = article.title?.split(' ')[0] || '';
+      const quality = this.assessArticleQuality(article.content || '', siteName);
+      if (quality < minScore) {
+        await this.prisma.blogArticle.delete({ where: { id: article.id } });
+        deleted++;
+        deletedTitles.push(`${quality}/100 | ${article.slug}`);
+      } else {
+        kept++;
+      }
+    }
+
+    this.logger.log(`Quality audit complete: ${kept} kept, ${deleted} deleted (threshold: ${minScore})`);
+    return { total: articles.length, kept, deleted, threshold: minScore };
+  }
 }
