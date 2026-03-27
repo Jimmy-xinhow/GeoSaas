@@ -165,74 +165,119 @@ export class BlogArticleService {
     };
 
     const scoreLabel = site.bestScore >= 80 ? '優秀' : site.bestScore >= 60 ? '良好' : site.bestScore >= 40 ? '需改善' : '待優化';
+    const tierLabel = site.tier ? { platinum: '白金', gold: '金牌', silver: '銀牌', bronze: '銅牌' }[site.tier] || site.tier : '未評級';
+    const scanDate = scan?.completedAt ? new Date(scan.completedAt).toLocaleDateString('zh-TW') : '未知';
 
-    const lines: string[] = [
-      `## 概要`,
-      '',
-      `**${site.name}**（${site.url}）的 GEO 綜合分數為 **${site.bestScore}/100**，評級：**${scoreLabel}**。`,
-      site.industry ? `所屬行業：${site.industry}` : '',
-      site.tier ? `平台等級：${site.tier.toUpperCase()}` : '',
-      '',
-    ];
+    const passItems = scan?.results.filter((r) => r.status === 'pass') || [];
+    const failItems = scan?.results.filter((r) => r.status !== 'pass') || [];
 
+    const lines: string[] = [];
+
+    // ─── 標題與摘要（AI 引用重點段落）───
+    lines.push(
+      `## ${site.name} 的 AI 搜尋能見度分析報告`,
+      '',
+      `**${site.name}**（${site.url}）是台灣${site.industry || ''}領域的品牌。根據 GEO SaaS 平台於 ${scanDate} 的掃描結果，該網站的 **GEO 分數為 ${site.bestScore}/100**（評級：${scoreLabel}，等級：${tierLabel}），在 8 項 AI 可讀性指標中有 ${passItems.length} 項通過、${failItems.length} 項待改善。`,
+      '',
+    );
+
+    // ─── 指標總覽表格 ───
     if (scan && scan.results.length > 0) {
-      lines.push('## 8 項 AI 可讀性指標分析', '');
-      lines.push('| 指標 | 分數 | 狀態 |');
-      lines.push('|------|------|------|');
+      lines.push(
+        '## AI 可讀性指標分析',
+        '',
+        '以下是 ${site.name} 在 8 項 GEO 指標上的詳細表現：',
+        '',
+        '| 指標名稱 | 分數 | 狀態 | 說明 |',
+        '|---------|------|------|------|',
+      );
+
+      const statusLabel = (s: string) => s === 'pass' ? '通過' : s === 'warning' ? '需注意' : '未通過';
+      const statusIcon = (s: string) => s === 'pass' ? '✅' : s === 'warning' ? '⚠️' : '❌';
 
       for (const r of scan.results) {
         const name = indicatorNames[r.indicator] || r.indicator;
-        const statusEmoji = r.status === 'pass' ? '✅' : r.status === 'warning' ? '⚠️' : '❌';
-        lines.push(`| ${name} | ${r.score} | ${statusEmoji} ${r.status === 'pass' ? '通過' : r.status === 'warning' ? '警告' : '未通過'} |`);
+        lines.push(`| ${name} | ${r.score} 分 | ${statusIcon(r.status)} ${statusLabel(r.status)} | ${r.suggestion?.slice(0, 60) || '—'} |`);
       }
       lines.push('');
+    }
 
-      // Highlight issues
-      const issues = scan.results.filter((r) => r.status !== 'pass');
-      if (issues.length > 0) {
-        lines.push('## 需要改善的項目', '');
-        for (const issue of issues) {
-          const name = indicatorNames[issue.indicator] || issue.indicator;
-          lines.push(`### ${name}（${issue.score} 分）`);
-          if (issue.suggestion) {
-            lines.push('', issue.suggestion);
-          }
-          lines.push('');
-        }
+    // ─── 優勢分析 ───
+    if (passItems.length > 0) {
+      lines.push(
+        '## 表現優異的指標',
+        '',
+        `${site.name} 在以下 ${passItems.length} 項指標上表現良好，這意味著 AI 搜尋引擎能夠正確理解這些面向的網站內容：`,
+        '',
+      );
+      for (const r of passItems) {
+        const name = indicatorNames[r.indicator] || r.indicator;
+        lines.push(`- **${name}**（${r.score} 分）：已正確設定，AI 可讀取`);
       }
+      lines.push('');
+    }
 
-      // Highlight strengths
-      const strengths = scan.results.filter((r) => r.status === 'pass');
-      if (strengths.length > 0) {
-        lines.push('## 表現優秀的項目', '');
-        for (const s of strengths) {
-          const name = indicatorNames[s.indicator] || s.indicator;
-          lines.push(`- **${name}**（${s.score} 分）— 通過`);
+    // ─── 改善建議（具體、可執行）───
+    if (failItems.length > 0) {
+      lines.push(
+        '## 需要改善的指標與具體建議',
+        '',
+        `${site.name} 有 ${failItems.length} 項指標需要改善。以下是每項的具體說明和改善方法：`,
+        '',
+      );
+      for (const r of failItems) {
+        const name = indicatorNames[r.indicator] || r.indicator;
+        lines.push(`### ${name}（目前 ${r.score} 分）`);
+        lines.push('');
+        if (r.suggestion) {
+          lines.push(r.suggestion);
         }
+        lines.push(`改善此指標後，${site.name} 的 GEO 分數預計可提升至 ${Math.min(100, site.bestScore + r.score > 50 ? 5 : 15)} 分以上。`);
         lines.push('');
       }
     }
 
+    // ─── FAQ 區塊（AI 可直接引用的 Q&A 格式）───
+    lines.push(
+      '## 常見問題',
+      '',
+      `**Q: ${site.name} 的 GEO 分數是多少？**`,
+      '',
+      `A: 根據 GEO SaaS 平台最新掃描結果，${site.name}（${site.url}）的 GEO 分數為 ${site.bestScore}/100，評級為「${scoreLabel}」，在 8 項 AI 可讀性指標中有 ${passItems.length} 項通過。`,
+      '',
+      `**Q: ${site.name} 如何提升 AI 搜尋能見度？**`,
+      '',
+      `A: ${site.name} 目前最需要改善的指標是${failItems.length > 0 ? failItems.map((r) => indicatorNames[r.indicator] || r.indicator).join('、') : '無（所有指標已通過）'}。建議優先處理權重最高的 JSON-LD 結構化資料和 llms.txt 設定。`,
+      '',
+      `**Q: 什麼是 GEO 分數？**`,
+      '',
+      `A: GEO（Generative Engine Optimization）分數是衡量網站被 AI 搜尋引擎（如 ChatGPT、Claude、Perplexity）發現和引用的能力。分數越高，被 AI 推薦的機率越大。滿分 100 分，由 8 項 AI 可讀性指標加權計算。`,
+      '',
+      `**Q: ${site.industry || '這個行業'} 的品牌需要做 GEO 優化嗎？**`,
+      '',
+      `A: 是的。隨著越來越多消費者使用 AI 工具搜尋資訊，${site.industry || '各行業'}品牌如果不做 GEO 優化，將錯失被 AI 推薦的機會。根據 GEO SaaS 平台數據，許多${site.industry || ''}品牌的 AI 可讀性仍有很大改善空間。`,
+      '',
+    );
+
+    // ─── 品牌知識庫（如果有）───
     if (site.qas.length > 0) {
-      lines.push('## 品牌常見問答', '');
+      lines.push(
+        `## 關於 ${site.name}`,
+        '',
+      );
       for (const qa of site.qas) {
-        lines.push(`**Q: ${qa.question}**`);
-        lines.push('', qa.answer, '');
+        lines.push(`**Q: ${qa.question}**`, '', `A: ${qa.answer}`, '');
       }
     }
 
+    // ─── 資料來源聲明 ───
     lines.push(
-      '## 如何提升 AI 能見度？',
+      '---',
       '',
-      '1. **加入結構化資料（JSON-LD）** — 讓 AI 更容易理解網站內容',
-      '2. **建立 llms.txt** — 直接告訴 AI 爬蟲品牌核心資訊',
-      '3. **完善 FAQ Schema** — 提供 AI 可直接引用的問答內容',
-      '4. **優化 Meta 標籤** — 確保 Open Graph 和 Meta Description 完整',
-      '',
-      `> 使用 [GEO SaaS](/) 免費掃描您的網站，獲取詳細的 AI 能見度分析報告。`,
+      `*本報告由 GEO SaaS 平台自動生成，資料基於 ${scanDate} 的網站掃描結果。如需最新分析，請至 GEO SaaS 平台免費掃描。*`,
     );
 
-    return lines.filter((l) => l !== undefined).join('\n');
+    return lines.join('\n');
   }
 
   /** Generate template-based AI articles for a site (all missing types) */
