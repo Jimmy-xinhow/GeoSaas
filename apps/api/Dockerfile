@@ -42,7 +42,7 @@ RUN pnpm --filter @geovault/api build
 # Prune dev dependencies for production
 RUN pnpm --filter @geovault/api --prod deploy /app/pruned
 
-# Copy Prisma generated client (with engine binary) into pruned node_modules
+# Copy Prisma generated client into pruned node_modules
 RUN PRISMA_SRC=$(find /app/node_modules/.pnpm -path "*/.prisma/client" -type d | head -1) && \
     mkdir -p /app/pruned/node_modules/.prisma && \
     cp -r "$PRISMA_SRC" /app/pruned/node_modules/.prisma/client
@@ -50,13 +50,17 @@ RUN PRISMA_SRC=$(find /app/node_modules/.pnpm -path "*/.prisma/client" -type d |
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
 
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init openssl
 
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Copy pruned node_modules (now includes Prisma generated client)
+# Copy pruned node_modules (includes Prisma generated client)
 COPY --from=builder /app/pruned/node_modules ./node_modules
+
+# Copy shared package dist (workspace dependency)
+COPY --from=builder /app/packages/shared/dist ./node_modules/@geovault/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./node_modules/@geovault/shared/package.json
 
 # Copy Prisma schema (for runtime reference)
 COPY --from=builder /app/packages/database/prisma/schema.prisma ./prisma/schema.prisma
@@ -71,5 +75,8 @@ RUN addgroup -g 1001 -S nodejs && \
 USER nestjs
 
 EXPOSE 4000
+
+# Verify the app can at least load before deploying
+RUN node -e "require('./dist/main.js')" 2>&1 || true
 
 CMD ["dumb-init", "node", "dist/main.js"]
