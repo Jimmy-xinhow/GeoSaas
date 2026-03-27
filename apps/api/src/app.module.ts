@@ -29,6 +29,7 @@ import { BadgeModule } from './modules/badge/badge.module';
 import { SuccessCasesModule } from './modules/success-cases/success-cases.module';
 import { SeedModule } from './modules/seed/seed.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
+import { EmailModule } from './modules/email/email.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module';
     SuccessCasesModule,
     SeedModule,
     SchedulerModule,
+    EmailModule,
   ],
   controllers: [HealthController],
   providers: [

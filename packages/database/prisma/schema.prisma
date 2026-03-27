@@ -100,6 +100,10 @@ model Site {
   bestScore   Int      @default(0)
   bestScoreAt DateTime?
 
+  // Verified status
+  isVerified   Boolean  @default(false)
+  verifiedAt   DateTime?
+
   // Crawler tracking
   crawlerToken String? @unique
 

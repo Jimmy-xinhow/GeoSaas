@@ -117,4 +117,14 @@ export class DirectoryController {
   ) {
     return this.service.togglePublic(siteId, dto);
   }
+
+  @ApiBearerAuth()
+  @Patch('admin/sites/:siteId/verify')
+  @ApiOperation({ summary: 'Toggle verified status (admin)' })
+  async verify(
+    @Param('siteId') siteId: string,
+    @Body() body: { isVerified: boolean },
+  ) {
+    return this.service.setVerified(siteId, body.isVerified);
+  }
 }

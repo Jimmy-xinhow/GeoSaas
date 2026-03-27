@@ -597,6 +597,14 @@ export class DirectoryService {
     return updated;
   }
 
+  async setVerified(siteId: string, isVerified: boolean) {
+    return this.prisma.site.update({
+      where: { id: siteId },
+      data: { isVerified, verifiedAt: isVerified ? new Date() : null },
+      select: { id: true, name: true, isVerified: true, verifiedAt: true },
+    });
+  }
+
   async recalculateTiers() {
     this.logger.log('Recalculating site tiers...');
 

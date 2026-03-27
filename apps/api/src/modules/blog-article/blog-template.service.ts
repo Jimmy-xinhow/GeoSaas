@@ -5,7 +5,8 @@ export type TemplateType =
   | 'score_breakdown'
   | 'competitor_comparison'
   | 'improvement_tips'
-  | 'industry_benchmark';
+  | 'industry_benchmark'
+  | 'brand_reputation';
 
 interface SiteData {
   name: string;
@@ -124,6 +125,43 @@ ${baseContext}
 ### 達到行業最高標準的條件
 ### 給 ${site.industry || '同行業'} 業者的建議
 ### 常見問題`,
+
+      brand_reputation: `你是一位品牌分析師兼 AI 搜尋專家。請根據以下網站資料，撰寫一篇 800–1000 字的品牌口碑與 AI 能見度分析文章。
+
+${baseContext}
+
+文章結構：
+## ${site.name} 品牌口碑與 AI 搜尋能見度分析
+
+### 品牌概述
+（介紹 ${site.name} 的品牌定位、核心業務、在台灣市場的地位）
+
+### AI 搜尋中的品牌印象
+（分析 AI 搜尋引擎如何理解和呈現這個品牌，基於其 GEO 分數 ${scan.geoScore} 分）
+
+### 品牌的 AI 可讀性優勢
+（根據通過的指標，說明品牌哪些方面已經對 AI 友善）
+
+### 消費者最常問 AI 的問題
+（推測消費者會問 AI 關於 ${site.name} 的 5 個問題，並說明目前 AI 能否正確回答）
+
+### 品牌聲譽與 AI 推薦的關聯
+（分析品牌線上聲譽如何影響 AI 推薦意願）
+
+### 提升 AI 引用率的品牌策略
+（3 個具體可執行的建議）
+
+### 常見問題
+Q: AI 搜尋引擎如何看待 ${site.name}？
+A: （根據 GEO 分數回答）
+
+Q: ${site.name} 被 ChatGPT/Claude 推薦的機率高嗎？
+A: （根據指標狀態回答）
+
+Q: 如何讓 AI 更準確地描述 ${site.name}？
+A: （具體建議）
+
+要求：語氣客觀專業，引用具體的 GEO 分數和指標數據，避免主觀臆斷。數據來源標注為「Geovault 平台數據」。`,
     };
 
     return prompts[type];
@@ -137,6 +175,7 @@ ${baseContext}
       competitor_comparison: ['競爭分析', '行業比較', 'AI 搜尋競爭力'],
       improvement_tips: ['GEO 優化方法', 'AI 搜尋優化', '具體改善步驟'],
       industry_benchmark: ['行業基準', `${site.industry} GEO`, '產業分析'],
+      brand_reputation: [`${site.name} 口碑`, `${site.name} 評價`, 'AI 品牌分析', '品牌聲譽'],
     };
     return [...new Set([...base, ...typeKeywords[type]])];
   }
@@ -148,6 +187,7 @@ ${baseContext}
       competitor_comparison: 4,
       improvement_tips: 5,
       industry_benchmark: 5,
+      brand_reputation: 5,
     };
     return times[templateType];
   }

@@ -580,6 +580,52 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Social Proof */}
+      <section className="py-16 bg-gray-50">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900">
+              已被台灣品牌信賴
+            </h2>
+            <p className="mt-3 text-gray-600">
+              超過 180 個台灣品牌已使用 Geovault 優化 AI 搜尋能見度
+            </p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+            <div>
+              <p className="text-4xl font-bold text-blue-600">180+</p>
+              <p className="text-sm text-gray-500 mt-1">收錄品牌</p>
+            </div>
+            <div>
+              <p className="text-4xl font-bold text-green-600">500+</p>
+              <p className="text-sm text-gray-500 mt-1">分析文章</p>
+            </div>
+            <div>
+              <p className="text-4xl font-bold text-purple-600">10</p>
+              <p className="text-sm text-gray-500 mt-1">行業覆蓋</p>
+            </div>
+            <div>
+              <p className="text-4xl font-bold text-orange-600">8</p>
+              <p className="text-sm text-gray-500 mt-1">AI 可讀性指標</p>
+            </div>
+          </div>
+          <div className="mt-12 flex flex-wrap justify-center gap-4">
+            <Link href="/directory" className="text-blue-600 hover:underline text-sm font-medium">
+              瀏覽品牌目錄 →
+            </Link>
+            <Link href="/blog" className="text-blue-600 hover:underline text-sm font-medium">
+              閱讀分析報告 →
+            </Link>
+            <Link href="/cases" className="text-blue-600 hover:underline text-sm font-medium">
+              成功案例 →
+            </Link>
+            <Link href="/news" className="text-blue-600 hover:underline text-sm font-medium">
+              AI News →
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="py-8 border-t bg-white">
         <div className="max-w-6xl mx-auto px-6 text-center">

@@ -12,6 +12,7 @@ const ALL_TEMPLATE_TYPES: TemplateType[] = [
   'competitor_comparison',
   'improvement_tips',
   'industry_benchmark',
+  'brand_reputation',
 ];
 
 @Injectable()
@@ -432,6 +433,7 @@ export class BlogArticleService {
       competitor_comparison: `${siteName} 的 AI 搜尋競爭力分析`,
       improvement_tips: `${siteName} GEO 優化實作指南`,
       industry_benchmark: `${siteName} 行業 AI 搜尋基準報告`,
+      brand_reputation: `${siteName} 品牌口碑與 AI 能見度分析`,
     };
     return fallbacks[type];
   }
