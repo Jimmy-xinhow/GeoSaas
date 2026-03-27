@@ -73,6 +73,7 @@ model User {
   contents      Content[]
   notifications Notification[]
   orders        Order[]
+  successCases  GeoSuccessCase[]
 
   @@map("users")
 }
@@ -110,6 +111,7 @@ model Site {
   crawlerRobotsChecks CrawlerRobotsCheck[]
   blogArticles        BlogArticle[]
   badges              SiteBadge[]
+  successCases        GeoSuccessCase[]
 
   @@map("sites")
 }
@@ -291,9 +293,21 @@ model BlogArticle {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Template system
+  templateType        String    @default("geo_overview")
+  industrySlug        String?
+  targetKeywords      String[]
+  readingTimeMinutes  Int       @default(5)
+  lastRegeneratedAt   DateTime?
+
+  // Success case relation
+  successCase         GeoSuccessCase?
+
   @@index([category])
   @@index([siteId])
   @@index([published, createdAt])
+  @@index([templateType, createdAt])
+  @@index([industrySlug, createdAt])
   @@map("blog_articles")
 }
 
@@ -308,6 +322,43 @@ model SiteBadge {
   @@unique([siteId, badge])
   @@index([siteId])
   @@map("site_badges")
+}
+
+model GeoSuccessCase {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId          String?
+  site            Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  title           String
+  aiPlatform      String
+  queryUsed       String
+  aiResponse      String    @db.Text
+  screenshotUrl   String?
+  beforeGeoScore  Int?
+  afterGeoScore   Int?
+  improvementDays Int?
+
+  industry        String?
+  tags            String[]
+
+  generatedArticleId String?  @unique
+  generatedArticle   BlogArticle? @relation(fields: [generatedArticleId], references: [id], onDelete: SetNull)
+
+  status          String    @default("pending")
+  rejectionReason String?
+  featuredAt      DateTime?
+
+  viewCount       Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([aiPlatform, status])
+  @@index([industry, status])
+  @@index([featuredAt])
+  @@map("geo_success_cases")
 }
 
 model NewsArticle {

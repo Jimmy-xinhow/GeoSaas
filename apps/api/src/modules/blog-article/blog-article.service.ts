@@ -1,6 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BlogTemplateService, TemplateType } from './blog-template.service';
+import Anthropic from '@anthropic-ai/sdk';
+import pLimit from 'p-limit';
+
+const ALL_TEMPLATE_TYPES: TemplateType[] = [
+  'geo_overview',
+  'score_breakdown',
+  'competitor_comparison',
+  'improvement_tips',
+  'industry_benchmark',
+];
 
 @Injectable()
 export class BlogArticleService {
@@ -9,6 +21,7 @@ export class BlogArticleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly templateService: BlogTemplateService,
   ) {}
 
   /** List published articles (paginated) */
@@ -220,5 +233,173 @@ export class BlogArticleService {
     );
 
     return lines.filter((l) => l !== undefined).join('\n');
+  }
+
+  /** Generate template-based AI articles for a site (all missing types) */
+  async generateArticlesForSite(siteId: string): Promise<{ generated: string[] }> {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        industry: true,
+        bestScore: true,
+        tier: true,
+        isPublic: true,
+        scans: {
+          where: { status: 'COMPLETED' },
+          orderBy: { completedAt: 'desc' },
+          take: 1,
+          select: {
+            totalScore: true,
+            completedAt: true,
+            results: { select: { indicator: true, score: true, status: true } },
+          },
+        },
+        blogArticles: { select: { templateType: true } },
+      },
+    });
+
+    if (!site || !site.isPublic || site.scans.length === 0) {
+      return { generated: [] };
+    }
+
+    const scan = site.scans[0];
+    const existingTypes = new Set(site.blogArticles.map((a) => a.templateType));
+    const missingTypes = ALL_TEMPLATE_TYPES.filter((t) => !existingTypes.has(t));
+
+    if (missingTypes.length === 0) return { generated: [] };
+
+    const industryData = site.industry ? await this.getIndustryData(site.industry) : undefined;
+    const indicators: Record<string, { score: number; status: string }> = {};
+    for (const r of scan.results) {
+      indicators[r.indicator] = { score: r.score, status: r.status };
+    }
+
+    const tierLabel = site.tier
+      ? site.tier.charAt(0).toUpperCase() + site.tier.slice(1)
+      : 'Unrated';
+
+    const scanData = {
+      geoScore: scan.totalScore,
+      level: tierLabel,
+      indicators,
+      scannedAt: scan.completedAt || new Date(),
+    };
+
+    const anthropic = new Anthropic({
+      apiKey: this.config.get<string>('ANTHROPIC_API_KEY'),
+    });
+    const limit = pLimit(2);
+    const generated: string[] = [];
+
+    await Promise.all(
+      missingTypes.map((templateType) =>
+        limit(async () => {
+          try {
+            const prompt = this.templateService.buildPrompt(
+              templateType,
+              { name: site.name, url: site.url, industry: site.industry || undefined },
+              scanData,
+              industryData,
+            );
+
+            const message = await anthropic.messages.create({
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 2000,
+              messages: [{ role: 'user', content: prompt }],
+            });
+
+            const content = message.content[0].type === 'text' ? message.content[0].text : '';
+            const title = this.extractTitle(content, site.name, templateType);
+            const slug = `${site.name.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').slice(0, 30)}-${templateType}-${Date.now().toString(36)}`;
+
+            await this.prisma.blogArticle.create({
+              data: {
+                slug,
+                title,
+                description: content.slice(0, 200).replace(/#+\s/g, '').trim(),
+                content,
+                category: 'analysis',
+                siteId: site.id,
+                templateType,
+                industrySlug: site.industry || undefined,
+                targetKeywords: this.templateService.getTargetKeywords(templateType, {
+                  name: site.name,
+                  url: site.url,
+                  industry: site.industry || undefined,
+                }),
+                readingTimeMinutes: this.templateService.estimateReadingTime(templateType),
+                readTime: `${this.templateService.estimateReadingTime(templateType)} 分鐘`,
+                published: true,
+              },
+            });
+
+            generated.push(templateType);
+            this.logger.log(`Generated ${templateType} article for ${site.name}`);
+          } catch (err) {
+            this.logger.warn(`Failed to generate ${templateType} for ${site.name}: ${err}`);
+          }
+        }),
+      ),
+    );
+
+    return { generated };
+  }
+
+  /** Cron: 每天凌晨 2 點批量補齊文章 */
+  @Cron('0 2 * * *', { name: 'blog-bulk-generation' })
+  async scheduledBulkGeneration(): Promise<void> {
+    this.logger.log('Starting scheduled blog bulk generation...');
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const sites = await this.prisma.site.findMany({
+      where: {
+        isPublic: true,
+        bestScore: { gt: 0 },
+        scans: { some: { status: 'COMPLETED', completedAt: { gte: sevenDaysAgo } } },
+      },
+      select: {
+        id: true,
+        _count: { select: { blogArticles: true } },
+      },
+    });
+
+    const needArticles = sites.filter((s) => s._count.blogArticles < 3);
+    const limit = pLimit(3);
+
+    await Promise.all(
+      needArticles.map((s) => limit(() => this.generateArticlesForSite(s.id))),
+    );
+
+    this.logger.log(`Bulk generation complete: processed ${needArticles.length} sites`);
+  }
+
+  private extractTitle(content: string, siteName: string, type: TemplateType): string {
+    const match = content.match(/^#{1,2}\s+(.+)$/m);
+    if (match) return match[1].trim();
+    const fallbacks: Record<TemplateType, string> = {
+      geo_overview: `${siteName} 的 AI 搜尋能見度全面分析`,
+      score_breakdown: `${siteName} GEO 8 項指標深度解析`,
+      competitor_comparison: `${siteName} 的 AI 搜尋競爭力分析`,
+      improvement_tips: `${siteName} GEO 優化實作指南`,
+      industry_benchmark: `${siteName} 行業 AI 搜尋基準報告`,
+    };
+    return fallbacks[type];
+  }
+
+  private async getIndustryData(industry: string) {
+    const result = await this.prisma.site.aggregate({
+      where: { industry, isPublic: true },
+      _avg: { bestScore: true },
+      _count: { id: true },
+    });
+    return {
+      avgScore: Math.round(result._avg.bestScore ?? 0),
+      totalSites: result._count.id,
+    };
   }
 }

@@ -113,4 +113,66 @@ export class BadgeService {
       select: { badge: true, label: true, awardedAt: true },
     });
   }
+
+  /** Generate an SVG badge image for a site */
+  async generateSvgBadge(siteId: string): Promise<string | null> {
+    const site = await this.prisma.site.findFirst({
+      where: { id: siteId, isPublic: true },
+      select: { name: true, bestScore: true, tier: true },
+    });
+
+    if (!site) return null;
+
+    const score = site.bestScore;
+    const level = site.tier
+      ? site.tier.charAt(0).toUpperCase() + site.tier.slice(1)
+      : 'Unrated';
+
+    const colors: Record<string, { bg: string }> = {
+      Platinum: { bg: '#1a56db' },
+      Gold: { bg: '#d97706' },
+      Silver: { bg: '#6b7280' },
+      Bronze: { bg: '#92400e' },
+    };
+    const color = colors[level] ?? { bg: '#374151' };
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="148" height="20" role="img" aria-label="GEO Score: ${score}">
+  <title>GEO Score: ${score}</title>
+  <linearGradient id="s" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <clipPath id="r"><rect width="148" height="20" rx="3" fill="#fff"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect width="88" height="20" fill="#555"/>
+    <rect x="88" width="60" height="20" fill="${color.bg}"/>
+    <rect width="148" height="20" fill="url(#s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="110">
+    <text x="445" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="780" lengthAdjust="spacing">GEO Score</text>
+    <text x="445" y="140" transform="scale(.1)" textLength="780" lengthAdjust="spacing">GEO Score</text>
+    <text x="1175" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="500" lengthAdjust="spacing">${score}</text>
+    <text x="1175" y="140" transform="scale(.1)" textLength="500" lengthAdjust="spacing">${score}</text>
+  </g>
+</svg>`;
+  }
+
+  /** Get embed code snippets for a site badge */
+  async getEmbedCode(siteId: string) {
+    const site = await this.prisma.site.findFirst({
+      where: { id: siteId, isPublic: true },
+      select: { bestScore: true },
+    });
+
+    if (!site) return null;
+
+    const apiUrl = process.env.API_PUBLIC_URL || 'https://api.geosaas.com';
+    const webUrl = process.env.FRONTEND_URL || 'https://geosaas.com';
+    const score = site.bestScore;
+
+    const imgTag = `<a href="${webUrl}/directory/${siteId}" target="_blank" rel="noopener">\n  <img src="${apiUrl}/api/badge/${siteId}.svg" alt="GEO Score: ${score} | Verified by GEO SaaS" width="148" height="20">\n</a>`;
+    const markdownBadge = `[![GEO Score: ${score}](${apiUrl}/api/badge/${siteId}.svg)](${webUrl}/directory/${siteId})`;
+
+    return { imgTag, markdownBadge, svgUrl: `${apiUrl}/api/badge/${siteId}.svg` };
+  }
 }

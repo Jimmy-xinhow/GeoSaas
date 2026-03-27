@@ -45,4 +45,22 @@ export class BlogArticleController {
   batchGenerate() {
     return this.service.batchGenerateAnalyses();
   }
+
+  @ApiBearerAuth()
+  @Post('generate-templates/:siteId')
+  @ApiOperation({ summary: 'Generate all template-based AI articles for a site' })
+  generateTemplates(@Param('siteId') siteId: string) {
+    return this.service.generateArticlesForSite(siteId);
+  }
+
+  @ApiBearerAuth()
+  @Post('generate-bulk-templates')
+  @ApiOperation({ summary: 'Trigger bulk template generation for all eligible sites' })
+  async generateBulkTemplates() {
+    // Fire-and-forget
+    this.service.scheduledBulkGeneration().catch((err) => {
+      console.error('Bulk generation failed:', err);
+    });
+    return { message: 'Bulk generation started' };
+  }
 }

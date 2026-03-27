@@ -26,6 +26,7 @@ import { IndexNowModule } from './modules/indexnow/indexnow.module';
 import { BlogArticleModule } from './modules/blog-article/blog-article.module';
 import { NewsModule } from './modules/news/news.module';
 import { BadgeModule } from './modules/badge/badge.module';
+import { SuccessCasesModule } from './modules/success-cases/success-cases.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { BadgeModule } from './modules/badge/badge.module';
     BlogArticleModule,
     NewsModule,
     BadgeModule,
+    SuccessCasesModule,
   ],
   controllers: [HealthController],
   providers: [

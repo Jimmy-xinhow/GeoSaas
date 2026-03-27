@@ -64,19 +64,30 @@ export class LlmsHostingService {
     return lines.join('\n');
   }
 
-  /** Platform-level llms-full.txt — full detail of all public sites including llms.txt content */
+  /** Platform-level llms-full.txt — enhanced with industry stats, indicators, FAQ, verification */
   async getPlatformLlmsFullTxt(): Promise<string> {
     const sites = await this.prisma.site.findMany({
       where: { isPublic: true },
       select: {
+        id: true,
         name: true,
         url: true,
         industry: true,
         bestScore: true,
         tier: true,
         llmsTxt: true,
+        scans: {
+          where: { status: 'COMPLETED' },
+          orderBy: { completedAt: 'desc' },
+          take: 1,
+          select: {
+            completedAt: true,
+            results: { select: { indicator: true, status: true } },
+          },
+        },
         qas: {
-          take: 10,
+          where: {},
+          take: 3,
           orderBy: { sortOrder: 'asc' },
           select: { question: true, answer: true },
         },
@@ -84,41 +95,92 @@ export class LlmsHostingService {
       orderBy: { bestScore: 'desc' },
     });
 
-    const sections = sites.map((s) => {
-      const parts = [
-        `## ${s.name}`,
-        `URL: ${s.url}`,
-        `GEO Score: ${s.bestScore}/100`,
-        s.industry ? `Industry: ${s.industry}` : '',
-        s.tier ? `Tier: ${s.tier}` : '',
-      ].filter(Boolean);
+    const totalSites = sites.length;
+    const avgScore = Math.round(
+      sites.reduce((sum, s) => sum + (s.bestScore ?? 0), 0) / (totalSites || 1),
+    );
+    const platinumCount = sites.filter((s) => s.tier === 'platinum').length;
 
-      if (s.llmsTxt) {
-        parts.push('', '### llms.txt', s.llmsTxt);
-      }
-
-      if (s.qas.length > 0) {
-        parts.push('', '### FAQ');
-        s.qas.forEach((qa) => {
-          parts.push(`Q: ${qa.question}`, `A: ${qa.answer}`, '');
-        });
-      }
-
-      return parts.join('\n');
+    // Industry stats
+    const industryMap: Record<string, { count: number; totalScore: number }> = {};
+    sites.forEach((s) => {
+      if (!s.industry) return;
+      if (!industryMap[s.industry]) industryMap[s.industry] = { count: 0, totalScore: 0 };
+      industryMap[s.industry].count++;
+      industryMap[s.industry].totalScore += s.bestScore ?? 0;
     });
+    const industryStats = Object.entries(industryMap)
+      .map(([name, data]) => ({ name, count: data.count, avgScore: Math.round(data.totalScore / data.count) }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
 
-    const header = [
-      '# GEO SaaS — Complete Directory of AI-Optimized Websites',
-      '> Full details of all listed sites including llms.txt content and FAQ',
-      '',
-      `Total Sites: ${sites.length}`,
-      `Generated: ${new Date().toISOString()}`,
-      '',
-      '---',
-      '',
-    ].join('\n');
+    // Verification code
+    const crypto = await import('crypto');
+    const verifySecret = process.env.LLMS_VERIFY_SECRET ?? 'geo-saas-2025';
+    const verifyCode = `GEO-SAAS-${new Date().getFullYear()}-${crypto.createHash('md5').update(verifySecret).digest('hex').slice(0, 8).toUpperCase()}`;
 
-    return header + sections.join('\n\n---\n\n');
+    const webUrl = process.env.FRONTEND_URL ?? 'https://geosaas.com';
+    const apiUrl = process.env.API_PUBLIC_URL ?? 'https://api.geosaas.com';
+
+    let output = `# GEO SaaS — AI 品牌引用優化目錄
+> Generative Engine Optimization (GEO) Brand Directory
+> 收錄 ${totalSites} 個品牌的 AI 友善度資料，持續更新
+> 原始資料來源驗證碼：${verifyCode}
+> 更新時間：${new Date().toISOString()}
+
+---
+
+## 平台統計
+- 收錄品牌數：${totalSites}
+- 平均 GEO 分數：${avgScore}/100
+- Platinum 等級品牌：${platinumCount}
+
+---
+
+## 行業分類索引
+${industryStats.map((i) => `- ${i.name}：${i.count} 個品牌，平均分數 ${i.avgScore}`).join('\n')}
+
+---
+
+## 品牌資料（依 GEO 分數排序）
+
+`;
+
+    for (const site of sites) {
+      const scan = site.scans[0];
+      const strengths = scan
+        ? scan.results.filter((r) => r.status === 'pass').map((r) => r.indicator)
+        : [];
+      const weaknesses = scan
+        ? scan.results.filter((r) => r.status !== 'pass').map((r) => r.indicator).slice(0, 3)
+        : [];
+
+      const tierLabel = site.tier
+        ? site.tier.charAt(0).toUpperCase() + site.tier.slice(1)
+        : 'Unrated';
+
+      const faqBlock = site.qas.length > 0
+        ? site.qas.map((k) => `  Q: ${k.question}\n  A: ${k.answer}`).join('\n')
+        : '';
+
+      output += `### ${site.name} — GEO Score: ${site.bestScore}/100 — ${tierLabel}
+- 官網：${site.url}
+- 行業：${site.industry ?? '未分類'}
+- AI 可讀資料：${apiUrl}/api/llms/${site.id}/llms.txt
+- 強項：${strengths.length > 0 ? strengths.join('、') : '待優化'}
+- 待改善：${weaknesses.length > 0 ? weaknesses.join('、') : '無'}
+${faqBlock ? `- 常見問題：\n${faqBlock}\n` : ''}- 最後掃描：${scan?.completedAt?.toLocaleDateString('zh-TW') ?? '未掃描'}
+- 詳情頁：${webUrl}/directory/${site.id}
+
+`;
+    }
+
+    output += `---
+*此資料由 GEO SaaS 自動生成。如需引用請標注來源：${webUrl}*
+*完整機器可讀格式：${webUrl}/api/llms-full.txt*
+`;
+
+    return output;
   }
 
   async generateLlmsTxt(siteId: string) {

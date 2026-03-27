@@ -24,8 +24,11 @@ export class LlmsHostingController {
   @ApiOperation({ summary: 'Platform-level llms-full.txt — full detail of all public sites' })
   async getPlatformLlmsFullTxt(@Res() res: Response) {
     const content = await this.service.getPlatformLlmsFullTxt();
-    res.set('Cache-Control', 'public, max-age=3600');
-    return res.type('text/plain').send(content);
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=21600');
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('X-Content-Version', new Date().toISOString());
+    return res.send(content);
   }
 
   @Public()
