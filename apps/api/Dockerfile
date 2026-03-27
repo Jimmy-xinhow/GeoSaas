@@ -42,8 +42,12 @@ RUN pnpm --filter @geovault/api build
 # Create standalone production bundle
 RUN pnpm --filter @geovault/api --prod deploy /app/pruned
 
-# Generate Prisma client inside pruned dir using builder's prisma (both pinned to 5.18.0)
-RUN cd /app/pruned && node /app/node_modules/.pnpm/prisma@5.18.0/node_modules/prisma/build/index.js generate --schema=/app/packages/database/prisma/schema.prisma
+# Copy schema into pruned and generate Prisma client there
+RUN cp /app/packages/database/prisma/schema.prisma /app/pruned/schema.prisma && \
+    cd /app/pruned && node /app/node_modules/.pnpm/prisma@5.18.0/node_modules/prisma/build/index.js generate --schema=./schema.prisma && \
+    echo "=== Checking .prisma/client ===" && \
+    find /app/pruned/node_modules -path "*/.prisma/client/index.js" 2>/dev/null && \
+    find /app/pruned/node_modules -name "libquery_engine*" 2>/dev/null
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
