@@ -39,13 +39,8 @@ RUN pnpm --filter @geovault/shared build
 # Build the API
 RUN pnpm --filter @geovault/api build
 
-# Prune dev dependencies for production
-RUN pnpm --filter @geovault/api --prod deploy /app/pruned
-
-# Run prisma generate inside pruned using the builder's prisma CLI
-RUN PRISMA_CLI=$(find /app/node_modules/.pnpm -path "*/prisma/build/index.js" -not -path "*/@prisma/*" | head -1) && \
-    echo "Using prisma CLI: $PRISMA_CLI" && \
-    cd /app/pruned && node "$PRISMA_CLI" generate --schema=/app/packages/database/prisma/schema.prisma
+# Remove devDependencies in-place (keep the same node_modules tree)
+RUN pnpm prune --prod
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
@@ -55,8 +50,8 @@ RUN apk add --no-cache dumb-init openssl
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Copy pruned node_modules (includes Prisma generated client)
-COPY --from=builder /app/pruned/node_modules ./node_modules
+# Copy node_modules (already has Prisma generated client in correct location)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy shared package dist (workspace dependency)
 COPY --from=builder /app/packages/shared/dist ./node_modules/@geovault/shared/dist
@@ -76,4 +71,4 @@ USER nestjs
 
 EXPOSE 4000
 
-CMD ["dumb-init", "sh", "-c", "node dist/main.js 2>&1"]
+CMD ["dumb-init", "node", "dist/main.js"]
