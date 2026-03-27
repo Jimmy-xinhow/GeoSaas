@@ -6,7 +6,7 @@ import { SuccessCasesService } from './success-cases.service';
 import { CreateSuccessCaseDto } from './dto/create-success-case.dto';
 
 @ApiTags('Success Cases')
-@Controller('api')
+@Controller()
 export class SuccessCasesController {
   constructor(private readonly service: SuccessCasesService) {}
 

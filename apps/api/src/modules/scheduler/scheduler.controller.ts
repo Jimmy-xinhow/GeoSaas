@@ -6,7 +6,7 @@ import cronParser from 'cron-parser';
 
 @ApiTags('Admin — Scheduler')
 @ApiBearerAuth()
-@Controller('api/admin/scheduler')
+@Controller('admin/scheduler')
 export class SchedulerController {
   constructor(
     private readonly prisma: PrismaService,

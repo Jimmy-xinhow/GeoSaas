@@ -5,7 +5,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { BadgeService } from './badge.service';
 
 @ApiTags('Badges')
-@Controller('api')
+@Controller()
 export class BadgeController {
   constructor(private readonly service: BadgeService) {}
 

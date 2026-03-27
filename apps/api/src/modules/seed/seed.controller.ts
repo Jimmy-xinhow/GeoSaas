@@ -4,7 +4,7 @@ import { SeedService } from './seed.service';
 
 @ApiTags('Admin — Seed')
 @ApiBearerAuth()
-@Controller('api/admin/seed')
+@Controller('admin/seed')
 export class SeedController {
   constructor(private readonly service: SeedService) {}
 

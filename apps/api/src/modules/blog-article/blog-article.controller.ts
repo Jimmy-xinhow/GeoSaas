@@ -5,7 +5,7 @@ import { BlogArticleService } from './blog-article.service';
 import { IndustryInsightService, InsightType } from './industry-insight.service';
 
 @ApiTags('Blog')
-@Controller('api/blog')
+@Controller('blog')
 export class BlogArticleController {
   constructor(
     private readonly service: BlogArticleService,

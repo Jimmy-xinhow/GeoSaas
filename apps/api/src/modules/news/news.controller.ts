@@ -4,7 +4,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { NewsService } from './news.service';
 
 @ApiTags('News')
-@Controller('api/news')
+@Controller('news')
 export class NewsController {
   constructor(private readonly service: NewsService) {}
 

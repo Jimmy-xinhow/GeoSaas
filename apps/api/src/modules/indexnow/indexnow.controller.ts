@@ -6,7 +6,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { SubmitUrlDto, SubmitBatchDto } from './dto/indexnow.dto';
 
 @ApiTags('IndexNow')
-@Controller('api')
+@Controller()
 export class IndexNowController {
   constructor(private readonly indexNowService: IndexNowService) {}
 

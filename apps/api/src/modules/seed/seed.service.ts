@@ -58,7 +58,8 @@ export class SeedService {
 
   /** Import CSV files into SeedSource table */
   async importCsvFiles(files?: string[]): Promise<{ imported: number }> {
-    const seedDataDir = path.resolve(__dirname, '../../../../scripts/seed-data');
+    // Resolve from monorepo root (process.cwd() is apps/api during dev)
+    const seedDataDir = path.resolve(process.cwd(), '../../scripts/seed-data');
 
     let csvFiles: string[];
     if (files && files.length > 0) {
