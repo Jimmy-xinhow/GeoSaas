@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Param, Query, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { NewsService } from './news.service';
 
 @ApiTags('News')
@@ -40,6 +41,8 @@ export class NewsController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Post()
   @ApiOperation({ summary: 'Create a news article (admin)' })
   create(@Body() body: any) {

@@ -1,9 +1,12 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SeedService } from './seed.service';
+import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 
 @ApiTags('Admin — Seed')
 @ApiBearerAuth()
+@UseGuards(RolesGuard)
+@Roles('ADMIN')
 @Controller('admin/seed')
 export class SeedController {
   constructor(private readonly service: SeedService) {}

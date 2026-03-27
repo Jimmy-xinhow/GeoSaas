@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Patch, Param, Query, Body } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { SuccessCasesService } from './success-cases.service';
 import { CreateSuccessCaseDto } from './dto/create-success-case.dto';
 
@@ -52,6 +53,8 @@ export class SuccessCasesController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Patch('admin/success-cases/:id/approve')
   @ApiOperation({ summary: 'Approve a success case (admin)' })
   approve(@Param('id') id: string) {
@@ -59,6 +62,8 @@ export class SuccessCasesController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Patch('admin/success-cases/:id/reject')
   @ApiOperation({ summary: 'Reject a success case (admin)' })
   reject(@Param('id') id: string, @Body() body: { reason: string }) {

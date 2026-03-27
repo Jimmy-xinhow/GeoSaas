@@ -1,11 +1,14 @@
-import { Controller, Get, Patch, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Param, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CronManagerService } from './cron-manager.service';
+import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import cronParser from 'cron-parser';
 
 @ApiTags('Admin — Scheduler')
 @ApiBearerAuth()
+@UseGuards(RolesGuard)
+@Roles('ADMIN')
 @Controller('admin/scheduler')
 export class SchedulerController {
   constructor(

@@ -1,6 +1,7 @@
-import { Controller, Get, Patch, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { DirectoryService } from './directory.service';
 import { QueryDirectoryDto } from './dto/query-directory.dto';
 import { TogglePublicDto } from './dto/toggle-public.dto';
@@ -119,6 +120,8 @@ export class DirectoryController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Patch('admin/sites/:siteId/verify')
   @ApiOperation({ summary: 'Toggle verified status (admin)' })
   async verify(

@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Delete, Param, Query, Body } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { BlogArticleService } from './blog-article.service';
 import { IndustryInsightService, InsightType } from './industry-insight.service';
 
@@ -69,6 +70,8 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Delete('quality-audit')
   @ApiOperation({ summary: 'Delete articles below quality threshold and return stats' })
   async qualityAudit(@Query('threshold') threshold?: string) {
