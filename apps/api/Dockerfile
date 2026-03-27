@@ -39,8 +39,14 @@ RUN pnpm --filter @geovault/shared build
 # Build the API
 RUN pnpm --filter @geovault/api build
 
-# Remove devDependencies in-place (keep the same node_modules tree)
-RUN pnpm prune --prod
+# Create standalone production bundle
+RUN pnpm --filter @geovault/api --prod deploy /app/pruned
+
+# Re-generate Prisma client inside pruned using builder's prisma CLI (not npx)
+# This ensures the generated client matches the @prisma/client version in pruned
+RUN PRISMA_BIN=$(find /app/node_modules/.pnpm -path "*/prisma@*/build/index.js" -not -path "*/@prisma/*" | head -1) && \
+    echo "Prisma CLI: $PRISMA_BIN" && \
+    cd /app/pruned && node "$PRISMA_BIN" generate --schema=/app/packages/database/prisma/schema.prisma
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
@@ -50,14 +56,14 @@ RUN apk add --no-cache dumb-init openssl
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Copy node_modules (already has Prisma generated client in correct location)
-COPY --from=builder /app/node_modules ./node_modules
+# Copy standalone production node_modules (with Prisma generated client)
+COPY --from=builder /app/pruned/node_modules ./node_modules
 
-# Copy shared package dist (workspace dependency)
+# Copy shared package dist (workspace dependency not included by pnpm deploy)
 COPY --from=builder /app/packages/shared/dist ./node_modules/@geovault/shared/dist
 COPY --from=builder /app/packages/shared/package.json ./node_modules/@geovault/shared/package.json
 
-# Copy Prisma schema (for runtime reference)
+# Copy Prisma schema
 COPY --from=builder /app/packages/database/prisma/schema.prisma ./prisma/schema.prisma
 
 # Copy built dist output
