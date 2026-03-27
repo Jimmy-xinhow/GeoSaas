@@ -137,6 +137,6 @@ export default function BlogClient() {
           ))}
         </div>
       </section>
-    </div>
+    </>
   );
 }
