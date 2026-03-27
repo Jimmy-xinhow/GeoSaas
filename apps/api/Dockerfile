@@ -76,7 +76,4 @@ USER nestjs
 
 EXPOSE 4000
 
-# Verify the app can at least load before deploying
-RUN node -e "require('./dist/main.js')" 2>&1 || true
-
-CMD ["dumb-init", "node", "dist/main.js"]
+CMD ["dumb-init", "sh", "-c", "node dist/main.js 2>&1"]
