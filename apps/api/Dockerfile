@@ -43,8 +43,9 @@ RUN pnpm --filter @geovault/api build
 RUN pnpm --filter @geovault/api --prod deploy /app/pruned
 
 # Copy Prisma generated client (with engine binary) into pruned node_modules
-RUN mkdir -p /app/pruned/node_modules/.prisma && \
-    cp -r /app/node_modules/.pnpm/@prisma+client@*/node_modules/.prisma/client /app/pruned/node_modules/.prisma/client
+RUN PRISMA_SRC=$(find /app/node_modules/.pnpm -path "*/.prisma/client" -type d | head -1) && \
+    mkdir -p /app/pruned/node_modules/.prisma && \
+    cp -r "$PRISMA_SRC" /app/pruned/node_modules/.prisma/client
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
