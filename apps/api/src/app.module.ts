@@ -28,6 +28,7 @@ import { NewsModule } from './modules/news/news.module';
 import { BadgeModule } from './modules/badge/badge.module';
 import { SuccessCasesModule } from './modules/success-cases/success-cases.module';
 import { SeedModule } from './modules/seed/seed.module';
+import { SchedulerModule } from './modules/scheduler/scheduler.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { SeedModule } from './modules/seed/seed.module';
     BadgeModule,
     SuccessCasesModule,
     SeedModule,
+    SchedulerModule,
   ],
   controllers: [HealthController],
   providers: [

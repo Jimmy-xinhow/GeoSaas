@@ -12,5 +12,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [NotificationsModule],
   controllers: [MonitorController],
   providers: [MonitorService, MonitorSchedulerService, ChatgptDetector, ClaudeDetector, PerplexityDetector, GeminiDetector],
+  exports: [MonitorService, MonitorSchedulerService],
 })
 export class MonitorModule {}

@@ -1,13 +1,17 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QueryDirectoryDto } from './dto/query-directory.dto';
 import { TogglePublicDto } from './dto/toggle-public.dto';
+import { IndexNowService } from '../indexnow/indexnow.service';
 
 @Injectable()
 export class DirectoryService {
   private readonly logger = new Logger(DirectoryService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly indexNowService?: IndexNowService,
+  ) {}
 
   async listDirectory(query: QueryDirectoryDto) {
     const { search, industry, tier, minScore, page = 1, limit = 12 } = query;
@@ -567,7 +571,7 @@ export class DirectoryService {
     const site = await this.prisma.site.findUnique({ where: { id: siteId } });
     if (!site) throw new NotFoundException('Site not found');
 
-    return this.prisma.site.update({
+    const updated = await this.prisma.site.update({
       where: { id: siteId },
       data: {
         isPublic: dto.isPublic,
@@ -575,12 +579,22 @@ export class DirectoryService {
       },
       select: {
         id: true,
+        url: true,
         isPublic: true,
         industry: true,
         tier: true,
         bestScore: true,
       },
     });
+
+    // Auto-submit to IndexNow when site goes public
+    if (dto.isPublic && this.indexNowService) {
+      this.indexNowService.submitUrl(site.url).catch((err) => {
+        this.logger.warn(`IndexNow auto-submit failed for ${site.url}: ${err}`);
+      });
+    }
+
+    return updated;
   }
 
   async recalculateTiers() {

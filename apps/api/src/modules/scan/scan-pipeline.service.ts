@@ -13,6 +13,7 @@ import { ContactInfoIndicator } from './indicators/contact-info.indicator';
 import { ImageAltIndicator } from './indicators/image-alt.indicator';
 import { IIndicatorAnalyzer, IndicatorResult, AnalysisInput } from './indicators/indicator.interface';
 import { BadgeService } from '../badge/badge.service';
+import { IndexNowService } from '../indexnow/indexnow.service';
 
 @Injectable()
 export class ScanPipelineService {
@@ -33,6 +34,7 @@ export class ScanPipelineService {
     private readonly contactInfo: ContactInfoIndicator,
     private readonly imageAlt: ImageAltIndicator,
     private readonly badgeService: BadgeService,
+    private readonly indexNowService: IndexNowService,
   ) {
     this.indicators = [
       this.jsonLd,
@@ -152,11 +154,23 @@ export class ScanPipelineService {
         }
       }
 
-      // Evaluate and award badges (fire-and-forget)
+      // Post-scan automations (fire-and-forget)
       if (scan) {
+        // 1. Badge evaluation
         this.badgeService.evaluateBadges(scan.siteId).catch((err) => {
           this.logger.warn(`Badge evaluation failed for site ${scan.siteId}: ${err}`);
         });
+
+        // 2. Auto-submit to IndexNow (if public site)
+        const siteForIndexNow = await this.prisma.site.findUnique({
+          where: { id: scan.siteId },
+          select: { isPublic: true, url: true },
+        });
+        if (siteForIndexNow?.isPublic && siteForIndexNow.url) {
+          this.indexNowService.submitUrl(siteForIndexNow.url).catch((err) => {
+            this.logger.warn(`IndexNow submit failed: ${err}`);
+          });
+        }
       }
 
       this.logger.log(`Scan ${scanId} completed with score ${totalScore}`);
