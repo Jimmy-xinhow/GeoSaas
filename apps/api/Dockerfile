@@ -42,10 +42,10 @@ RUN pnpm --filter @geovault/api build
 # Prune dev dependencies for production
 RUN pnpm --filter @geovault/api --prod deploy /app/pruned
 
-# Copy Prisma generated client into pruned node_modules
-RUN PRISMA_SRC=$(find /app/node_modules/.pnpm -path "*/.prisma/client" -type d | head -1) && \
-    mkdir -p /app/pruned/node_modules/.prisma && \
-    cp -r "$PRISMA_SRC" /app/pruned/node_modules/.prisma/client
+# Run prisma generate inside pruned using the builder's prisma CLI
+RUN PRISMA_CLI=$(find /app/node_modules/.pnpm -path "*/prisma/build/index.js" -not -path "*/@prisma/*" | head -1) && \
+    echo "Using prisma CLI: $PRISMA_CLI" && \
+    cd /app/pruned && node "$PRISMA_CLI" generate --schema=/app/packages/database/prisma/schema.prisma
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
