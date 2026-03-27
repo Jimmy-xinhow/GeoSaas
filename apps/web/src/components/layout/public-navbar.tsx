@@ -10,6 +10,7 @@ const navLinks = [
   { href: '/directory', label: '目錄' },
   { href: '/blog', label: 'Blog' },
   { href: '/news', label: 'News' },
+  { href: '/cases', label: '案例' },
 ];
 
 export default function PublicNavbar() {

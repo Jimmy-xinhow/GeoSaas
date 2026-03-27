@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import PublicNavbar from '@/components/layout/public-navbar';
 import BlogClient from './blog-client';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://geovault.app';
@@ -46,15 +46,7 @@ export default function BlogPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionsJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
 
-      <nav className="flex items-center justify-between p-4 px-6 lg:px-12 bg-white border-b border-gray-100 sticky top-0 z-50">
-        <Link href="/" className="text-xl font-bold text-gray-900">Geovault</Link>
-        <div className="flex items-center gap-6">
-          <Link href="/directory" className="text-sm text-gray-600 hover:text-gray-900">目錄</Link>
-          <Link href="/news" className="text-sm text-gray-600 hover:text-gray-900">News</Link>
-          <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900">登入</Link>
-          <Link href="/register" className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">免費開始</Link>
-        </div>
-      </nav>
+      <PublicNavbar />
 
       <BlogClient />
     </div>
