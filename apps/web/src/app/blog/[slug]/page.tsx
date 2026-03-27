@@ -1,171 +1,159 @@
-'use client';
-
-import { useParams } from 'next/navigation';
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowLeft, Clock, Loader2 } from 'lucide-react';
-import { getPost } from '@/content/blog/posts';
-import { useBlogArticle } from '@/hooks/use-blog';
+import { getPost, getAllPosts } from '@/content/blog/posts';
+import ArticleClient from './article-client';
 
-/** Simple markdown to HTML converter */
-function markdownToHtml(md: string): string {
-  return md
-    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/^\|(.+)\|$/gm, (match) => {
-      const cells = match.split('|').filter(Boolean).map((c) => c.trim());
-      return `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
-    })
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/^(?!<[hluopt])/gm, '')
-    .replace(/^(.+)$/gm, (line) => (line.startsWith('<') ? line : `<p>${line}</p>`))
-    .replace(/<p><\/p>/g, '')
-    .replace(/<p>\s*<\/p>/g, '');
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://geovault.app';
+
+interface Props {
+  params: { slug: string };
 }
 
-function ArticleContent({
-  title,
-  description,
-  category,
-  readTime,
-  date,
-  content,
-}: {
-  title: string;
-  description: string;
-  category: string;
-  readTime: string;
-  date: string;
-  content: string;
-}) {
-  return (
-    <article className="max-w-3xl mx-auto px-6 py-12">
-      <Link
-        href="/blog"
-        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 mb-6"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        返回文章列表
-      </Link>
-
-      <div className="flex items-center gap-3 text-sm text-gray-500 mb-4">
-        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-          {category}
-        </span>
-        <span className="flex items-center gap-1">
-          <Clock className="h-3.5 w-3.5" />
-          {readTime}
-        </span>
-        <span>{new Date(date).toLocaleDateString('zh-TW')}</span>
-      </div>
-
-      <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-        {title}
-      </h1>
-      <p className="text-lg text-gray-600 mb-8">{description}</p>
-      <hr className="mb-8" />
-
-      <div
-        className="prose prose-gray prose-lg max-w-none
-          prose-headings:text-gray-900 prose-headings:font-bold
-          prose-p:text-gray-700 prose-p:leading-relaxed
-          prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline
-          prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
-          prose-pre:bg-gray-900 prose-pre:text-gray-100
-          prose-table:border prose-th:bg-gray-50 prose-th:p-3 prose-td:p-3"
-        dangerouslySetInnerHTML={{ __html: markdownToHtml(content) }}
-      />
-
-      <div className="mt-12 p-8 bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl text-center">
-        <h3 className="text-xl font-bold text-gray-900">
-          想優化你的 AI 能見度？
-        </h3>
-        <p className="mt-2 text-gray-600">
-          免費掃描你的網站，了解 AI 友善度分數
-        </p>
-        <Link
-          href="/"
-          className="inline-block mt-4 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-        >
-          免費掃描
-        </Link>
-      </div>
-    </article>
-  );
+export function generateStaticParams() {
+  return getAllPosts().map((post) => ({ slug: post.slug }));
 }
 
-export default function BlogPostPage() {
-  const params = useParams();
-  const slug = params.slug as string;
-
-  // Try static post first
-  const staticPost = getPost(slug);
-
-  // If not static, fetch from API
-  const { data: apiArticle, isLoading } = useBlogArticle(staticPost ? '' : slug);
-
-  const post = staticPost
-    ? {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const staticPost = getPost(params.slug);
+  if (staticPost) {
+    return {
+      title: staticPost.title,
+      description: staticPost.description,
+      openGraph: {
         title: staticPost.title,
         description: staticPost.description,
-        category: staticPost.category,
-        readTime: staticPost.readTime,
-        date: staticPost.date,
-        content: staticPost.content,
+        type: 'article',
+        publishedTime: staticPost.date,
+        authors: ['Geovault'],
+        siteName: 'Geovault',
+        url: `${SITE_URL}/blog/${params.slug}`,
+      },
+      twitter: { card: 'summary_large_image', title: staticPost.title, description: staticPost.description },
+      alternates: { canonical: `${SITE_URL}/blog/${params.slug}` },
+    };
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/api/blog/articles/${params.slug}`, { next: { revalidate: 3600 } });
+    if (res.ok) {
+      const data = await res.json();
+      const article = data?.data || data;
+      if (article) {
+        return {
+          title: article.title,
+          description: article.description?.slice(0, 160),
+          openGraph: {
+            title: article.title,
+            description: article.description?.slice(0, 160),
+            type: 'article',
+            publishedTime: article.createdAt,
+            authors: ['Geovault'],
+            siteName: 'Geovault',
+          },
+          alternates: { canonical: `${SITE_URL}/blog/${params.slug}` },
+        };
       }
-    : apiArticle
-    ? {
-        title: apiArticle.title,
-        description: apiArticle.description,
-        category: apiArticle.category === 'analysis' ? 'AI 分析報告' : apiArticle.category,
-        readTime: apiArticle.readTime,
-        date: apiArticle.createdAt,
-        content: apiArticle.content || '',
+    }
+  } catch {}
+
+  return { title: 'Blog — Geovault' };
+}
+
+function extractFaqJsonLd(content: string) {
+  const faqs: { question: string; answer: string }[] = [];
+  const regex = /\*\*Q:\s*(.+?)\*\*\s*\n\s*\nA:\s*(.+?)(?=\n\n\*\*Q:|\n\n##|\n\n---|\s*$)/gs;
+  let match;
+  while ((match = regex.exec(content)) !== null) {
+    faqs.push({ question: match[1].trim(), answer: match[2].trim() });
+  }
+  if (faqs.length === 0) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map((faq) => ({
+      '@type': 'Question',
+      name: faq.question,
+      acceptedAnswer: { '@type': 'Answer', text: faq.answer },
+    })),
+  };
+}
+
+export default async function BlogPostPage({ params }: Props) {
+  const staticPost = getPost(params.slug);
+  let articleJsonLd: any = null;
+  let faqJsonLd: any = null;
+
+  if (staticPost) {
+    articleJsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: staticPost.title,
+      description: staticPost.description,
+      datePublished: staticPost.date,
+      author: { '@type': 'Organization', name: 'Geovault', url: SITE_URL },
+      publisher: { '@type': 'Organization', name: 'Geovault', url: SITE_URL, logo: { '@type': 'ImageObject', url: `${SITE_URL}/logo.png` } },
+      isPartOf: { '@type': 'WebSite', name: 'Geovault', url: SITE_URL },
+      identifier: 'GEOVAULT-2026-APAC-PRIME',
+    };
+    faqJsonLd = extractFaqJsonLd(staticPost.content);
+  } else {
+    try {
+      const res = await fetch(`${API_URL}/api/blog/articles/${params.slug}`, { next: { revalidate: 3600 } });
+      if (res.ok) {
+        const data = await res.json();
+        const article = data?.data || data;
+        if (article) {
+          articleJsonLd = {
+            '@context': 'https://schema.org',
+            '@type': 'Article',
+            headline: article.title,
+            description: article.description,
+            datePublished: article.createdAt,
+            dateModified: article.updatedAt || article.createdAt,
+            author: { '@type': 'Organization', name: 'Geovault', url: SITE_URL },
+            publisher: { '@type': 'Organization', name: 'Geovault', url: SITE_URL, logo: { '@type': 'ImageObject', url: `${SITE_URL}/logo.png` } },
+            isPartOf: { '@type': 'WebSite', name: 'Geovault', url: SITE_URL },
+            keywords: article.targetKeywords?.join(', '),
+            identifier: 'GEOVAULT-2026-APAC-PRIME',
+          };
+          if (article.content) faqJsonLd = extractFaqJsonLd(article.content);
+        }
       }
-    : null;
+    } catch {}
+  }
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: '首頁', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
+      { '@type': 'ListItem', position: 3, name: staticPost?.title || 'Article' },
+    ],
+  };
 
   return (
     <div className="min-h-screen bg-white">
+      {articleJsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
+      )}
+      {faqJsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+      )}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+
       <nav className="flex items-center justify-between p-4 px-6 lg:px-12 bg-white border-b border-gray-100 sticky top-0 z-50">
-        <Link href="/" className="text-xl font-bold text-gray-900">
-          Geovault
-        </Link>
+        <Link href="/" className="text-xl font-bold text-gray-900">Geovault</Link>
         <div className="flex items-center gap-6">
-          <Link href="/blog" className="text-sm text-gray-600 hover:text-gray-900">
-            Blog
-          </Link>
-          <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900">
-            登入
-          </Link>
-          <Link
-            href="/register"
-            className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-          >
-            免費開始
-          </Link>
+          <Link href="/blog" className="text-sm text-gray-600 hover:text-gray-900">Blog</Link>
+          <Link href="/directory" className="text-sm text-gray-600 hover:text-gray-900">目錄</Link>
+          <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900">登入</Link>
+          <Link href="/register" className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">免費開始</Link>
         </div>
       </nav>
 
-      {isLoading && !staticPost ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-        </div>
-      ) : post ? (
-        <ArticleContent {...post} />
-      ) : (
-        <div className="text-center py-20">
-          <h2 className="text-xl font-bold text-gray-900">找不到文章</h2>
-          <p className="text-gray-500 mt-2">該文章不存在或已被移除</p>
-          <Link href="/blog" className="text-blue-600 mt-4 inline-block">
-            返回文章列表
-          </Link>
-        </div>
-      )}
+      <ArticleClient />
     </div>
   );
 }
