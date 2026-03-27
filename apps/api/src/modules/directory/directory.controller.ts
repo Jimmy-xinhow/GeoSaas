@@ -53,6 +53,13 @@ export class DirectoryController {
   }
 
   @Public()
+  @Get('directory/industry/:industry/wiki')
+  @ApiOperation({ summary: 'Get full wiki data for an industry' })
+  industryWiki(@Param('industry') industry: string) {
+    return this.service.getIndustryWikiData(industry);
+  }
+
+  @Public()
   @Get('directory/platform-stats')
   @ApiOperation({ summary: 'Get platform-wide statistics for landing page' })
   platformStats() {

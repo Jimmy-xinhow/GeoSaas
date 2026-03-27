@@ -176,6 +176,29 @@ export function useAllIndustryStats() {
   });
 }
 
+export interface IndustryWikiData {
+  industrySlug: string;
+  totalSites: number;
+  avgScore: number;
+  maxScore: number;
+  minScore: number;
+  levelDistribution: Record<string, number>;
+  indicatorStats: Record<string, { name: string; passRate: number }>;
+  weakestIndicators: { key: string; name: string; passRate: number }[];
+  topSites: { id: string; name: string; url: string; bestScore: number; tier: string | null }[];
+}
+
+export function useIndustryWiki(industry: string) {
+  return useQuery({
+    queryKey: ['directory', 'industry', industry, 'wiki'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<IndustryWikiData>(`/directory/industry/${industry}/wiki`);
+      return data;
+    },
+    enabled: !!industry,
+  });
+}
+
 export interface PlatformStats {
   totalSites: number;
   totalScans: number;

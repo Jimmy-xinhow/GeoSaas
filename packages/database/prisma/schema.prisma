@@ -112,6 +112,7 @@ model Site {
   blogArticles        BlogArticle[]
   badges              SiteBadge[]
   successCases        GeoSuccessCase[]
+  seedSource          SeedSource?
 
   @@map("sites")
 }
@@ -381,6 +382,26 @@ model NewsArticle {
   @@index([category, publishedAt])
   @@index([published, publishedAt])
   @@map("news_articles")
+}
+
+model SeedSource {
+  id          String   @id @default(cuid())
+  url         String   @unique
+  brandName   String
+  industry    String
+  country     String   @default("TW")
+  source      String   @default("manual")
+  status      String   @default("pending")
+  failReason  String?
+  siteId      String?  @unique
+  site        Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([industry, status])
+  @@index([country, status])
+  @@index([status])
+  @@map("seed_sources")
 }
 
 model GuestScan {

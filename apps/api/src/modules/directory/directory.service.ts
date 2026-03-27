@@ -207,6 +207,92 @@ export class DirectoryService {
   }
 
   /** Platform-wide stats for landing page */
+  /** Full wiki data for a specific industry */
+  async getIndustryWikiData(industrySlug: string) {
+    const sites = await this.prisma.site.findMany({
+      where: { industry: industrySlug, isPublic: true },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        bestScore: true,
+        tier: true,
+        scans: {
+          where: { status: 'COMPLETED' },
+          orderBy: { completedAt: 'desc' },
+          take: 1,
+          select: {
+            completedAt: true,
+            results: { select: { indicator: true, score: true, status: true } },
+          },
+        },
+      },
+      orderBy: { bestScore: 'desc' },
+    });
+
+    if (sites.length === 0) return null;
+
+    const scores = sites.map((s) => s.bestScore);
+    const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+
+    // Indicator pass rates
+    const indicatorNames: Record<string, string> = {
+      json_ld: 'JSON-LD',
+      llms_txt: 'llms.txt',
+      og_tags: 'OG Tags',
+      meta_description: 'Meta Description',
+      faq_schema: 'FAQ Schema',
+      title_optimization: '標題優化',
+      contact_info: '聯絡資訊',
+      image_alt: '圖片 Alt',
+    };
+
+    const indicatorStats: Record<string, { name: string; passRate: number }> = {};
+    const allScans = sites.map((s) => s.scans[0]).filter(Boolean);
+
+    for (const [key, label] of Object.entries(indicatorNames)) {
+      if (allScans.length === 0) {
+        indicatorStats[key] = { name: label, passRate: 0 };
+      } else {
+        const passCount = allScans.filter((scan) =>
+          scan.results.some((r) => r.indicator === key && r.status === 'pass'),
+        ).length;
+        indicatorStats[key] = { name: label, passRate: Math.round((passCount / allScans.length) * 100) };
+      }
+    }
+
+    const weakestIndicators = Object.entries(indicatorStats)
+      .sort((a, b) => a[1].passRate - b[1].passRate)
+      .slice(0, 3)
+      .map(([key, val]) => ({ key, name: val.name, passRate: val.passRate }));
+
+    const levelDistribution = {
+      platinum: sites.filter((s) => s.tier === 'platinum').length,
+      gold: sites.filter((s) => s.tier === 'gold').length,
+      silver: sites.filter((s) => s.tier === 'silver').length,
+      bronze: sites.filter((s) => s.tier === 'bronze').length,
+      unrated: sites.filter((s) => !s.tier).length,
+    };
+
+    return {
+      industrySlug,
+      totalSites: sites.length,
+      avgScore,
+      maxScore: Math.max(...scores),
+      minScore: Math.min(...scores),
+      levelDistribution,
+      indicatorStats,
+      weakestIndicators,
+      topSites: sites.slice(0, 10).map((s) => ({
+        id: s.id,
+        name: s.name,
+        url: s.url,
+        bestScore: s.bestScore,
+        tier: s.tier,
+      })),
+    };
+  }
+
   /** Stats for a specific industry */
   async getIndustryStats(industry: string) {
     const [totalSites, avgResult, topSites] = await Promise.all([

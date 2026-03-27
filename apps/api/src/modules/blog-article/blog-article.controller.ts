@@ -1,12 +1,16 @@
-import { Controller, Get, Post, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { BlogArticleService } from './blog-article.service';
+import { IndustryInsightService, InsightType } from './industry-insight.service';
 
 @ApiTags('Blog')
 @Controller('api/blog')
 export class BlogArticleController {
-  constructor(private readonly service: BlogArticleService) {}
+  constructor(
+    private readonly service: BlogArticleService,
+    private readonly insightService: IndustryInsightService,
+  ) {}
 
   @Public()
   @Get('articles')
@@ -62,5 +66,25 @@ export class BlogArticleController {
       console.error('Bulk generation failed:', err);
     });
     return { message: 'Bulk generation started' };
+  }
+
+  @ApiBearerAuth()
+  @Post('insights/generate')
+  @ApiOperation({ summary: 'Generate insight article for an industry' })
+  generateInsight(@Body() body: { industry: string; type?: InsightType }) {
+    return this.insightService.generateInsightArticle(
+      body.industry,
+      body.type || 'industry_current_state',
+    );
+  }
+
+  @ApiBearerAuth()
+  @Post('insights/generate-all')
+  @ApiOperation({ summary: 'Generate industry_current_state for all eligible industries' })
+  async generateAllInsights() {
+    this.insightService.generateAll().catch((err) => {
+      console.error('Insight generation failed:', err);
+    });
+    return { message: 'Insight generation started' };
   }
 }
