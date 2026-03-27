@@ -1,6 +1,6 @@
 # ============================================================
-# GEO-SaaS API — Multi-stage Production Dockerfile
-# Build context: monorepo root (../../)
+# Geovault API — Multi-stage Production Dockerfile
+# Build context: monorepo root
 # ============================================================
 
 # ---------- Stage 1: Builder ----------
@@ -42,6 +42,10 @@ RUN pnpm --filter @geovault/api build
 # Prune dev dependencies for production
 RUN pnpm --filter @geovault/api --prod deploy /app/pruned
 
+# Re-generate Prisma client into pruned node_modules
+RUN cp -r packages/database/prisma /app/pruned/prisma && \
+    cd /app/pruned && npx prisma generate --schema=prisma/schema.prisma
+
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
 
@@ -50,11 +54,10 @@ RUN apk add --no-cache dumb-init
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Copy pruned production node_modules
+# Copy pruned node_modules (now includes Prisma generated client)
 COPY --from=builder /app/pruned/node_modules ./node_modules
 
-# Copy Prisma generated client (required at runtime)
-COPY --from=builder /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma ./node_modules/.prisma
+# Copy Prisma schema (for runtime reference)
 COPY --from=builder /app/packages/database/prisma/schema.prisma ./prisma/schema.prisma
 
 # Copy built dist output
@@ -67,8 +70,5 @@ RUN addgroup -g 1001 -S nodejs && \
 USER nestjs
 
 EXPOSE 4000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:4000/api/health || exit 1
 
 CMD ["dumb-init", "node", "dist/main.js"]
