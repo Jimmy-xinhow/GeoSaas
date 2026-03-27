@@ -21,6 +21,7 @@ COPY apps/api/nest-cli.json                   apps/api/nest-cli.json
 COPY apps/web/package.json                    apps/web/package.json
 COPY packages/database/package.json           packages/database/package.json
 COPY packages/shared/package.json             packages/shared/package.json
+COPY packages/tsconfig/package.json           packages/tsconfig/package.json
 
 # Install all dependencies (including devDependencies for building)
 RUN pnpm install --frozen-lockfile
@@ -31,6 +32,9 @@ COPY apps/api/ apps/api/
 
 # Generate Prisma client
 RUN pnpm --filter @geovault/database db:generate
+
+# Build shared package (API depends on it)
+RUN pnpm --filter @geovault/shared build
 
 # Build the API
 RUN pnpm --filter @geovault/api build
