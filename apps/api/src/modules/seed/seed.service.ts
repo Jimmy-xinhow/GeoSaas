@@ -58,8 +58,13 @@ export class SeedService {
 
   /** Import CSV files into SeedSource table */
   async importCsvFiles(files?: string[]): Promise<{ imported: number }> {
-    // Resolve from monorepo root (process.cwd() is apps/api during dev)
-    const seedDataDir = path.resolve(process.cwd(), '../../scripts/seed-data');
+    // Try multiple possible paths (dev vs Docker)
+    const candidates = [
+      path.resolve(process.cwd(), '../../scripts/seed-data'),  // dev: apps/api/
+      path.resolve(process.cwd(), 'scripts/seed-data'),        // Docker: /app/
+      path.resolve(process.cwd(), '../scripts/seed-data'),     // fallback
+    ];
+    const seedDataDir = candidates.find((p) => fs.existsSync(p)) || candidates[0];
 
     let csvFiles: string[];
     if (files && files.length > 0) {

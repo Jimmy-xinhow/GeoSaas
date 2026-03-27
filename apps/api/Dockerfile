@@ -29,6 +29,7 @@ RUN pnpm install --frozen-lockfile
 # Copy full source
 COPY packages/ packages/
 COPY apps/api/ apps/api/
+COPY scripts/seed-data/ scripts/seed-data/
 
 # Generate Prisma client
 RUN pnpm --filter @geovault/database db:generate
@@ -66,6 +67,9 @@ COPY --from=builder /app/packages/shared/package.json ./node_modules/@geovault/s
 
 # Copy Prisma schema
 COPY --from=builder /app/packages/database/prisma/schema.prisma ./prisma/schema.prisma
+
+# Copy seed data CSV files
+COPY --from=builder /app/scripts/seed-data ./scripts/seed-data
 
 # Copy built dist output
 COPY --from=builder /app/apps/api/dist ./dist
