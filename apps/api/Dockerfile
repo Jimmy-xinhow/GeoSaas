@@ -43,7 +43,7 @@ RUN pnpm --filter @geovault/api build
 RUN pnpm --filter @geovault/api --prod deploy /app/pruned
 
 # Copy Prisma generated client into pruned node_modules
-RUN cp -r /app/node_modules/.pnpm/@prisma+client@*/node_modules/.prisma /app/pruned/node_modules/.prisma
+RUN cp -r /app/node_modules/.prisma /app/pruned/node_modules/.prisma
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
