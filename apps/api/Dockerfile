@@ -42,9 +42,9 @@ RUN pnpm --filter @geovault/api build
 # Prune dev dependencies for production
 RUN pnpm --filter @geovault/api --prod deploy /app/pruned
 
-# Debug: find where Prisma generated client lives
-RUN find /app/node_modules -name "libquery_engine*" -o -name "query-engine*" 2>/dev/null | head -10 && \
-    find /app/node_modules -path "*/.prisma/client" -type d 2>/dev/null | head -5
+# Copy Prisma generated client (with engine binary) into pruned node_modules
+RUN mkdir -p /app/pruned/node_modules/.prisma && \
+    cp -r /app/node_modules/.pnpm/@prisma+client@*/node_modules/.prisma/client /app/pruned/node_modules/.prisma/client
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
