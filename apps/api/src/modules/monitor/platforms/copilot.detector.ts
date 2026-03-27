@@ -19,7 +19,7 @@ export class CopilotDetector {
       this.client = new OpenAI({
         apiKey: azureKey,
         baseURL: `${azureEndpoint}/openai/deployments/${azureDeployment}`,
-        defaultQuery: { 'api-version': '2024-08-01-preview' },
+        defaultQuery: { 'api-version': '2025-01-01-preview' },
         defaultHeaders: { 'api-key': azureKey },
       });
       this.model = azureDeployment;
