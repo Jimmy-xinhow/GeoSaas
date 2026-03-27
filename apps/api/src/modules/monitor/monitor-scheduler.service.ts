@@ -113,15 +113,15 @@ export class MonitorSchedulerService {
     }
 
     for (const [userId, userChanges] of byUser) {
-      const gained = userChanges.filter((c) => c.nowMentioned && !c.wasMentioned);
-      const lost = userChanges.filter((c) => !c.nowMentioned && c.wasMentioned);
+      const gained = userChanges.filter((c: any) => c.nowMentioned && !c.wasMentioned);
+      const lost = userChanges.filter((c: any) => !c.nowMentioned && c.wasMentioned);
 
       const parts: string[] = [];
       if (gained.length > 0) {
-        parts.push(`新增 ${gained.length} 個 AI 引用：${gained.map((c) => `${c.platform} — "${c.query}"`).join('、')}`);
+        parts.push(`新增 ${gained.length} 個 AI 引用：${gained.map((c: any) => `${c.platform} — "${c.query}"`).join('、')}`);
       }
       if (lost.length > 0) {
-        parts.push(`失去 ${lost.length} 個 AI 引用：${lost.map((c) => `${c.platform} — "${c.query}"`).join('、')}`);
+        parts.push(`失去 ${lost.length} 個 AI 引用：${lost.map((c: any) => `${c.platform} — "${c.query}"`).join('、')}`);
       }
 
       if (parts.length > 0) {

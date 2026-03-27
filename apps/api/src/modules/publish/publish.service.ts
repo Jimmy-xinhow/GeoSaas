@@ -86,7 +86,7 @@ export class PublishService {
 
   async findAll(userId: string) {
     const contents = await this.prisma.content.findMany({ where: { userId }, select: { id: true } });
-    const contentIds = contents.map((c) => c.id);
+    const contentIds = contents.map((c: any) => c.id);
     return this.prisma.publication.findMany({
       where: { contentId: { in: contentIds } },
       include: { content: { select: { title: true, type: true } } },

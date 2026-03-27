@@ -93,7 +93,7 @@ export class IndustryInsightService {
       _count: { id: true },
     });
 
-    const eligible = industries.filter((i) => i.industry && i._count.id >= 5);
+    const eligible = industries.filter((i: any) => i.industry && i._count.id >= 5);
 
     const insightTypes: InsightType[] = [
       'industry_current_state',
@@ -128,7 +128,7 @@ export class IndustryInsightService {
 
     let generated = 0;
     for (const { industry } of industries) {
-      if (!industry || industries.find((i) => i.industry === industry && i._count.id < 5)) continue;
+      if (!industry || industries.find((i: any) => i.industry === industry && i._count.id < 5)) continue;
       try {
         const result = await this.generateInsightArticle(industry, 'industry_current_state');
         if (result) generated++;
@@ -159,14 +159,14 @@ export class IndustryInsightService {
 
     if (sites.length === 0) return null;
 
-    const scores = sites.map((s) => s.bestScore);
-    const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-    const allScans = sites.map((s) => s.scans[0]).filter(Boolean);
+    const scores = sites.map((s: any) => s.bestScore);
+    const avgScore = Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length);
+    const allScans = sites.map((s: any) => s.scans[0]).filter(Boolean);
 
     const indicatorStats: Record<string, { name: string; passRate: number }> = {};
     for (const [key, name] of Object.entries(INDICATOR_NAMES)) {
-      const passCount = allScans.filter((scan) =>
-        scan.results.some((r) => r.indicator === key && r.status === 'pass'),
+      const passCount = allScans.filter((scan: any) =>
+        scan.results.some((r: any) => r.indicator === key && r.status === 'pass'),
       ).length;
       indicatorStats[key] = { name, passRate: allScans.length > 0 ? Math.round((passCount / allScans.length) * 100) : 0 };
     }
@@ -182,15 +182,15 @@ export class IndustryInsightService {
       maxScore: Math.max(...scores),
       minScore: Math.min(...scores),
       levelDistribution: {
-        Platinum: sites.filter((s) => s.tier === 'platinum').length,
-        Gold: sites.filter((s) => s.tier === 'gold').length,
-        Silver: sites.filter((s) => s.tier === 'silver').length,
-        Bronze: sites.filter((s) => s.tier === 'bronze').length,
-        Unrated: sites.filter((s) => !s.tier).length,
+        Platinum: sites.filter((s: any) => s.tier === 'platinum').length,
+        Gold: sites.filter((s: any) => s.tier === 'gold').length,
+        Silver: sites.filter((s: any) => s.tier === 'silver').length,
+        Bronze: sites.filter((s: any) => s.tier === 'bronze').length,
+        Unrated: sites.filter((s: any) => !s.tier).length,
       },
       indicatorStats,
       weakestIndicators,
-      topSites: sites.slice(0, 5).map((s) => ({ name: s.name, bestScore: s.bestScore })),
+      topSites: sites.slice(0, 5).map((s: any) => ({ name: s.name, bestScore: s.bestScore })),
     };
   }
 
@@ -218,7 +218,7 @@ ${Object.values(data.indicatorStats).map((v) => `- ${v.name}：${v.passRate}%`).
 最常缺少的指標：
 ${data.weakestIndicators.map((w, i) => `${i + 1}. ${w.name}（僅 ${w.passRate}% 通過）`).join('\n')}
 
-前 5 名品牌：${data.topSites.map((s) => `${s.name}（${s.bestScore}分）`).join('、')}`;
+前 5 名品牌：${data.topSites.map((s: any) => `${s.name}（${s.bestScore}分）`).join('、')}`;
 
     const prompts: Record<InsightType, string> = {
       industry_current_state: `你是一位產業分析師。請根據以下真實數據，撰寫一篇 900–1100 字的繁體中文行業報告。

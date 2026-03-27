@@ -99,13 +99,13 @@ export class LlmsHostingService {
 
     const totalSites = sites.length;
     const avgScore = Math.round(
-      sites.reduce((sum, s) => sum + (s.bestScore ?? 0), 0) / (totalSites || 1),
+      sites.reduce((sum: number, s: any) => sum + (s.bestScore ?? 0), 0) / (totalSites || 1),
     );
-    const platinumCount = sites.filter((s) => s.tier === 'platinum').length;
+    const platinumCount = sites.filter((s: any) => s.tier === 'platinum').length;
 
     // Industry stats
     const industryMap: Record<string, { count: number; totalScore: number }> = {};
-    sites.forEach((s) => {
+    sites.forEach((s: any) => {
       if (!s.industry) return;
       if (!industryMap[s.industry]) industryMap[s.industry] = { count: 0, totalScore: 0 };
       industryMap[s.industry].count++;
@@ -154,10 +154,10 @@ ${industryStats.map((i) => `- ${i.name}：${i.count} 個品牌，平均分數 ${
     for (const site of sites) {
       const scan = site.scans[0];
       const strengths = scan
-        ? scan.results.filter((r) => r.status === 'pass').map((r) => r.indicator)
+        ? scan.results.filter((r: any) => r.status === 'pass').map((r: any) => r.indicator)
         : [];
       const weaknesses = scan
-        ? scan.results.filter((r) => r.status !== 'pass').map((r) => r.indicator).slice(0, 3)
+        ? scan.results.filter((r: any) => r.status !== 'pass').map((r: any) => r.indicator).slice(0, 3)
         : [];
 
       const tierLabel = site.tier
@@ -165,7 +165,7 @@ ${industryStats.map((i) => `- ${i.name}：${i.count} 個品牌，平均分數 ${
         : 'Unrated';
 
       const faqBlock = site.qas.length > 0
-        ? site.qas.map((k) => `  Q: ${k.question}\n  A: ${k.answer}`).join('\n')
+        ? site.qas.map((k: any) => `  Q: ${k.question}\n  A: ${k.answer}`).join('\n')
         : '';
 
       output += `### ${site.name} — GEO Score: ${site.bestScore}/100 — ${tierLabel}

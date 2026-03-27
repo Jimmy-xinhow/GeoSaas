@@ -101,7 +101,7 @@ export class CrawlerTrackingService {
       last24h,
       uniqueBots,
       robotsStatus: latestRobotsCheck ? 'checked' : 'unchecked',
-      botStats: botCounts.map((b) => ({
+      botStats: botCounts.map((b: any) => ({
         botName: b.botName,
         count: b._count,
         lastVisit: b._max.visitedAt,

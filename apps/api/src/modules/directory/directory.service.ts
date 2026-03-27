@@ -139,15 +139,15 @@ export class DirectoryService {
 
     if (topSites.length === 0) return [];
 
-    const siteIds = topSites.map((s) => s.siteId);
+    const siteIds = topSites.map((s: any) => s.siteId);
     const sites = await this.prisma.site.findMany({
       where: { id: { in: siteIds } },
       select: { id: true, name: true, url: true, industry: true, tier: true, bestScore: true },
     });
 
-    const siteMap = new Map(sites.map((s) => [s.id, s]));
-    return topSites.map((t) => ({
-      ...siteMap.get(t.siteId),
+    const siteMap = new Map(sites.map((s: any) => [s.id, s]));
+    return topSites.map((t: any) => ({
+      ...(siteMap.get(t.siteId) || {}),
       todayVisits: t._count,
     }));
   }
@@ -166,15 +166,15 @@ export class DirectoryService {
 
     if (topSites.length === 0) return [];
 
-    const siteIds = topSites.map((s) => s.siteId);
+    const siteIds = topSites.map((s: any) => s.siteId);
     const sites = await this.prisma.site.findMany({
       where: { id: { in: siteIds } },
       select: { id: true, name: true, url: true, industry: true, tier: true, bestScore: true },
     });
 
-    const siteMap = new Map(sites.map((s) => [s.id, s]));
-    return topSites.map((t) => ({
-      ...siteMap.get(t.siteId),
+    const siteMap = new Map(sites.map((s: any) => [s.id, s]));
+    return topSites.map((t: any) => ({
+      ...(siteMap.get(t.siteId) || {}),
       totalVisits: t._count,
     }));
   }
@@ -203,7 +203,7 @@ export class DirectoryService {
       },
     });
 
-    return recentScans.map((s) => ({
+    return recentScans.map((s: any) => ({
       ...s.site,
       lastScanScore: s.totalScore,
       lastScanAt: s.completedAt,
@@ -236,8 +236,8 @@ export class DirectoryService {
 
     if (sites.length === 0) return null;
 
-    const scores = sites.map((s) => s.bestScore);
-    const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    const scores = sites.map((s: any) => s.bestScore);
+    const avgScore = Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length);
 
     // Indicator pass rates
     const indicatorNames: Record<string, string> = {
@@ -252,14 +252,14 @@ export class DirectoryService {
     };
 
     const indicatorStats: Record<string, { name: string; passRate: number }> = {};
-    const allScans = sites.map((s) => s.scans[0]).filter(Boolean);
+    const allScans = sites.map((s: any) => s.scans[0]).filter(Boolean);
 
     for (const [key, label] of Object.entries(indicatorNames)) {
       if (allScans.length === 0) {
         indicatorStats[key] = { name: label, passRate: 0 };
       } else {
-        const passCount = allScans.filter((scan) =>
-          scan.results.some((r) => r.indicator === key && r.status === 'pass'),
+        const passCount = allScans.filter((scan: any) =>
+          scan.results.some((r: any) => r.indicator === key && r.status === 'pass'),
         ).length;
         indicatorStats[key] = { name: label, passRate: Math.round((passCount / allScans.length) * 100) };
       }
@@ -271,11 +271,11 @@ export class DirectoryService {
       .map(([key, val]) => ({ key, name: val.name, passRate: val.passRate }));
 
     const levelDistribution = {
-      platinum: sites.filter((s) => s.tier === 'platinum').length,
-      gold: sites.filter((s) => s.tier === 'gold').length,
-      silver: sites.filter((s) => s.tier === 'silver').length,
-      bronze: sites.filter((s) => s.tier === 'bronze').length,
-      unrated: sites.filter((s) => !s.tier).length,
+      platinum: sites.filter((s: any) => s.tier === 'platinum').length,
+      gold: sites.filter((s: any) => s.tier === 'gold').length,
+      silver: sites.filter((s: any) => s.tier === 'silver').length,
+      bronze: sites.filter((s: any) => s.tier === 'bronze').length,
+      unrated: sites.filter((s: any) => !s.tier).length,
     };
 
     return {
@@ -287,7 +287,7 @@ export class DirectoryService {
       levelDistribution,
       indicatorStats,
       weakestIndicators,
-      topSites: sites.slice(0, 10).map((s) => ({
+      topSites: sites.slice(0, 10).map((s: any) => ({
         id: s.id,
         name: s.name,
         url: s.url,
@@ -333,8 +333,8 @@ export class DirectoryService {
     });
 
     return stats
-      .filter((s) => s.industry)
-      .map((s) => ({
+      .filter((s: any) => s.industry)
+      .map((s: any) => ({
         industry: s.industry!,
         count: s._count,
         avgScore: Math.round(s._avg.bestScore || 0),
@@ -359,7 +359,7 @@ export class DirectoryService {
       this.prisma.crawlerVisit.groupBy({
         by: ['botName'],
         where: { visitedAt: { gte: oneDayAgo } },
-      }).then((r) => r.length),
+      }).then((r: any) => r.length),
     ]);
 
     return {
@@ -418,7 +418,7 @@ export class DirectoryService {
       feed: recentVisits,
       stats: {
         last24h: last24hCount,
-        activeBots: activeBots.map((b) => ({
+        activeBots: activeBots.map((b: any) => ({
           name: b.botName,
           count: b._count,
         })),
@@ -497,13 +497,13 @@ export class DirectoryService {
     return {
       ...siteData,
       latestScan: scans[0] || null,
-      scoreTrend: scoreTrend.map((s) => ({
+      scoreTrend: scoreTrend.map((s: any) => ({
         date: s.completedAt,
         score: s.totalScore,
       })),
       crawlerActivity: {
         totalVisits: totalCrawlerVisits,
-        bots: crawlerStats.map((b) => ({
+        bots: crawlerStats.map((b: any) => ({
           name: b.botName,
           org: b.botOrg,
           visitCount: b._count,
@@ -538,10 +538,10 @@ export class DirectoryService {
     });
 
     const stars = sites
-      .filter((s) => s.scans.length >= 2)
-      .map((s) => {
+      .filter((s: any) => s.scans.length >= 2)
+      .map((s: any) => {
         const firstScan = s.scans[0];
-        const bestScan = s.scans.reduce((a, b) => (b.totalScore > a.totalScore ? b : a), s.scans[0]);
+        const bestScan = s.scans.reduce((a: any, b: any) => (b.totalScore > a.totalScore ? b : a), s.scans[0]);
         const improvement = bestScan.totalScore - firstScan.totalScore;
         const daysBetween = Math.ceil(
           (new Date(bestScan.completedAt!).getTime() - new Date(firstScan.completedAt!).getTime()) / 86400000,
@@ -560,7 +560,7 @@ export class DirectoryService {
           daysToImprove: Math.max(daysBetween, 1),
         };
       })
-      .filter((s) => s.improvement > 0)
+      .filter((s: any) => s.improvement > 0)
       .sort((a, b) => b.improvement - a.improvement)
       .slice(0, 10);
 

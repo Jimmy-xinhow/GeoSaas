@@ -27,7 +27,7 @@ export class NewsService {
     ]);
 
     // Return localized fields
-    const localized = items.map((item) => ({
+    const localized = items.map((item: any) => ({
       id: item.id,
       slug: item.slug,
       title: this.localize(item.title, item.titleEn, item.titleJa, locale),

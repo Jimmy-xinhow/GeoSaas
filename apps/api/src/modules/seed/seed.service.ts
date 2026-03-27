@@ -44,7 +44,7 @@ export class SeedService {
       pending,
       failed,
       isRunning: this.isRunning,
-      byIndustry: byIndustry.map((b) => ({ industry: b.industry, count: b._count })),
+      byIndustry: byIndustry.map((b: any) => ({ industry: b.industry, count: b._count })),
     };
   }
 
@@ -134,7 +134,7 @@ export class SeedService {
       }
 
       await Promise.all(
-        pendingSeeds.map((seed) =>
+        pendingSeeds.map((seed: any) =>
           limit(async () => {
             try {
               // Find or create site

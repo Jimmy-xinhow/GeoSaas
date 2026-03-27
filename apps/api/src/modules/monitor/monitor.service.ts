@@ -76,10 +76,10 @@ export class MonitorService {
 
     const platforms = platformKeys.map((p) => {
       const pMonitors = monitors.filter((m) => m.platform.toUpperCase() === p);
-      const checked = pMonitors.filter((m) => m.response && !m.response.startsWith('[Error]'));
-      const mentioned = checked.filter((m) => m.mentioned).length;
+      const checked = pMonitors.filter((m: any) => m.response && !m.response.startsWith('[Error]'));
+      const mentioned = checked.filter((m: any) => m.mentioned).length;
       const total = pMonitors.length;
-      const errorCount = pMonitors.filter((m) => m.response?.startsWith('[Error]')).length;
+      const errorCount = pMonitors.filter((m: any) => m.response?.startsWith('[Error]')).length;
       const rate = checked.length ? Math.round((mentioned / checked.length) * 100) : 0;
       return {
         name: platformNames[p] || p,
@@ -93,7 +93,7 @@ export class MonitorService {
       };
     });
 
-    const queries = monitors.slice(0, 50).map((m) => {
+    const queries = monitors.slice(0, 50).map((m: any) => {
       const hasError = m.response?.startsWith('[Error]') || false;
       const notChecked = !m.response;
       return {

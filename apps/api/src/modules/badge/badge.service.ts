@@ -72,7 +72,7 @@ export class BadgeService {
       take: 10,
       select: { id: true },
     });
-    const isTop10 = top10.some((s) => s.id === siteId);
+    const isTop10 = top10.some((s: any) => s.id === siteId);
 
     const ctx: BadgeContext = {
       bestScore: site.bestScore,
@@ -82,7 +82,7 @@ export class BadgeService {
       scoreImprovement,
     };
 
-    const existingBadges = new Set(site.badges.map((b) => b.badge));
+    const existingBadges = new Set(site.badges.map((b: any) => b.badge));
     const newBadges: string[] = [];
 
     for (const def of BADGE_DEFINITIONS) {

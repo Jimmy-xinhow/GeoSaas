@@ -81,7 +81,7 @@ export class ScanService {
       },
     });
 
-    return scans.map((s) => ({
+    return scans.map((s: any) => ({
       date: s.completedAt,
       score: s.totalScore,
       site: s.site.name,

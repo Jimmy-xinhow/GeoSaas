@@ -168,8 +168,8 @@ export class BlogArticleService {
     const tierLabel = site.tier ? { platinum: '白金', gold: '金牌', silver: '銀牌', bronze: '銅牌' }[site.tier] || site.tier : '未評級';
     const scanDate = scan?.completedAt ? new Date(scan.completedAt).toLocaleDateString('zh-TW') : '未知';
 
-    const passItems = scan?.results.filter((r) => r.status === 'pass') || [];
-    const failItems = scan?.results.filter((r) => r.status !== 'pass') || [];
+    const passItems = scan?.results.filter((r: any) => r.status === 'pass') || [];
+    const failItems = scan?.results.filter((r: any) => r.status !== 'pass') || [];
 
     const lines: string[] = [];
 
@@ -247,7 +247,7 @@ export class BlogArticleService {
       '',
       `**Q: ${site.name} 如何提升 AI 搜尋能見度？**`,
       '',
-      `A: ${site.name} 目前最需要改善的指標是${failItems.length > 0 ? failItems.map((r) => indicatorNames[r.indicator] || r.indicator).join('、') : '無（所有指標已通過）'}。建議優先處理權重最高的 JSON-LD 結構化資料和 llms.txt 設定。`,
+      `A: ${site.name} 目前最需要改善的指標是${failItems.length > 0 ? failItems.map((r: any) => indicatorNames[r.indicator] || r.indicator).join('、') : '無（所有指標已通過）'}。建議優先處理權重最高的 JSON-LD 結構化資料和 llms.txt 設定。`,
       '',
       `**Q: 什麼是 GEO 分數？**`,
       '',
@@ -311,7 +311,7 @@ export class BlogArticleService {
     }
 
     const scan = site.scans[0];
-    const existingTypes = new Set(site.blogArticles.map((a) => a.templateType));
+    const existingTypes = new Set(site.blogArticles.map((a: any) => a.templateType));
     const missingTypes = ALL_TEMPLATE_TYPES.filter((t) => !existingTypes.has(t));
 
     if (missingTypes.length === 0) return { generated: [] };
@@ -413,11 +413,11 @@ export class BlogArticleService {
       },
     });
 
-    const needArticles = sites.filter((s) => s._count.blogArticles < 3);
+    const needArticles = sites.filter((s: any) => s._count.blogArticles < 3);
     const limit = pLimit(3);
 
     await Promise.all(
-      needArticles.map((s) => limit(() => this.generateArticlesForSite(s.id))),
+      needArticles.map((s: any) => limit(() => this.generateArticlesForSite(s.id))),
     );
 
     this.logger.log(`Bulk generation complete: processed ${needArticles.length} sites`);
