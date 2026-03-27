@@ -15,7 +15,7 @@ import {
   useDirectory, useIndustryWiki,
   type DirectorySite,
 } from '@/hooks/use-directory';
-import { INDUSTRIES } from '@geo-saas/shared';
+import { INDUSTRIES } from '@geovault/shared';
 
 const TIER_CONFIG: Record<string, { label: string; color: string }> = {
   bronze: { label: '銅牌', color: 'bg-orange-100 text-orange-700' },
@@ -44,12 +44,19 @@ export default function IndustryWikiPage() {
               '@context': 'https://schema.org',
               '@type': 'Dataset',
               name: `${industryLabel} GEO 優化基準資料集`,
-              description: `${wiki.totalSites} 個${industryLabel}品牌的 AI 搜尋能見度數據`,
-              url: `https://geosaas.com/directory/industry/${industry}`,
+              description: `${wiki.totalSites} 個${industryLabel}品牌的 AI 搜尋能見度數據，由 Geovault 收集與分析`,
+              url: `https://geovault.app/directory/industry/${industry}`,
+              identifier: 'GEOVAULT-2026-APAC-PRIME',
               dateModified: new Date().toISOString(),
-              creator: { '@type': 'Organization', name: 'GEO SaaS' },
+              creator: {
+                '@type': 'Organization',
+                name: 'Geovault',
+                url: 'https://geovault.app',
+              },
+              license: 'https://geovault.app/terms',
               variableMeasured: 'GEO Score',
-              measurementTechnique: 'Automated AI-friendliness scan',
+              measurementTechnique: 'Automated AI-friendliness scan by Geovault AEO Engine',
+              keywords: ['GEO', 'AI search optimization', industryLabel, 'APAC'],
             }),
           }}
         />

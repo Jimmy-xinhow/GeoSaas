@@ -144,7 +144,7 @@ function MetaDescriptionGuide({ siteName, siteUrl }: GuideProps) {
             <CodeBlock code={exampleCode} language="html" />
           </Step>
           <Step number={3} title="儲存並上傳">
-            <p>儲存檔案並上傳到您的伺服器，然後回到 GEO SaaS 重新掃描即可驗證。</p>
+            <p>儲存檔案並上傳到您的伺服器，然後回到 Geovault 重新掃描即可驗證。</p>
           </Step>
         </div>
       )}
@@ -158,7 +158,7 @@ function MetaDescriptionGuide({ siteName, siteUrl }: GuideProps) {
             <p>開啟您要修改的頁面 → 拉到頁面下方 → 找到 SEO 外掛區塊 → 在「Meta Description」欄位填入描述文字。</p>
           </Step>
           <Step number={3} title="發布頁面">
-            <p>點擊「更新」儲存頁面，然後回到 GEO SaaS 重新掃描即可。</p>
+            <p>點擊「更新」儲存頁面，然後回到 Geovault 重新掃描即可。</p>
           </Step>
         </div>
       )}
@@ -172,7 +172,7 @@ function MetaDescriptionGuide({ siteName, siteUrl }: GuideProps) {
             <p>在「What does this page is about?」欄位中填入您的頁面描述（50-160 字元）。</p>
           </Step>
           <Step number={3} title="發布網站">
-            <p>點擊「發布」，然後回到 GEO SaaS 重新掃描即可。</p>
+            <p>點擊「發布」，然後回到 Geovault 重新掃描即可。</p>
           </Step>
         </div>
       )}
@@ -312,7 +312,7 @@ function ContactInfoGuide({ siteName, siteUrl, details }: GuideProps) {
       </Step>
 
       <Step number={3} title="儲存並重新掃描">
-        <p>儲存修改後，回到 GEO SaaS 重新掃描即可驗證。</p>
+        <p>儲存修改後，回到 Geovault 重新掃描即可驗證。</p>
       </Step>
     </div>
   )
@@ -365,7 +365,7 @@ function ImageAltGuide({ siteName, siteUrl, details }: GuideProps) {
       </Step>
 
       <Step number={4} title="儲存並重新掃描">
-        <p>修改完成後，回到 GEO SaaS 重新掃描來驗證修復效果。</p>
+        <p>修改完成後，回到 Geovault 重新掃描來驗證修復效果。</p>
       </Step>
     </div>
   )

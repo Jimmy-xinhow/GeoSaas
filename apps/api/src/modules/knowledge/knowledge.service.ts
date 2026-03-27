@@ -150,7 +150,7 @@ export class KnowledgeService {
     try {
       const response = await fetch(site.url, {
         headers: {
-          'User-Agent': 'GEO-SaaS-Scanner/1.0 (+https://geo-saas.com/bot)',
+          'User-Agent': 'GEO-SaaS-Scanner/1.0 (+https://geovault.app/bot)',
           Accept: 'text/html,application/xhtml+xml',
         },
         signal: AbortSignal.timeout(15000),

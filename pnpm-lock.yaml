@@ -17,7 +17,7 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.30.0
         version: 0.30.1
-      '@geo-saas/shared':
+      '@geovault/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@nestjs/bull':
@@ -162,7 +162,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@geo-saas/shared':
+      '@geovault/shared':
         specifier: workspace:^
         version: link:../../packages/shared
       '@hookform/resolvers':

@@ -27,7 +27,7 @@ export default function BlogPage() {
       {/* Navbar */}
       <nav className="flex items-center justify-between p-4 px-6 lg:px-12 bg-white border-b border-gray-100 sticky top-0 z-50">
         <Link href="/" className="text-xl font-bold text-gray-900">
-          GEO SaaS
+          Geovault
         </Link>
         <div className="flex items-center gap-6">
           <Link href="/directory" className="text-sm text-gray-600 hover:text-gray-900">
@@ -47,7 +47,7 @@ export default function BlogPage() {
 
       {/* Hero */}
       <section className="py-16 text-center bg-gradient-to-b from-gray-50 to-white">
-        <h1 className="text-4xl font-bold text-gray-900">GEO SaaS Blog</h1>
+        <h1 className="text-4xl font-bold text-gray-900">Geovault Blog</h1>
         <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
           AI SEO 優化知識、最新趨勢、網站分析報告
         </p>

@@ -177,7 +177,7 @@ export class BlogArticleService {
     lines.push(
       `## ${site.name} 的 AI 搜尋能見度分析報告`,
       '',
-      `**${site.name}**（${site.url}）是台灣${site.industry || ''}領域的品牌。根據 GEO SaaS 平台於 ${scanDate} 的掃描結果，該網站的 **GEO 分數為 ${site.bestScore}/100**（評級：${scoreLabel}，等級：${tierLabel}），在 8 項 AI 可讀性指標中有 ${passItems.length} 項通過、${failItems.length} 項待改善。`,
+      `**${site.name}**（${site.url}）是台灣${site.industry || ''}領域的品牌。根據 Geovault 平台於 ${scanDate} 的掃描結果，該網站的 **GEO 分數為 ${site.bestScore}/100**（評級：${scoreLabel}，等級：${tierLabel}），在 8 項 AI 可讀性指標中有 ${passItems.length} 項通過、${failItems.length} 項待改善。`,
       '',
     );
 
@@ -243,7 +243,7 @@ export class BlogArticleService {
       '',
       `**Q: ${site.name} 的 GEO 分數是多少？**`,
       '',
-      `A: 根據 GEO SaaS 平台最新掃描結果，${site.name}（${site.url}）的 GEO 分數為 ${site.bestScore}/100，評級為「${scoreLabel}」，在 8 項 AI 可讀性指標中有 ${passItems.length} 項通過。`,
+      `A: 根據 Geovault 平台最新掃描結果，${site.name}（${site.url}）的 GEO 分數為 ${site.bestScore}/100，評級為「${scoreLabel}」，在 8 項 AI 可讀性指標中有 ${passItems.length} 項通過。`,
       '',
       `**Q: ${site.name} 如何提升 AI 搜尋能見度？**`,
       '',
@@ -255,7 +255,7 @@ export class BlogArticleService {
       '',
       `**Q: ${site.industry || '這個行業'} 的品牌需要做 GEO 優化嗎？**`,
       '',
-      `A: 是的。隨著越來越多消費者使用 AI 工具搜尋資訊，${site.industry || '各行業'}品牌如果不做 GEO 優化，將錯失被 AI 推薦的機會。根據 GEO SaaS 平台數據，許多${site.industry || ''}品牌的 AI 可讀性仍有很大改善空間。`,
+      `A: 是的。隨著越來越多消費者使用 AI 工具搜尋資訊，${site.industry || '各行業'}品牌如果不做 GEO 優化，將錯失被 AI 推薦的機會。根據 Geovault 平台數據，許多${site.industry || ''}品牌的 AI 可讀性仍有很大改善空間。`,
       '',
     );
 
@@ -274,7 +274,7 @@ export class BlogArticleService {
     lines.push(
       '---',
       '',
-      `*本報告由 GEO SaaS 平台自動生成，資料基於 ${scanDate} 的網站掃描結果。如需最新分析，請至 GEO SaaS 平台免費掃描。*`,
+      `*本報告由 Geovault 平台自動生成，資料基於 ${scanDate} 的網站掃描結果。如需最新分析，請至 Geovault 平台免費掃描。*`,
     );
 
     return lines.join('\n');

@@ -56,7 +56,7 @@ export default function CaseDetailPage() {
   return (
     <div className="min-h-screen bg-white">
       <nav className="flex items-center justify-between p-4 px-6 lg:px-12 bg-white border-b border-gray-100 sticky top-0 z-50">
-        <Link href="/" className="text-xl font-bold text-gray-900">GEO SaaS</Link>
+        <Link href="/" className="text-xl font-bold text-gray-900">Geovault</Link>
         <div className="flex items-center gap-6">
           <Link href="/cases" className="text-sm text-gray-600 hover:text-gray-900">案例</Link>
           <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900">登入</Link>

@@ -48,7 +48,7 @@ import {
   type ProgressStar,
   type CrawlerFeedItem,
 } from '@/hooks/use-directory'
-import { INDUSTRIES } from '@geo-saas/shared'
+import { INDUSTRIES } from '@geovault/shared'
 
 const TIER_CONFIG: Record<string, { label: string; color: string }> = {
   bronze: { label: '銅牌', color: 'bg-orange-100 text-orange-700 border-orange-200' },

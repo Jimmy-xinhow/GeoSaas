@@ -4,7 +4,7 @@ import { RobotsParserService } from './robots-parser.service';
 import { SnippetGeneratorService } from './snippet-generator.service';
 import { ReportVisitDto } from './dto/report-visit.dto';
 import { QueryVisitsDto } from './dto/query-visits.dto';
-import { AI_BOTS, AiBotDefinition } from '@geo-saas/shared';
+import { AI_BOTS, AiBotDefinition } from '@geovault/shared';
 import { randomBytes } from 'crypto';
 
 @Injectable()

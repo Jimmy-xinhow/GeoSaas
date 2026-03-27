@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import Anthropic from '@anthropic-ai/sdk';
-import { INDUSTRIES } from '@geo-saas/shared';
+import { INDUSTRIES } from '@geovault/shared';
 
 export type InsightType =
   | 'industry_current_state'
@@ -234,7 +234,7 @@ ${dataContext}
 ## 建議行動
 ## 常見問題（3 題）
 
-注意：引用具體數字，語氣客觀專業，數據來源標注為「GEO SaaS 平台數據」。`,
+注意：引用具體數字，語氣客觀專業，數據來源標注為「Geovault 平台數據」。`,
 
       missing_indicator_focus: `你是一位 GEO 技術顧問。請根據以下數據，撰寫一篇 800–1000 字的深度分析文章。
 

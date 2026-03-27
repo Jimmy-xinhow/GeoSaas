@@ -31,7 +31,7 @@ export default function Sidebar() {
     <aside className="w-64 h-screen bg-gray-900 text-white flex flex-col sticky top-0">
       {/* Logo */}
       <div className="p-6">
-        <h1 className="text-xl font-bold text-white">GEO SaaS</h1>
+        <h1 className="text-xl font-bold text-white">Geovault</h1>
       </div>
 
       {/* Navigation */}

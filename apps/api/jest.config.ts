@@ -12,8 +12,8 @@ const config: Config = {
   testEnvironment: 'node',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
-    '^@geo-saas/shared$': '<rootDir>/../../../packages/shared/src',
-    '^@geo-saas/shared/(.*)$': '<rootDir>/../../../packages/shared/src/$1',
+    '^@geovault/shared$': '<rootDir>/../../../packages/shared/src',
+    '^@geovault/shared/(.*)$': '<rootDir>/../../../packages/shared/src/$1',
   },
 };
 

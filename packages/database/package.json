@@ -1,5 +1,5 @@
 {
-  "name": "@geo-saas/database",
+  "name": "@geovault/database",
   "version": "0.1.0",
   "private": true,
   "scripts": {

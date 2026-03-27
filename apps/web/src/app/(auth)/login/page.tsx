@@ -55,7 +55,7 @@ export default function LoginPage() {
   return (
     <Card className="w-full max-w-md shadow-lg">
       <CardHeader className="text-center space-y-2">
-        <div className="text-2xl font-bold text-blue-600 mb-2">GEO SaaS</div>
+        <div className="text-2xl font-bold text-blue-600 mb-2">Geovault</div>
         <CardTitle className="text-2xl">歡迎回來</CardTitle>
         <CardDescription>登入您的帳號</CardDescription>
       </CardHeader>

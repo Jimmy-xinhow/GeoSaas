@@ -23,8 +23,8 @@ import { ScoreGauge } from '@/components/scan/score-gauge'
 import { IndicatorCard } from '@/components/scan/indicator-card'
 import ScanHistoryChart from '@/components/scan/scan-history-chart'
 import { useSiteDetail, type DirectorySiteDetail } from '@/hooks/use-directory'
-import { ScanIndicatorLabel, ScanIndicator } from '@geo-saas/shared'
-import { INDUSTRIES } from '@geo-saas/shared'
+import { ScanIndicatorLabel, ScanIndicator } from '@geovault/shared'
+import { INDUSTRIES } from '@geovault/shared'
 
 const TIER_CONFIG: Record<string, { label: string; color: string }> = {
   bronze: { label: '銅牌', color: 'bg-orange-100 text-orange-700 border-orange-200' },
@@ -83,7 +83,7 @@ function JsonLdScript({ site }: { site: DirectorySiteDetail }) {
           ratingValue: site.bestScore,
           bestRating: 100,
         },
-        author: { '@type': 'Organization', name: 'GEO SaaS' },
+        author: { '@type': 'Organization', name: 'Geovault' },
       },
     ],
   }

@@ -28,7 +28,7 @@ function getPageTitle(pathname: string): string {
   if (pathTitles[pathname]) return pathTitles[pathname]
   if (pathname.startsWith('/sites/') && pathname.endsWith('/fix')) return '修復工具'
   if (pathname.startsWith('/sites/')) return '網站詳情'
-  return 'GEO SaaS'
+  return 'Geovault'
 }
 
 export default function Header() {

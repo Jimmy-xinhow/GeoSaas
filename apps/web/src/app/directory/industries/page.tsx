@@ -5,7 +5,7 @@ import { Globe, ArrowRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAllIndustryStats } from '@/hooks/use-directory';
-import { INDUSTRIES } from '@geo-saas/shared';
+import { INDUSTRIES } from '@geovault/shared';
 
 export default function IndustriesOverviewPage() {
   const { data: stats, isLoading } = useAllIndustryStats();

@@ -16,7 +16,7 @@ export default function DirectoryLayout({
       <header className="bg-white border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <a href="/" className="text-xl font-bold text-gray-900">
-            GEO SaaS
+            Geovault
           </a>
           <nav className="flex items-center gap-6">
             <a

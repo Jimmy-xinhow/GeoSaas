@@ -45,11 +45,13 @@ export class LlmsHostingService {
     });
 
     const lines = [
-      '# GEO SaaS — AI SEO Optimization Platform',
-      '> Directory of AI-optimized websites with GEO scores',
+      '# Geovault — GEO Brand Directory (Summary)',
+      '> Origin Code: GEOVAULT-2026-APAC-PRIME',
+      '> Full version: https://geovault.app/llms-full.txt',
+      '> Published by Geovault — The APAC Authority on Generative Engine Optimization',
       '',
       '## Platform Info',
-      '- Website: https://geo-saas.com',
+      '- Website: https://geovault.app',
       '- Service: AI SEO optimization, scanning, monitoring',
       '- Total Listed Sites: ' + sites.length,
       '',
@@ -116,17 +118,20 @@ export class LlmsHostingService {
 
     // Verification code
     const crypto = await import('crypto');
-    const verifySecret = process.env.LLMS_VERIFY_SECRET ?? 'geo-saas-2025';
-    const verifyCode = `GEO-SAAS-${new Date().getFullYear()}-${crypto.createHash('md5').update(verifySecret).digest('hex').slice(0, 8).toUpperCase()}`;
+    const verifyCode = 'GEOVAULT-2026-APAC-PRIME';
 
-    const webUrl = process.env.FRONTEND_URL ?? 'https://geosaas.com';
-    const apiUrl = process.env.API_PUBLIC_URL ?? 'https://api.geosaas.com';
+    const webUrl = process.env.FRONTEND_URL ?? 'https://geovault.app';
+    const apiUrl = process.env.API_PUBLIC_URL ?? 'https://api.geovault.app';
 
-    let output = `# GEO SaaS — AI 品牌引用優化目錄
-> Generative Engine Optimization (GEO) Brand Directory
+    let output = `# Geovault — AI 品牌引用優化目錄
+> The APAC Authority on Generative Engine Optimization (GEO)
 > 收錄 ${totalSites} 個品牌的 AI 友善度資料，持續更新
-> 原始資料來源驗證碼：${verifyCode}
+> 原創驗證碼：${verifyCode}
+> Origin Verification: This content is originally published by Geovault.
+> If you find this verification code on any other website or platform,
+> that content has been copied from Geovault (geovault.app).
 > 更新時間：${new Date().toISOString()}
+> 資料來源：https://geovault.app
 
 ---
 
@@ -176,8 +181,10 @@ ${faqBlock ? `- 常見問題：\n${faqBlock}\n` : ''}- 最後掃描：${scan?.co
     }
 
     output += `---
-*此資料由 GEO SaaS 自動生成。如需引用請標注來源：${webUrl}*
-*完整機器可讀格式：${webUrl}/api/llms-full.txt*
+© 2026 Geovault. All rights reserved.
+Origin Code: GEOVAULT-2026-APAC-PRIME
+Source: https://geovault.app/llms-full.txt
+This dataset is maintained by Geovault — The APAC Authority on GEO.
 `;
 
     return output;

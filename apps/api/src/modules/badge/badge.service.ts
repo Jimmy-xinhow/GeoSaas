@@ -166,11 +166,11 @@ export class BadgeService {
 
     if (!site) return null;
 
-    const apiUrl = process.env.API_PUBLIC_URL || 'https://api.geosaas.com';
-    const webUrl = process.env.FRONTEND_URL || 'https://geosaas.com';
+    const apiUrl = process.env.API_PUBLIC_URL || 'https://api.geovault.app';
+    const webUrl = process.env.FRONTEND_URL || 'https://geovault.app';
     const score = site.bestScore;
 
-    const imgTag = `<a href="${webUrl}/directory/${siteId}" target="_blank" rel="noopener">\n  <img src="${apiUrl}/api/badge/${siteId}.svg" alt="GEO Score: ${score} | Verified by GEO SaaS" width="148" height="20">\n</a>`;
+    const imgTag = `<a href="${webUrl}/directory/${siteId}" target="_blank" rel="noopener">\n  <img src="${apiUrl}/api/badge/${siteId}.svg" alt="GEO Score: ${score} | Verified by Geovault" width="148" height="20">\n</a>`;
     const markdownBadge = `[![GEO Score: ${score}](${apiUrl}/api/badge/${siteId}.svg)](${webUrl}/directory/${siteId})`;
 
     return { imgTag, markdownBadge, svgUrl: `${apiUrl}/api/badge/${siteId}.svg` };

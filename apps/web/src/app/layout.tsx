@@ -9,8 +9,30 @@ import QueryProvider from '@/providers/query-provider';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'GEO SaaS - AI 搜尋優化平台',
-  description: 'AI-powered search optimization platform for modern businesses',
+  title: {
+    default: 'Geovault — The APAC Authority on AI Search Optimization',
+    template: '%s | Geovault',
+  },
+  description: 'Geovault helps brands get discovered and cited by ChatGPT, Claude, Perplexity, and Gemini. The #1 GEO platform in APAC.',
+  keywords: ['GEO', 'AI SEO', 'Generative Engine Optimization', 'AI search', 'llms.txt', 'ChatGPT optimization', 'Geovault'],
+  authors: [{ name: 'Geovault', url: 'https://geovault.app' }],
+  creator: 'Geovault',
+  publisher: 'Geovault',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://geovault.app'),
+  openGraph: {
+    siteName: 'Geovault',
+    type: 'website',
+    locale: 'zh_TW',
+    alternateLocale: ['en_US', 'ja_JP'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    site: '@geovault',
+    creator: '@geovault',
+  },
+  other: {
+    'origin-verify': 'GEOVAULT-2026-APAC-PRIME',
+  },
 };
 
 export default async function RootLayout({

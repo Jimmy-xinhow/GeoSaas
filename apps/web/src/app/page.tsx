@@ -342,7 +342,7 @@ export default function LandingPage() {
       <nav className="flex items-center justify-between p-4 px-6 lg:px-12 bg-white/80 backdrop-blur-sm sticky top-0 z-50 border-b border-gray-100">
         <div className="flex items-center gap-8">
           <Link href="/" className="text-xl font-bold text-gray-900">
-            GEO SaaS
+            Geovault
           </Link>
           <div className="hidden md:flex items-center gap-6">
             <a
@@ -460,7 +460,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
-              為什麼選擇 GEO SaaS？
+              為什麼選擇 Geovault？
             </h2>
             <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
               從診斷到修復，從內容生成到多平台佈局，一站式解決所有 GEO 需求
@@ -584,7 +584,7 @@ export default function LandingPage() {
       <footer className="py-8 border-t bg-white">
         <div className="max-w-6xl mx-auto px-6 text-center">
           <p className="text-gray-500 text-sm">
-            &copy; 2024 GEO SaaS. All rights reserved.
+            &copy; 2024 Geovault. All rights reserved.
           </p>
         </div>
       </footer>

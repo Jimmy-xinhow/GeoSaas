@@ -121,13 +121,13 @@ export class SeedService {
 
       // Need a system user for site creation
       let systemUser = await this.prisma.user.findFirst({
-        where: { email: 'system@geo-saas.local' },
+        where: { email: 'system@geovault.local' },
       });
       if (!systemUser) {
         systemUser = await this.prisma.user.create({
           data: {
-            email: 'system@geo-saas.local',
-            name: 'GEO SaaS System',
+            email: 'system@geovault.local',
+            name: 'Geovault System',
             passwordHash: 'SYSTEM_NO_LOGIN',
           },
         });

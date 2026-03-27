@@ -40,7 +40,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new TransformInterceptor());
 
   const config = new DocumentBuilder()
-    .setTitle('GEO SaaS API')
+    .setTitle('Geovault API')
     .setDescription('Generative Engine Optimization Platform API')
     .setVersion('1.0')
     .addBearerAuth()
@@ -51,7 +51,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 4000;
   await app.listen(port);
-  console.log(`GEO SaaS API running on http://localhost:${port}`);
+  console.log(`Geovault API running on http://localhost:${port}`);
   console.log(`Swagger docs at http://localhost:${port}/docs`);
 }
 

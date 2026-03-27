@@ -1,8 +1,8 @@
 import { MetadataRoute } from 'next';
 import { getAllPosts } from '@/content/blog/posts';
-import { INDUSTRIES } from '@geo-saas/shared';
+import { INDUSTRIES } from '@geovault/shared';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://geo-saas.com';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

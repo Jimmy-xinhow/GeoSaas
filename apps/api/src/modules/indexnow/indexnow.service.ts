@@ -23,7 +23,7 @@ export class IndexNowService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    this.apiKey = this.config.get<string>('INDEXNOW_API_KEY', 'geo-saas-indexnow-key');
+    this.apiKey = this.config.get<string>('INDEXNOW_API_KEY', 'geovault-indexnow-key');
   }
 
   /** Submit a single URL to all IndexNow engines */

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { SCAN_WEIGHTS, ScanIndicator } from '@geo-saas/shared';
+import { SCAN_WEIGHTS, ScanIndicator } from '@geovault/shared';
 import { IndicatorResult } from '../indicators/indicator.interface';
 
 @Injectable()
