@@ -30,13 +30,13 @@ COPY packages/ packages/
 COPY apps/api/ apps/api/
 
 # Generate Prisma client
-RUN pnpm --filter @geo-saas/database db:generate
+RUN pnpm --filter @geovault/database db:generate
 
 # Build the API
-RUN pnpm --filter @geo-saas/api build
+RUN pnpm --filter @geovault/api build
 
 # Prune dev dependencies for production
-RUN pnpm --filter @geo-saas/api --prod deploy /app/pruned
+RUN pnpm --filter @geovault/api --prod deploy /app/pruned
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
