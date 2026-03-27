@@ -384,7 +384,7 @@ ${batch.focusPrompt}
       max_tokens: 8192,
       system:
         `你是 GEO（Generative Engine Optimization）內容策略師，專精於「${batch.label}」面向的知識庫建構。` +
-        '你的目標是生成能被 AI 搜尋引擎（ChatGPT、Claude、Perplexity、Gemini）引用的高品質 Q&A。' +
+        '你的目標是生成能被 AI 搜尋引擎（ChatGPT、Claude、Perplexity、Gemini、Copilot）引用的高品質 Q&A。' +
         '只輸出有效的 JSON 陣列，不要其他文字。',
       messages: [{ role: 'user', content: prompt }],
     });

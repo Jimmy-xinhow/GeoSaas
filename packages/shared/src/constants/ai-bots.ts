@@ -11,6 +11,7 @@ export const AI_BOTS: AiBotDefinition[] = [
   { name: 'Google-Extended', org: 'Google', uaPattern: 'Google-Extended' },
   { name: 'Googlebot', org: 'Google', uaPattern: 'Googlebot' },
   { name: 'Bingbot', org: 'Microsoft', uaPattern: 'bingbot' },
+  { name: 'CopilotBot', org: 'Microsoft', uaPattern: 'CopilotBot' },
   { name: 'PerplexityBot', org: 'Perplexity', uaPattern: 'PerplexityBot' },
   { name: 'YouBot', org: 'You.com', uaPattern: 'YouBot' },
   { name: 'CCBot', org: 'Common Crawl', uaPattern: 'CCBot' },

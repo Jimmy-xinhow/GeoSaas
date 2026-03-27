@@ -4,6 +4,7 @@ import { ChatgptDetector } from './platforms/chatgpt.detector';
 import { ClaudeDetector } from './platforms/claude.detector';
 import { PerplexityDetector } from './platforms/perplexity.detector';
 import { GeminiDetector } from './platforms/gemini.detector';
+import { CopilotDetector } from './platforms/copilot.detector';
 
 @Injectable()
 export class MonitorService {
@@ -15,6 +16,7 @@ export class MonitorService {
     private claudeDetector: ClaudeDetector,
     private perplexityDetector: PerplexityDetector,
     private geminiDetector: GeminiDetector,
+    private copilotDetector: CopilotDetector,
   ) {}
 
   async findBySite(siteId: string) {
@@ -49,6 +51,9 @@ export class MonitorService {
       case 'GEMINI':
         result = await this.geminiDetector.detect(monitor.query, monitor.site.name, monitor.site.url);
         break;
+      case 'COPILOT':
+        result = await this.copilotDetector.detect(monitor.query, monitor.site.name, monitor.site.url);
+        break;
       case 'CLAUDE':
       default:
         result = await this.claudeDetector.detect(monitor.query, monitor.site.name, monitor.site.url);
@@ -70,9 +75,9 @@ export class MonitorService {
     });
 
     const platformNames: Record<string, string> = {
-      CHATGPT: 'ChatGPT', CLAUDE: 'Claude', PERPLEXITY: 'Perplexity', GEMINI: 'Gemini',
+      CHATGPT: 'ChatGPT', CLAUDE: 'Claude', PERPLEXITY: 'Perplexity', GEMINI: 'Gemini', COPILOT: 'Copilot',
     };
-    const platformKeys = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI'];
+    const platformKeys = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'];
 
     const platforms = platformKeys.map((p) => {
       const pMonitors = monitors.filter((m: any) => m.platform.toUpperCase() === p);

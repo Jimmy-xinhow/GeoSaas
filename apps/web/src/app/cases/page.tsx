@@ -14,6 +14,7 @@ const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
   claude: { label: 'Claude', color: 'bg-orange-100 text-orange-700' },
   perplexity: { label: 'Perplexity', color: 'bg-blue-100 text-blue-700' },
   gemini: { label: 'Gemini', color: 'bg-purple-100 text-purple-700' },
+  copilot: { label: 'Copilot', color: 'bg-cyan-100 text-cyan-700' },
   other: { label: '其他', color: 'bg-gray-100 text-gray-700' },
 };
 

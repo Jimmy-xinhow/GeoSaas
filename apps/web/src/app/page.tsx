@@ -354,7 +354,7 @@ export default function LandingPage() {
           <p className="mt-6 text-lg sm:text-xl text-blue-100 max-w-2xl mx-auto">
             全方位 GEO（Generative Engine Optimization）解決方案，
             <br className="hidden sm:block" />
-            讓 ChatGPT、Claude、Perplexity 等 AI 工具主動推薦你。
+            讓 ChatGPT、Claude、Perplexity、Copilot 等 AI 工具主動推薦你。
           </p>
 
           <div className="mt-10 flex flex-col sm:flex-row items-center gap-3 max-w-xl mx-auto">

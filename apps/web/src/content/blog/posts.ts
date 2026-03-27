@@ -19,7 +19,7 @@ export const blogPosts: BlogPost[] = [
     content: `
 ## 什麼是 GEO？
 
-GEO（Generative Engine Optimization）是一種新興的搜尋引擎優化策略，專門針對 AI 驅動的搜尋引擎進行優化。與傳統 SEO 不同，GEO 的目標是讓 ChatGPT、Claude、Perplexity 等 AI 工具在回答用戶問題時，主動推薦並引用你的品牌。
+GEO（Generative Engine Optimization）是一種新興的搜尋引擎優化策略，專門針對 AI 驅動的搜尋引擎進行優化。與傳統 SEO 不同，GEO 的目標是讓 ChatGPT、Claude、Perplexity、Copilot 等 AI 工具在回答用戶問題時，主動推薦並引用你的品牌。
 
 ## 為什麼 GEO 很重要？
 

@@ -3,4 +3,5 @@ export enum AIPlatform {
   CLAUDE = 'CLAUDE',
   PERPLEXITY = 'PERPLEXITY',
   GEMINI = 'GEMINI',
+  COPILOT = 'COPILOT',
 }

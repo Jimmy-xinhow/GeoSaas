@@ -108,7 +108,17 @@ export class ScanPipelineService {
       // Step 4: Calculate total weighted score
       const totalScore = this.scoring.calculateTotalScore(resultsMap);
 
-      // Step 5: Save all results and update scan in a transaction
+      // Step 5: Get siteId for this scan
+      const scanRecord = await this.prisma.scan.findUnique({
+        where: { id: scanId },
+        select: { siteId: true },
+      });
+      const siteId = scanRecord?.siteId;
+
+      // Calculate tier from score
+      const tier = totalScore >= 80 ? 'gold' : totalScore >= 70 ? 'silver' : totalScore >= 60 ? 'bronze' : null;
+
+      // Save all results, update scan, and update site in a single transaction
       await this.prisma.$transaction([
         // Create ScanResult records for each indicator
         ...Array.from(resultsMap.entries()).map(([name, result]) =>
@@ -134,36 +144,29 @@ export class ScanPipelineService {
             completedAt: new Date(),
           },
         }),
+        // Always update site bestScore (use latest scan score, not just higher)
+        ...(siteId ? [
+          this.prisma.site.update({
+            where: { id: siteId },
+            data: {
+              bestScore: totalScore,
+              bestScoreAt: new Date(),
+              tier,
+            },
+          }),
+        ] : []),
       ]);
 
-      // Update bestScore if this score is higher
-      const scan = await this.prisma.scan.findUnique({
-        where: { id: scanId },
-        select: { siteId: true },
-      });
-      if (scan) {
-        const site = await this.prisma.site.findUnique({
-          where: { id: scan.siteId },
-          select: { bestScore: true },
-        });
-        if (site && totalScore > site.bestScore) {
-          await this.prisma.site.update({
-            where: { id: scan.siteId },
-            data: { bestScore: totalScore, bestScoreAt: new Date() },
-          });
-        }
-      }
-
       // Post-scan automations (fire-and-forget)
-      if (scan) {
+      if (siteId) {
         // 1. Badge evaluation
-        this.badgeService.evaluateBadges(scan.siteId).catch((err) => {
-          this.logger.warn(`Badge evaluation failed for site ${scan.siteId}: ${err}`);
+        this.badgeService.evaluateBadges(siteId).catch((err) => {
+          this.logger.warn(`Badge evaluation failed for site ${siteId}: ${err}`);
         });
 
         // 2. Auto-submit to IndexNow (if public site)
         const siteForIndexNow = await this.prisma.site.findUnique({
-          where: { id: scan.siteId },
+          where: { id: siteId },
           select: { isPublic: true, url: true },
         });
         if (siteForIndexNow?.isPublic && siteForIndexNow.url) {

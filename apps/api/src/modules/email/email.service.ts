@@ -75,7 +75,7 @@ export class EmailService {
           <li>🔍 免費掃描您的網站 AI 能見度</li>
           <li>🔧 根據建議自動修復問題</li>
           <li>📊 追蹤 AI 爬蟲造訪紀錄</li>
-          <li>📈 監控 ChatGPT、Claude 等 AI 引用狀態</li>
+          <li>📈 監控 ChatGPT、Claude、Copilot 等 AI 引用狀態</li>
         </ol>
         <p><a href="https://geovault.app/dashboard" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">開始使用</a></p>
         <hr/>

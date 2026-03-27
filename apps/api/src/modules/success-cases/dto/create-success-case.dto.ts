@@ -9,6 +9,7 @@ export enum AiPlatform {
   CLAUDE = 'claude',
   PERPLEXITY = 'perplexity',
   GEMINI = 'gemini',
+  COPILOT = 'copilot',
   OTHER = 'other',
 }
 

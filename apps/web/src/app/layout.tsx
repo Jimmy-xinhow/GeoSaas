@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     default: 'Geovault — The APAC Authority on AI Search Optimization',
     template: '%s | Geovault',
   },
-  description: 'Geovault helps brands get discovered and cited by ChatGPT, Claude, Perplexity, and Gemini. The #1 GEO platform in APAC.',
+  description: 'Geovault helps brands get discovered and cited by ChatGPT, Claude, Perplexity, Gemini, and Copilot. The #1 GEO platform in APAC.',
   keywords: ['GEO', 'AI SEO', 'Generative Engine Optimization', 'AI search', 'llms.txt', 'ChatGPT optimization', 'Geovault'],
   authors: [{ name: 'Geovault', url: 'https://geovault.app' }],
   creator: 'Geovault',

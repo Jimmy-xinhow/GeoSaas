@@ -48,6 +48,7 @@ const platformMeta: Record<string, { color: string; bgColor: string; textColor: 
   Claude: { color: 'bg-orange-500', bgColor: 'bg-orange-50', textColor: 'text-orange-700', icon: '🧠' },
   Perplexity: { color: 'bg-blue-500', bgColor: 'bg-blue-50', textColor: 'text-blue-700', icon: '🔍' },
   Gemini: { color: 'bg-purple-500', bgColor: 'bg-purple-50', textColor: 'text-purple-700', icon: '✨' },
+  Copilot: { color: 'bg-cyan-500', bgColor: 'bg-cyan-50', textColor: 'text-cyan-700', icon: '🪟' },
 }
 const defaultPlatformMeta = { color: 'bg-gray-500', bgColor: 'bg-gray-50', textColor: 'text-gray-700', icon: '🔗' }
 
@@ -81,6 +82,7 @@ const PLATFORM_OPTIONS = [
   { value: 'claude', label: 'Claude' },
   { value: 'perplexity', label: 'Perplexity' },
   { value: 'gemini', label: 'Gemini' },
+  { value: 'copilot', label: 'Copilot' },
 ]
 
 export default function MonitorPage() {

@@ -252,7 +252,7 @@ export class BlogArticleService {
       '',
       `**Q: 什麼是 GEO 分數？**`,
       '',
-      `A: GEO（Generative Engine Optimization）分數是衡量網站被 AI 搜尋引擎（如 ChatGPT、Claude、Perplexity）發現和引用的能力。分數越高，被 AI 推薦的機率越大。滿分 100 分，由 8 項 AI 可讀性指標加權計算。`,
+      `A: GEO（Generative Engine Optimization）分數是衡量網站被 AI 搜尋引擎（如 ChatGPT、Claude、Perplexity、Copilot）發現和引用的能力。分數越高，被 AI 推薦的機率越大。滿分 100 分，由 8 項 AI 可讀性指標加權計算。`,
       '',
       `**Q: ${site.industry || '這個行業'} 的品牌需要做 GEO 優化嗎？**`,
       '',
@@ -358,6 +358,14 @@ export class BlogArticleService {
             });
 
             const content = message.content[0].type === 'text' ? message.content[0].text : '';
+
+            // Quality gate: reject low-quality articles
+            const qualityScore = this.assessArticleQuality(content, site.name);
+            if (qualityScore < 85) {
+              this.logger.warn(`Article quality too low (${qualityScore}/100) for ${templateType} of ${site.name}, skipping`);
+              return;
+            }
+
             const title = this.extractTitle(content, site.name, templateType);
             const slug = `${site.name.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').slice(0, 30)}-${templateType}-${Date.now().toString(36)}`;
 
@@ -436,6 +444,46 @@ export class BlogArticleService {
       brand_reputation: `${siteName} 品牌口碑與 AI 能見度分析`,
     };
     return fallbacks[type];
+  }
+
+  /**
+   * Quality gate: score 0-100 based on content quality criteria.
+   * Articles below 85 are rejected.
+   */
+  private assessArticleQuality(content: string, siteName: string): number {
+    let score = 0;
+    const contentLength = content.length;
+
+    // 1. Length check (0-25 points): 800+ chars is good
+    if (contentLength >= 1500) score += 25;
+    else if (contentLength >= 800) score += 15;
+    else if (contentLength >= 400) score += 5;
+
+    // 2. Structure check (0-25 points): has headings, sections
+    const headingCount = (content.match(/^#{1,3}\s+/gm) || []).length;
+    if (headingCount >= 5) score += 25;
+    else if (headingCount >= 3) score += 15;
+    else if (headingCount >= 1) score += 5;
+
+    // 3. FAQ presence (0-20 points)
+    const hasFaq = /Q[:：]/.test(content) && /A[:：]/.test(content);
+    const faqCount = (content.match(/Q[:：]/g) || []).length;
+    if (hasFaq && faqCount >= 2) score += 20;
+    else if (hasFaq) score += 10;
+
+    // 4. Specificity check (0-15 points): mentions the brand name, has data
+    const mentionsBrand = content.includes(siteName);
+    const hasNumbers = (content.match(/\d+/g) || []).length >= 3;
+    if (mentionsBrand) score += 8;
+    if (hasNumbers) score += 7;
+
+    // 5. No obvious errors (0-15 points): not truncated, not empty sections
+    const hasEmptySections = /^#{1,3}\s+.+\n\s*\n#{1,3}/m.test(content);
+    const seemsTruncated = content.length > 200 && !content.trim().endsWith('.') && !content.trim().endsWith('。') && !content.trim().endsWith('）') && !content.trim().endsWith(')') && !content.trim().endsWith('```');
+    if (!hasEmptySections) score += 8;
+    if (!seemsTruncated) score += 7;
+
+    return score;
   }
 
   private async getIndustryData(industry: string) {

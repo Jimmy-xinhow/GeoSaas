@@ -43,6 +43,7 @@ const BOT_COLORS: Record<string, string> = {
   'Google-Extended': 'bg-blue-100 text-blue-700',
   Googlebot: 'bg-blue-100 text-blue-700',
   Bingbot: 'bg-cyan-100 text-cyan-700',
+  CopilotBot: 'bg-teal-100 text-teal-700',
   PerplexityBot: 'bg-purple-100 text-purple-700',
   YouBot: 'bg-pink-100 text-pink-700',
   CCBot: 'bg-gray-100 text-gray-700',

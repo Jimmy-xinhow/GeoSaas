@@ -155,7 +155,7 @@ ${baseContext}
 Q: AI 搜尋引擎如何看待 ${site.name}？
 A: （根據 GEO 分數回答）
 
-Q: ${site.name} 被 ChatGPT/Claude 推薦的機率高嗎？
+Q: ${site.name} 被 ChatGPT/Claude/Copilot 推薦的機率高嗎？
 A: （根據指標狀態回答）
 
 Q: 如何讓 AI 更準確地描述 ${site.name}？
