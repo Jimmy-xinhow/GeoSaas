@@ -18,18 +18,24 @@ const CATEGORY_LABELS: Record<string, string> = {
   analysis: 'AI 分析報告',
 };
 
-export default function BlogPage() {
+export default function BlogClient() {
   const staticPosts = getAllPosts();
   const [page, setPage] = useState(1);
   const { data: apiArticles } = useBlogArticles({ page });
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Navbar */}
-      <PublicNavbar />
+    <>
+      {/* Breadcrumb */}
+      <nav className="max-w-4xl mx-auto px-6 pt-6" aria-label="Breadcrumb">
+        <ol className="flex items-center gap-1.5 text-sm text-gray-500">
+          <li><Link href="/" className="hover:text-gray-900">首頁</Link></li>
+          <li className="text-gray-300">/</li>
+          <li className="text-gray-900">Blog</li>
+        </ol>
+      </nav>
 
       {/* Hero */}
-      <section className="py-16 text-center bg-gradient-to-b from-gray-50 to-white">
+      <section className="py-12 text-center">
         <h1 className="text-4xl font-bold text-gray-900">Geovault Blog</h1>
         <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
           AI SEO 優化知識、最新趨勢、網站分析報告

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useSuccessCases, useFeaturedCases } from '@/hooks/use-cases';
+import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
   chatgpt: { label: 'ChatGPT', color: 'bg-green-100 text-green-700' },
@@ -24,15 +25,7 @@ export default function CasesPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <nav className="flex items-center justify-between p-4 px-6 lg:px-12 bg-white border-b border-gray-100 sticky top-0 z-50">
-        <Link href="/" className="text-xl font-bold text-gray-900">Geovault</Link>
-        <div className="flex items-center gap-6">
-          <Link href="/directory" className="text-sm text-gray-600 hover:text-gray-900">目錄</Link>
-          <Link href="/blog" className="text-sm text-gray-600 hover:text-gray-900">Blog</Link>
-          <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900">登入</Link>
-          <Link href="/register" className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">免費開始</Link>
-        </div>
-      </nav>
+      <PublicNavbar />
 
       <section className="py-12 text-center bg-gradient-to-b from-yellow-50 to-white">
         <h1 className="flex items-center justify-center gap-2 text-3xl font-bold text-gray-900">

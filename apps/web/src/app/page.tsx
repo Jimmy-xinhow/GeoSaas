@@ -25,6 +25,7 @@ import { useGuestScan, useGuestScanStatus } from '@/hooks/use-guest-scan'
 import { useSubmitIndexNow } from '@/hooks/use-indexnow'
 import { useCrawlerFeed, usePlatformStats } from '@/hooks/use-directory'
 import { LanguageSwitcher } from '@/components/language-switcher'
+import PublicNavbar from '@/components/layout/public-navbar'
 import { useTranslations } from 'next-intl'
 
 const features = [
@@ -339,61 +340,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen">
       {/* Navbar */}
-      <nav className="flex items-center justify-between p-4 px-6 lg:px-12 bg-white/80 backdrop-blur-sm sticky top-0 z-50 border-b border-gray-100">
-        <div className="flex items-center gap-8">
-          <Link href="/" className="text-xl font-bold text-gray-900">
-            Geovault
-          </Link>
-          <div className="hidden md:flex items-center gap-6">
-            <a
-              href="#features"
-              className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              功能
-            </a>
-            <a
-              href="#pricing"
-              className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              定價
-            </a>
-            <Link
-              href="/directory"
-              className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              目錄
-            </Link>
-            <Link
-              href="/blog"
-              className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              Blog
-            </Link>
-            <Link
-              href="/news"
-              className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              News
-            </Link>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <LanguageSwitcher />
-          <Link href="/login">
-            <Button variant="ghost" size="sm">
-              登入
-            </Button>
-          </Link>
-          <Link href="/register">
-            <Button
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              免費開始
-            </Button>
-          </Link>
-        </div>
-      </nav>
+      <PublicNavbar />
 
       {/* Hero */}
       <section className="py-20 lg:py-28 text-center bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 text-white relative overflow-hidden">

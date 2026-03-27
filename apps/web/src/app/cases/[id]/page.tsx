@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Award, Clock, Eye, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useSuccessCase } from '@/hooks/use-cases';
+import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
   chatgpt: { label: 'ChatGPT', color: 'bg-green-100 text-green-700' },
@@ -55,13 +56,7 @@ export default function CaseDetailPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <nav className="flex items-center justify-between p-4 px-6 lg:px-12 bg-white border-b border-gray-100 sticky top-0 z-50">
-        <Link href="/" className="text-xl font-bold text-gray-900">Geovault</Link>
-        <div className="flex items-center gap-6">
-          <Link href="/cases" className="text-sm text-gray-600 hover:text-gray-900">案例</Link>
-          <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900">登入</Link>
-        </div>
-      </nav>
+      <PublicNavbar />
 
       <article className="max-w-3xl mx-auto px-6 py-12">
         <Link href="/cases" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 mb-6">
