@@ -48,7 +48,9 @@ RUN addgroup -g 1001 -S nodejs && \
 # Copy Next.js standalone output and static files
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /app/apps/web/public ./apps/web/public
+
+# Ensure public dir exists (may be empty)
+RUN mkdir -p ./apps/web/public
 
 USER nextjs
 
