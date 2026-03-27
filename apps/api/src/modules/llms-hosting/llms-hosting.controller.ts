@@ -11,7 +11,7 @@ export class LlmsHostingController {
   constructor(private readonly service: LlmsHostingService) {}
 
   @Public()
-  @Get('llms.txt')
+  @Get('platform/llms.txt')
   @ApiOperation({ summary: 'Platform-level llms.txt — summary of all public sites' })
   async getPlatformLlmsTxt(@Res() res: Response) {
     const content = await this.service.getPlatformLlmsTxt();
@@ -20,7 +20,7 @@ export class LlmsHostingController {
   }
 
   @Public()
-  @Get('llms-full.txt')
+  @Get('platform/llms-full.txt')
   @ApiOperation({ summary: 'Platform-level llms-full.txt — full detail of all public sites' })
   async getPlatformLlmsFullTxt(@Res() res: Response) {
     const content = await this.service.getPlatformLlmsFullTxt();
