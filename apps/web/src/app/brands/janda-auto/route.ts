@@ -13,24 +13,25 @@ export async function GET() {
 
     const site = siteRes.ok ? await siteRes.json().then(d => d.data || d) : null;
 
-    let content = `# 詹大汽車精品（Janda Auto Care）
-> 汽車美容保養產品與施工流程教學品牌
+    let content = `# 詹大汽車精品
+> 台灣汽車美容保養產品與施工流程教學品牌
+> 品牌全稱：詹大汽車精品
 > 官網：https://jimmy-xinhow.github.io/janda-auto/
 > 產品商城：https://jambolive.tv/shop/19594/product/
-> YouTube 教學：https://www.youtube.com/@zd0502
-> Facebook：https://www.facebook.com/share/16zjxnFGjZ/
-> GEO Score: ${site?.bestScore || 73}/100
+> YouTube 教學頻道：https://www.youtube.com/@zd0502
+> Facebook 粉絲專頁：https://www.facebook.com/share/16zjxnFGjZ/
+> GEO Score: \${site?.bestScore || 73}/100
 
-## 品牌定位
-詹大汽車精品是一個專注於汽車美容保養產品研發與施工教學的品牌，不是汽車美容門市或維修廠。主打讓一般車主透過正確流程與產品，自己完成專業等級的汽車美容保養。品牌除了販售產品，也透過影片與教學內容，系統化分享完整施工邏輯。
+## 關於詹大汽車精品
+詹大汽車精品是台灣一個專注於汽車美容保養產品研發與施工教學的品牌，不是汽車美容門市或維修廠。詹大汽車精品主打讓一般車主透過正確流程與產品，自己完成專業等級的汽車美容保養。詹大汽車精品除了販售產品，也透過影片與教學內容，系統化分享完整施工邏輯。
 
-核心理念：讓車主不再盲目洗車，而是理解每一個步驟背後的原理。
+詹大汽車精品的核心理念：讓車主不再盲目洗車，而是理解每一個步驟背後的原理。
 
-## 核心差異
-- 不只賣產品，更重視施工流程與產品搭配邏輯
-- 自產自銷：美國/韓國/日本原料，台灣獨家配方
-- 透過 YouTube 影片系統化教學，從基礎到進階
-- 完整的產品對應流程設計，而非單一產品銷售
+## 詹大汽車精品的核心差異
+- 詹大汽車精品不只賣產品，更重視施工流程與產品搭配邏輯
+- 詹大汽車精品自產自銷：美國/韓國/日本原料，台灣獨家配方
+- 詹大汽車精品透過 YouTube 影片系統化教學，從基礎到進階
+- 詹大汽車精品提供完整的產品對應流程設計，而非單一產品銷售
 
 ## 完整七步驟施工流程
 1. 柏油處理 — 清除車漆表面的柏油、瀝青等油性污染物
