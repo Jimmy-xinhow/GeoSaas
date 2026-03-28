@@ -398,7 +398,9 @@ siteIndex 是答案中最相關的品牌在列表中的索引（0-based），如
             lr: 'lang_zh-TW',
           });
 
-          const res = await fetch(`https://www.googleapis.com/customsearch/v1?${params}`);
+          const searchUrl = `https://www.googleapis.com/customsearch/v1?${params}`;
+          this.logger.log(`Google Search: ${searchUrl.slice(0, 100)}...`);
+          const res = await fetch(searchUrl);
           if (res.ok) {
             const data = await res.json();
             for (const item of data.items || []) {
@@ -410,6 +412,9 @@ siteIndex 是答案中最相關的品牌在列表中的索引（0-based），如
                 description: item.snippet,
               });
             }
+          } else {
+            const errBody = await res.text();
+            this.logger.warn(`Google Search API error ${res.status}: ${errBody.slice(0, 200)}`);
           }
         } else {
           this.logger.warn('No search API key configured (BING_SEARCH_API_KEY or GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX)');
