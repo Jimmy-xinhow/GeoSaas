@@ -95,10 +95,25 @@ export default function CasesPage() {
             ))}
           </div>
         ) : !cases || cases.items.length === 0 ? (
-          <div className="text-center py-16">
-            <Award className="h-12 w-12 text-gray-300 mx-auto" />
-            <h3 className="mt-4 text-lg font-semibold">尚無案例</h3>
-            <p className="text-gray-500 mt-1">成為第一個分享成功故事的人</p>
+          <div className="text-center py-16 max-w-lg mx-auto">
+            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-10 border border-yellow-100">
+              <Award className="h-16 w-16 text-yellow-500 mx-auto" />
+              <h3 className="mt-6 text-2xl font-bold text-gray-900">你的品牌被 AI 引用了嗎？</h3>
+              <p className="text-gray-600 mt-3 leading-relaxed">
+                如果你的品牌曾經被 ChatGPT、Claude、Copilot、Perplexity 或 Gemini 提及或推薦，歡迎提交你的成功案例！
+              </p>
+              <p className="text-gray-500 mt-2 text-sm">
+                經審核通過後，我們會為你的品牌生成一篇 AI 分析文章，增加更多曝光機會。
+              </p>
+              <Link href="/register">
+                <button className="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors">
+                  免費註冊並提交案例
+                </button>
+              </Link>
+              <p className="text-xs text-gray-400 mt-4">
+                目前已有 {cases?.total ?? 0} 個品牌正在等待審核
+              </p>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">

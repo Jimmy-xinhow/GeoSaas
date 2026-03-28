@@ -577,7 +577,7 @@ export default function LandingPage() {
       <footer className="py-8 border-t bg-white">
         <div className="max-w-6xl mx-auto px-6 text-center">
           <p className="text-gray-500 text-sm">
-            &copy; 2024 Geovault. All rights reserved.
+            &copy; {new Date().getFullYear()} Geovault. All rights reserved.
           </p>
         </div>
       </footer>
