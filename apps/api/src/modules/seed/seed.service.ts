@@ -38,6 +38,14 @@ export class SeedService {
       _count: true,
     });
 
+    const [crawlerTotal, crawlerReal, crawlerSeeded] = await Promise.all([
+      this.prisma.crawlerVisit.count(),
+      this.prisma.crawlerVisit.count({ where: { isSeeded: false } }),
+      this.prisma.crawlerVisit.count({ where: { isSeeded: true } }),
+    ]);
+
+    const blogCount = await this.prisma.blogArticle.count({ where: { published: true } });
+
     return {
       total,
       scanned,
@@ -45,6 +53,12 @@ export class SeedService {
       failed,
       isRunning: this.isRunning,
       byIndustry: byIndustry.map((b: any) => ({ industry: b.industry, count: b._count })),
+      crawler: {
+        total: crawlerTotal,
+        real: crawlerReal,
+        seeded: crawlerSeeded,
+      },
+      blogArticles: blogCount,
     };
   }
 
