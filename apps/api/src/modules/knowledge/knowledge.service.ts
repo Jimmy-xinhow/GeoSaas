@@ -125,7 +125,6 @@ export class KnowledgeService {
       question: item.question,
       answer: item.answer,
       category: item.category || null,
-      isPublic: true,
       sortOrder: nextSort++,
     }));
 
