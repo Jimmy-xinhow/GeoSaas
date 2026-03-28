@@ -15,7 +15,7 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
       },
     ],
-    sitemap: [`${BASE_URL}/sitemap.xml`, `${BASE_URL}/llms.txt`],
+    sitemap: [`${BASE_URL}/sitemap.xml`, `${BASE_URL}/llms.txt`, `https://api.geovault.app/api/llms.txt`],
     host: BASE_URL,
   };
 }

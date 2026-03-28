@@ -16,6 +16,7 @@ export class LlmsHostingController {
   async getPlatformLlmsTxt(@Res() res: Response) {
     const content = await this.service.getPlatformLlmsTxt();
     res.set('Cache-Control', 'public, max-age=3600');
+    res.set('Access-Control-Allow-Origin', '*');
     return res.type('text/plain').send(content);
   }
 
@@ -28,6 +29,27 @@ export class LlmsHostingController {
     res.set('Cache-Control', 'public, max-age=21600');
     res.set('Access-Control-Allow-Origin', '*');
     res.set('X-Content-Version', new Date().toISOString());
+    return res.send(content);
+  }
+
+  @Public()
+  @Get('llms.txt')
+  @ApiOperation({ summary: 'Direct /api/llms.txt shortcut' })
+  async getLlmsTxtDirect(@Res() res: Response) {
+    const content = await this.service.getPlatformLlmsTxt();
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.set('Access-Control-Allow-Origin', '*');
+    return res.type('text/plain').send(content);
+  }
+
+  @Public()
+  @Get('llms-full.txt')
+  @ApiOperation({ summary: 'Direct /api/llms-full.txt shortcut' })
+  async getLlmsFullTxtDirect(@Res() res: Response) {
+    const content = await this.service.getPlatformLlmsFullTxt();
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=21600');
+    res.set('Access-Control-Allow-Origin', '*');
     return res.send(content);
   }
 
