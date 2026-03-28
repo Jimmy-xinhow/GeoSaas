@@ -28,6 +28,7 @@ import { NewsModule } from './modules/news/news.module';
 import { BadgeModule } from './modules/badge/badge.module';
 import { SuccessCasesModule } from './modules/success-cases/success-cases.module';
 import { SeedModule } from './modules/seed/seed.module';
+import { DiscoveryModule } from './modules/discovery/discovery.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { EmailModule } from './modules/email/email.module';
 
@@ -70,6 +71,7 @@ import { EmailModule } from './modules/email/email.module';
     BadgeModule,
     SuccessCasesModule,
     SeedModule,
+    DiscoveryModule,
     SchedulerModule,
     EmailModule,
   ],

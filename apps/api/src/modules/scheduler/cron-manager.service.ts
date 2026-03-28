@@ -85,6 +85,20 @@ const DEFAULT_TASKS: Array<{
     cronExpr: '0 5 * * 0',
     enabled: true,
   },
+  {
+    taskKey: 'auto_discover_businesses',
+    name: '自動發現新商家',
+    description: '每天搜尋各產業新商家，自動收錄並掃描 GEO 分數',
+    cronExpr: '0 4 * * *',
+    enabled: true,
+  },
+  {
+    taskKey: 'enrich_industry_content',
+    name: '產業內容自動擴充',
+    description: '每天從網路抓取產業評論/討論，AI 生成 Q&A 擴充知識庫',
+    cronExpr: '0 5 * * *',
+    enabled: true,
+  },
 ];
 
 @Injectable()

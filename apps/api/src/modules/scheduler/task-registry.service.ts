@@ -8,6 +8,7 @@ import { SeedService } from '../seed/seed.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScanPipelineService } from '../scan/scan-pipeline.service';
+import { DiscoveryService } from '../discovery/discovery.service';
 
 @Injectable()
 export class TaskRegistryService implements OnModuleInit {
@@ -23,6 +24,7 @@ export class TaskRegistryService implements OnModuleInit {
     private readonly indexNowService: IndexNowService,
     private readonly prisma: PrismaService,
     private readonly scanPipeline: ScanPipelineService,
+    private readonly discoveryService: DiscoveryService,
   ) {}
 
   onModuleInit() {
@@ -115,6 +117,16 @@ export class TaskRegistryService implements OnModuleInit {
       if (result.reset > 0) {
         await this.seedService.runScanning();
       }
+    });
+
+    this.cronManager.registerHandler('auto_discover_businesses', async () => {
+      const result = await this.discoveryService.discoverBusinesses();
+      this.logger.log(`Auto-discovery: ${result.discovered} found, ${result.scanned} scanned`);
+    });
+
+    this.cronManager.registerHandler('enrich_industry_content', async () => {
+      const result = await this.discoveryService.enrichIndustryContent();
+      this.logger.log(`Content enrichment: ${result.created} Q&A created`);
     });
   }
 }
