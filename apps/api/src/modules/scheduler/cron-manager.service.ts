@@ -64,6 +64,27 @@ const DEFAULT_TASKS: Array<{
     cronExpr: '0 3 1 * *',
     enabled: true,
   },
+  {
+    taskKey: 'auto_rescan',
+    name: '自動重新掃描',
+    description: '每週重新掃描 30 天內未掃描的公開網站，更新分數',
+    cronExpr: '0 5 * * 3',
+    enabled: true,
+  },
+  {
+    taskKey: 'indexnow_batch_submit',
+    name: 'IndexNow 批次提交',
+    description: '每週將所有公開頁面重新提交 IndexNow，提醒搜尋引擎',
+    cronExpr: '0 6 * * 1',
+    enabled: true,
+  },
+  {
+    taskKey: 'retry_failed_seeds',
+    name: '自動重試失敗 Seed',
+    description: '每週自動重試所有失敗的 seed 掃描',
+    cronExpr: '0 5 * * 0',
+    enabled: true,
+  },
 ];
 
 @Injectable()

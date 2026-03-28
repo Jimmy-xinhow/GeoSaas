@@ -5,9 +5,13 @@ import { TaskRegistryService } from './task-registry.service';
 import { MonitorModule } from '../monitor/monitor.module';
 import { DirectoryModule } from '../directory/directory.module';
 import { BlogArticleModule } from '../blog-article/blog-article.module';
+import { SeedModule } from '../seed/seed.module';
+import { IndexNowModule } from '../indexnow/indexnow.module';
+import { ScanModule } from '../scan/scan.module';
+import { PrismaModule } from '../../prisma/prisma.module';
 
 @Module({
-  imports: [MonitorModule, DirectoryModule, BlogArticleModule],
+  imports: [MonitorModule, DirectoryModule, BlogArticleModule, SeedModule, IndexNowModule, ScanModule, PrismaModule],
   controllers: [SchedulerController],
   providers: [CronManagerService, TaskRegistryService],
   exports: [CronManagerService],
