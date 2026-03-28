@@ -235,6 +235,7 @@ export class SeedService {
               url: site.url,
               userAgent: `Mozilla/5.0 (compatible; ${bot.name}/1.0; +https://${bot.org.toLowerCase()}.com/bot)`,
               statusCode: 200,
+              isSeeded: true,
               visitedAt,
             },
           });

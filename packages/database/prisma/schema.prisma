@@ -252,10 +252,12 @@ model CrawlerVisit {
   url        String
   statusCode Int?
   userAgent  String?  @db.Text
+  isSeeded   Boolean  @default(false)
   visitedAt  DateTime @default(now())
 
   @@index([siteId, visitedAt])
   @@index([siteId, botName])
+  @@index([isSeeded])
   @@map("crawler_visits")
 }
 
