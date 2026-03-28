@@ -109,6 +109,30 @@ export class KnowledgeService {
     return this.findAll(siteId, userId);
   }
 
+  /** Admin bulk import - bypasses ownership check */
+  async adminBatchCreate(siteId: string, items: CreateQaDto[]) {
+    const site = await this.prisma.site.findUnique({ where: { id: siteId } });
+    if (!site) throw new NotFoundException('Site not found');
+
+    const maxSort = await this.prisma.siteQa.aggregate({
+      where: { siteId },
+      _max: { sortOrder: true },
+    });
+    let nextSort = (maxSort._max.sortOrder ?? -1) + 1;
+
+    const data = items.map((item) => ({
+      siteId,
+      question: item.question,
+      answer: item.answer,
+      category: item.category || null,
+      isPublic: true,
+      sortOrder: nextSort++,
+    }));
+
+    const result = await this.prisma.siteQa.createMany({ data, skipDuplicates: true });
+    return { imported: result.count, total: nextSort };
+  }
+
   async update(qaId: string, siteId: string, dto: UpdateQaDto, userId: string) {
     await this.verifySiteOwnership(siteId, userId);
     const qa = await this.prisma.siteQa.findFirst({

@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { KnowledgeService } from './knowledge.service';
 import { CreateQaDto, UpdateQaDto, BatchCreateQaDto, AiGenerateQaDto } from './dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 
 @ApiTags('Knowledge')
 @ApiBearerAuth()
@@ -68,5 +69,16 @@ export class KnowledgeController {
     @CurrentUser('userId') userId: string,
   ) {
     return this.knowledgeService.aiGenerate(siteId, userId, dto.excludeQuestions);
+  }
+
+  @Post('admin-import')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Admin bulk import Q&A (bypasses ownership)' })
+  async adminImport(
+    @Param('siteId') siteId: string,
+    @Body() dto: BatchCreateQaDto,
+  ) {
+    return this.knowledgeService.adminBatchCreate(siteId, dto.items);
   }
 }
