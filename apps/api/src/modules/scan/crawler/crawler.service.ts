@@ -28,10 +28,22 @@ export class CrawlerService {
 
   async fetchLlmsTxt(url: string): Promise<string | null> {
     try {
+      // Try 1: same directory as the URL (for subdirectory sites like GitHub Pages)
+      const baseUrl = url.endsWith('/') ? url : url + '/';
+      const sameDir = await fetch(`${baseUrl}llms.txt`, { signal: AbortSignal.timeout(5000) });
+      if (sameDir.ok) {
+        const text = await sameDir.text();
+        if (text.includes('#') || text.length > 20) return text;
+      }
+
+      // Try 2: root domain (traditional location)
       const base = new URL(url);
-      const llmsUrl = `${base.protocol}//${base.host}/llms.txt`;
-      const response = await fetch(llmsUrl, { signal: AbortSignal.timeout(5000) });
-      if (response.ok) return response.text();
+      const rootUrl = `${base.protocol}//${base.host}/llms.txt`;
+      if (rootUrl !== `${baseUrl}llms.txt`) {
+        const rootRes = await fetch(rootUrl, { signal: AbortSignal.timeout(5000) });
+        if (rootRes.ok) return rootRes.text();
+      }
+
       return null;
     } catch {
       return null;
