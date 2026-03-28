@@ -45,6 +45,9 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} suppressHydrationWarning>
+      <head>
+        <link rel="alternate" type="application/rss+xml" title="Geovault Blog RSS" href="/feed" />
+      </head>
       <body className={inter.className}>
         <NextIntlClientProvider messages={messages}>
           <QueryProvider>{children}</QueryProvider>

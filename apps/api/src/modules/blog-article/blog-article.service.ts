@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BlogTemplateService, TemplateType } from './blog-template.service';
+import { IndexNowService } from '../indexnow/indexnow.service';
 import Anthropic from '@anthropic-ai/sdk';
 import pLimit from 'p-limit';
 
@@ -23,7 +24,14 @@ export class BlogArticleService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly templateService: BlogTemplateService,
+    private readonly indexNowService: IndexNowService,
   ) {}
+
+  /** Auto-ping IndexNow when new article is created */
+  private pingIndexNow(slug: string) {
+    const webUrl = this.config.get('FRONTEND_URL') || 'https://geovault.app';
+    this.indexNowService.submitUrl(`${webUrl}/blog/${slug}`).catch(() => {});
+  }
 
   /** List published articles (paginated) */
   async listArticles(params: { page?: number; limit?: number; category?: string; locale?: string }) {
@@ -391,6 +399,7 @@ export class BlogArticleService {
             });
 
             generated.push(templateType);
+            this.pingIndexNow(slug);
             this.logger.log(`Generated ${templateType} article for ${site.name}`);
           } catch (err) {
             this.logger.warn(`Failed to generate ${templateType} for ${site.name}: ${err}`);

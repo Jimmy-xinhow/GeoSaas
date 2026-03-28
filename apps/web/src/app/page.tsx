@@ -337,8 +337,69 @@ export default function LandingPage() {
     })
   }
 
+  const jsonLdWebSite = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Geovault',
+    url: 'https://geovault.app',
+    description: 'Geovault helps brands get discovered and cited by ChatGPT, Claude, Perplexity, Gemini, and Copilot. The #1 GEO platform in APAC.',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: { '@type': 'EntryPoint', urlTemplate: 'https://geovault.app/directory?search={search_term_string}' },
+      'query-input': 'required name=search_term_string',
+    },
+  }
+
+  const jsonLdOrg = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Geovault',
+    url: 'https://geovault.app',
+    logo: 'https://geovault.app/logo.png',
+    description: 'The APAC Authority on Generative Engine Optimization (GEO)',
+    sameAs: ['https://twitter.com/geovault', 'https://www.linkedin.com/company/geovault'],
+    foundingDate: '2026',
+    knowsAbout: ['GEO', 'AI SEO', 'Generative Engine Optimization', 'llms.txt', 'AI search optimization'],
+  }
+
+  const jsonLdFaq = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: [
+      {
+        '@type': 'Question',
+        name: '什麼是 GEO（Generative Engine Optimization）？',
+        acceptedAnswer: { '@type': 'Answer', text: 'GEO 是一種專門針對 AI 搜尋引擎的優化策略，目標是讓 ChatGPT、Claude、Perplexity、Gemini、Copilot 等 AI 工具在回答用戶問題時，主動推薦並引用你的品牌。' },
+      },
+      {
+        '@type': 'Question',
+        name: 'Geovault 是什麼？',
+        acceptedAnswer: { '@type': 'Answer', text: 'Geovault 是 APAC 領先的 GEO（AI 搜尋優化）平台，提供免費 AI 友善度掃描、自動修復、AI 引用監控、品牌知識庫管理等一站式服務，幫助品牌被 AI 搜尋引擎主動推薦。' },
+      },
+      {
+        '@type': 'Question',
+        name: 'GEO 分數是什麼？',
+        acceptedAnswer: { '@type': 'Answer', text: 'GEO 分數是 Geovault 平台衡量網站被 AI 搜尋引擎發現和引用能力的指標，滿分 100 分，由 8 項 AI 可讀性指標加權計算，包括 JSON-LD、llms.txt、FAQ Schema 等。' },
+      },
+      {
+        '@type': 'Question',
+        name: '如何提升品牌的 AI 搜尋能見度？',
+        acceptedAnswer: { '@type': 'Answer', text: '建議步驟：1. 用 Geovault 免費掃描你的網站 2. 根據報告加入 JSON-LD 結構化資料 3. 建立 llms.txt 告訴 AI 爬蟲你的品牌資訊 4. 完善 FAQ Schema 提供可引用的問答內容 5. 持續監控 AI 引用狀態。' },
+      },
+      {
+        '@type': 'Question',
+        name: 'Geovault 支援監控哪些 AI 平台？',
+        acceptedAnswer: { '@type': 'Answer', text: 'Geovault 支援 5 大 AI 平台的引用監控：ChatGPT（OpenAI）、Claude（Anthropic）、Perplexity、Gemini（Google）、Microsoft Copilot，可以追蹤你的品牌是否被這些 AI 提及和推薦。' },
+      },
+    ],
+  }
+
   return (
     <div className="min-h-screen">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdWebSite) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdOrg) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdFaq) }} />
+
       {/* Navbar */}
       <PublicNavbar />
 

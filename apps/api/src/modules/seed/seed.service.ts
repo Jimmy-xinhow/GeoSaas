@@ -196,6 +196,59 @@ export class SeedService {
   }
 
   /** Retry all failed seeds */
+  /** Seed realistic crawler visit data for public sites */
+  async seedCrawlerVisits(): Promise<{ created: number }> {
+    const sites = await this.prisma.site.findMany({
+      where: { isPublic: true, bestScore: { gt: 0 } },
+      select: { id: true, url: true, bestScore: true },
+    });
+
+    const bots = [
+      { name: 'GPTBot', org: 'OpenAI' },
+      { name: 'ClaudeBot', org: 'Anthropic' },
+      { name: 'PerplexityBot', org: 'Perplexity' },
+      { name: 'Google-Extended', org: 'Google' },
+      { name: 'Bingbot', org: 'Microsoft' },
+      { name: 'CopilotBot', org: 'Microsoft' },
+      { name: 'Bytespider', org: 'ByteDance' },
+    ];
+
+    let created = 0;
+    const now = Date.now();
+
+    for (const site of sites) {
+      // Higher score sites get more visits
+      const visitCount = Math.floor((site.bestScore / 20) + Math.random() * 5) + 1;
+
+      for (let i = 0; i < visitCount; i++) {
+        const bot = bots[Math.floor(Math.random() * bots.length)];
+        const daysAgo = Math.floor(Math.random() * 30);
+        const hoursAgo = Math.floor(Math.random() * 24);
+        const visitedAt = new Date(now - (daysAgo * 86400000) - (hoursAgo * 3600000));
+
+        try {
+          await this.prisma.crawlerVisit.create({
+            data: {
+              siteId: site.id,
+              botName: bot.name,
+              botOrg: bot.org,
+              url: site.url,
+              userAgent: `Mozilla/5.0 (compatible; ${bot.name}/1.0; +https://${bot.org.toLowerCase()}.com/bot)`,
+              statusCode: 200,
+              visitedAt,
+            },
+          });
+          created++;
+        } catch {
+          // skip duplicates
+        }
+      }
+    }
+
+    this.logger.log(`Seeded ${created} crawler visits for ${sites.length} sites`);
+    return { created };
+  }
+
   async retryFailed(): Promise<{ reset: number }> {
     const result = await this.prisma.seedSource.updateMany({
       where: { status: 'failed' },
