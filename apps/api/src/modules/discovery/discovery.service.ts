@@ -347,78 +347,24 @@ siteIndex 是答案中最相關的品牌在列表中的索引（0-based），如
   }
 
   /**
-   * Search for businesses using SerpAPI or Bing Search API.
-   * Falls back to a simpler approach if no API key is available.
+   * Search for businesses using multiple search engines.
+   * Priority: SerpAPI → Google Custom Search → Bing Search
    */
   private async searchBusinesses(query: string, industry: string): Promise<DiscoveredBusiness[]> {
     const results: DiscoveredBusiness[] = [];
 
     try {
-      // Use Bing Search API if available
-      const bingKey = this.config.get<string>('BING_SEARCH_API_KEY');
-      if (bingKey) {
-        const params = new URLSearchParams({
-          q: `${query} 官網 site:.com.tw OR site:.tw`,
-          count: '10',
-          mkt: 'zh-TW',
-        });
-
-        const res = await fetch(`https://api.bing.microsoft.com/v7.0/search?${params}`, {
-          headers: { 'Ocp-Apim-Subscription-Key': bingKey },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const webPages = data.webPages?.value || [];
-
-          for (const page of webPages) {
-            const url = page.url;
-            // Skip social media, directories, and review sites
-            if (this.isExcludedDomain(url)) continue;
-
-            results.push({
-              name: this.extractBrandName(page.name, url),
-              url: new URL(url).origin,
-              industry,
-              description: page.snippet,
-            });
-          }
-        }
-      } else {
-        // Fallback: use Google's programmable search (free tier)
-        const googleKey = this.config.get<string>('GOOGLE_SEARCH_API_KEY');
-        const googleCx = this.config.get<string>('GOOGLE_SEARCH_CX');
-
-        if (googleKey && googleCx) {
-          const params = new URLSearchParams({
-            q: `${query} 官網`,
-            key: googleKey,
-            cx: googleCx,
-            num: '10',
-            lr: 'lang_zh-TW',
+      const rawResults = await this.webSearch(`${query} 官網`);
+      for (const item of rawResults) {
+        if (this.isExcludedDomain(item.url)) continue;
+        try {
+          results.push({
+            name: this.extractBrandName(item.title, item.url),
+            url: new URL(item.url).origin,
+            industry,
+            description: item.snippet,
           });
-
-          const searchUrl = `https://www.googleapis.com/customsearch/v1?${params}`;
-          this.logger.log(`Google Search: ${searchUrl.slice(0, 100)}...`);
-          const res = await fetch(searchUrl);
-          if (res.ok) {
-            const data = await res.json();
-            for (const item of data.items || []) {
-              if (this.isExcludedDomain(item.link)) continue;
-              results.push({
-                name: this.extractBrandName(item.title, item.link),
-                url: new URL(item.link).origin,
-                industry,
-                description: item.snippet,
-              });
-            }
-          } else {
-            const errBody = await res.text();
-            this.logger.warn(`Google Search API error ${res.status}: ${errBody.slice(0, 200)}`);
-          }
-        } else {
-          this.logger.warn('No search API key configured (BING_SEARCH_API_KEY or GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX)');
-        }
+        } catch {}
       }
     } catch (err) {
       this.logger.warn(`Search failed for "${query}": ${err}`);
@@ -434,31 +380,76 @@ siteIndex 是答案中最相關的品牌在列表中的索引（0-based），如
   }
 
   /**
-   * Web search for content enrichment (reviews, discussions).
+   * Unified web search: tries SerpAPI → Google → Bing in order.
    */
   private async webSearch(query: string): Promise<Array<{ title: string; snippet: string; url: string }>> {
-    const bingKey = this.config.get<string>('BING_SEARCH_API_KEY');
-    if (!bingKey) {
-      const googleKey = this.config.get<string>('GOOGLE_SEARCH_API_KEY');
-      const googleCx = this.config.get<string>('GOOGLE_SEARCH_CX');
-      if (googleKey && googleCx) {
-        const params = new URLSearchParams({ q: query, key: googleKey, cx: googleCx, num: '5', lr: 'lang_zh-TW' });
+    // 1. Try SerpAPI (most reliable, free 100/month)
+    const serpKey = this.config.get<string>('SERP_API_KEY');
+    if (serpKey) {
+      try {
+        const params = new URLSearchParams({
+          q: query,
+          api_key: serpKey,
+          engine: 'google',
+          gl: 'tw',
+          hl: 'zh-TW',
+          num: '10',
+        });
+        const res = await fetch(`https://serpapi.com/search.json?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          const organic = data.organic_results || [];
+          this.logger.log(`SerpAPI: ${organic.length} results for "${query.slice(0, 30)}"`);
+          return organic.map((r: any) => ({ title: r.title || '', snippet: r.snippet || '', url: r.link || '' }));
+        } else {
+          const err = await res.text();
+          this.logger.warn(`SerpAPI error ${res.status}: ${err.slice(0, 100)}`);
+        }
+      } catch (err) {
+        this.logger.warn(`SerpAPI failed: ${err}`);
+      }
+    }
+
+    // 2. Try Google Custom Search
+    const googleKey = this.config.get<string>('GOOGLE_SEARCH_API_KEY');
+    const googleCx = this.config.get<string>('GOOGLE_SEARCH_CX');
+    if (googleKey && googleCx) {
+      try {
+        const params = new URLSearchParams({ q: query, key: googleKey, cx: googleCx, num: '10', lr: 'lang_zh-TW' });
         const res = await fetch(`https://www.googleapis.com/customsearch/v1?${params}`);
         if (res.ok) {
           const data = await res.json();
+          this.logger.log(`Google Search: ${(data.items || []).length} results for "${query.slice(0, 30)}"`);
           return (data.items || []).map((i: any) => ({ title: i.title, snippet: i.snippet, url: i.link }));
+        } else {
+          const err = await res.text();
+          this.logger.warn(`Google Search error ${res.status}: ${err.slice(0, 100)}`);
         }
+      } catch (err) {
+        this.logger.warn(`Google Search failed: ${err}`);
       }
-      return [];
     }
 
-    const params = new URLSearchParams({ q: query, count: '5', mkt: 'zh-TW' });
-    const res = await fetch(`https://api.bing.microsoft.com/v7.0/search?${params}`, {
-      headers: { 'Ocp-Apim-Subscription-Key': bingKey },
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.webPages?.value || []).map((p: any) => ({ title: p.name, snippet: p.snippet, url: p.url }));
+    // 3. Try Bing Search
+    const bingKey = this.config.get<string>('BING_SEARCH_API_KEY');
+    if (bingKey) {
+      try {
+        const params = new URLSearchParams({ q: query, count: '10', mkt: 'zh-TW' });
+        const res = await fetch(`https://api.bing.microsoft.com/v7.0/search?${params}`, {
+          headers: { 'Ocp-Apim-Subscription-Key': bingKey },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          this.logger.log(`Bing Search: ${(data.webPages?.value || []).length} results for "${query.slice(0, 30)}"`);
+          return (data.webPages?.value || []).map((p: any) => ({ title: p.name, snippet: p.snippet, url: p.url }));
+        }
+      } catch (err) {
+        this.logger.warn(`Bing Search failed: ${err}`);
+      }
+    }
+
+    this.logger.warn('No search API available (SERP_API_KEY / GOOGLE_SEARCH_API_KEY / BING_SEARCH_API_KEY)');
+    return [];
   }
 
   private isExcludedDomain(url: string): boolean {
