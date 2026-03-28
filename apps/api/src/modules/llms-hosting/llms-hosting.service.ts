@@ -88,8 +88,6 @@ export class LlmsHostingService {
           },
         },
         qas: {
-          where: {},
-          take: 3,
           orderBy: { sortOrder: 'asc' },
           select: { question: true, answer: true },
         },
