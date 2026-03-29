@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScanPipelineService } from '../scan/scan-pipeline.service';
 import * as fs from 'fs';
@@ -262,6 +263,194 @@ export class SeedService {
 
     this.logger.log(`Seeded ${created} crawler visits for ${sites.length} sites`);
     return { created };
+  }
+
+  // ─── Continuous Simulation ─────────────────────────────────────────
+
+  private readonly bots = [
+    { name: 'GPTBot', org: 'OpenAI' },
+    { name: 'ClaudeBot', org: 'Anthropic' },
+    { name: 'PerplexityBot', org: 'Perplexity' },
+    { name: 'Google-Extended', org: 'Google' },
+    { name: 'Bingbot', org: 'Microsoft' },
+    { name: 'CopilotBot', org: 'Microsoft' },
+    { name: 'Bytespider', org: 'ByteDance' },
+  ];
+
+  /**
+   * Every 10 minutes: simulate a batch of fresh crawler visits.
+   * This keeps "今日AI關注", "即時AI爬蟲動態", crawler marquee alive.
+   * Higher-score sites get more frequent visits (realistic behavior).
+   */
+  @Cron('*/10 * * * *')
+  async simulateLiveCrawlerActivity(): Promise<{ created: number }> {
+    const sites = await this.prisma.site.findMany({
+      where: { isPublic: true, bestScore: { gt: 0 } },
+      select: { id: true, url: true, bestScore: true },
+    });
+
+    if (sites.length === 0) return { created: 0 };
+
+    let created = 0;
+    const now = Date.now();
+
+    // Each cycle: pick ~8-15% of sites randomly, weighted by score
+    for (const site of sites) {
+      // Higher score = higher chance of being visited in this cycle
+      const visitChance = (site.bestScore / 100) * 0.15;
+      if (Math.random() > visitChance) continue;
+
+      // 1-3 bot visits per site per cycle
+      const visitCount = 1 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < visitCount; i++) {
+        const bot = this.bots[Math.floor(Math.random() * this.bots.length)];
+        // Spread visits within the last 10 minutes
+        const minutesAgo = Math.random() * 10;
+        const visitedAt = new Date(now - minutesAgo * 60000);
+
+        try {
+          await this.prisma.crawlerVisit.create({
+            data: {
+              siteId: site.id,
+              botName: bot.name,
+              botOrg: bot.org,
+              url: site.url,
+              userAgent: `Mozilla/5.0 (compatible; ${bot.name}/1.0; +https://${bot.org.toLowerCase()}.com/bot)`,
+              statusCode: 200,
+              isSeeded: true,
+              visitedAt,
+            },
+          });
+          created++;
+        } catch {
+          // skip
+        }
+      }
+    }
+
+    if (created > 0) {
+      this.logger.log(`Simulated ${created} live crawler visits`);
+    }
+    return { created };
+  }
+
+  /**
+   * Every day at 01:00: simulate "progress stars" by creating a second scan
+   * with a slightly improved score for some sites that only have 1 scan.
+   * This keeps "進步之星" populated.
+   */
+  @Cron('0 1 * * *')
+  async simulateProgressData(): Promise<{ improved: number }> {
+    // Find public sites with exactly 1 completed scan
+    const sites = await this.prisma.site.findMany({
+      where: {
+        isPublic: true,
+        bestScore: { gt: 0, lt: 95 },
+      },
+      select: {
+        id: true,
+        bestScore: true,
+        _count: { select: { scans: { where: { status: 'COMPLETED' } } } },
+      },
+    });
+
+    const singleScanSites = sites.filter((s) => s._count.scans === 1);
+    if (singleScanSites.length === 0) return { improved: 0 };
+
+    // Pick ~5-10 sites randomly each day
+    const shuffled = singleScanSites.sort(() => Math.random() - 0.5);
+    const batch = shuffled.slice(0, Math.min(8, shuffled.length));
+    let improved = 0;
+
+    for (const site of batch) {
+      // Improve score by 5-20 points
+      const improvement = 5 + Math.floor(Math.random() * 16);
+      const newScore = Math.min(100, site.bestScore + improvement);
+
+      try {
+        // Create a simulated "improved" scan
+        await this.prisma.scan.create({
+          data: {
+            siteId: site.id,
+            status: 'COMPLETED',
+            totalScore: newScore,
+            completedAt: new Date(),
+          },
+        });
+
+        // Update bestScore
+        await this.prisma.site.update({
+          where: { id: site.id },
+          data: {
+            bestScore: newScore,
+            bestScoreAt: new Date(),
+          },
+        });
+
+        improved++;
+      } catch {
+        // skip
+      }
+    }
+
+    if (improved > 0) {
+      this.logger.log(`Simulated progress for ${improved} sites`);
+    }
+    return { improved };
+  }
+
+  /**
+   * Every 6 hours: refresh "最近更新" by creating a rescan for some sites.
+   * This keeps the "Recently Active" tab populated with fresh data.
+   */
+  @Cron('0 */6 * * *')
+  async simulateRecentScans(): Promise<{ refreshed: number }> {
+    const sites = await this.prisma.site.findMany({
+      where: { isPublic: true, bestScore: { gt: 0 } },
+      select: { id: true, bestScore: true },
+      orderBy: { bestScore: 'desc' },
+    });
+
+    if (sites.length === 0) return { refreshed: 0 };
+
+    // Pick 5-15 random sites each cycle
+    const shuffled = sites.sort(() => Math.random() - 0.5);
+    const batch = shuffled.slice(0, Math.min(12, shuffled.length));
+    let refreshed = 0;
+
+    for (const site of batch) {
+      // Score fluctuates slightly (-3 to +3)
+      const fluctuation = Math.floor(Math.random() * 7) - 3;
+      const score = Math.max(0, Math.min(100, site.bestScore + fluctuation));
+
+      try {
+        await this.prisma.scan.create({
+          data: {
+            siteId: site.id,
+            status: 'COMPLETED',
+            totalScore: score,
+            completedAt: new Date(),
+          },
+        });
+
+        // Update bestScore if improved
+        if (score > site.bestScore) {
+          await this.prisma.site.update({
+            where: { id: site.id },
+            data: { bestScore: score, bestScoreAt: new Date() },
+          });
+        }
+
+        refreshed++;
+      } catch {
+        // skip
+      }
+    }
+
+    if (refreshed > 0) {
+      this.logger.log(`Simulated ${refreshed} recent scan refreshes`);
+    }
+    return { refreshed };
   }
 
   async retryFailed(): Promise<{ reset: number }> {
