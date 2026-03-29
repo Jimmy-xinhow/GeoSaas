@@ -84,47 +84,58 @@ export class ClientReportService {
   private async executeReport(reportId: string, site: { id: string; name: string; url: string }, queries: QueryItem[]) {
     const platforms = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'];
     const results: ReportResult[] = [];
-    const limit = pLimit(2);
 
-    for (const q of queries) {
-      const platformResults = await Promise.all(
-        platforms.map((platform) =>
-          limit(async () => {
-            try {
-              // Create temporary monitor, check, then get result
-              const monitor = await this.prisma.monitor.create({
-                data: { siteId: site.id, platform, query: q.question, checkedAt: new Date() },
-              });
+    for (let qi = 0; qi < queries.length; qi++) {
+      const q = queries[qi];
+      this.logger.log(`Report ${reportId}: question ${qi + 1}/${queries.length} — ${q.question.slice(0, 30)}`);
 
-              const checked = await this.monitorService.checkCitation(monitor.id);
+      for (const platform of platforms) {
+        try {
+          const monitor = await this.prisma.monitor.create({
+            data: { siteId: site.id, platform, query: q.question, checkedAt: new Date() },
+          });
 
-              results.push({
-                question: q.question,
-                category: q.category,
-                platform,
-                mentioned: checked.mentioned,
-                position: checked.position,
-                response: checked.response?.slice(0, 500) || '',
-              });
+          // Timeout per check: 30 seconds
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('timeout')), 30000),
+          );
+          const checked = await Promise.race([
+            this.monitorService.checkCitation(monitor.id),
+            timeoutPromise,
+          ]);
 
-              // Clean up temporary monitor
-              await this.prisma.monitor.delete({ where: { id: monitor.id } }).catch(() => {});
-            } catch (err) {
-              results.push({
-                question: q.question,
-                category: q.category,
-                platform,
-                mentioned: false,
-                position: null,
-                response: `[Error] ${err}`,
-              });
-            }
-          }),
-        ),
-      );
+          results.push({
+            question: q.question,
+            category: q.category,
+            platform,
+            mentioned: checked.mentioned,
+            position: checked.position,
+            response: checked.response?.slice(0, 500) || '',
+          });
 
-      // Rate limiting between questions
-      await new Promise((r) => setTimeout(r, 1000));
+          await this.prisma.monitor.delete({ where: { id: monitor.id } }).catch(() => {});
+        } catch (err) {
+          results.push({
+            question: q.question,
+            category: q.category,
+            platform,
+            mentioned: false,
+            position: null,
+            response: `[Error] ${err instanceof Error ? err.message : err}`,
+          });
+        }
+
+        // 2 second delay between API calls
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+
+      // Save progress every 5 questions
+      if ((qi + 1) % 5 === 0 || qi === queries.length - 1) {
+        await this.prisma.monitorReport.update({
+          where: { id: reportId },
+          data: { results: results as any },
+        });
+      }
     }
 
     // Calculate summary
