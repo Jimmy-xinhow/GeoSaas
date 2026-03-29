@@ -112,20 +112,63 @@ export class DiscoveryService {
       '整骨 經驗分享',
       '整復 注意事項',
       '整復 多久做一次',
+      '整復 第一次 經驗',
+      '整復 腰痛 推薦',
     ],
     auto_care: [
       '汽車美容 PTT 推薦',
       '鍍膜 DIY 經驗',
       '洗車 正確方式',
       '汽車保養 注意事項',
+      '汽車美容 新手 教學',
+      '鍍膜 打蠟 差別',
     ],
     restaurant: [
       '台灣 美食 推薦 評論',
       '餐廳 評價 PTT',
+      '台北 必吃 推薦',
     ],
     healthcare: [
       '診所 評價 PTT',
       '看診 推薦 經驗',
+      '牙醫 推薦 PTT',
+    ],
+    beauty_salon: [
+      '美髮 推薦 PTT',
+      '髮型設計 評價',
+      '染髮 推薦 經驗',
+    ],
+    cafe: [
+      '咖啡廳 推薦 PTT',
+      '手搖飲 推薦 排行',
+      '台灣 咖啡 品牌 評價',
+    ],
+    fitness: [
+      '健身房 推薦 PTT',
+      '健身 新手 經驗',
+      '瑜伽 推薦 台灣',
+    ],
+    pet: [
+      '寵物店 推薦 PTT',
+      '動物醫院 推薦 經驗',
+      '寵物用品 推薦',
+    ],
+    education: [
+      '補習班 推薦 PTT',
+      '線上課程 推薦 評價',
+    ],
+    home_services: [
+      '搬家 推薦 PTT',
+      '清潔公司 推薦 經驗',
+    ],
+    hospitality: [
+      '飯店 推薦 PTT',
+      '民宿 推薦 評價',
+      '旅行社 推薦 經驗',
+    ],
+    retail: [
+      '網購 推薦 PTT',
+      '電商 評價 比較',
     ],
   };
 
@@ -156,19 +199,34 @@ export class DiscoveryService {
       const industries = Object.keys(this.industryQueries);
       industries.sort((a, b) => (countMap.get(a) || 0) - (countMap.get(b) || 0));
 
-      // Pick top 3 industries with fewest coverage
-      const targetIndustries = industries.slice(0, 3);
-      this.logger.log(`Discovery targeting industries: ${targetIndustries.join(', ')}`);
+      // Pick top 6 industries with fewest coverage
+      const targetIndustries = industries.slice(0, 6);
+      this.logger.log(`Discovery targeting ${targetIndustries.length} industries: ${targetIndustries.join(', ')}`);
 
       let totalDiscovered = 0;
       let totalScanned = 0;
 
       for (const industry of targetIndustries) {
         const queries = this.industryQueries[industry];
-        const query = queries[Math.floor(Math.random() * queries.length)];
+        // Run up to 2 different queries per industry
+        const selectedQueries = queries.sort(() => Math.random() - 0.5).slice(0, 2);
 
         try {
-          const businesses = await this.searchBusinesses(query, industry);
+          // Search with multiple queries
+          const allBusinesses: DiscoveredBusiness[] = [];
+          for (const query of selectedQueries) {
+            const found = await this.searchBusinesses(query, industry);
+            allBusinesses.push(...found);
+          }
+
+          // Deduplicate
+          const seen = new Set<string>();
+          const businesses = allBusinesses.filter(b => {
+            if (seen.has(b.url)) return false;
+            seen.add(b.url);
+            return true;
+          });
+
           this.logger.log(`Found ${businesses.length} potential businesses for ${industry}`);
 
           for (const biz of businesses) {
@@ -191,10 +249,10 @@ export class DiscoveryService {
             totalDiscovered++;
           }
 
-          // Scan the newly discovered ones
+          // Scan all newly discovered ones for this industry
           const pendingSeeds = await this.prisma.seedSource.findMany({
             where: { industry, status: 'pending', source: 'auto_discovery' },
-            take: 5,
+            take: 15,
           });
 
           let systemUser = await this.prisma.user.findFirst({
@@ -265,9 +323,10 @@ export class DiscoveryService {
     const anthropic = new Anthropic({ apiKey: anthropicKey });
     let totalCreated = 0;
 
-    // Pick one industry to enrich per run
-    const industries = Object.keys(this.enrichmentQueries);
-    const industry = industries[Math.floor(Math.random() * industries.length)];
+    // Pick 3 industries to enrich per run
+    const industries = Object.keys(this.enrichmentQueries).sort(() => Math.random() - 0.5).slice(0, 3);
+
+    for (const industry of industries) {
     const queries = this.enrichmentQueries[industry];
     const query = queries[Math.floor(Math.random() * queries.length)];
 
@@ -276,7 +335,7 @@ export class DiscoveryService {
     try {
       // Search for content
       const searchResults = await this.webSearch(query);
-      if (!searchResults || searchResults.length === 0) return { created: 0 };
+      if (!searchResults || searchResults.length === 0) continue;
 
       // Get top sites in this industry
       const sites = await this.prisma.site.findMany({
@@ -342,6 +401,7 @@ siteIndex 是答案中最相關的品牌在列表中的索引（0-based），如
     } catch (err) {
       this.logger.warn(`Enrichment failed for ${industry}: ${err}`);
     }
+    } // end for loop
 
     return { created: totalCreated };
   }
