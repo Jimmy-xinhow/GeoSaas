@@ -11,6 +11,7 @@ import {
   Settings,
   Trophy,
   Shield,
+  ClipboardCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/sites', icon: Globe, label: '我的網站' },
   { href: '/content', icon: FileText, label: '內容引擎' },
   { href: '/monitor', icon: Eye, label: 'AI 監控' },
+  { href: '/monitor/reports', icon: ClipboardCheck, label: '客戶驗收報告' },
   { href: '/publish', icon: Share2, label: '多平台佈局' },
   { href: '/directory', icon: Trophy, label: '公開目錄' },
   { href: '/settings', icon: Settings, label: '設定' },
