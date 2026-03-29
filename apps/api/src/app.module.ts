@@ -31,6 +31,7 @@ import { SeedModule } from './modules/seed/seed.module';
 import { DiscoveryModule } from './modules/discovery/discovery.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { EmailModule } from './modules/email/email.module';
+import { ClientReportModule } from './modules/client-report/client-report.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { EmailModule } from './modules/email/email.module';
     DiscoveryModule,
     SchedulerModule,
     EmailModule,
+    ClientReportModule,
   ],
   controllers: [HealthController],
   providers: [

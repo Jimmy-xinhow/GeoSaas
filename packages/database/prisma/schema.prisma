@@ -118,6 +118,8 @@ model Site {
   badges              SiteBadge[]
   successCases        GeoSuccessCase[]
   seedSource          SeedSource?
+  clientQuerySets     ClientQuerySet[]
+  monitorReports      MonitorReport[]
 
   @@map("sites")
 }
@@ -435,6 +437,39 @@ model SeedSource {
   @@index([country, status])
   @@index([status])
   @@map("seed_sources")
+}
+
+model ClientQuerySet {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name        String   // e.g. "立如整復 驗收問題集"
+  queries     Json     // array of { category, question }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reports     MonitorReport[]
+
+  @@index([siteId])
+  @@map("client_query_sets")
+}
+
+model MonitorReport {
+  id            String   @id @default(cuid())
+  querySetId    String
+  querySet      ClientQuerySet @relation(fields: [querySetId], references: [id], onDelete: Cascade)
+  siteId        String
+  site          Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period        String   // e.g. "2026-03"
+  results       Json     // array of { question, platform, mentioned, response }
+  summary       Json?    // { totalQueries, mentionedCount, mentionRate, byPlatform }
+  status        String   @default("pending") // pending | running | completed
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([siteId, period])
+  @@index([querySetId])
+  @@map("monitor_reports")
 }
 
 model GuestScan {
