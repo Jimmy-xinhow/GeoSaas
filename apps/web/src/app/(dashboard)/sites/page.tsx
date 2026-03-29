@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Plus, ExternalLink, RefreshCw, Loader2, Trash2, Globe } from 'lucide-react'
+import { Plus, ExternalLink, RefreshCw, Loader2, Trash2, Globe, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -103,8 +103,21 @@ export default function SitesPage() {
   const [newSiteUrl, setNewSiteUrl] = useState('')
   const [newSiteName, setNewSiteName] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const { data: sites, isLoading, error } = useSites()
+
+  const filteredSites = useMemo(() => {
+    if (!sites) return []
+    if (!searchQuery.trim()) return sites as any[]
+    const q = searchQuery.toLowerCase()
+    return (sites as any[]).filter(
+      (s) =>
+        s.name?.toLowerCase().includes(q) ||
+        s.url?.toLowerCase().includes(q) ||
+        s.industry?.toLowerCase().includes(q),
+    )
+  }, [sites, searchQuery])
   const createSiteMutation = useCreateSite()
   const deleteSiteMutation = useDeleteSite()
   const triggerScanMutation = useTriggerScan()
@@ -195,6 +208,22 @@ export default function SitesPage() {
         </Button>
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Input
+          placeholder="搜尋網站名稱、網址或行業..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+        {searchQuery && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+            {filteredSites.length} 筆結果
+          </span>
+        )}
+      </div>
+
       {/* Add site form */}
       {showAddForm && (
         <Card>
@@ -247,7 +276,7 @@ export default function SitesPage() {
             <SiteCardSkeleton key={i} />
           ))}
         </div>
-      ) : !sites || sites.length === 0 ? (
+      ) : filteredSites.length === 0 ? (
         <Card>
           <CardContent className="p-12">
             <div className="text-center">
@@ -270,7 +299,7 @@ export default function SitesPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sites.map((site: any) => {
+          {filteredSites.map((site: any) => {
             const { score, status, scanDate } = getSiteLatestScan(site)
             const isSiteScanning = activeScanSiteIds.has(site.id)
             const isTriggeringThis = triggerScanMutation.isPending && triggerScanMutation.variables === site.id
