@@ -21,6 +21,7 @@ interface AuthResponse {
     plan?: string;
   };
   token: string;
+  refreshToken?: string;
 }
 
 export function useLogin() {
@@ -36,7 +37,7 @@ export function useLogin() {
       return data;
     },
     onSuccess: (data) => {
-      login(data.user, data.token);
+      login(data.user, data.token, data.refreshToken);
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
   });
@@ -55,7 +56,7 @@ export function useRegister() {
       return data;
     },
     onSuccess: (data) => {
-      login(data.user, data.token);
+      login(data.user, data.token, data.refreshToken);
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
   });

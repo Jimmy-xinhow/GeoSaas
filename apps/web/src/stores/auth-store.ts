@@ -14,7 +14,7 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isHydrated: boolean;
-  login: (user: User, token: string) => void;
+  login: (user: User, token: string, refreshToken?: string) => void;
   logout: () => void;
   hydrate: () => Promise<void>;
 }
@@ -25,9 +25,10 @@ const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   isHydrated: false,
 
-  login: (user, token) => {
+  login: (user, token, refreshToken?) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('token', token);
+      if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
     }
     set({ user, token, isAuthenticated: true, isHydrated: true });
   },
@@ -35,6 +36,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
   logout: () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
     }
     set({ user: null, token: null, isAuthenticated: false });
   },
@@ -54,6 +56,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // Token is invalid or expired — clear it
       localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
       set({ user: null, token: null, isAuthenticated: false, isHydrated: true });
     }
   },
