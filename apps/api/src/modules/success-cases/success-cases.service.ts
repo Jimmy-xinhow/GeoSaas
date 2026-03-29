@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSuccessCaseDto } from './dto/create-success-case.dto';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 
 @Injectable()
 export class SuccessCasesService {
@@ -134,8 +134,8 @@ export class SuccessCasesService {
 
     if (!caseData) throw new NotFoundException('Case not found');
 
-    const anthropic = new Anthropic({
-      apiKey: this.config.get<string>('ANTHROPIC_API_KEY'),
+    const openai = new OpenAI({
+      apiKey: this.config.get<string>('OPENAI_API_KEY'),
     });
 
     const prompt = `根據以下 GEO 成功案例，撰寫一篇 700–900 字的繁體中文案例故事文章。
@@ -159,13 +159,13 @@ AI 回應摘要：${caseData.aiResponse.slice(0, 500)}
 Q: 這個成功案例可以複製嗎？
 Q: 需要多少技術能力才能做到？`;
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
       max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const content = message.content[0].type === 'text' ? message.content[0].text : '';
+    const content = completion.choices[0]?.message?.content || '';
     const slug = `case-${caseData.title.slice(0, 20).replace(/[^a-z0-9\u4e00-\u9fff]+/gi, '-').toLowerCase()}-${Date.now().toString(36)}`;
 
     const article = await this.prisma.blogArticle.create({

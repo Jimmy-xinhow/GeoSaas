@@ -4,7 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BlogTemplateService, TemplateType } from './blog-template.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import pLimit from 'p-limit';
 
 const ALL_TEMPLATE_TYPES: TemplateType[] = [
@@ -342,8 +342,8 @@ export class BlogArticleService {
       scannedAt: scan.completedAt || new Date(),
     };
 
-    const anthropic = new Anthropic({
-      apiKey: this.config.get<string>('ANTHROPIC_API_KEY'),
+    const openai = new OpenAI({
+      apiKey: this.config.get<string>('OPENAI_API_KEY'),
     });
     const limit = pLimit(2);
     const generated: string[] = [];
@@ -359,13 +359,13 @@ export class BlogArticleService {
               industryData,
             );
 
-            const message = await anthropic.messages.create({
-              model: 'claude-sonnet-4-20250514',
+            const completion = await openai.chat.completions.create({
+              model: 'gpt-4o-mini',
               max_tokens: 2000,
               messages: [{ role: 'user', content: prompt }],
             });
 
-            const content = message.content[0].type === 'text' ? message.content[0].text : '';
+            const content = completion.choices[0]?.message?.content || '';
 
             // Quality gate: reject low-quality articles
             const qualityScore = this.assessArticleQuality(content, site.name);

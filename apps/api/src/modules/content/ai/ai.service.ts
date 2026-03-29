@@ -1,16 +1,16 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { buildFaqPrompt } from './prompts/faq.prompt';
 import { buildArticlePrompt } from './prompts/article.prompt';
 
 @Injectable()
 export class AiService {
-  private client: Anthropic;
+  private client: OpenAI;
   private logger = new Logger(AiService.name);
 
   constructor(private config: ConfigService) {
-    this.client = new Anthropic({ apiKey: this.config.get('ANTHROPIC_API_KEY') });
+    this.client = new OpenAI({ apiKey: this.config.get('OPENAI_API_KEY') });
   }
 
   private handleApiError(error: unknown, context: string): never {
@@ -24,7 +24,7 @@ export class AiService {
       errMsg.includes('402')
     ) {
       throw new BadRequestException(
-        `AI API 餘額不足，請確認 Anthropic 帳戶餘額。原始錯誤: ${errMsg.substring(0, 200)}`,
+        `AI API 餘額不足，請確認 OpenAI 帳戶餘額。原始錯誤: ${errMsg.substring(0, 200)}`,
       );
     }
     if (
@@ -35,7 +35,7 @@ export class AiService {
       errMsg.includes('AuthenticationError')
     ) {
       throw new BadRequestException(
-        `AI API 金鑰無效，請確認 ANTHROPIC_API_KEY 是否正確，並重啟伺服器。原始錯誤: ${errMsg.substring(0, 200)}`,
+        `AI API 金鑰無效，請確認 OPENAI_API_KEY 是否正確，並重啟伺服器。原始錯誤: ${errMsg.substring(0, 200)}`,
       );
     }
     if (errMsg.includes('rate_limit') || errMsg.includes('429') || errMsg.includes('overloaded')) {
@@ -49,15 +49,16 @@ export class AiService {
     const { system, user } = buildFaqPrompt(brand, industry, keywords, language);
 
     try {
-      const response = await this.client.messages.create({
-        model: 'claude-sonnet-4-20250514',
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-4o-mini',
         max_tokens: 4096,
-        system,
-        messages: [{ role: 'user', content: user }],
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
       });
 
-      const textBlock = response.content.find((block) => block.type === 'text');
-      return textBlock ? textBlock.text : '';
+      return response.choices[0]?.message?.content || '';
     } catch (error) {
       this.handleApiError(error, 'FAQ generation');
     }
@@ -67,15 +68,16 @@ export class AiService {
     const { system, user } = buildArticlePrompt(brand, topic, keywords, language);
 
     try {
-      const response = await this.client.messages.create({
-        model: 'claude-sonnet-4-20250514',
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-4o-mini',
         max_tokens: 8192,
-        system,
-        messages: [{ role: 'user', content: user }],
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
       });
 
-      const textBlock = response.content.find((block) => block.type === 'text');
-      return textBlock ? textBlock.text : '';
+      return response.choices[0]?.message?.content || '';
     } catch (error) {
       this.handleApiError(error, 'Article generation');
     }

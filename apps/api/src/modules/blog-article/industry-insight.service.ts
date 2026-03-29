@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { INDUSTRIES } from '@geovault/shared';
 
 export type InsightType =
@@ -46,14 +46,14 @@ export class IndustryInsightService {
     const industryName = this.getIndustryName(industrySlug);
     const prompt = this.buildInsightPrompt(insightType, industryName, data);
 
-    const anthropic = new Anthropic({ apiKey: this.config.get<string>('ANTHROPIC_API_KEY') });
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const content = message.content[0].type === 'text' ? message.content[0].text : '';
+    const content = completion.choices[0]?.message?.content || '';
     const titleMap: Record<InsightType, string> = {
       industry_current_state: `${industryName} 行業 AI 搜尋優化現況報告 ${new Date().getFullYear()}`,
       missing_indicator_focus: `為什麼 ${100 - data.weakestIndicators[0].passRate}% 的 ${industryName} 品牌被 AI 忽略`,

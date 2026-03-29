@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JsonLdGenerator } from './generators/json-ld.generator';
 import { LlmsTxtGenerator } from './generators/llms-txt.generator';
@@ -20,7 +20,7 @@ const SUPPORTED_SMART_INDICATORS = new Set([
 @Injectable()
 export class FixService {
   private readonly logger = new Logger(FixService.name);
-  private anthropic: Anthropic | null = null;
+  private openai: OpenAI | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -30,9 +30,9 @@ export class FixService {
     private readonly ogTagsGen: OgTagsGenerator,
     private readonly faqSchemaGen: FaqSchemaGenerator,
   ) {
-    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
+    const apiKey = this.config.get<string>('OPENAI_API_KEY');
     if (apiKey) {
-      this.anthropic = new Anthropic({ apiKey });
+      this.openai = new OpenAI({ apiKey });
     }
   }
 
@@ -101,10 +101,10 @@ export class FixService {
     let code: string;
     const language = indicator === 'llms_txt' ? 'text' : 'html';
 
-    if (this.anthropic) {
+    if (this.openai) {
       code = await this.generateWithAi(indicator, site, scanResult.details, html, qas, (site as any).profile);
     } else {
-      this.logger.warn('ANTHROPIC_API_KEY not configured, falling back to template generator');
+      this.logger.warn('OPENAI_API_KEY not configured, falling back to template generator');
       code = this.generateWithTemplate(indicator, site);
     }
 
@@ -128,17 +128,21 @@ export class FixService {
     const prompt = this.buildSmartPrompt(indicator, site, details, html, qas, profile);
 
     try {
-      const response = await this.anthropic!.messages.create({
-        model: 'claude-sonnet-4-20250514',
+      const response = await this.openai!.chat.completions.create({
+        model: 'gpt-4o-mini',
         max_tokens: 4096,
-        system:
-          '你是一位專業的 SEO 工程師。根據網站的實際內容分析並產生修復程式碼。' +
-          '只輸出程式碼本身，不要包含任何說明文字、markdown 標記（如 ```）或其他額外內容。',
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          {
+            role: 'system',
+            content:
+              '你是一位專業的 SEO 工程師。根據網站的實際內容分析並產生修復程式碼。' +
+              '只輸出程式碼本身，不要包含任何說明文字、markdown 標記（如 ```）或其他額外內容。',
+          },
+          { role: 'user', content: prompt },
+        ],
       });
 
-      const textBlock = response.content.find((b) => b.type === 'text');
-      let code = textBlock?.text?.trim() || '';
+      let code = response.choices[0]?.message?.content?.trim() || '';
 
       // Strip markdown code fences if AI accidentally wraps them
       code = code.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim();
@@ -155,7 +159,7 @@ export class FixService {
         errMsg.includes('402')
       ) {
         throw new BadRequestException(
-          `AI API 餘額不足，請確認 Anthropic 帳戶餘額。原始錯誤: ${errMsg.substring(0, 200)}`,
+          `AI API 餘額不足，請確認 OpenAI 帳戶餘額。原始錯誤: ${errMsg.substring(0, 200)}`,
         );
       }
       if (
@@ -166,7 +170,7 @@ export class FixService {
         errMsg.includes('AuthenticationError')
       ) {
         throw new BadRequestException(
-          `AI API 金鑰無效，請確認 ANTHROPIC_API_KEY 並重啟伺服器。原始錯誤: ${errMsg.substring(0, 200)}`,
+          `AI API 金鑰無效，請確認 OPENAI_API_KEY 並重啟伺服器。原始錯誤: ${errMsg.substring(0, 200)}`,
         );
       }
 

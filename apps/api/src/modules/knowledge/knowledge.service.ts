@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateQaDto } from './dto/create-qa.dto';
 import { UpdateQaDto } from './dto/update-qa.dto';
@@ -23,21 +23,21 @@ interface BatchConfig {
 @Injectable()
 export class KnowledgeService {
   private readonly logger = new Logger(KnowledgeService.name);
-  private anthropic: Anthropic | null = null;
+  private openai: OpenAI | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {
-    this.initAnthropicClient();
+    this.initOpenAIClient();
   }
 
-  private initAnthropicClient() {
-    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
+  private initOpenAIClient() {
+    const apiKey = this.config.get<string>('OPENAI_API_KEY');
     if (apiKey) {
-      this.anthropic = new Anthropic({ apiKey });
+      this.openai = new OpenAI({ apiKey });
     } else {
-      this.anthropic = null;
+      this.openai = null;
     }
   }
 
@@ -164,8 +164,8 @@ export class KnowledgeService {
   async aiGenerate(siteId: string, userId: string, excludeQuestions?: string[]): Promise<GeneratedQa[]> {
     const site = await this.verifySiteOwnership(siteId, userId);
 
-    if (!this.anthropic) {
-      throw new BadRequestException('AI 功能未啟用（ANTHROPIC_API_KEY 未設定）');
+    if (!this.openai) {
+      throw new BadRequestException('AI 功能未啟用（OPENAI_API_KEY 未設定）');
     }
 
     // Crawl website for context
@@ -325,7 +325,7 @@ export class KnowledgeService {
       );
       if (isBilling) {
         throw new BadRequestException(
-          `AI API 餘額不足或帳單問題，請確認 Anthropic 帳戶餘額。原始錯誤: ${firstError.substring(0, 200)}`,
+          `AI API 餘額不足或帳單問題，請確認 OpenAI 帳戶餘額。原始錯誤: ${firstError.substring(0, 200)}`,
         );
       }
 
@@ -342,7 +342,7 @@ export class KnowledgeService {
       );
       if (isAuth) {
         throw new BadRequestException(
-          `AI API 金鑰無效或已過期，請確認 ANTHROPIC_API_KEY 是否正確，並重啟伺服器。原始錯誤: ${firstError.substring(0, 200)}`,
+          `AI API 金鑰無效或已過期，請確認 OPENAI_API_KEY 是否正確，並重啟伺服器。原始錯誤: ${firstError.substring(0, 200)}`,
         );
       }
 
@@ -402,18 +402,22 @@ ${batch.focusPrompt}
 
 只輸出 JSON 陣列: [{"question": "...", "answer": "..."}, ...]`;
 
-    const response = await this.anthropic!.messages.create({
-      model: 'claude-sonnet-4-20250514',
+    const response = await this.openai!.chat.completions.create({
+      model: 'gpt-4o-mini',
       max_tokens: 8192,
-      system:
-        `你是 GEO（Generative Engine Optimization）內容策略師，專精於「${batch.label}」面向的知識庫建構。` +
-        '你的目標是生成能被 AI 搜尋引擎（ChatGPT、Claude、Perplexity、Gemini、Copilot）引用的高品質 Q&A。' +
-        '只輸出有效的 JSON 陣列，不要其他文字。',
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        {
+          role: 'system',
+          content:
+            `你是 GEO（Generative Engine Optimization）內容策略師，專精於「${batch.label}」面向的知識庫建構。` +
+            '你的目標是生成能被 AI 搜尋引擎（ChatGPT、Claude、Perplexity、Gemini、Copilot）引用的高品質 Q&A。' +
+            '只輸出有效的 JSON 陣列，不要其他文字。',
+        },
+        { role: 'user', content: prompt },
+      ],
     });
 
-    const textBlock = response.content.find((b) => b.type === 'text');
-    let text = textBlock?.text?.trim() || '[]';
+    let text = response.choices[0]?.message?.content?.trim() || '[]';
     text = text.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim();
 
     try {

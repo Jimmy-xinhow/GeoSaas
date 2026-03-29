@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScanPipelineService } from '../scan/scan-pipeline.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import pLimit from 'p-limit';
 
 interface DiscoveredBusiness {
@@ -317,10 +317,10 @@ export class DiscoveryService {
    * Enrich industry content: search for discussions/reviews and create Q&A.
    */
   async enrichIndustryContent(): Promise<{ created: number }> {
-    const anthropicKey = this.config.get<string>('ANTHROPIC_API_KEY');
-    if (!anthropicKey) return { created: 0 };
+    const openaiKey = this.config.get<string>('OPENAI_API_KEY');
+    if (!openaiKey) return { created: 0 };
 
-    const anthropic = new Anthropic({ apiKey: anthropicKey });
+    const openai = new OpenAI({ apiKey: openaiKey });
     let totalCreated = 0;
 
     // Pick 3 industries to enrich per run
@@ -364,13 +364,13 @@ export class DiscoveryService {
 回覆純 JSON array：[{"q":"問題","a":"答案","siteIndex":0}]
 siteIndex 是答案中最相關的品牌在列表中的索引（0-based），如果沒有特別相關就填 0。`;
 
-      const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }],
       });
 
-      const text = message.content[0].type === 'text' ? message.content[0].text : '';
+      const text = completion.choices[0]?.message?.content || '';
       const start = text.indexOf('[');
       const end = text.lastIndexOf(']') + 1;
 
