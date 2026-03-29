@@ -275,11 +275,22 @@ export default function ClientReportsPage() {
         </p>
       </div>
 
-      {/* Site Selector with Search */}
+      {/* Site Selector: Search + Dropdown */}
       <Card>
         <CardContent className="p-5 space-y-3">
           <div className="flex items-center gap-4">
             <span className="text-sm font-medium shrink-0">選擇客戶：</span>
+            <Select value={selectedSiteId} onValueChange={(v) => { setSelectedSiteId(v); setActiveReportId(''); setSiteSearch(''); }}>
+              <SelectTrigger className="w-[280px]">
+                <SelectValue placeholder="下拉選擇" />
+              </SelectTrigger>
+              <SelectContent>
+                {(sites as any[])?.slice(0, 50).map((s: any) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">或</span>
             <div className="relative flex-1">
               <input
                 type="text"
@@ -318,6 +329,7 @@ export default function ClientReportsPage() {
           )}
           {selectedSiteId && !siteSearch && (
             <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">已選：</span>
               <Badge variant="secondary" className="text-sm">
                 {(sites as any[])?.find((s: any) => s.id === selectedSiteId)?.name}
               </Badge>
