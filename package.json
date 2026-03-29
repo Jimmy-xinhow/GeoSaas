@@ -8,9 +8,9 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "db:generate": "turbo db:generate",
-    "db:migrate": "pnpm --filter @geo-saas/database prisma migrate dev",
-    "db:seed": "pnpm --filter @geo-saas/database prisma db seed",
-    "db:studio": "pnpm --filter @geo-saas/database prisma studio",
+    "db:migrate": "pnpm --filter @geovault/database prisma migrate dev",
+    "db:seed": "pnpm --filter @geovault/database prisma db seed",
+    "db:studio": "pnpm --filter @geovault/database prisma studio",
     "clean": "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {

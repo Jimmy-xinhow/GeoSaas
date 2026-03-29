@@ -124,6 +124,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Prisma migrate deploy
-        run: pnpm --filter @geo-saas/database exec prisma migrate deploy
+        run: pnpm --filter @geovault/database exec prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
