@@ -125,16 +125,14 @@ export class ClientReportService {
           });
         }
 
-        // 2 second delay between API calls
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-
-      // Save progress every 5 questions
-      if ((qi + 1) % 5 === 0 || qi === queries.length - 1) {
+        // Save after every platform call (real-time progress)
         await this.prisma.monitorReport.update({
           where: { id: reportId },
           data: { results: results as any },
         });
+
+        // 2 second delay between API calls
+        await new Promise((r) => setTimeout(r, 2000));
       }
     }
 
