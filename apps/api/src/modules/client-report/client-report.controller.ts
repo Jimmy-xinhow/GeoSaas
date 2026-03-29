@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Body, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
+import { Public } from '../../common/decorators/public.decorator';
 import { ClientReportService } from './client-report.service';
 
 @ApiTags('Client Reports')
@@ -39,6 +40,7 @@ export class ClientReportController {
     return this.service.getReport(reportId);
   }
 
+  @Public()
   @Get('report/:reportId/html')
   @ApiOperation({ summary: 'Get report as HTML (for PDF download)' })
   async getReportHtml(@Param('reportId') reportId: string, @Res() res: Response) {
