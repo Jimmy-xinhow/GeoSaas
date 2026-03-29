@@ -241,6 +241,7 @@ export default function ClientReportsPage() {
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
   const [activeReportId, setActiveReportId] = useState<string>('');
   const [activeQsLength, setActiveQsLength] = useState(0);
+  const [siteSearch, setSiteSearch] = useState('');
 
   const { data: querySets, isLoading: qsLoading } = useClientQuerySets(selectedSiteId);
   const { data: reports } = useSiteReports(selectedSiteId);
@@ -274,22 +275,57 @@ export default function ClientReportsPage() {
         </p>
       </div>
 
-      {/* Site Selector */}
+      {/* Site Selector with Search */}
       <Card>
-        <CardContent className="p-5">
+        <CardContent className="p-5 space-y-3">
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium">選擇客戶：</span>
-            <Select value={selectedSiteId} onValueChange={(v) => { setSelectedSiteId(v); setActiveReportId(''); }}>
-              <SelectTrigger className="w-[300px]">
-                <SelectValue placeholder="選擇客戶網站" />
-              </SelectTrigger>
-              <SelectContent>
-                {(sites as any[])?.map((s: any) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <span className="text-sm font-medium shrink-0">選擇客戶：</span>
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="搜尋客戶名稱或網址..."
+                value={siteSearch}
+                onChange={(e) => setSiteSearch(e.target.value)}
+                className="w-full h-10 px-3 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
+          {siteSearch && (
+            <div className="max-h-[200px] overflow-y-auto border rounded-md divide-y">
+              {(sites as any[])
+                ?.filter((s: any) => {
+                  const q = siteSearch.toLowerCase();
+                  return s.name?.toLowerCase().includes(q) || s.url?.toLowerCase().includes(q);
+                })
+                .slice(0, 20)
+                .map((s: any) => (
+                  <button
+                    key={s.id}
+                    onClick={() => { setSelectedSiteId(s.id); setSiteSearch(''); setActiveReportId(''); }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-gray-900">{s.name}</p>
+                    <p className="text-xs text-gray-500 truncate">{s.url}</p>
+                  </button>
+                ))}
+              {(sites as any[])?.filter((s: any) => {
+                const q = siteSearch.toLowerCase();
+                return s.name?.toLowerCase().includes(q) || s.url?.toLowerCase().includes(q);
+              }).length === 0 && (
+                <p className="p-3 text-sm text-muted-foreground text-center">無符合結果</p>
+              )}
+            </div>
+          )}
+          {selectedSiteId && !siteSearch && (
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-sm">
+                {(sites as any[])?.find((s: any) => s.id === selectedSiteId)?.name}
+              </Badge>
+              <button onClick={() => { setSelectedSiteId(''); setActiveReportId(''); }} className="text-xs text-gray-400 hover:text-red-500">
+                ✕ 清除
+              </button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
