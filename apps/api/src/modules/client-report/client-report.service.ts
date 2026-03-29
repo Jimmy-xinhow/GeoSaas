@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MonitorService } from '../monitor/monitor.service';
 import pLimit from 'p-limit';
@@ -18,13 +18,24 @@ interface ReportResult {
 }
 
 @Injectable()
-export class ClientReportService {
+export class ClientReportService implements OnModuleInit {
   private readonly logger = new Logger(ClientReportService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly monitorService: MonitorService,
   ) {}
+
+  /** On startup, mark any orphaned "running" reports as failed */
+  async onModuleInit() {
+    const orphaned = await this.prisma.monitorReport.updateMany({
+      where: { status: 'running' },
+      data: { status: 'failed' },
+    });
+    if (orphaned.count > 0) {
+      this.logger.warn(`Marked ${orphaned.count} orphaned running report(s) as failed`);
+    }
+  }
 
   /** Create or update a client query set */
   async upsertQuerySet(siteId: string, name: string, queries: QueryItem[]) {
