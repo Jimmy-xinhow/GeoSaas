@@ -508,6 +508,76 @@ export class BlogArticleService {
   }
 
   /**
+   * Cron: 每天凌晨 4 點，逐步重新生成格式不佳的舊文章（每天 5 篇）
+   * 判斷標準：缺少表格、缺少列表、缺少 FAQ 格式
+   */
+  @Cron('0 4 * * *', { name: 'article-format-refresh' })
+  async scheduledFormatRefresh(): Promise<void> {
+    this.logger.log('Starting article format refresh...');
+
+    const articles = await this.prisma.blogArticle.findMany({
+      where: {
+        published: true,
+        siteId: { not: undefined },
+        templateType: { not: undefined },
+      },
+      include: {
+        site: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'asc' }, // oldest first
+    });
+
+    // Find articles with poor formatting
+    const poorFormat = articles.filter((a) => {
+      const c = a.content || '';
+      const hasTable = c.includes('|---');
+      const hasList = (c.match(/^[-*]\s|^\d+\.\s/gm) || []).length >= 3;
+      const hasFaqFormat = c.includes('**Q:') || c.includes('**Q：');
+      // Poor if missing 2+ of these
+      const missing = [!hasTable, !hasList, !hasFaqFormat].filter(Boolean).length;
+      return missing >= 2;
+    });
+
+    if (poorFormat.length === 0) {
+      this.logger.log('No articles need format refresh');
+      return;
+    }
+
+    // Take 5 per day
+    const batch = poorFormat.slice(0, 5);
+    this.logger.log(`Found ${poorFormat.length} articles with poor formatting, refreshing ${batch.length}`);
+
+    for (const article of batch) {
+      if (!article.siteId || !article.templateType) continue;
+      try {
+        // Delete old article
+        await this.prisma.blogArticle.delete({ where: { id: article.id } });
+        this.logger.log(`Deleted old article: ${article.slug} (${article.site?.name})`);
+      } catch (err) {
+        this.logger.warn(`Failed to delete ${article.slug}: ${err}`);
+      }
+    }
+
+    // Regenerate for affected sites (deduped)
+    const siteIds = [...new Set(batch.map((a) => a.siteId).filter(Boolean))] as string[];
+    const limit = pLimit(2);
+
+    await Promise.all(
+      siteIds.map((siteId) =>
+        limit(async () => {
+          try {
+            await this.generateArticlesForSite(siteId);
+          } catch (err) {
+            this.logger.warn(`Failed to regenerate for site ${siteId}: ${err}`);
+          }
+        }),
+      ),
+    );
+
+    this.logger.log(`Format refresh complete: refreshed ${batch.length} articles`);
+  }
+
+  /**
    * Quality audit: scan all articles, delete those below threshold.
    */
   async qualityAudit(minScore: number = 85) {
