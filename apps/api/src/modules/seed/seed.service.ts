@@ -39,11 +39,51 @@ export class SeedService {
       _count: true,
     });
 
-    const [crawlerTotal, crawlerReal, crawlerSeeded] = await Promise.all([
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [
+      crawlerTotal, crawlerReal, crawlerSeeded,
+      real24h, seeded24h, real7d, seeded7d,
+    ] = await Promise.all([
       this.prisma.crawlerVisit.count(),
       this.prisma.crawlerVisit.count({ where: { isSeeded: false } }),
       this.prisma.crawlerVisit.count({ where: { isSeeded: true } }),
+      this.prisma.crawlerVisit.count({ where: { isSeeded: false, visitedAt: { gte: twentyFourHoursAgo } } }),
+      this.prisma.crawlerVisit.count({ where: { isSeeded: true, visitedAt: { gte: twentyFourHoursAgo } } }),
+      this.prisma.crawlerVisit.count({ where: { isSeeded: false, visitedAt: { gte: sevenDaysAgo } } }),
+      this.prisma.crawlerVisit.count({ where: { isSeeded: true, visitedAt: { gte: sevenDaysAgo } } }),
     ]);
+
+    // Bot breakdown: real vs seeded per bot
+    const [realByBot, seededByBot] = await Promise.all([
+      this.prisma.crawlerVisit.groupBy({
+        by: ['botName'],
+        where: { isSeeded: false },
+        _count: true,
+        orderBy: { _count: { botName: 'desc' } },
+      }),
+      this.prisma.crawlerVisit.groupBy({
+        by: ['botName'],
+        where: { isSeeded: true },
+        _count: true,
+        orderBy: { _count: { botName: 'desc' } },
+      }),
+    ]);
+
+    // Recent real visits (last 20)
+    const recentRealVisits = await this.prisma.crawlerVisit.findMany({
+      where: { isSeeded: false },
+      orderBy: { visitedAt: 'desc' },
+      take: 20,
+      select: {
+        botName: true,
+        botOrg: true,
+        visitedAt: true,
+        statusCode: true,
+        site: { select: { name: true, url: true } },
+      },
+    });
 
     const blogCount = await this.prisma.blogArticle.count({ where: { published: true } });
 
@@ -58,6 +98,13 @@ export class SeedService {
         total: crawlerTotal,
         real: crawlerReal,
         seeded: crawlerSeeded,
+        real24h,
+        seeded24h,
+        real7d,
+        seeded7d,
+        realByBot: realByBot.map((b: any) => ({ bot: b.botName, count: b._count })),
+        seededByBot: seededByBot.map((b: any) => ({ bot: b.botName, count: b._count })),
+        recentRealVisits,
       },
       blogArticles: blogCount,
     };
