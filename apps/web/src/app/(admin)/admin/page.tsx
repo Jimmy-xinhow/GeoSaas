@@ -62,7 +62,10 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
 
-  const fetchStats = async () => {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchStats = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
     try {
       const [dirRes, articleRes, seedRes] = await Promise.all([
         apiClient.get('/directory?limit=1'),
@@ -82,6 +85,7 @@ export default function AdminDashboard() {
       console.error('Failed to fetch stats:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -128,8 +132,9 @@ export default function AdminDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">管理後台</h1>
           <p className="text-sm text-gray-500 mt-1">Geovault 系統總覽與操作中心</p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchStats}>
-          <RefreshCw className="h-4 w-4 mr-1" /> 刷新
+        <Button variant="outline" size="sm" onClick={() => fetchStats(true)} disabled={refreshing}>
+          <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? '刷新中...' : '刷新'}
         </Button>
       </div>
 

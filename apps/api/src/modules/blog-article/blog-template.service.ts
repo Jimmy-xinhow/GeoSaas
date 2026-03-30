@@ -27,12 +27,43 @@ interface IndustryData {
   totalSites?: number;
 }
 
+const FORMAT_RULES = `
+
+【格式規範 — 必須嚴格遵守】
+1. 使用繁體中文
+2. 使用 Markdown 格式，必須包含：
+   - ## 和 ### 標題層級
+   - **粗體**強調關鍵詞
+   - 用 - 或 1. 2. 3. 做條列式重點（不要寫成長段落）
+   - 重要數據用 \`行內代碼\` 標示（例如 \`GEO 分數 72/100\`）
+3. FAQ 必須用以下格式（每題之間空行分隔）：
+   **Q: 問題內容？**
+   A: 回答內容，簡潔有力，2-3 句即可。
+
+4. 如果有比較數據，使用 Markdown 表格：
+   | 指標 | 狀態 | 說明 |
+   |------|------|------|
+   | JSON-LD | ✓ 通過 | 結構化資料完善 |
+
+5. 每個段落不要超過 3-4 句。長內容一律拆成條列式。
+6. 不要使用「首先」「其次」「最後」等老套過渡詞，直接講重點。
+7. 不要出現「在這篇文章中」「讓我們」「接下來」等廢話。
+8. 文末標注：*資料來源：[Geovault](https://geovault.app) 平台 GEO 掃描數據*
+`;
+
 @Injectable()
 export class BlogTemplateService {
   buildPrompt(type: TemplateType, site: SiteData, scan: ScanData, industry?: IndustryData): string {
-    const indicatorStatus = Object.entries(scan.indicators)
-      .map(([name, v]) => `- ${name}：${v.status === 'pass' ? '✓ 通過' : v.status === 'warning' ? '⚠ 警告' : '✗ 未通過'}（${v.score} 分）`)
-      .join('\n');
+    const passed = Object.entries(scan.indicators).filter(([, v]) => v.status === 'pass');
+    const failed = Object.entries(scan.indicators).filter(([, v]) => v.status === 'fail');
+    const warned = Object.entries(scan.indicators).filter(([, v]) => v.status === 'warning');
+
+    const indicatorTable = `
+| 指標 | 狀態 | 分數 |
+|------|------|------|
+${Object.entries(scan.indicators)
+  .map(([name, v]) => `| ${name} | ${v.status === 'pass' ? '✓ 通過' : v.status === 'warning' ? '⚠ 警告' : '✗ 未通過'} | ${v.score} |`)
+  .join('\n')}`;
 
     const baseContext = `
 網站名稱：${site.name}
@@ -40,128 +71,254 @@ export class BlogTemplateService {
 行業：${site.industry || '未分類'}
 GEO 分數：${scan.geoScore}/100（等級：${scan.level}）
 掃描時間：${scan.scannedAt.toLocaleDateString('zh-TW')}
+通過指標數：${passed.length}/${Object.keys(scan.indicators).length}
+未通過指標：${failed.map(([n]) => n).join('、') || '無'}
+警告指標：${warned.map(([n]) => n).join('、') || '無'}
 
-各項指標狀態：
-${indicatorStatus}
+各項指標明細：
+${indicatorTable}
 `;
 
     const prompts: Record<TemplateType, string> = {
-      geo_overview: `你是一位 GEO（Generative Engine Optimization）專家。請根據以下網站資料，撰寫一篇 800–1000 字的繁體中文分析文章。
+      geo_overview: `你是 GEO（Generative Engine Optimization）專家，為品牌撰寫 AI 搜尋能見度分析。
 
 ${baseContext}
 
-文章結構要求：
+請撰寫一篇 800-1000 字的繁體中文分析文章，結構如下：
+
 ## ${site.name} 的 AI 搜尋能見度全面分析
 
-### GEO 評分總覽
-### 優勢項目
-### 待改善項目
-### 改善後的預期效果
-### 常見問題
-Q: 什麼是 GEO 分數？
-Q: ${site.name} 如何提升 AI 搜尋能見度？
-Q: 多久能看到 GEO 優化的效果？
-### 延伸閱讀
+### 📊 GEO 評分總覽
+- 用一個表格呈現分數、等級、通過率
+- 用 2-3 句說明這個分數在 AI 搜尋中代表什麼
 
-要求：文章語氣專業但易讀，包含具體數據，避免空泛建議。`,
+### ✅ 優勢項目
+- 條列式列出每個通過的指標，**每個指標用一句話說明它如何幫助 AI 找到這個網站**
 
-      score_breakdown: `你是一位 GEO 技術顧問。請根據以下資料，撰寫一篇 900–1100 字的深度指標解析文章。
+### ❌ 待改善項目
+- 條列式列出未通過的指標，**每個指標用一句話說明缺失的影響**
+- 用表格列出：指標名稱 | 目前狀態 | 改善建議 | 預估影響
+
+### 📈 改善後的預期效果
+- 用具體數字描述（例如：預估分數可從 ${scan.geoScore} 提升至 XX 分）
+- 列出 3 個改善後的具體好處
+
+### ❓ 常見問題
+
+**Q: 什麼是 GEO 分數？**
+A: （2-3 句回答）
+
+**Q: ${site.name} 如何提升 AI 搜尋能見度？**
+A: （根據缺失指標，列出 3 個具體步驟）
+
+**Q: 多久能看到 GEO 優化的效果？**
+A: （實際的時間預估）
+
+**Q: GEO 和 SEO 有什麼不同？**
+A: （簡短比較）
+${FORMAT_RULES}`,
+
+      score_breakdown: `你是 GEO 技術顧問，為品牌做深度指標解析。
 
 ${baseContext}
 
-文章結構：
-## ${site.name} 的 GEO 8 項指標深度解析
+請撰寫一篇 900-1100 字的繁體中文深度解析文章：
 
-逐一說明每個指標對 AI 搜尋的重要性及該網站現況。
+## ${site.name} 的 GEO 指標深度解析
 
-### 優化優先順序建議
-### 常見問題
-Q: 哪個指標對 GEO 分數影響最大？
-Q: ${site.name} 最應該優先修復哪個指標？
-Q: llms.txt 是什麼？為什麼重要？`,
+### 指標總覽
+用表格呈現所有指標的狀態、分數、權重和簡短說明。
 
-      competitor_comparison: `你是一位市場分析師。請根據以下資料，撰寫一篇 800–1000 字的同行比較分析文章。
+### 逐項分析
+**對每個指標獨立分析**，每個指標包含：
+- 指標名稱 + 目前狀態（用 ✓ 或 ✗）
+- 這個指標的用途（1 句）
+- ${site.name} 的現況（1-2 句）
+- 如果未通過，修復方法（用程式碼區塊或具體步驟）
+
+### 🎯 優化優先順序
+用**編號列表**排出修復順序，格式：
+1. **指標名稱** — 修復原因 — 預估影響分數
+
+### ❓ 常見問題
+
+**Q: 哪個指標對 GEO 分數影響最大？**
+A: （回答）
+
+**Q: ${site.name} 最應該優先修復哪個指標？**
+A: （根據權重和難度回答）
+
+**Q: llms.txt 是什麼？為什麼重要？**
+A: （技術性但易懂的回答）
+
+**Q: robots.txt 如何影響 AI 爬蟲？**
+A: （回答，提到 Cloudflare 的影響）
+${FORMAT_RULES}`,
+
+      competitor_comparison: `你是市場分析師，為品牌做行業 AI 搜尋競爭力分析。
 
 ${baseContext}
 行業平均分數：${industry?.avgScore || '未知'}
 行業收錄網站數：${industry?.totalSites || '未知'}
 
-文章結構：
+請撰寫一篇 800-1000 字的繁體中文競爭分析文章：
+
 ## ${site.name} 在 ${site.industry || '同行業'} 中的 AI 搜尋競爭力分析
 
-### 行業 GEO 整體現況
-### ${site.name} 的競爭位置
-### 領先項目
-### 落後項目
-### 趕上行業頂尖的行動建議
-### 常見問題`,
+### 📊 行業 GEO 現況
+用表格呈現：
+| 項目 | 數值 |
+|------|------|
+| 行業收錄品牌數 | ${industry?.totalSites || 'N/A'} |
+| 行業平均 GEO 分數 | ${industry?.avgScore || 'N/A'} |
+| ${site.name} 的 GEO 分數 | ${scan.geoScore} |
+| 與行業平均差距 | ${industry?.avgScore ? (scan.geoScore - industry.avgScore) + ' 分' : 'N/A'} |
 
-      improvement_tips: `你是一位 GEO 實作顧問。請根據以下資料，撰寫一篇 800–1000 字的具體改善指南。
+### 🏆 ${site.name} 的競爭位置
+- ${scan.geoScore > (industry?.avgScore || 0) ? '高於' : '低於'}行業平均，分析原因
+
+### ✅ 領先同行的項目
+- 條列式，每項一句說明
+
+### ⚠️ 落後同行的項目
+- 條列式，每項一句說明 + 改善建議
+
+### 🚀 趕上行業頂尖的行動計劃
+用編號列表，每步包含：具體行動 + 預估時間 + 預期效果
+
+### ❓ 常見問題
+
+**Q: ${site.industry || '這個行業'} 平均 GEO 分數是多少？**
+A: （回答）
+
+**Q: 如何超越同行的 AI 搜尋能見度？**
+A: （3 個具體策略）
+
+**Q: 為什麼同行業中 AI 引用差異這麼大？**
+A: （分析原因）
+${FORMAT_RULES}`,
+
+      improvement_tips: `你是 GEO 實作顧問，為品牌撰寫具體可執行的改善指南。
 
 ${baseContext}
 
-文章結構：
-## ${site.name} 的 GEO 優化實作指南：從 ${scan.geoScore} 分到滿分的步驟
+請撰寫一篇 800-1000 字的繁體中文改善指南：
 
-### 現況診斷
-### 立即可做的改善（0–1 天）
-### 需要規劃的改善（1–7 天）
-### 長期優化策略（7 天以上）
-### 預期成效時間表
-### 常見問題`,
+## ${site.name} 的 GEO 優化實作指南：從 ${scan.geoScore} 分邁向高分
 
-      industry_benchmark: `你是一位產業分析師。請根據以下資料，撰寫一篇 900–1100 字的行業基準報告。
+### 📋 現況診斷
+用表格呈現目前各指標狀態和改善空間。
+
+### ⚡ 立即可做的改善（0-1 天）
+針對最容易修復的指標，**給出具體程式碼範例**：
+- 每個改善項用獨立的小標題
+- 包含可以直接複製貼上的程式碼（用 \`\`\` 包裹）
+- 說明貼在哪裡
+
+### 📝 需要規劃的改善（1-7 天）
+- 條列式，每項包含：做什麼 + 怎麼做 + 為什麼重要
+
+### 🎯 長期優化策略（7 天以上）
+- 條列式，偏向內容策略和持續優化方向
+
+### 📅 預期成效時間表
+用表格呈現：
+| 時間 | 預估分數 | 主要改善項目 |
+|------|----------|-------------|
+| 現在 | ${scan.geoScore} | — |
+| 1 天後 | XX | 修復 OG Tags、Meta Description |
+| ...  | ... | ... |
+
+### ❓ 常見問題
+
+**Q: 修復這些問題需要技術背景嗎？**
+A: （回答，區分不同難度）
+
+**Q: GEO 優化和 SEO 可以同時進行嗎？**
+A: （回答）
+
+**Q: 改善後多久會被 ChatGPT/Claude 引用？**
+A: （實際時間預估）
+${FORMAT_RULES}`,
+
+      industry_benchmark: `你是產業分析師，為行業撰寫 AI 搜尋優化基準報告。
 
 ${baseContext}
 行業平均分數：${industry?.avgScore || '未知'}
 行業收錄網站數：${industry?.totalSites || '未知'}
 
-文章結構：
-## ${site.industry || '未分類'} 行業 AI 搜尋優化基準報告：以 ${site.name} 為例
+請撰寫一篇 900-1100 字的繁體中文行業基準報告：
 
-### 行業概覽
-### 本次分析對象：${site.name}
-### 行業 GEO 現況
-### 達到行業最高標準的條件
-### 給 ${site.industry || '同行業'} 業者的建議
-### 常見問題`,
+## ${site.industry || '未分類'} 行業 AI 搜尋優化基準報告
 
-      brand_reputation: `你是一位品牌分析師兼 AI 搜尋專家。請根據以下網站資料，撰寫一篇 800–1000 字的品牌口碑與 AI 能見度分析文章。
+### 📊 行業概覽
+用表格呈現行業關鍵數據（品牌數、平均分、最高分等）
+
+### 🔍 分析對象：${site.name}
+- 用表格對比 ${site.name} 與行業平均
+
+### 📈 行業 GEO 指標通過率
+用表格呈現每個指標在行業中的平均通過率
+
+### 🏅 達到行業最高標準的條件
+- 編號列表，每項具體可執行
+
+### 💡 給 ${site.industry || '同行業'} 業者的建議
+- 分為「基礎」「進階」「高階」三個層次
+- 每層 2-3 個具體建議
+
+### ❓ 常見問題
+
+**Q: ${site.industry || '這個行業'} 需要特別注意哪些 GEO 指標？**
+A: （回答）
+
+**Q: AI 如何理解和推薦 ${site.industry || '這類'} 網站？**
+A: （回答）
+
+**Q: 小品牌如何在 AI 搜尋中與大品牌競爭？**
+A: （回答）
+${FORMAT_RULES}`,
+
+      brand_reputation: `你是品牌分析師兼 AI 搜尋專家，為品牌撰寫口碑與 AI 能見度分析。
 
 ${baseContext}
 
-文章結構：
+請撰寫一篇 800-1000 字的繁體中文品牌分析文章：
+
 ## ${site.name} 品牌口碑與 AI 搜尋能見度分析
 
-### 品牌概述
-（介紹 ${site.name} 的品牌定位、核心業務、在台灣市場的地位）
+### 🏢 品牌概述
+- 介紹品牌定位、核心業務（2-3 句）
 
-### AI 搜尋中的品牌印象
-（分析 AI 搜尋引擎如何理解和呈現這個品牌，基於其 GEO 分數 ${scan.geoScore} 分）
+### 🤖 AI 搜尋中的品牌印象
+- 基於 GEO 分數 \`${scan.geoScore}/100\`，分析 AI 如何看待這個品牌
+- 用表格呈現各 AI 平台（ChatGPT、Claude、Perplexity）可能的引用狀況
 
-### 品牌的 AI 可讀性優勢
-（根據通過的指標，說明品牌哪些方面已經對 AI 友善）
+### ✅ 品牌的 AI 可讀性優勢
+- 條列式，每個通過的指標用一句話說明對品牌的好處
 
-### 消費者最常問 AI 的問題
-（推測消費者會問 AI 關於 ${site.name} 的 5 個問題，並說明目前 AI 能否正確回答）
+### 🔍 消費者最常問 AI 的 5 個問題
+用編號列表，每題包含：
+1. **問題** — AI 目前能否正確回答（能/不能/部分）— 原因
 
-### 品牌聲譽與 AI 推薦的關聯
-（分析品牌線上聲譽如何影響 AI 推薦意願）
+### 📊 品牌聲譽與 AI 推薦的關聯
+- 分析品牌線上聲譽如何影響 AI 推薦意願
+- 用表格呈現影響因素
 
-### 提升 AI 引用率的品牌策略
-（3 個具體可執行的建議）
+### 🚀 提升 AI 引用率的品牌策略
+用編號列表，3 個具體可執行的建議
 
-### 常見問題
-Q: AI 搜尋引擎如何看待 ${site.name}？
+### ❓ 常見問題
+
+**Q: AI 搜尋引擎如何看待 ${site.name}？**
 A: （根據 GEO 分數回答）
 
-Q: ${site.name} 被 ChatGPT/Claude/Copilot 推薦的機率高嗎？
+**Q: ${site.name} 被 AI 推薦的機率高嗎？**
 A: （根據指標狀態回答）
 
-Q: 如何讓 AI 更準確地描述 ${site.name}？
+**Q: 如何讓 AI 更準確地描述 ${site.name}？**
 A: （具體建議）
-
-要求：語氣客觀專業，引用具體的 GEO 分數和指標數據，避免主觀臆斷。數據來源標注為「Geovault 平台數據」。`,
+${FORMAT_RULES}`,
     };
 
     return prompts[type];
