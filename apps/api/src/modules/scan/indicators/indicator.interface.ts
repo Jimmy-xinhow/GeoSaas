@@ -20,4 +20,5 @@ export interface AnalysisInput {
   $: cheerio.CheerioAPI;
   headers: Record<string, string>;
   llmsTxt?: string | null;
+  robotsTxt?: string | null;
 }

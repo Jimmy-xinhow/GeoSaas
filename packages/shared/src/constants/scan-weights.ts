@@ -9,4 +9,5 @@ export const SCAN_WEIGHTS: Record<ScanIndicator, number> = {
   [ScanIndicator.TITLE_OPTIMIZATION]: 10,
   [ScanIndicator.CONTACT_INFO]: 10,
   [ScanIndicator.IMAGE_ALT]: 10,
+  [ScanIndicator.ROBOTS_AI]: 15,
 };

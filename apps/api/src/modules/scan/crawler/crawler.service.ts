@@ -26,6 +26,21 @@ export class CrawlerService {
     }
   }
 
+  async fetchRobotsTxt(url: string): Promise<string | null> {
+    try {
+      const base = new URL(url);
+      const robotsUrl = `${base.protocol}//${base.host}/robots.txt`;
+      const res = await fetch(robotsUrl, {
+        headers: { 'User-Agent': 'GEO-SaaS-Scanner/1.0 (+https://geovault.app/bot)' },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) return res.text();
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   async fetchLlmsTxt(url: string): Promise<string | null> {
     try {
       // Try 1: same directory as the URL (for subdirectory sites like GitHub Pages)

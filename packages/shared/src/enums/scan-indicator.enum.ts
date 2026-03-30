@@ -7,6 +7,7 @@ export enum ScanIndicator {
   TITLE_OPTIMIZATION = 'title_optimization',
   CONTACT_INFO = 'contact_info',
   IMAGE_ALT = 'image_alt',
+  ROBOTS_AI = 'robots_ai',
 }
 
 export const ScanIndicatorLabel: Record<ScanIndicator, string> = {
@@ -18,4 +19,5 @@ export const ScanIndicatorLabel: Record<ScanIndicator, string> = {
   [ScanIndicator.TITLE_OPTIMIZATION]: '頁面標題優化',
   [ScanIndicator.CONTACT_INFO]: '聯絡資訊完整度',
   [ScanIndicator.IMAGE_ALT]: '圖片 ALT 標籤',
+  [ScanIndicator.ROBOTS_AI]: 'robots.txt AI 爬蟲政策',
 };

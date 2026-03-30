@@ -11,6 +11,7 @@ import { FaqSchemaIndicator } from './indicators/faq-schema.indicator';
 import { TitleOptimizationIndicator } from './indicators/title-optimization.indicator';
 import { ContactInfoIndicator } from './indicators/contact-info.indicator';
 import { ImageAltIndicator } from './indicators/image-alt.indicator';
+import { RobotsAiIndicator } from './indicators/robots-ai.indicator';
 import { IIndicatorAnalyzer, IndicatorResult, AnalysisInput } from './indicators/indicator.interface';
 import { BadgeService } from '../badge/badge.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
@@ -33,6 +34,7 @@ export class ScanPipelineService {
     private readonly titleOptimization: TitleOptimizationIndicator,
     private readonly contactInfo: ContactInfoIndicator,
     private readonly imageAlt: ImageAltIndicator,
+    private readonly robotsAi: RobotsAiIndicator,
     private readonly badgeService: BadgeService,
     private readonly indexNowService: IndexNowService,
   ) {
@@ -45,6 +47,7 @@ export class ScanPipelineService {
       this.titleOptimization,
       this.contactInfo,
       this.imageAlt,
+      this.robotsAi,
     ];
   }
 
@@ -62,10 +65,11 @@ export class ScanPipelineService {
     });
 
     try {
-      // Step 1: Crawl the page and fetch llms.txt in parallel
-      const [crawlResult, llmsTxtContent] = await Promise.all([
+      // Step 1: Crawl the page, fetch llms.txt and robots.txt in parallel
+      const [crawlResult, llmsTxtContent, robotsTxtContent] = await Promise.all([
         this.crawler.crawl(url),
         this.crawler.fetchLlmsTxt(url),
+        this.crawler.fetchRobotsTxt(url),
       ]);
 
       // Step 2: Parse the HTML
@@ -76,6 +80,7 @@ export class ScanPipelineService {
         $,
         headers: crawlResult.headers,
         llmsTxt: llmsTxtContent,
+        robotsTxt: robotsTxtContent,
       };
 
       // Step 3: Run all indicators, handling errors individually
@@ -197,9 +202,10 @@ export class ScanPipelineService {
   }> {
     this.logger.log(`Starting guest scan for ${url}`);
 
-    const [crawlResult, llmsTxtContent] = await Promise.all([
+    const [crawlResult, llmsTxtContent, robotsTxtContent] = await Promise.all([
       this.crawler.crawl(url),
       this.crawler.fetchLlmsTxt(url),
+      this.crawler.fetchRobotsTxt(url),
     ]);
 
     const $ = this.parser.load(crawlResult.html);
@@ -209,6 +215,7 @@ export class ScanPipelineService {
       $,
       headers: crawlResult.headers,
       llmsTxt: llmsTxtContent,
+      robotsTxt: robotsTxtContent,
     };
 
     const resultsMap = new Map<string, IndicatorResult>();

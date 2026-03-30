@@ -17,6 +17,7 @@ import { FaqSchemaIndicator } from './indicators/faq-schema.indicator';
 import { TitleOptimizationIndicator } from './indicators/title-optimization.indicator';
 import { ContactInfoIndicator } from './indicators/contact-info.indicator';
 import { ImageAltIndicator } from './indicators/image-alt.indicator';
+import { RobotsAiIndicator } from './indicators/robots-ai.indicator';
 
 const indicatorProviders = [
   JsonLdIndicator,
@@ -27,6 +28,7 @@ const indicatorProviders = [
   TitleOptimizationIndicator,
   ContactInfoIndicator,
   ImageAltIndicator,
+  RobotsAiIndicator,
 ];
 
 const coreProviders = [
