@@ -118,7 +118,7 @@ export class DirectoryService {
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
-      take: 10,
+      take: 30,
     });
   }
 
