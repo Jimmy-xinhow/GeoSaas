@@ -53,8 +53,8 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 
-# Ensure public dir exists (may be empty)
-RUN mkdir -p ./apps/web/public
+# Copy public assets (logos, favicon, etc.)
+COPY --from=builder /app/apps/web/public ./apps/web/public
 
 USER nextjs
 
