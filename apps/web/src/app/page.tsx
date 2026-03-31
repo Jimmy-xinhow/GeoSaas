@@ -215,54 +215,18 @@ function CrawlerMarquee() {
   )
 }
 
-/* ─── AI Platform SVG Logos ─── */
-function ChatGPTLogo({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" />
-    </svg>
-  )
+/* ─── AI Platform Logo (image-based) ─── */
+function PlatformLogo({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  return <img src={src} alt={alt} className={cn('object-contain rounded-lg', className)} />
 }
 
-function ClaudeLogo({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M4.603 15.477l5.397-6.985L4.603 1.5h2.794l3.603 4.66L14.603 1.5h2.794l-5.397 6.992 5.397 6.985h-2.794L11 10.817l-3.603 4.66H4.603z" transform="translate(1 4) scale(0.92)" />
-    </svg>
-  )
-}
-
-function PerplexityLogo({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M7.38 3.162L12 .845l4.62 2.317V7.69L12 10.008 7.38 7.69V3.162zM2.76 8.535L7.38 6.218v4.527L12 13.062v4.527l-4.62 2.317-4.62-2.317V8.535zm18.48 0v9.054l-4.62 2.317L12 17.59v-4.527l4.62-2.317V6.218l4.62 2.317z" />
-    </svg>
-  )
-}
-
-function GeminiLogo({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M12 24A14.304 14.304 0 0 0 12 0a14.304 14.304 0 0 0 0 24zM12 24c0-7.902-6.098-14-14-14M12 24c0-7.902 6.098-14 14-14M12 0C12 7.902 5.902 14 0 14M12 0c0 7.902 6.098 14 12 14" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-function CopilotLogo({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M23.922 12.153c-.1-2.725-1.346-5.32-3.503-7.29C18.263 2.894 15.42 1.832 12.47 1.832h-.94C8.58 1.832 5.737 2.894 3.58 4.864 1.424 6.833.178 9.428.078 12.153c-.052 1.423.197 2.823.73 4.113a10.202 10.202 0 0 0 2.263 3.396l.4.394a1.468 1.468 0 0 0 1.058.441h.008c.397 0 .78-.16 1.058-.445l.573-.574a1.48 1.48 0 0 0 .366-1.488 5.038 5.038 0 0 1-.195-1.388c0-1.328.517-2.578 1.456-3.52A4.965 4.965 0 0 1 9.35 12.04c.22-.035.443-.054.67-.054h3.96c.227 0 .45.019.67.054a4.965 4.965 0 0 1 3.555 1.442 4.954 4.954 0 0 1 1.456 3.52c0 .473-.067.94-.195 1.388a1.48 1.48 0 0 0 .366 1.488l.573.574a1.498 1.498 0 0 0 2.124-.004l.393-.386a10.202 10.202 0 0 0 2.263-3.396c.533-1.29.782-2.69.73-4.113z" />
-    </svg>
-  )
-}
-
-/* Platform data with logos */
+/* Platform data with image paths */
 const aiPlatforms = [
-  { name: 'ChatGPT', color: 'from-green-400 to-green-600', bg: 'bg-[#10a37f]', Logo: ChatGPTLogo },
-  { name: 'Claude', color: 'from-orange-400 to-orange-600', bg: 'bg-[#d97757]', Logo: ClaudeLogo },
-  { name: 'Perplexity', color: 'from-blue-400 to-blue-600', bg: 'bg-[#1a73e8]', Logo: PerplexityLogo },
-  { name: 'Gemini', color: 'from-purple-400 to-purple-600', bg: 'bg-[#8e44ef]', Logo: GeminiLogo },
-  { name: 'Copilot', color: 'from-cyan-400 to-cyan-600', bg: 'bg-[#0078d4]', Logo: CopilotLogo },
+  { name: 'ChatGPT', color: 'from-green-400 to-green-600', bg: 'bg-[#10a37f]', logo: '/logos/chatgpt.png' },
+  { name: 'Claude', color: 'from-orange-400 to-orange-600', bg: 'bg-[#d97757]', logo: '/logos/claude.jpg' },
+  { name: 'Perplexity', color: 'from-blue-400 to-blue-600', bg: 'bg-[#1a73e8]', logo: '/logos/perplexity.png' },
+  { name: 'Gemini', color: 'from-purple-400 to-purple-600', bg: 'bg-[#8e44ef]', logo: '/logos/gemini.jpg' },
+  { name: 'Copilot', color: 'from-cyan-400 to-cyan-600', bg: 'bg-[#0078d4]', logo: '/logos/copilot.jpg' },
 ]
 
 /* ─── Pricing Data ─── */
@@ -385,7 +349,7 @@ export default function LandingPage() {
           <div className="flex items-center justify-center gap-3 mb-8 flex-wrap">
             {aiPlatforms.map((p) => (
               <span key={p.name} className={cn('inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gradient-to-r text-white shadow-lg', p.color)}>
-                <p.Logo className="h-3.5 w-3.5" />
+                <PlatformLogo src={p.logo} alt={p.name} className="h-3.5 w-3.5" />
                 {p.name}
               </span>
             ))}
@@ -499,7 +463,7 @@ export default function LandingPage() {
               </div>
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-lg bg-[#10a37f]/20 flex items-center justify-center">
-                  <ChatGPTLogo className="h-5 w-5 text-[#10a37f]" />
+                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-5 w-5" />
                 </div>
                 <h3 className="text-lg font-semibold">AI 搜尋</h3>
               </div>
@@ -666,7 +630,7 @@ export default function LandingPage() {
               <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <div className="w-4 h-4 rounded bg-[#10a37f]/20 flex items-center justify-center">
-                    <ChatGPTLogo className="h-2.5 w-2.5 text-[#10a37f]" />
+                    <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-2.5 w-2.5" />
                   </div>
                   <span className="text-[10px] text-green-400 font-medium">ChatGPT 回覆</span>
                 </div>
@@ -676,10 +640,10 @@ export default function LandingPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <ChatGPTLogo className="h-3 w-3" />ChatGPT
+                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-3 w-3" />ChatGPT
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PerplexityLogo className="h-3 w-3" />Perplexity
+                  <PlatformLogo src="/logos/perplexity.png" alt="Perplexity" className="h-3 w-3" />Perplexity
                 </span>
                 <span className="text-[10px] text-gray-500 ml-auto">產業排名 #1</span>
               </div>
@@ -701,7 +665,7 @@ export default function LandingPage() {
               <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <div className="w-4 h-4 rounded bg-[#d97757]/20 flex items-center justify-center">
-                    <ClaudeLogo className="h-2.5 w-2.5 text-[#d97757]" />
+                    <PlatformLogo src="/logos/claude.jpg" alt="Claude" className="h-2.5 w-2.5" />
                   </div>
                   <span className="text-[10px] text-orange-400 font-medium">Claude 回覆</span>
                 </div>
@@ -711,10 +675,10 @@ export default function LandingPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <ChatGPTLogo className="h-3 w-3" />ChatGPT
+                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-3 w-3" />ChatGPT
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <ClaudeLogo className="h-3 w-3" />Claude
+                  <PlatformLogo src="/logos/claude.jpg" alt="Claude" className="h-3 w-3" />Claude
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] text-blue-400 ml-auto">
                   <TrendingUp className="h-3 w-3" />+305%
@@ -738,7 +702,7 @@ export default function LandingPage() {
               <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <div className="w-4 h-4 rounded bg-[#1a73e8]/20 flex items-center justify-center">
-                    <PerplexityLogo className="h-2.5 w-2.5 text-[#1a73e8]" />
+                    <PlatformLogo src="/logos/perplexity.png" alt="Perplexity" className="h-2.5 w-2.5" />
                   </div>
                   <span className="text-[10px] text-blue-400 font-medium">Perplexity 回覆</span>
                 </div>
@@ -748,10 +712,10 @@ export default function LandingPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PerplexityLogo className="h-3 w-3" />Perplexity
+                  <PlatformLogo src="/logos/perplexity.png" alt="Perplexity" className="h-3 w-3" />Perplexity
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <GeminiLogo className="h-3 w-3" />Gemini
+                  <PlatformLogo src="/logos/gemini.jpg" alt="Gemini" className="h-3 w-3" />Gemini
                 </span>
                 <span className="text-[10px] text-gray-500 ml-auto">7 天見效</span>
               </div>
@@ -776,7 +740,7 @@ export default function LandingPage() {
               <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <div className="w-4 h-4 rounded bg-[#10a37f]/20 flex items-center justify-center">
-                    <ChatGPTLogo className="h-2.5 w-2.5 text-[#10a37f]" />
+                    <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-2.5 w-2.5" />
                   </div>
                   <span className="text-[10px] text-green-400 font-medium">ChatGPT 回覆</span>
                 </div>
@@ -786,10 +750,10 @@ export default function LandingPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <ChatGPTLogo className="h-3 w-3" />ChatGPT
+                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-3 w-3" />ChatGPT
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <CopilotLogo className="h-3 w-3" />Copilot
+                  <PlatformLogo src="/logos/copilot.jpg" alt="Copilot" className="h-3 w-3" />Copilot
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] text-blue-400 ml-auto">
                   <TrendingUp className="h-3 w-3" />+353%
@@ -813,7 +777,7 @@ export default function LandingPage() {
               <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <div className="w-4 h-4 rounded bg-[#8e44ef]/20 flex items-center justify-center">
-                    <GeminiLogo className="h-2.5 w-2.5 text-[#8e44ef]" />
+                    <PlatformLogo src="/logos/gemini.jpg" alt="Gemini" className="h-2.5 w-2.5" />
                   </div>
                   <span className="text-[10px] text-purple-400 font-medium">Gemini 回覆</span>
                 </div>
@@ -823,10 +787,10 @@ export default function LandingPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <GeminiLogo className="h-3 w-3" />Gemini
+                  <PlatformLogo src="/logos/gemini.jpg" alt="Gemini" className="h-3 w-3" />Gemini
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <ChatGPTLogo className="h-3 w-3" />ChatGPT
+                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-3 w-3" />ChatGPT
                 </span>
                 <span className="text-[10px] text-gray-500 ml-auto">10 天見效</span>
               </div>
@@ -848,7 +812,7 @@ export default function LandingPage() {
               <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <div className="w-4 h-4 rounded bg-[#0078d4]/20 flex items-center justify-center">
-                    <CopilotLogo className="h-2.5 w-2.5 text-[#0078d4]" />
+                    <PlatformLogo src="/logos/copilot.jpg" alt="Copilot" className="h-2.5 w-2.5" />
                   </div>
                   <span className="text-[10px] text-cyan-400 font-medium">Copilot 回覆</span>
                 </div>
@@ -858,10 +822,10 @@ export default function LandingPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <CopilotLogo className="h-3 w-3" />Copilot
+                  <PlatformLogo src="/logos/copilot.jpg" alt="Copilot" className="h-3 w-3" />Copilot
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <ClaudeLogo className="h-3 w-3" />Claude
+                  <PlatformLogo src="/logos/claude.jpg" alt="Claude" className="h-3 w-3" />Claude
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] text-blue-400 ml-auto">
                   <TrendingUp className="h-3 w-3" />+183%
@@ -887,7 +851,7 @@ export default function LandingPage() {
 
           <div className="text-center">
             <Link href="/cases">
-              <Button variant="outline" className="border-white/20 text-white hover:bg-white/10 rounded-xl">
+              <Button className="bg-white text-gray-900 hover:bg-gray-100 rounded-xl font-semibold">
                 查看更多成功案例
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
@@ -974,7 +938,7 @@ export default function LandingPage() {
               <div className="flex flex-wrap gap-2">
                 {aiPlatforms.map(p => (
                   <span key={p.name} className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium bg-orange-500/20 text-orange-400 rounded-full">
-                    <p.Logo className="h-3 w-3" />
+                    <PlatformLogo src={p.logo} alt={p.name} className="h-3 w-3" />
                     {p.name}
                   </span>
                 ))}
@@ -1041,7 +1005,7 @@ export default function LandingPage() {
                 <span className="bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full">FREE</span>
               </div>
               <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
-                <ChatGPTLogo className="h-6 w-6 text-[#10a37f]" />
+                <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-6 w-6" />
               </div>
               <p className="text-3xl font-bold text-green-400">$0</p>
               <p className="text-sm text-gray-400 mt-2">AI 推薦一次<br />免費且最高信任度曝光</p>
@@ -1072,24 +1036,42 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           SECTION 7 — PLATFORM STATS (Social Proof Numbers)
          ════════════════════════════════════════════════════════ */}
-      <section className="py-16 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            <div ref={brandCount.ref}>
-              <p className="text-4xl sm:text-5xl font-bold text-white tabular-nums">{brandCount.count}+</p>
-              <p className="text-sm text-blue-100 mt-2">收錄品牌</p>
+      <section className="py-20 bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 relative overflow-hidden">
+        {/* Decorative elements */}
+        <div className="absolute top-0 left-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
+        <div className="relative max-w-5xl mx-auto px-6">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white">被台灣品牌信賴的 GEO 平台</h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div ref={brandCount.ref} className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10 hover:bg-white/15 transition-colors">
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                <Globe className="h-6 w-6 text-white" />
+              </div>
+              <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">{brandCount.count}+</p>
+              <p className="text-sm text-blue-100 mt-1">收錄品牌</p>
             </div>
-            <div ref={articleCount.ref}>
-              <p className="text-4xl sm:text-5xl font-bold text-white tabular-nums">{articleCount.count}+</p>
-              <p className="text-sm text-blue-100 mt-2">AI 分析文章</p>
+            <div ref={articleCount.ref} className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10 hover:bg-white/15 transition-colors">
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                <FileText className="h-6 w-6 text-white" />
+              </div>
+              <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">{articleCount.count}+</p>
+              <p className="text-sm text-blue-100 mt-1">AI 分析文章</p>
             </div>
-            <div ref={industryCount.ref}>
-              <p className="text-4xl sm:text-5xl font-bold text-white tabular-nums">{industryCount.count}</p>
-              <p className="text-sm text-blue-100 mt-2">行業覆蓋</p>
+            <div ref={industryCount.ref} className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10 hover:bg-white/15 transition-colors">
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                <BarChart3 className="h-6 w-6 text-white" />
+              </div>
+              <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">{industryCount.count}</p>
+              <p className="text-sm text-blue-100 mt-1">行業覆蓋</p>
             </div>
-            <div>
-              <p className="text-4xl sm:text-5xl font-bold text-white">9</p>
-              <p className="text-sm text-blue-100 mt-2">AI 可讀性指標</p>
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10 hover:bg-white/15 transition-colors">
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                <Shield className="h-6 w-6 text-white" />
+              </div>
+              <p className="text-3xl sm:text-4xl font-bold text-white">9</p>
+              <p className="text-sm text-blue-100 mt-1">AI 可讀性指標</p>
             </div>
           </div>
         </div>
@@ -1202,9 +1184,8 @@ export default function LandingPage() {
                         'w-full h-12 rounded-xl font-semibold',
                         isPopular
                           ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg shadow-blue-600/20'
-                          : '',
+                          : 'bg-white text-gray-900 hover:bg-gray-100',
                       )}
-                      variant={isPopular ? 'default' : 'outline'}
                     >
                       {plan.cta}
                     </Button>
@@ -1291,7 +1272,7 @@ export default function LandingPage() {
               {/* AI response */}
               <div className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-full bg-[#10a37f]/30 flex items-center justify-center shrink-0 mt-0.5">
-                  <ChatGPTLogo className="h-3.5 w-3.5 text-[#10a37f]" />
+                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-3.5 w-3.5" />
                 </div>
                 <div className="bg-white/5 rounded-xl rounded-tl-none px-4 py-2.5 flex-1">
                   <p className="text-sm text-gray-300 leading-relaxed">
@@ -1324,7 +1305,7 @@ export default function LandingPage() {
             {aiPlatforms.map((p) => (
               <div key={p.name} className="flex flex-col items-center gap-1.5 group">
                 <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform', p.bg)}>
-                  <p.Logo className="h-6 w-6" />
+                  <PlatformLogo src={p.logo} alt={p.name} className="h-6 w-6" />
                 </div>
                 <span className="text-xs text-blue-200/70 font-medium">{p.name}</span>
               </div>
