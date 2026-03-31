@@ -3,11 +3,15 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { NewsService } from './news.service';
+import { NewsGeneratorService } from './news-generator.service';
 
 @ApiTags('News')
 @Controller('news')
 export class NewsController {
-  constructor(private readonly service: NewsService) {}
+  constructor(
+    private readonly service: NewsService,
+    private readonly generator: NewsGeneratorService,
+  ) {}
 
   @Public()
   @Get()
@@ -47,5 +51,14 @@ export class NewsController {
   @ApiOperation({ summary: 'Create a news article (admin)' })
   create(@Body() body: any) {
     return this.service.create(body);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @Post('generate')
+  @ApiOperation({ summary: 'Trigger AI news generation batch (admin)' })
+  generate(@Query('count') count?: string) {
+    return this.generator.generateBatch(count ? parseInt(count, 10) : 10);
   }
 }
