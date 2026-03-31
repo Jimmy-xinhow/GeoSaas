@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { IndexNowService } from '../indexnow/indexnow.service';
 import OpenAI from 'openai';
 
 interface NewsSource {
@@ -47,6 +48,7 @@ export class NewsGeneratorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly indexNow: IndexNowService,
   ) {
     const apiKey = this.config.get<string>('OPENAI_API_KEY');
     if (apiKey) {
@@ -136,6 +138,12 @@ export class NewsGeneratorService {
 
         generated++;
         this.logger.log(`Generated: ${article.title.slice(0, 40)}`);
+
+        // Ping IndexNow for the new article
+        try {
+          const webUrl = this.config.get<string>('WEB_URL') || 'https://www.geovault.app';
+          await this.indexNow.submitUrl(`${webUrl}/news`);
+        } catch {}
 
         // Rate limit
         await new Promise((r) => setTimeout(r, 2000));

@@ -85,6 +85,28 @@ function JsonLdScript({ site }: { site: DirectorySiteDetail }) {
         },
         author: { '@type': 'Organization', name: 'Geovault' },
       },
+      {
+        '@type': 'LocalBusiness',
+        name: site.name,
+        url: site.url,
+        description: site.profile?.description || `${site.name} — GEO Score: ${site.bestScore}/100`,
+        ...(site.industry && { industry: site.industry }),
+        aggregateRating: {
+          '@type': 'AggregateRating',
+          ratingValue: site.bestScore,
+          bestRating: 100,
+          worstRating: 0,
+          ratingCount: site.latestScan ? 1 : 0,
+        },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: '首頁', item: 'https://www.geovault.app' },
+          { '@type': 'ListItem', position: 2, name: '品牌目錄', item: 'https://www.geovault.app/directory' },
+          { '@type': 'ListItem', position: 3, name: site.name },
+        ],
+      },
     ],
   }
 

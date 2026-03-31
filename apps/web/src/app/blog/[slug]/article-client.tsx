@@ -113,6 +113,30 @@ export default function ArticleClient() {
 
   return (
     <>
+      {/* JSON-LD Article Schema */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: post.title,
+        description: post.description || post.content?.slice(0, 200),
+        author: { '@type': 'Organization', name: 'Geovault', url: 'https://www.geovault.app' },
+        publisher: { '@type': 'Organization', name: 'Geovault', logo: { '@type': 'ImageObject', url: 'https://www.geovault.app/icon.svg' } },
+        datePublished: post.date,
+        dateModified: post.date,
+        mainEntityOfPage: `https://www.geovault.app/blog/${slug}`,
+        url: `https://www.geovault.app/blog/${slug}`,
+      }) }} />
+      {/* JSON-LD BreadcrumbList Schema */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: '首頁', item: 'https://www.geovault.app' },
+          { '@type': 'ListItem', position: 2, name: 'Blog', item: 'https://www.geovault.app/blog' },
+          { '@type': 'ListItem', position: 3, name: post.title },
+        ],
+      }) }} />
+
       {/* Breadcrumb */}
       <nav className="max-w-3xl mx-auto px-6 pt-6" aria-label="Breadcrumb">
         <ol className="flex items-center gap-1.5 text-sm text-gray-400">

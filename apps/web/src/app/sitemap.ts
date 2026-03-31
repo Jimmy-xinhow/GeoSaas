@@ -18,6 +18,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: '/cases', priority: 0.8, changeFrequency: 'weekly' as const },
     { url: '/news', priority: 0.7, changeFrequency: 'daily' as const },
     { url: '/directory/industries', priority: 0.8, changeFrequency: 'weekly' as const },
+    { url: '/guide', priority: 0.8, changeFrequency: 'monthly' as const },
+    { url: '/feed', priority: 0.3, changeFrequency: 'daily' as const },
+    { url: '/feed.json', priority: 0.3, changeFrequency: 'daily' as const },
+    { url: '/llms.txt', priority: 0.5, changeFrequency: 'daily' as const },
+    { url: '/llms-full.txt', priority: 0.5, changeFrequency: 'daily' as const },
     { url: '/register', priority: 0.5, changeFrequency: 'monthly' as const },
     { url: '/login', priority: 0.3, changeFrequency: 'monthly' as const },
   ];
