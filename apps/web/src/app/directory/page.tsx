@@ -349,6 +349,36 @@ export default function DirectoryPage() {
         </p>
       </div>
 
+      {/* Industry AI Recommendation Banner */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link href="/industry/auto_care">
+          <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 hover:shadow-md transition cursor-pointer">
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="p-3 bg-blue-100 rounded-full">
+                <Bot className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-bold text-blue-900">汽車美容 AI 推薦排行</p>
+                <p className="text-sm text-blue-600">看看哪些品牌最常被 AI 推薦 →</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/industry/traditional_medicine">
+          <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 hover:shadow-md transition cursor-pointer">
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="p-3 bg-green-100 rounded-full">
+                <Bot className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <p className="font-bold text-green-900">整復推拿 AI 推薦排行</p>
+                <p className="text-sm text-green-600">看看哪些品牌最常被 AI 推薦 →</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
