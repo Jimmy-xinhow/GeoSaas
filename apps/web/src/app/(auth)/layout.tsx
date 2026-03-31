@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import useAuthStore from '@/stores/auth-store'
+import { GeovaultLogoFullDark } from '@/components/logo'
 
 export default function AuthLayout({
   children,
@@ -44,7 +45,7 @@ export default function AuthLayout({
       {/* Left side - branding */}
       <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-blue-600 to-indigo-700 items-center justify-center">
         <div className="text-center">
-          <h1 className="text-5xl font-bold text-white mb-4">Geovault</h1>
+          <GeovaultLogoFullDark className="h-14 w-auto mb-4" />
           <p className="text-xl text-blue-100">讓 AI 優先推薦你的品牌</p>
           <div className="mt-8 flex justify-center gap-3">
             <div className="h-2 w-2 rounded-full bg-white/40" />

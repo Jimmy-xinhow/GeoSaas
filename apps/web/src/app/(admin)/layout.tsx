@@ -17,6 +17,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { GeovaultLogoCompactDark } from '@/components/logo';
 
 const adminNav = [
   { href: '/admin', icon: LayoutDashboard, label: '總覽' },
@@ -58,8 +59,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="w-60 h-screen bg-gray-950 text-white flex flex-col sticky top-0">
         <div className="p-5 border-b border-gray-800">
           <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-red-400" />
-            <h1 className="text-lg font-bold">Geovault Admin</h1>
+            <GeovaultLogoCompactDark className="h-7 w-auto" />
+            <span className="text-xs font-semibold text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">ADMIN</span>
           </div>
         </div>
 

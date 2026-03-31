@@ -16,6 +16,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import useAuthStore from '@/stores/auth-store'
+import { GeovaultLogoCompactDark } from '@/components/logo'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: '總覽' },
@@ -35,8 +36,10 @@ export default function Sidebar() {
   return (
     <aside className="w-64 h-screen bg-gray-900 text-white flex flex-col sticky top-0">
       {/* Logo */}
-      <div className="p-6">
-        <h1 className="text-xl font-bold text-white">Geovault</h1>
+      <div className="p-4">
+        <Link href="/dashboard">
+          <GeovaultLogoCompactDark className="h-8 w-auto" />
+        </Link>
       </div>
 
       {/* Navigation */}

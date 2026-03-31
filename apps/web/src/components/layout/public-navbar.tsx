@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { GeovaultLogoCompact } from '@/components/logo';
 import { cn } from '@/lib/utils';
 
 const navLinks = [
-  { href: '/directory', label: '目錄' },
+  { href: '/directory', label: '品牌目錄' },
   { href: '/blog', label: 'Blog' },
-  { href: '/news', label: 'News' },
-  { href: '/cases', label: '案例' },
+  { href: '/cases', label: '成功案例' },
+  { href: '/news', label: 'AI News' },
 ];
 
 export default function PublicNavbar() {
@@ -19,8 +20,8 @@ export default function PublicNavbar() {
   return (
     <nav className="flex items-center justify-between p-4 px-6 lg:px-12 bg-white/80 backdrop-blur-sm sticky top-0 z-50 border-b border-gray-100">
       <div className="flex items-center gap-8">
-        <Link href="/" className="text-xl font-bold text-gray-900">
-          Geovault
+        <Link href="/" className="shrink-0">
+          <GeovaultLogoCompact className="h-8 w-auto" />
         </Link>
         <div className="hidden md:flex items-center gap-6">
           {pathname === '/' && (

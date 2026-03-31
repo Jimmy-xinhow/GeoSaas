@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
+import { GeovaultLogoCompact } from '@/components/logo'
 import { useLogin } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,7 +56,7 @@ export default function LoginPage() {
   return (
     <Card className="w-full max-w-md shadow-lg">
       <CardHeader className="text-center space-y-2">
-        <div className="text-2xl font-bold text-blue-600 mb-2">Geovault</div>
+        <div className="mb-2 flex justify-center"><GeovaultLogoCompact className="h-9 w-auto" /></div>
         <CardTitle className="text-2xl">歡迎回來</CardTitle>
         <CardDescription>登入您的帳號</CardDescription>
       </CardHeader>
