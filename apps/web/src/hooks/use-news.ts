@@ -31,6 +31,17 @@ export function useNewsList(params: { page?: number; category?: string } = {}) {
   });
 }
 
+export function useNewsDetail(slug: string) {
+  return useQuery({
+    queryKey: ['news', 'detail', slug],
+    queryFn: async () => {
+      const { data } = await apiClient.get<NewsArticle>(`/news/${slug}`);
+      return data;
+    },
+    enabled: !!slug,
+  });
+}
+
 export function useLatestNews(limit = 5) {
   return useQuery({
     queryKey: ['news', 'latest', limit],
