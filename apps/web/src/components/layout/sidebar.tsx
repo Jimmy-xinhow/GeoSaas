@@ -63,7 +63,7 @@ export default function Sidebar() {
             </Link>
           )
         })}
-        {user?.role === 'ADMIN' && (
+        {(user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
           <Link
             href="/admin"
             className={cn(

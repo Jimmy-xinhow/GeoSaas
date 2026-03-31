@@ -39,7 +39,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
       router.replace('/login');
-    } else if (isHydrated && isAuthenticated && user?.role !== 'ADMIN') {
+    } else if (isHydrated && isAuthenticated && user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN') {
       router.replace('/dashboard');
     }
   }, [isHydrated, isAuthenticated, user, router]);
@@ -52,7 +52,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  if (!isAuthenticated || user?.role !== 'ADMIN') return null;
+  if (!isAuthenticated || (user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN')) return null;
 
   return (
     <div className="flex min-h-screen">
