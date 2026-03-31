@@ -260,7 +260,8 @@ export class IndustryAiService {
   // ─── Feature 2: Industry Ranking ───
   async getIndustryRanking(industry: string, platform?: string) {
     const weekOf = this.getWeekOf();
-    // Try current week, fall back to last week
+
+    // Try snapshots first
     let snapshots = await this.prisma.industryAiSnapshot.findMany({
       where: { industry, weekOf },
       include: { site: { select: { id: true, name: true, url: true, bestScore: true, tier: true } } },
@@ -275,32 +276,72 @@ export class IndustryAiService {
       });
     }
 
-    let ranked = snapshots.map((s) => {
-      const bp = s.byPlatform as Record<string, { total: number; mentioned: number; rate: number }>;
-      return {
-        ...s.site,
-        mentionRate: platform && bp[platform] ? bp[platform].rate : s.mentionRate,
-        mentionedCount: s.mentionedCount,
-        totalChecks: s.totalChecks,
-        byPlatform: bp,
-        avgSentiment: s.avgSentiment,
-      };
+    // If snapshots exist, use them
+    if (snapshots.length > 0) {
+      let ranked = snapshots.map((s) => {
+        const bp = s.byPlatform as Record<string, { total: number; mentioned: number; rate: number }>;
+        return {
+          ...s.site,
+          mentionRate: platform && bp[platform] ? bp[platform].rate : s.mentionRate,
+          mentionedCount: s.mentionedCount,
+          totalChecks: s.totalChecks,
+          byPlatform: bp,
+          avgSentiment: s.avgSentiment,
+        };
+      });
+      ranked.sort((a, b) => b.mentionRate - a.mentionRate);
+      const avgMentionRate = ranked.length > 0
+        ? Math.round(ranked.reduce((sum, r) => sum + r.mentionRate, 0) / ranked.length)
+        : 0;
+      return { industry, totalBrands: ranked.length, avgMentionRate, weekOf: snapshots[0]?.weekOf || weekOf, ranking: ranked };
+    }
+
+    // Fallback: compute ranking from raw results (for when test is still running)
+    const sites = await this.prisma.site.findMany({
+      where: { isPublic: true, industry, bestScore: { gt: 0 } },
+      select: { id: true, name: true, url: true, bestScore: true, tier: true },
     });
 
-    ranked.sort((a, b) => b.mentionRate - a.mentionRate);
+    const ranked = [];
+    for (const site of sites) {
+      const results = await this.prisma.industryAiResult.findMany({
+        where: { siteId: site.id },
+        orderBy: { checkedAt: 'desc' },
+      });
+      if (results.length === 0) continue;
 
-    // Industry stats
+      const valid = results.filter((r) => !r.response.startsWith('[Error]'));
+      const mentionedCount = valid.filter((r) => r.mentioned).length;
+      const totalChecks = valid.length;
+      const mentionRate = totalChecks > 0 ? Math.round((mentionedCount / totalChecks) * 100) : 0;
+
+      const byPlatform: Record<string, { total: number; mentioned: number; rate: number }> = {};
+      for (const p of PLATFORMS) {
+        const pResults = valid.filter((r) => r.platform === p);
+        const pMentioned = pResults.filter((r) => r.mentioned).length;
+        byPlatform[p] = {
+          total: pResults.length,
+          mentioned: pMentioned,
+          rate: pResults.length > 0 ? Math.round((pMentioned / pResults.length) * 100) : 0,
+        };
+      }
+
+      ranked.push({
+        ...site,
+        mentionRate: platform && byPlatform[platform] ? byPlatform[platform].rate : mentionRate,
+        mentionedCount,
+        totalChecks,
+        byPlatform,
+        avgSentiment: null,
+      });
+    }
+
+    ranked.sort((a, b) => b.mentionRate - a.mentionRate);
     const avgMentionRate = ranked.length > 0
       ? Math.round(ranked.reduce((sum, r) => sum + r.mentionRate, 0) / ranked.length)
       : 0;
 
-    return {
-      industry,
-      totalBrands: ranked.length,
-      avgMentionRate,
-      weekOf: snapshots[0]?.weekOf || weekOf,
-      ranking: ranked,
-    };
+    return { industry, totalBrands: ranked.length, avgMentionRate, weekOf, ranking: ranked };
   }
 
   // ─── Feature 3: Citation Trend ───
