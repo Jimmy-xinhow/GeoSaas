@@ -13,10 +13,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'ai-seo': 'bg-blue-100 text-blue-700',
-  'ai-news': 'bg-purple-100 text-purple-700',
-  'geo-updates': 'bg-green-100 text-green-700',
-  industry: 'bg-orange-100 text-orange-700',
+  'ai-seo': 'bg-blue-900/50 text-blue-300',
+  'ai-news': 'bg-purple-900/50 text-purple-300',
+  'geo-updates': 'bg-green-900/50 text-green-300',
+  industry: 'bg-orange-900/50 text-orange-300',
 };
 
 export default function NewsClient() {
@@ -36,20 +36,20 @@ export default function NewsClient() {
     <>
       {/* Breadcrumb */}
       <nav className="max-w-4xl mx-auto px-6 pt-6" aria-label="Breadcrumb">
-        <ol className="flex items-center gap-1.5 text-sm text-gray-500">
-          <li><Link href="/" className="hover:text-gray-900">首頁</Link></li>
-          <li className="text-gray-300">/</li>
-          <li className="text-gray-900">AI News</li>
+        <ol className="flex items-center gap-1.5 text-sm text-gray-400">
+          <li><Link href="/" className="hover:text-white">首頁</Link></li>
+          <li className="text-gray-600">/</li>
+          <li className="text-white">AI News</li>
         </ol>
       </nav>
 
       {/* Hero */}
       <section className="py-10 text-center">
-        <h1 className="flex items-center justify-center gap-2 text-3xl font-bold text-gray-900">
-          <Newspaper className="h-8 w-8 text-blue-600" />
+        <h1 className="flex items-center justify-center gap-2 text-3xl font-bold text-white">
+          <Newspaper className="h-8 w-8 text-blue-400" />
           AI News
         </h1>
-        <p className="mt-3 text-gray-600 max-w-xl mx-auto">
+        <p className="mt-3 text-gray-400 max-w-xl mx-auto">
           AI SEO 產業最新動態、趨勢分析、技術更新
         </p>
       </section>
@@ -63,8 +63,8 @@ export default function NewsClient() {
               onClick={() => { setCategory(cat.key); setPage(1); }}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 category === cat.key
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-100 border'
+                  ? 'bg-white text-gray-900'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
               }`}
             >
               {cat.label}
@@ -78,14 +78,14 @@ export default function NewsClient() {
         {isLoading ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-28 bg-white rounded-xl animate-pulse" />
+              <div key={i} className="h-28 bg-gray-800 rounded-xl animate-pulse" />
             ))}
           </div>
         ) : !data || data.items.length === 0 ? (
           <div className="text-center py-16">
-            <Newspaper className="h-12 w-12 text-gray-300 mx-auto" />
-            <h3 className="mt-4 text-lg font-semibold text-gray-900">尚無新聞</h3>
-            <p className="text-gray-500 mt-1">稍後再來查看最新動態</p>
+            <Newspaper className="h-12 w-12 text-gray-600 mx-auto" />
+            <h3 className="mt-4 text-lg font-semibold text-white">尚無新聞</h3>
+            <p className="text-gray-400 mt-1">稍後再來查看最新動態</p>
           </div>
         ) : (
           data.items.map((article) => (
@@ -94,23 +94,23 @@ export default function NewsClient() {
               href={article.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="block bg-white rounded-xl p-5 border hover:shadow-md transition-shadow group"
+              className="block bg-gray-800 rounded-xl p-5 border border-gray-700 hover:shadow-md hover:shadow-gray-900/50 transition-shadow group"
             >
               <div className="flex items-start gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[article.category] || 'bg-gray-100 text-gray-700'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[article.category] || 'bg-gray-700 text-gray-300'}`}>
                       {CATEGORY_LABELS[article.category] || article.category}
                     </span>
-                    <span className="text-xs text-gray-400">{article.sourceName}</span>
-                    <span className="text-xs text-gray-400">{new Date(article.publishedAt).toLocaleDateString('zh-TW')}</span>
+                    <span className="text-xs text-gray-500">{article.sourceName}</span>
+                    <span className="text-xs text-gray-500">{new Date(article.publishedAt).toLocaleDateString('zh-TW')}</span>
                   </div>
-                  <h2 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                  <h2 className="font-bold text-white group-hover:text-blue-400 transition-colors line-clamp-2">
                     {article.title}
                   </h2>
-                  <p className="mt-1 text-sm text-gray-600 line-clamp-2">{article.summary}</p>
+                  <p className="mt-1 text-sm text-gray-400 line-clamp-2">{article.summary}</p>
                 </div>
-                <ExternalLink className="h-4 w-4 text-gray-400 shrink-0 mt-1 group-hover:text-blue-600" />
+                <ExternalLink className="h-4 w-4 text-gray-500 shrink-0 mt-1 group-hover:text-blue-400" />
               </div>
             </a>
           ))
@@ -118,11 +118,11 @@ export default function NewsClient() {
 
         {data && data.totalPages > 1 && (
           <div className="flex items-center justify-center gap-4 pt-4">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="flex items-center gap-1 text-sm text-blue-600 disabled:text-gray-300">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="flex items-center gap-1 text-sm text-blue-400 disabled:text-gray-600">
               <ChevronLeft className="h-4 w-4" /> 上一頁
             </button>
-            <span className="text-sm text-gray-500">{page} / {data.totalPages}</span>
-            <button onClick={() => setPage((p) => p + 1)} disabled={page >= data.totalPages} className="flex items-center gap-1 text-sm text-blue-600 disabled:text-gray-300">
+            <span className="text-sm text-gray-400">{page} / {data.totalPages}</span>
+            <button onClick={() => setPage((p) => p + 1)} disabled={page >= data.totalPages} className="flex items-center gap-1 text-sm text-blue-400 disabled:text-gray-600">
               下一頁 <ChevronRight className="h-4 w-4" />
             </button>
           </div>

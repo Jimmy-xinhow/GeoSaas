@@ -8,12 +8,12 @@ import { useSuccessCase } from '@/hooks/use-cases';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
-  chatgpt: { label: 'ChatGPT', color: 'bg-green-100 text-green-700' },
-  claude: { label: 'Claude', color: 'bg-orange-100 text-orange-700' },
-  perplexity: { label: 'Perplexity', color: 'bg-blue-100 text-blue-700' },
-  gemini: { label: 'Gemini', color: 'bg-purple-100 text-purple-700' },
-  copilot: { label: 'Copilot', color: 'bg-cyan-100 text-cyan-700' },
-  other: { label: '其他', color: 'bg-gray-100 text-gray-700' },
+  chatgpt: { label: 'ChatGPT', color: 'bg-green-500/20 text-green-400' },
+  claude: { label: 'Claude', color: 'bg-orange-500/20 text-orange-400' },
+  perplexity: { label: 'Perplexity', color: 'bg-blue-500/20 text-blue-400' },
+  gemini: { label: 'Gemini', color: 'bg-purple-500/20 text-purple-400' },
+  copilot: { label: 'Copilot', color: 'bg-cyan-500/20 text-cyan-400' },
+  other: { label: '其他', color: 'bg-gray-500/20 text-gray-400' },
 };
 
 function markdownToHtml(md: string): string {
@@ -38,7 +38,7 @@ export default function CaseDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
       </div>
     );
@@ -46,9 +46,9 @@ export default function CaseDetailPage() {
 
   if (!caseData) {
     return (
-      <div className="min-h-screen flex items-center justify-center flex-col gap-4">
-        <h2 className="text-xl font-bold">找不到案例</h2>
-        <Link href="/cases" className="text-blue-600">返回案例列表</Link>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center flex-col gap-4">
+        <h2 className="text-xl font-bold text-white">找不到案例</h2>
+        <Link href="/cases" className="text-blue-400">返回案例列表</Link>
       </div>
     );
   }
@@ -56,11 +56,11 @@ export default function CaseDetailPage() {
   const platformCfg = PLATFORM_CONFIG[caseData.aiPlatform] || PLATFORM_CONFIG.other;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-900 text-white">
       <PublicNavbar />
 
       <article className="max-w-3xl mx-auto px-6 py-12">
-        <Link href="/cases" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 mb-6">
+        <Link href="/cases" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-300 mb-6">
           <ArrowLeft className="h-3.5 w-3.5" />
           返回案例列表
         </Link>
@@ -76,11 +76,11 @@ export default function CaseDetailPage() {
           </span>
         </div>
 
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">{caseData.title}</h1>
+        <h1 className="text-3xl font-bold text-white mb-4">{caseData.title}</h1>
 
         {/* Score change */}
         {caseData.beforeGeoScore != null && caseData.afterGeoScore != null && (
-          <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-red-50 to-green-50 rounded-xl mb-6">
+          <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-red-500/10 to-green-500/10 rounded-xl mb-6">
             <div className="text-center">
               <p className="text-2xl font-bold text-red-400">{caseData.beforeGeoScore}</p>
               <p className="text-xs text-gray-500">優化前</p>
@@ -100,34 +100,34 @@ export default function CaseDetailPage() {
         )}
 
         {/* Query */}
-        <div className="bg-gray-50 rounded-xl p-4 mb-6">
+        <div className="bg-white/5 rounded-xl p-4 mb-6">
           <p className="text-xs text-gray-500 mb-1">AI 搜尋問題</p>
-          <p className="text-gray-900 font-medium">「{caseData.queryUsed}」</p>
+          <p className="text-white font-medium">「{caseData.queryUsed}」</p>
         </div>
 
         {/* AI Response */}
         {caseData.aiResponse && (
-          <div className="bg-blue-50 rounded-xl p-4 mb-8">
-            <p className="text-xs text-blue-600 mb-1">{platformCfg.label} 回應</p>
-            <p className="text-gray-700 text-sm whitespace-pre-wrap">{caseData.aiResponse}</p>
+          <div className="bg-blue-500/10 rounded-xl p-4 mb-8">
+            <p className="text-xs text-blue-400 mb-1">{platformCfg.label} 回應</p>
+            <p className="text-gray-300 text-sm whitespace-pre-wrap">{caseData.aiResponse}</p>
           </div>
         )}
 
         {/* Generated article */}
         {caseData.generatedArticle?.content && (
           <>
-            <hr className="mb-8" />
+            <hr className="mb-8 border-white/10" />
             <div
-              className="prose prose-gray prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700"
+              className="prose prose-invert prose-lg max-w-none prose-headings:text-white prose-p:text-gray-300"
               dangerouslySetInnerHTML={{ __html: markdownToHtml(caseData.generatedArticle.content) }}
             />
           </>
         )}
 
         {/* CTA */}
-        <div className="mt-12 p-8 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl text-center">
-          <h3 className="text-xl font-bold text-gray-900">你的品牌也被 AI 引用了嗎？</h3>
-          <p className="mt-2 text-gray-600">分享你的成功故事，獲得更多曝光</p>
+        <div className="mt-12 p-8 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl text-center">
+          <h3 className="text-xl font-bold text-white">你的品牌也被 AI 引用了嗎？</h3>
+          <p className="mt-2 text-gray-400">分享你的成功故事，獲得更多曝光</p>
           <Link href="/register" className="inline-block mt-4 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700">
             提交我的案例
           </Link>

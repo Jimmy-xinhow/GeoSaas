@@ -8,6 +8,7 @@ import { GeovaultLogoCompactDark } from '@/components/logo';
 import { cn } from '@/lib/utils';
 
 const navLinks = [
+  { href: '/guide', label: '使用教學' },
   { href: '/directory', label: '品牌目錄' },
   { href: '/blog', label: 'Blog' },
   { href: '/cases', label: '成功案例' },

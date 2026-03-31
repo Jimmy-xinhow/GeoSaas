@@ -27,10 +27,10 @@ import { ScanIndicatorLabel, ScanIndicator } from '@geovault/shared'
 import { INDUSTRIES } from '@geovault/shared'
 
 const TIER_CONFIG: Record<string, { label: string; color: string }> = {
-  bronze: { label: '銅牌', color: 'bg-orange-100 text-orange-700 border-orange-200' },
-  silver: { label: '銀牌', color: 'bg-gray-100 text-gray-700 border-gray-300' },
-  gold: { label: '金牌', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
-  platinum: { label: '白金', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+  bronze: { label: '銅牌', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  silver: { label: '銀牌', color: 'bg-gray-500/20 text-gray-300 border-gray-500/30' },
+  gold: { label: '金牌', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+  platinum: { label: '白金', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
 }
 
 function TierBadge({ tier }: { tier: string | null }) {
@@ -127,7 +127,7 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
 
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="bg-gray-900 text-white min-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <DetailSkeleton />
       </div>
     )
@@ -135,12 +135,12 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
 
   if (isError || !site) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
-        <Globe className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">找不到此網站</h1>
-        <p className="text-muted-foreground mb-6">此網站不存在或尚未公開。</p>
+      <div className="bg-gray-900 text-white min-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
+        <Globe className="h-16 w-16 text-gray-500 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold mb-2">找不到此網站</h1>
+        <p className="text-gray-400 mb-6">此網站不存在或尚未公開。</p>
         <Link href="/directory">
-          <Button variant="outline">
+          <Button variant="outline" className="border-white/10 bg-white/5 text-white hover:bg-white/10">
             <ArrowLeft className="h-4 w-4 mr-2" />
             返回目錄
           </Button>
@@ -159,13 +159,13 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
   }))
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="bg-gray-900 text-white min-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       <JsonLdScript site={site} />
 
       {/* Back link */}
       <Link
         href="/directory"
-        className="inline-flex items-center text-sm text-muted-foreground hover:text-gray-900"
+        className="inline-flex items-center text-sm text-gray-400 hover:text-white"
       >
         <ArrowLeft className="h-4 w-4 mr-1" />
         返回目錄
@@ -173,12 +173,12 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
 
       {/* Hero */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 bg-white/5 border-white/10">
           <CardContent className="p-6 space-y-4">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-bold text-gray-900">
+                  <h1 className="text-2xl font-bold">
                     {site.name}
                   </h1>
                   <TierBadge tier={site.tier} />
@@ -194,9 +194,9 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+            <div className="flex flex-wrap gap-3 text-sm text-gray-400">
               {industryLabel && (
-                <span className="inline-flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full">
+                <span className="inline-flex items-center gap-1 bg-white/10 px-3 py-1 rounded-full">
                   {industryLabel}
                 </span>
               )}
@@ -213,17 +213,17 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
             </div>
 
             {site.profile?.description && (
-              <p className="text-gray-600 text-sm leading-relaxed">
+              <p className="text-gray-400 text-sm leading-relaxed">
                 {site.profile.description}
               </p>
             )}
           </CardContent>
         </Card>
 
-        <Card className="flex items-center justify-center">
+        <Card className="flex items-center justify-center bg-white/5 border-white/10">
           <CardContent className="p-6 text-center">
             <ScoreGauge score={site.bestScore} size={180} />
-            <p className="text-sm text-muted-foreground mt-2">GEO 總分</p>
+            <p className="text-sm text-gray-400 mt-2">GEO 總分</p>
           </CardContent>
         </Card>
       </div>
@@ -234,10 +234,10 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
           {site.badges.map((b) => (
             <div
               key={b.badge}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-full text-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded-full text-sm"
             >
-              <Award className="h-3.5 w-3.5 text-yellow-600" />
-              <span className="font-medium text-yellow-800">{b.label}</span>
+              <Award className="h-3.5 w-3.5 text-yellow-400" />
+              <span className="font-medium text-yellow-400">{b.label}</span>
             </div>
           ))}
         </div>
@@ -245,9 +245,9 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
 
       {/* Indicator Breakdown */}
       {site.latestScan && site.latestScan.results.length > 0 && (
-        <Card>
+        <Card className="bg-white/5 border-white/10">
           <CardHeader>
-            <CardTitle>AI 優化指標明細</CardTitle>
+            <CardTitle className="text-white">AI 優化指標明細</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -269,9 +269,9 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
       )}
 
       {/* AI Crawler Activity */}
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-white">
             <Bot className="h-5 w-5 text-purple-500" />
             AI 爬蟲造訪紀錄
             <Badge variant="secondary" className="ml-auto text-xs font-normal">
@@ -281,29 +281,29 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
         </CardHeader>
         <CardContent>
           {site.crawlerActivity.bots.length === 0 ? (
-            <p className="text-center text-muted-foreground py-6">
+            <p className="text-center text-gray-500 py-6">
               尚無 AI 爬蟲造訪紀錄
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-muted-foreground">
+                  <tr className="border-b border-white/10 text-left text-gray-400">
                     <th className="pb-3 font-medium">Bot 名稱</th>
                     <th className="pb-3 font-medium">組織</th>
                     <th className="pb-3 font-medium text-right">造訪次數</th>
                     <th className="pb-3 font-medium text-right">最後造訪</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-white/5">
                   {site.crawlerActivity.bots.map((bot) => (
-                    <tr key={bot.name} className="hover:bg-gray-50">
+                    <tr key={bot.name} className="hover:bg-white/5">
                       <td className="py-3 font-medium">{bot.name}</td>
-                      <td className="py-3 text-muted-foreground">{bot.org}</td>
+                      <td className="py-3 text-gray-400">{bot.org}</td>
                       <td className="py-3 text-right tabular-nums">
                         {bot.visitCount}
                       </td>
-                      <td className="py-3 text-right text-muted-foreground">
+                      <td className="py-3 text-right text-gray-500">
                         {getTimeAgo(bot.lastVisit)}
                       </td>
                     </tr>
@@ -317,9 +317,9 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
 
       {/* Score Trend */}
       {chartData.length > 1 && (
-        <Card>
+        <Card className="bg-white/5 border-white/10">
           <CardHeader>
-            <CardTitle>分數趨勢</CardTitle>
+            <CardTitle className="text-white">分數趨勢</CardTitle>
           </CardHeader>
           <CardContent>
             <ScanHistoryChart data={chartData} />
@@ -329,9 +329,9 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
 
       {/* Knowledge Base Preview */}
       {site.qas.length > 0 && (
-        <Card>
+        <Card className="bg-white/5 border-white/10">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-white">
               <MessageSquare className="h-5 w-5 text-blue-500" />
               品牌知識庫
             </CardTitle>
@@ -341,10 +341,10 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
               {site.qas.map((qa) => (
                 <div
                   key={qa.id}
-                  className="border rounded-lg p-4 space-y-2"
+                  className="border border-white/10 rounded-lg p-4 space-y-2"
                 >
-                  <p className="font-medium text-gray-900">{qa.question}</p>
-                  <p className="text-sm text-gray-600 leading-relaxed">
+                  <p className="font-medium text-white">{qa.question}</p>
+                  <p className="text-sm text-gray-400 leading-relaxed">
                     {qa.answer}
                   </p>
                   {qa.category && (

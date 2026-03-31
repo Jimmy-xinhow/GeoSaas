@@ -10,12 +10,12 @@ import { useSuccessCases, useFeaturedCases } from '@/hooks/use-cases';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
-  chatgpt: { label: 'ChatGPT', color: 'bg-green-100 text-green-700' },
-  claude: { label: 'Claude', color: 'bg-orange-100 text-orange-700' },
-  perplexity: { label: 'Perplexity', color: 'bg-blue-100 text-blue-700' },
-  gemini: { label: 'Gemini', color: 'bg-purple-100 text-purple-700' },
-  copilot: { label: 'Copilot', color: 'bg-cyan-100 text-cyan-700' },
-  other: { label: '其他', color: 'bg-gray-100 text-gray-700' },
+  chatgpt: { label: 'ChatGPT', color: 'bg-green-500/20 text-green-400' },
+  claude: { label: 'Claude', color: 'bg-orange-500/20 text-orange-400' },
+  perplexity: { label: 'Perplexity', color: 'bg-blue-500/20 text-blue-400' },
+  gemini: { label: 'Gemini', color: 'bg-purple-500/20 text-purple-400' },
+  copilot: { label: 'Copilot', color: 'bg-cyan-500/20 text-cyan-400' },
+  other: { label: '其他', color: 'bg-gray-500/20 text-gray-400' },
 };
 
 export default function CasesPage() {
@@ -25,15 +25,15 @@ export default function CasesPage() {
   const { data: cases, isLoading } = useSuccessCases({ page, aiPlatform: platform });
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-900 text-white">
       <PublicNavbar />
 
-      <section className="py-12 text-center bg-gradient-to-b from-yellow-50 to-white">
-        <h1 className="flex items-center justify-center gap-2 text-3xl font-bold text-gray-900">
+      <section className="py-12 text-center bg-gradient-to-b from-gray-800 to-gray-900">
+        <h1 className="flex items-center justify-center gap-2 text-3xl font-bold text-white">
           <Award className="h-8 w-8 text-yellow-500" />
           GEO 成功案例
         </h1>
-        <p className="mt-3 text-gray-600 max-w-xl mx-auto">
+        <p className="mt-3 text-gray-400 max-w-xl mx-auto">
           真實品牌被 AI 引用的故事 — 看看他們如何做到的
         </p>
       </section>
@@ -41,14 +41,14 @@ export default function CasesPage() {
       {/* Featured carousel */}
       {featured && featured.length > 0 && (
         <section className="max-w-6xl mx-auto px-6 py-8">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">精選案例</h2>
+          <h2 className="text-lg font-bold text-white mb-4">精選案例</h2>
           <div className="flex gap-4 overflow-x-auto pb-2 snap-x">
             {featured.map((c) => (
               <Link key={c.id} href={`/cases/${c.id}`} className="snap-start">
-                <Card className="w-[280px] shrink-0 hover:shadow-md transition-shadow cursor-pointer">
+                <Card className="w-[280px] shrink-0 bg-white/5 backdrop-blur-sm border border-white/10 hover:shadow-lg hover:shadow-blue-500/5 transition-shadow cursor-pointer">
                   <CardContent className="p-5 space-y-3">
                     <div className="flex items-center gap-2">
-                      <Badge className={PLATFORM_CONFIG[c.aiPlatform]?.color || 'bg-gray-100'}>
+                      <Badge className={PLATFORM_CONFIG[c.aiPlatform]?.color || 'bg-white/10'}>
                         {PLATFORM_CONFIG[c.aiPlatform]?.label || c.aiPlatform}
                       </Badge>
                     </div>
@@ -80,7 +80,7 @@ export default function CasesPage() {
               key={p.key ?? 'all'}
               onClick={() => { setPlatform(p.key); setPage(1); }}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                platform === p.key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                platform === p.key ? 'bg-gray-900 text-white' : 'bg-white/10 text-gray-400 hover:bg-white/10'
               }`}
             >
               {p.label}
@@ -91,15 +91,15 @@ export default function CasesPage() {
         {isLoading ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />
+              <div key={i} className="h-24 bg-white/10 rounded-xl animate-pulse" />
             ))}
           </div>
         ) : !cases || cases.items.length === 0 ? (
           <div className="text-center py-16 max-w-lg mx-auto">
-            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-10 border border-yellow-100">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-10 border border-white/10">
               <Award className="h-16 w-16 text-yellow-500 mx-auto" />
-              <h3 className="mt-6 text-2xl font-bold text-gray-900">你的品牌被 AI 引用了嗎？</h3>
-              <p className="text-gray-600 mt-3 leading-relaxed">
+              <h3 className="mt-6 text-2xl font-bold text-white">你的品牌被 AI 引用了嗎？</h3>
+              <p className="text-gray-400 mt-3 leading-relaxed">
                 如果你的品牌曾經被 ChatGPT、Claude、Copilot、Perplexity 或 Gemini 提及或推薦，歡迎提交你的成功案例！
               </p>
               <p className="text-gray-500 mt-2 text-sm">
@@ -119,18 +119,18 @@ export default function CasesPage() {
           <div className="space-y-4">
             {cases.items.map((c) => (
               <Link key={c.id} href={`/cases/${c.id}`}>
-                <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                <Card className="bg-white/5 backdrop-blur-sm border border-white/10 hover:shadow-lg hover:shadow-blue-500/5 transition-shadow cursor-pointer">
                   <CardContent className="p-5 flex items-center gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <Badge className={PLATFORM_CONFIG[c.aiPlatform]?.color || 'bg-gray-100'}>
+                        <Badge className={PLATFORM_CONFIG[c.aiPlatform]?.color || 'bg-white/10'}>
                           {PLATFORM_CONFIG[c.aiPlatform]?.label || c.aiPlatform}
                         </Badge>
                         {c.tags.slice(0, 3).map((t) => (
                           <Badge key={t} variant="outline" className="text-xs">{t}</Badge>
                         ))}
                       </div>
-                      <h3 className="font-bold text-gray-900">{c.title}</h3>
+                      <h3 className="font-bold text-white">{c.title}</h3>
                       <p className="text-sm text-gray-500 truncate mt-1">「{c.queryUsed}」</p>
                     </div>
                     {c.beforeGeoScore != null && c.afterGeoScore != null && (
