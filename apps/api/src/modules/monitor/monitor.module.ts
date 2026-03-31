@@ -13,6 +13,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [NotificationsModule],
   controllers: [MonitorController],
   providers: [MonitorService, MonitorSchedulerService, ChatgptDetector, ClaudeDetector, PerplexityDetector, GeminiDetector, CopilotDetector],
-  exports: [MonitorService, MonitorSchedulerService],
+  exports: [MonitorService, MonitorSchedulerService, ChatgptDetector, ClaudeDetector, PerplexityDetector, GeminiDetector, CopilotDetector],
 })
 export class MonitorModule {}

@@ -120,6 +120,8 @@ model Site {
   seedSource          SeedSource?
   clientQuerySets     ClientQuerySet[]
   monitorReports      MonitorReport[]
+  industryAiResults   IndustryAiResult[]
+  industryAiSnapshots IndustryAiSnapshot[]
 
   @@map("sites")
 }
@@ -485,4 +487,76 @@ model GuestScan {
   @@index([ipHash, createdAt])
   @@index([url, createdAt])
   @@map("guest_scans")
+}
+
+// ==================== Industry AI Recommendation ====================
+
+model IndustryQuery {
+  id        String   @id @default(cuid())
+  industry  String
+  question  String
+  category  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  results IndustryAiResult[]
+
+  @@index([industry, isActive])
+  @@map("industry_queries")
+}
+
+model IndustryAiResult {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  queryId   String
+  query     IndustryQuery @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  platform  String
+  mentioned Boolean  @default(false)
+  position  Int?
+  response  String   @db.Text
+  sentiment String?
+  weekOf    DateTime
+  checkedAt DateTime @default(now())
+
+  @@unique([siteId, queryId, platform, weekOf])
+  @@index([siteId, weekOf])
+  @@index([queryId, platform, weekOf])
+  @@index([siteId, platform, weekOf])
+  @@map("industry_ai_results")
+}
+
+model IndustryAiSnapshot {
+  id             String   @id @default(cuid())
+  siteId         String
+  site           Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  industry       String
+  weekOf         DateTime
+  totalChecks    Int      @default(0)
+  mentionedCount Int      @default(0)
+  mentionRate    Int      @default(0)
+  byPlatform     Json
+  avgSentiment   Float?
+  createdAt      DateTime @default(now())
+
+  @@unique([siteId, industry, weekOf])
+  @@index([industry, weekOf])
+  @@index([siteId, weekOf])
+  @@map("industry_ai_snapshots")
+}
+
+model IndustryAiComparison {
+  id        String   @id @default(cuid())
+  siteAId   String
+  siteBId   String
+  industry  String
+  platform  String
+  question  String
+  response  String   @db.Text
+  weekOf    DateTime
+  checkedAt DateTime @default(now())
+
+  @@unique([siteAId, siteBId, platform, weekOf])
+  @@index([industry, weekOf])
+  @@map("industry_ai_comparisons")
 }

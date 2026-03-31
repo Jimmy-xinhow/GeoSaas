@@ -115,5 +115,42 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // API unavailable — skip
   }
 
+  // ─── Industry AI recommendation pages ───
+  const pilotIndustries = ['auto_care', 'traditional_medicine'];
+  for (const ind of pilotIndustries) {
+    entries.push({
+      url: `${BASE_URL}/industry/${ind}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    });
+    entries.push({
+      url: `${BASE_URL}/industry/${ind}/compare`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.6,
+    });
+
+    try {
+      const res = await fetch(`${API_URL}/api/industry-ai/${ind}/sites`, {
+        next: { revalidate: 3600 },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const items = data?.data || data || [];
+        for (const site of items) {
+          entries.push({
+            url: `${BASE_URL}/industry/${ind}/${site.id}`,
+            lastModified: new Date(),
+            changeFrequency: 'weekly',
+            priority: 0.7,
+          });
+        }
+      }
+    } catch {
+      // API unavailable — skip
+    }
+  }
+
   return entries;
 }

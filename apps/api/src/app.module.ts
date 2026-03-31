@@ -32,6 +32,7 @@ import { DiscoveryModule } from './modules/discovery/discovery.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { EmailModule } from './modules/email/email.module';
 import { ClientReportModule } from './modules/client-report/client-report.module';
+import { IndustryAiModule } from './modules/industry-ai/industry-ai.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { ClientReportModule } from './modules/client-report/client-report.module
     SchedulerModule,
     EmailModule,
     ClientReportModule,
+    IndustryAiModule,
   ],
   controllers: [HealthController],
   providers: [
