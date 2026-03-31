@@ -288,8 +288,8 @@ const pricingPlans = [
   },
   {
     name: 'Starter',
-    monthlyPrice: 490,
-    yearlyPrice: 441,
+    monthlyPrice: 390,
+    yearlyPrice: 351,
     features: [
       { text: '3 個網站', included: true },
       { text: '每站 5 次掃描/月', included: true },
@@ -304,8 +304,8 @@ const pricingPlans = [
   },
   {
     name: 'Pro',
-    monthlyPrice: 1490,
-    yearlyPrice: 1341,
+    monthlyPrice: 690,
+    yearlyPrice: 621,
     features: [
       { text: '3 個網站', included: true },
       { text: '每站 10 次掃描/月', included: true },
@@ -1050,17 +1050,17 @@ export default function LandingPage() {
               <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-4">
                 <TrendingUp className="h-6 w-6 text-blue-400" />
               </div>
-              <p className="text-3xl font-bold">NT$50</p>
+              <p className="text-3xl font-bold">NT$23</p>
               <p className="text-sm text-gray-400 mt-2">每天不到一杯咖啡<br />換取持續 AI 曝光</p>
             </div>
           </div>
 
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 max-w-2xl mx-auto text-center">
             <p className="text-lg leading-relaxed">
-              每月 <span className="text-3xl font-bold text-blue-400">NT$1,490</span> 的 Pro 方案
+              每月 <span className="text-3xl font-bold text-blue-400">NT$690</span> 的 Pro 方案
             </p>
             <p className="mt-3 text-gray-400">
-              = 每天 NT$50 = 讓你的品牌在 <strong className="text-gray-200">ChatGPT、Claude、Perplexity、Gemini、Copilot</strong> 上被主動推薦
+              = 每天 NT$23 = 讓你的品牌在 <strong className="text-gray-200">ChatGPT、Claude、Perplexity、Gemini、Copilot</strong> 上被主動推薦
             </p>
             <p className="mt-4 text-sm text-gray-500">
               一個 AI 推薦帶來的高意願客戶，遠比 10 次 Google Ads 點擊更有價值
