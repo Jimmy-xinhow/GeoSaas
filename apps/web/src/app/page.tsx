@@ -1374,8 +1374,8 @@ export default function LandingPage() {
               <h4 className="font-semibold mb-3 text-sm">探索</h4>
               <ul className="space-y-2 text-sm text-gray-500">
                 <li><Link href="/directory/industries" className="hover:text-white transition-colors">行業分類</Link></li>
-                <li><Link href="/api/llms.txt" className="hover:text-white transition-colors">llms.txt</Link></li>
-                <li><Link href="/api/llms-full.txt" className="hover:text-white transition-colors">llms-full.txt</Link></li>
+                <li><Link href="/llms.txt" className="hover:text-white transition-colors">llms.txt</Link></li>
+                <li><Link href="/llms-full.txt" className="hover:text-white transition-colors">llms-full.txt</Link></li>
               </ul>
             </div>
           </div>
