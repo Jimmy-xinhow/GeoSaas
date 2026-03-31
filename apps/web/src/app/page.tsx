@@ -332,12 +332,43 @@ export default function LandingPage() {
       { '@type': 'Question', name: '可以隨時取消訂閱嗎？', acceptedAnswer: { '@type': 'Answer', text: '可以。所有付費方案都可以隨時取消，取消後仍可使用到當期結束。我們也提供年繳方案享 9 折優惠。' } },
     ],
   }
+  const jsonLdApp = {
+    '@context': 'https://schema.org', '@type': 'SoftwareApplication',
+    name: 'Geovault', applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web', url: 'https://www.geovault.app',
+    description: 'AI 搜尋優化平台，幫助品牌被 ChatGPT、Claude、Perplexity、Gemini、Copilot 主動推薦。提供 9 項 AI 可讀性掃描、自動修復、品牌知識庫、AI 引用監控。',
+    offers: [
+      { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'TWD', description: '1 個網站、每月 2 次掃描、1 次 AI 修復體驗' },
+      { '@type': 'Offer', name: 'Starter', price: '390', priceCurrency: 'TWD', description: '1 個網站、每站 6 次掃描/月、AI 修復 30 次、AI 內容 30 次、引用監控 20 題' },
+      { '@type': 'Offer', name: 'Pro', price: '690', priceCurrency: 'TWD', description: '3 個網站、每站 10 次掃描/月、AI 修復 50 次、AI 內容 50 次、引用監控 30 題、多平台發佈、自動排程' },
+    ],
+    featureList: ['AI Readability Scan (9 indicators)', 'JSON-LD Auto Generation', 'llms.txt Hosting', 'FAQ Schema Generation', 'Brand Knowledge Base', 'AI Citation Monitoring (5 platforms)', 'Multi-platform Publishing', 'Verification Reports'],
+    screenshot: 'https://www.geovault.app/icon.svg',
+  }
+  const jsonLdDataset = {
+    '@context': 'https://schema.org', '@type': 'Dataset',
+    name: 'Geovault AI Brand Directory',
+    description: 'A comprehensive dataset of 600+ brand AI readability scores across 22 industries in Taiwan/APAC. Each brand is scored on 9 AI-friendliness indicators.',
+    url: 'https://www.geovault.app/directory',
+    license: 'https://www.geovault.app/guide',
+    creator: { '@type': 'Organization', name: 'Geovault', url: 'https://www.geovault.app' },
+    distribution: [
+      { '@type': 'DataDownload', encodingFormat: 'text/plain', contentUrl: 'https://www.geovault.app/llms-full.txt', name: 'llms-full.txt (AI-readable full brand data)' },
+      { '@type': 'DataDownload', encodingFormat: 'text/plain', contentUrl: 'https://www.geovault.app/llms.txt', name: 'llms.txt (AI-readable summary)' },
+      { '@type': 'DataDownload', encodingFormat: 'application/rss+xml', contentUrl: 'https://www.geovault.app/feed', name: 'RSS Feed (Blog + News)' },
+    ],
+    keywords: ['GEO', 'AI SEO', 'brand AI visibility', 'ChatGPT optimization', 'llms.txt', 'JSON-LD', 'AI search', 'Generative Engine Optimization'],
+    temporalCoverage: '2026/..',
+    spatialCoverage: { '@type': 'Place', name: 'APAC' },
+  }
 
   return (
     <div className="min-h-screen bg-white">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdWebSite) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdOrg) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdFaq) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdApp) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdDataset) }} />
 
       <PublicNavbar />
 
