@@ -179,7 +179,7 @@ function GuestScanResults({ scanId }: { scanId: string }) {
       <IndexNowButton url={scan.url} />
       <div className="text-center">
         <Link href="/register">
-          <Button size="lg" className="bg-white text-blue-600 hover:bg-blue-50 font-semibold h-12 px-10">
+          <Button size="lg" className="bg-white text-gray-900 hover:bg-gray-100 font-semibold h-12 px-10">
             註冊解鎖完整報告 & 自動修復
             <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
@@ -1074,24 +1074,24 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           SECTION 7 — PLATFORM STATS (Social Proof Numbers)
          ════════════════════════════════════════════════════════ */}
-      <section className="py-16 bg-gray-800/50 border-y border-white/5">
+      <section className="py-16 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600">
         <div className="max-w-5xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             <div ref={brandCount.ref}>
-              <p className="text-4xl sm:text-5xl font-bold text-blue-400 tabular-nums">{brandCount.count}+</p>
-              <p className="text-sm text-gray-500 mt-2">收錄品牌</p>
+              <p className="text-4xl sm:text-5xl font-bold text-white tabular-nums">{brandCount.count}+</p>
+              <p className="text-sm text-blue-100 mt-2">收錄品牌</p>
             </div>
             <div ref={articleCount.ref}>
-              <p className="text-4xl sm:text-5xl font-bold text-green-400 tabular-nums">{articleCount.count}+</p>
-              <p className="text-sm text-gray-500 mt-2">AI 分析文章</p>
+              <p className="text-4xl sm:text-5xl font-bold text-white tabular-nums">{articleCount.count}+</p>
+              <p className="text-sm text-blue-100 mt-2">AI 分析文章</p>
             </div>
             <div ref={industryCount.ref}>
-              <p className="text-4xl sm:text-5xl font-bold text-purple-400 tabular-nums">{industryCount.count}</p>
-              <p className="text-sm text-gray-500 mt-2">行業覆蓋</p>
+              <p className="text-4xl sm:text-5xl font-bold text-white tabular-nums">{industryCount.count}</p>
+              <p className="text-sm text-blue-100 mt-2">行業覆蓋</p>
             </div>
             <div>
-              <p className="text-4xl sm:text-5xl font-bold text-orange-400">9</p>
-              <p className="text-sm text-gray-500 mt-2">AI 可讀性指標</p>
+              <p className="text-4xl sm:text-5xl font-bold text-white">9</p>
+              <p className="text-sm text-blue-100 mt-2">AI 可讀性指標</p>
             </div>
           </div>
         </div>
