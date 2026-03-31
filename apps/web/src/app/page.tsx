@@ -1042,42 +1042,51 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           SECTION 7 — PLATFORM STATS (Social Proof Numbers)
          ════════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 relative overflow-hidden">
-        {/* Decorative elements */}
-        <div className="absolute top-0 left-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
-        <div className="relative max-w-5xl mx-auto px-6">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold text-white">被台灣品牌信賴的 GEO 平台</h2>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div ref={brandCount.ref} className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10 hover:bg-white/15 transition-colors">
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <Globe className="h-6 w-6 text-white" />
-              </div>
-              <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">{brandCount.count}+</p>
-              <p className="text-sm text-blue-100 mt-1">收錄品牌</p>
+      <section className="relative overflow-hidden">
+        {/* Top fade from dark */}
+        <div className="h-16 bg-gradient-to-b from-gray-900 to-transparent absolute top-0 left-0 right-0 z-10" />
+        {/* Bottom fade to dark */}
+        <div className="h-16 bg-gradient-to-t from-gray-900 to-transparent absolute bottom-0 left-0 right-0 z-10" />
+        {/* Main gradient — blue-green like the reference */}
+        <div className="py-20 bg-gradient-to-r from-[#0a3d5c] via-[#1a8a6e] to-[#3b6cb5] relative">
+          {/* Decorative blur orbs */}
+          <div className="absolute top-1/2 left-0 w-96 h-96 bg-green-400/15 rounded-full blur-3xl -translate-y-1/2 -translate-x-1/3" />
+          <div className="absolute top-1/2 right-0 w-96 h-96 bg-blue-500/15 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+          <div className="absolute top-0 left-1/2 w-72 h-72 bg-teal-400/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+
+          <div className="relative z-20 max-w-5xl mx-auto px-6">
+            <div className="text-center mb-10">
+              <h2 className="text-2xl sm:text-3xl font-bold text-white">被台灣品牌信賴的 GEO 平台</h2>
             </div>
-            <div ref={articleCount.ref} className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10 hover:bg-white/15 transition-colors">
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <FileText className="h-6 w-6 text-white" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div ref={brandCount.ref} className="bg-white/10 backdrop-blur-md rounded-2xl p-6 text-center border border-white/20 hover:bg-white/15 transition-colors">
+                <div className="w-12 h-12 rounded-full bg-white/15 flex items-center justify-center mx-auto mb-3">
+                  <Globe className="h-6 w-6 text-white/80" />
+                </div>
+                <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">{brandCount.count}+</p>
+                <p className="text-sm text-white/60 mt-1">收錄品牌</p>
               </div>
-              <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">{articleCount.count}+</p>
-              <p className="text-sm text-blue-100 mt-1">AI 分析文章</p>
-            </div>
-            <div ref={industryCount.ref} className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10 hover:bg-white/15 transition-colors">
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <BarChart3 className="h-6 w-6 text-white" />
+              <div ref={articleCount.ref} className="bg-white/10 backdrop-blur-md rounded-2xl p-6 text-center border border-white/20 hover:bg-white/15 transition-colors">
+                <div className="w-12 h-12 rounded-full bg-white/15 flex items-center justify-center mx-auto mb-3">
+                  <FileText className="h-6 w-6 text-white/80" />
+                </div>
+                <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">{articleCount.count}+</p>
+                <p className="text-sm text-white/60 mt-1">AI 分析文章</p>
               </div>
-              <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">{industryCount.count}</p>
-              <p className="text-sm text-blue-100 mt-1">行業覆蓋</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10 hover:bg-white/15 transition-colors">
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <Shield className="h-6 w-6 text-white" />
+              <div ref={industryCount.ref} className="bg-white/10 backdrop-blur-md rounded-2xl p-6 text-center border border-white/20 hover:bg-white/15 transition-colors">
+                <div className="w-12 h-12 rounded-full bg-white/15 flex items-center justify-center mx-auto mb-3">
+                  <BarChart3 className="h-6 w-6 text-white/80" />
+                </div>
+                <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">{industryCount.count}</p>
+                <p className="text-sm text-white/60 mt-1">行業覆蓋</p>
               </div>
-              <p className="text-3xl sm:text-4xl font-bold text-white">9</p>
-              <p className="text-sm text-blue-100 mt-1">AI 可讀性指標</p>
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 text-center border border-white/20 hover:bg-white/15 transition-colors">
+                <div className="w-12 h-12 rounded-full bg-white/15 flex items-center justify-center mx-auto mb-3">
+                  <Shield className="h-6 w-6 text-white/80" />
+                </div>
+                <p className="text-3xl sm:text-4xl font-bold text-white">9</p>
+                <p className="text-sm text-white/60 mt-1">AI 可讀性指標</p>
+              </div>
             </div>
           </div>
         </div>
