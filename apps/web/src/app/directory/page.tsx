@@ -408,55 +408,61 @@ export default function DirectoryPage() {
         </Card>
       </div>
 
-      {/* Crawler Feed */}
-      <Card className="bg-white/5 border-white/10">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
+      {/* Crawler Feed — Marquee */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
+          <div className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-purple-400 animate-live-pulse" />
-            即時 AI 爬蟲動態
-            <span className="inline-flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 text-xs font-normal">
+            <span className="font-semibold text-white text-sm">即時 AI 爬蟲動態</span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 text-xs font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" />
               LIVE
             </span>
-            {crawlerFeed?.stats && (
-              <Badge variant="secondary" className="ml-auto text-xs font-normal bg-white/10 text-gray-300">
-                24h: {crawlerFeed.stats.last24h} 次造訪
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {feedLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
+          </div>
+          {crawlerFeed?.stats && (
+            <div className="flex items-center gap-3">
+              {crawlerFeed.stats.activeBots.slice(0, 4).map((bot) => (
+                <span key={bot.name} className="inline-flex items-center gap-1 text-xs text-gray-400">
+                  <Bot className="h-3 w-3 text-purple-400" />
+                  {bot.name}: {bot.count}
+                </span>
               ))}
-            </div>
-          ) : !crawlerFeed || crawlerFeed.feed.length === 0 ? (
-            <p className="text-center text-gray-500 py-6">
-              尚無爬蟲活動數據
-            </p>
-          ) : (
-            <div>
-              {crawlerFeed.stats.activeBots.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {crawlerFeed.stats.activeBots.map((bot) => (
-                    <Badge key={bot.name} variant="outline" className="text-xs">
-                      <Bot className="h-3 w-3 mr-1" />
-                      {bot.name}: {bot.count}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-              <div className="divide-y divide-white/5 max-h-[300px] overflow-y-auto">
-                {crawlerFeed.feed.map((item) => (
-                  <CrawlerFeedRow key={item.id} item={item} />
-                ))}
-              </div>
+              <span className="text-xs text-gray-500">24h: {crawlerFeed.stats.last24h}</span>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+        {feedLoading ? (
+          <div className="px-5 py-4 space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-6 w-full" />
+            ))}
+          </div>
+        ) : !crawlerFeed || crawlerFeed.feed.length === 0 ? (
+          <p className="text-center text-gray-500 py-6 text-sm">尚無爬蟲活動數據</p>
+        ) : (
+          <div className="py-3 overflow-hidden">
+            <div className="flex items-center gap-10 animate-marquee-dir whitespace-nowrap">
+              {[...crawlerFeed.feed, ...crawlerFeed.feed].map((item, i) => (
+                <span key={`${item.id}-${i}`} className="inline-flex items-center gap-2 text-sm shrink-0">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    Date.now() - new Date(item.visitedAt).getTime() < 300000
+                      ? 'bg-green-400 animate-live-dot'
+                      : 'bg-gray-600'
+                  }`} />
+                  <span className="text-purple-400 font-medium">{item.botName}</span>
+                  <span className="text-gray-600">→</span>
+                  <span className="text-gray-400">{item.site.name}</span>
+                  <span className="text-xs text-yellow-200/40">{getTimeAgo(item.visitedAt)}</span>
+                </span>
+              ))}
+            </div>
+            <style jsx>{`
+              @keyframes marquee-dir { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
+              .animate-marquee-dir { animation: marquee-dir ${Math.max(crawlerFeed.feed.length * 4, 30)}s linear infinite; }
+            `}</style>
+          </div>
+        )}
+      </div>
 
       {/* Multi-dimension Leaderboards */}
       <LeaderboardTabs />

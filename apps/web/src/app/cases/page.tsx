@@ -88,20 +88,22 @@ function FeaturedCarousel({ items }: { items: any[] }) {
       <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         {items.map((c) => (
           <Link key={c.id} href={`/cases/${c.id}`} className="snap-start">
-            <Card className="w-[300px] shrink-0 bg-white/5 backdrop-blur-sm border border-white/10 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10 transition-all cursor-pointer">
-              <CardContent className="p-5 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Badge className={PLATFORM_CONFIG[c.aiPlatform]?.color || 'bg-white/10'}>
-                    {PLATFORM_CONFIG[c.aiPlatform]?.label || c.aiPlatform}
-                  </Badge>
-                  {c.featuredAt && (
-                    <Badge className="bg-yellow-500/20 text-yellow-400 text-[10px]">精選</Badge>
-                  )}
+            <Card className="w-[300px] h-[180px] shrink-0 bg-white/5 backdrop-blur-sm border border-white/10 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10 transition-all cursor-pointer flex flex-col">
+              <CardContent className="p-5 flex flex-col justify-between flex-1">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge className={PLATFORM_CONFIG[c.aiPlatform]?.color || 'bg-white/10'}>
+                      {PLATFORM_CONFIG[c.aiPlatform]?.label || c.aiPlatform}
+                    </Badge>
+                    {c.featuredAt && (
+                      <Badge className="bg-yellow-500/20 text-yellow-400 text-[10px]">精選</Badge>
+                    )}
+                  </div>
+                  <h3 className="font-semibold text-sm text-white line-clamp-2">{c.title}</h3>
+                  <p className="text-xs text-yellow-200/60 line-clamp-1">「{c.queryUsed}」</p>
                 </div>
-                <h3 className="font-semibold text-sm text-white line-clamp-2">{c.title}</h3>
-                <p className="text-xs text-yellow-200/60 line-clamp-1">「{c.queryUsed}」</p>
                 {c.beforeGeoScore != null && c.afterGeoScore != null && (
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex items-center gap-2 text-sm mt-auto pt-2">
                     <span className="text-red-400 font-bold">{c.beforeGeoScore}</span>
                     <span className="text-yellow-200/40">→</span>
                     <span className="text-green-400 font-bold">{c.afterGeoScore}</span>
