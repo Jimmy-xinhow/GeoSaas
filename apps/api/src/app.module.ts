@@ -92,6 +92,5 @@ import { IndustryAiModule } from './modules/industry-ai/industry-ai.module';
     },
     PlanUsageService,
   ],
-  exports: [PlanUsageService],
 })
 export class AppModule {}
