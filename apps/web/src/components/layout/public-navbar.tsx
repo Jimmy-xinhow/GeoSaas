@@ -8,9 +8,8 @@ import { cn } from '@/lib/utils';
 
 const navLinks = [
   { href: '/directory', label: '目錄' },
-  { href: '/industry/auto_care', label: '汽車美容' },
-  { href: '/industry/traditional_medicine', label: '整復推拿' },
   { href: '/blog', label: 'Blog' },
+  { href: '/news', label: 'News' },
   { href: '/cases', label: '案例' },
 ];
 
