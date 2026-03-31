@@ -69,9 +69,9 @@ export default function AdminSitesPage() {
 
   const allSites = data?.items || [];
   const sites = showClientOnly
-    ? allSites.filter((s: any) => clientSiteIds.has(s.id))
+    ? (clientSites || [])
     : allSites;
-  const total = showClientOnly ? sites.length : (data?.total || 0);
+  const total = showClientOnly ? (clientSites || []).length : (data?.total || 0);
   const totalPages = showClientOnly ? 1 : Math.ceil((data?.total || 0) / 20);
 
   return (
