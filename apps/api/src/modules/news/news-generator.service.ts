@@ -201,15 +201,15 @@ export class NewsGeneratorService {
     if (!this.openai) return null;
 
     const sourceSummary = sources
-      .map((s, i) => `${i + 1}. [${s.source}] ${s.title}\n   ${s.snippet}`)
+      .map((s, i) => `${i + 1}. [${s.source}] ${s.title}\n   摘要：${s.snippet}\n   連結：${s.url}`)
       .join('\n\n');
 
     const category = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        max_tokens: 2000,
+        model: 'gpt-4o',
+        max_tokens: 3000,
         messages: [
           {
             role: 'system',
@@ -223,8 +223,10 @@ export class NewsGeneratorService {
 3. 文末要帶出對品牌 AI 能見度的實際建議
 4. 繁體中文，專業但易讀
 5. 標題要吸引人，有新聞感
-6. 內容 400-600 字
-7. 使用 Markdown 格式（## 標題、- 列表等）
+6. 內容 600-900 字
+7. 使用 Markdown 格式（## 標題、### 子標題、- 列表等）
+8. **必須在文章中引用來源文章的連結**，使用 Markdown 連結格式 [來源名稱](URL)，至少引用 2-3 個來源
+9. 文末加上「### 參考來源」區塊，列出所有引用的文章連結
 
 回覆格式（JSON）：
 {

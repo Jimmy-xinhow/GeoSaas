@@ -160,7 +160,7 @@ Q: 這個成功案例可以複製嗎？
 Q: 需要多少技術能力才能做到？`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
     });

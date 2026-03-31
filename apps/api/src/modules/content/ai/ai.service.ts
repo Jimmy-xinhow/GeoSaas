@@ -50,7 +50,7 @@ export class AiService {
 
     try {
       const response = await this.client.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         max_tokens: 4096,
         messages: [
           { role: 'system', content: system },
@@ -69,7 +69,7 @@ export class AiService {
 
     try {
       const response = await this.client.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         max_tokens: 8192,
         messages: [
           { role: 'system', content: system },

@@ -142,7 +142,7 @@ export class FixService {
 
     try {
       const response = await this.openai!.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         max_tokens: 4096,
         messages: [
           {

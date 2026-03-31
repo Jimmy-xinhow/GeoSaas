@@ -416,7 +416,7 @@ ${batch.focusPrompt}
 只輸出 JSON 陣列: [{"question": "...", "answer": "..."}, ...]`;
 
     const response = await this.openai!.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       max_tokens: 8192,
       messages: [
         {
