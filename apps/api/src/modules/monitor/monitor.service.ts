@@ -1,5 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 import { ChatgptDetector } from './platforms/chatgpt.detector';
 import { ClaudeDetector } from './platforms/claude.detector';
 import { PerplexityDetector } from './platforms/perplexity.detector';
@@ -12,6 +13,7 @@ export class MonitorService {
 
   constructor(
     private prisma: PrismaService,
+    private planUsage: PlanUsageService,
     private chatgptDetector: ChatgptDetector,
     private claudeDetector: ClaudeDetector,
     private perplexityDetector: PerplexityDetector,
@@ -24,6 +26,20 @@ export class MonitorService {
   }
 
   async create(data: { siteId: string; platform: string; query: string }) {
+    // Check plan limit: monitorPerMonth
+    const site = await this.prisma.site.findUnique({ where: { id: data.siteId }, select: { userId: true } });
+    if (site) {
+      const user = await this.prisma.user.findUnique({ where: { id: site.userId } });
+      if (user) {
+        const check = await this.planUsage.checkAndIncrement(site.userId, 'monitorPerMonth', user.plan, user.role);
+        if (!check.allowed) {
+          throw new ForbiddenException(
+            `已達本月監測額度上限（${check.used}/${check.limit}）。請升級方案以繼續使用。`,
+          );
+        }
+      }
+    }
+
     const monitor = await this.prisma.monitor.create({
       data: { ...data, platform: data.platform.toUpperCase(), checkedAt: new Date() },
     });

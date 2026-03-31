@@ -79,18 +79,18 @@ export default function Sidebar() {
         )}
       </nav>
 
-      {/* Bottom usage section */}
+      {/* Bottom — Plan info */}
       <div className="p-4 mx-4 mb-4 bg-gray-800 rounded-lg">
-        <p className="text-sm text-gray-400 mb-2">已用 3/5 次掃描</p>
-        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden mb-3">
-          <div
-            className="h-full bg-blue-500 rounded-full transition-all"
-            style={{ width: '60%' }}
-          />
-        </div>
-        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm">
-          升級 Pro
-        </Button>
+        <p className="text-sm text-gray-400 mb-2">
+          {user?.plan === 'PRO' ? 'Pro 方案' : user?.plan === 'STARTER' ? 'Starter 方案' : 'Free 方案'}
+        </p>
+        {user?.plan === 'FREE' && (
+          <Link href="/settings">
+            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm">
+              升級方案
+            </Button>
+          </Link>
+        )}
       </div>
     </aside>
   )

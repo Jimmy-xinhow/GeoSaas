@@ -2,11 +2,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ForbiddenException,
   Optional,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
 import { ScanPipelineService } from './scan-pipeline.service';
 
 @Injectable()
@@ -16,6 +18,7 @@ export class ScanService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pipeline: ScanPipelineService,
+    private readonly planUsage: PlanUsageService,
     @Optional() @InjectQueue('scan') private readonly scanQueue?: Queue,
   ) {}
 
@@ -25,6 +28,26 @@ export class ScanService {
       where: { id: siteId, userId },
     });
     if (!site) throw new NotFoundException('Site not found');
+
+    // Check plan limit: scans per site per month
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user && !['STAFF', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+      const plan = (user.plan || 'FREE') as keyof typeof PLAN_LIMITS;
+      const limits = PLAN_LIMITS[plan];
+      if (limits) {
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+        const scansThisMonth = await this.prisma.scan.count({
+          where: { siteId, createdAt: { gte: monthStart } },
+        });
+        if (scansThisMonth >= limits.scansPerSitePerMonth) {
+          throw new ForbiddenException(
+            `此網站本月掃描次數已達上限（${scansThisMonth}/${limits.scansPerSitePerMonth}）。請升級方案以繼續使用。`,
+          );
+        }
+      }
+    }
 
     // Create the scan record with PENDING status
     const scan = await this.prisma.scan.create({

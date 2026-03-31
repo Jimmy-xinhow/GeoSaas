@@ -8,6 +8,14 @@ export const Roles = (...roles: string[]) =>
     return descriptor ?? target;
   };
 
+// Role hierarchy: SUPER_ADMIN > ADMIN > STAFF > USER
+const ROLE_HIERARCHY: Record<string, number> = {
+  USER: 0,
+  STAFF: 1,
+  ADMIN: 2,
+  SUPER_ADMIN: 3,
+};
+
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
@@ -19,6 +27,13 @@ export class RolesGuard implements CanActivate {
     ]);
     if (!requiredRoles) return true;
     const { user } = context.switchToHttp().getRequest();
-    return requiredRoles.includes(user?.role);
+    if (!user?.role) return false;
+
+    // SUPER_ADMIN can do everything ADMIN can
+    if (user.role === 'SUPER_ADMIN' && requiredRoles.includes('ADMIN')) {
+      return true;
+    }
+
+    return requiredRoles.includes(user.role);
   }
 }

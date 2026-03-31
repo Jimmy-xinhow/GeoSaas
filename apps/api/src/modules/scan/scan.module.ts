@@ -6,6 +6,7 @@ import { ScanController } from './scan.controller';
 import { ScanService } from './scan.service';
 import { ScanProcessor } from './scan.processor';
 import { ScanPipelineService } from './scan-pipeline.service';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 import { CrawlerService } from './crawler/crawler.service';
 import { ParserService } from './crawler/parser.service';
 import { ScoringService } from './scoring/scoring.service';
@@ -43,7 +44,7 @@ const coreProviders = [
 @Module({
   imports: [BullModule.registerQueue({ name: 'scan' }), BadgeModule, IndexNowModule],
   controllers: [ScanController],
-  providers: [...coreProviders, ScanProcessor],
+  providers: [...coreProviders, ScanProcessor, PlanUsageService],
   exports: [ScanService, ScanPipelineService],
 })
 export class ScanModule {}

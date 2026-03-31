@@ -6,11 +6,12 @@ import { LlmsTxtGenerator } from './generators/llms-txt.generator';
 import { OgTagsGenerator } from './generators/og-tags.generator';
 import { FaqSchemaGenerator } from './generators/faq-schema.generator';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 
 @Module({
   imports: [KnowledgeModule],
   controllers: [FixController],
-  providers: [FixService, JsonLdGenerator, LlmsTxtGenerator, OgTagsGenerator, FaqSchemaGenerator],
+  providers: [FixService, JsonLdGenerator, LlmsTxtGenerator, OgTagsGenerator, FaqSchemaGenerator, PlanUsageService],
   exports: [FixService],
 })
 export class FixModule {}

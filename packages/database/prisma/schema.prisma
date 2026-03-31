@@ -12,14 +12,15 @@ datasource db {
 
 enum UserRole {
   USER
+  STAFF
   ADMIN
+  SUPER_ADMIN
 }
 
 enum Plan {
   FREE
   STARTER
   PRO
-  ENTERPRISE
 }
 
 enum ScanStatus {
@@ -67,6 +68,7 @@ model User {
   avatarUrl        String?
   role             UserRole  @default(USER)
   plan             Plan      @default(FREE)
+  managedBy        String?   // SUPER_ADMIN userId who manages this client
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -76,6 +78,7 @@ model User {
   orders        Order[]
   successCases  GeoSuccessCase[]
 
+  @@index([managedBy])
   @@map("users")
 }
 
@@ -99,6 +102,9 @@ model Site {
   tier        String?
   bestScore   Int      @default(0)
   bestScoreAt DateTime?
+
+  // Client tagging
+  isClient     Boolean  @default(false)
 
   // Verified status
   isVerified   Boolean  @default(false)

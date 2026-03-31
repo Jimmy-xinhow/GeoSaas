@@ -29,8 +29,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             email,
             name: 'Admin',
             passwordHash,
-            role: 'ADMIN',
-            plan: 'ENTERPRISE',
+            role: 'SUPER_ADMIN',
+            plan: 'PRO',
           },
         });
         this.logger.log(`Admin user created: ${email}`);

@@ -1,7 +1,8 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 import { JsonLdGenerator } from './generators/json-ld.generator';
 import { LlmsTxtGenerator } from './generators/llms-txt.generator';
 import { OgTagsGenerator } from './generators/og-tags.generator';
@@ -25,6 +26,7 @@ export class FixService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly planUsage: PlanUsageService,
     private readonly jsonLdGen: JsonLdGenerator,
     private readonly llmsTxtGen: LlmsTxtGenerator,
     private readonly ogTagsGen: OgTagsGenerator,
@@ -64,9 +66,20 @@ export class FixService {
     // 1. Fetch site info (including profile)
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
-      select: { id: true, name: true, url: true, profile: true },
+      select: { id: true, name: true, url: true, profile: true, userId: true },
     });
     if (!site) throw new NotFoundException('Site not found');
+
+    // Check plan limit: fixesPerMonth
+    const siteOwner = await this.prisma.user.findUnique({ where: { id: site.userId } });
+    if (siteOwner) {
+      const check = await this.planUsage.checkAndIncrement(site.userId, 'fixesPerMonth', siteOwner.plan, siteOwner.role);
+      if (!check.allowed) {
+        throw new ForbiddenException(
+          `已達本月修復額度上限（${check.used}/${check.limit}）。請升級方案以繼續使用。`,
+        );
+      }
+    }
 
     // 2. Fetch scan result details (contains data from original scan)
     const scanResult = await this.prisma.scanResult.findUnique({

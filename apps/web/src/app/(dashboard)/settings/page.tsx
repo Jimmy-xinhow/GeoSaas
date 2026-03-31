@@ -22,10 +22,9 @@ import {
 } from '@/hooks/use-settings'
 
 const PLAN_LIMITS: Record<string, { scans: number; sites: number; label: string; description: string }> = {
-  FREE: { scans: 3, sites: 1, label: 'Free 方案', description: '3 次掃描/月 | 1 個網站' },
-  STARTER: { scans: 30, sites: 5, label: 'Starter 方案', description: '30 次掃描/月 | 5 個網站 | AI 內容' },
-  PRO: { scans: 100, sites: 20, label: 'Pro 方案', description: '100 次掃描/月 | 20 個網站 | AI 內容 | 引用監控' },
-  ENTERPRISE: { scans: -1, sites: -1, label: 'Enterprise 方案', description: '無限掃描 | 無限網站 | 全功能' },
+  FREE: { scans: 2, sites: 1, label: 'Free 方案', description: '每站 2 次掃描/月 | 1 個網站 | 1 次修復體驗' },
+  STARTER: { scans: 6, sites: 1, label: 'Starter 方案 NT$390/月', description: '每站 6 次掃描/月 | 1 個網站 | AI 修復 30 次 | AI 內容 30 次 | 引用監控 20 題' },
+  PRO: { scans: 10, sites: 3, label: 'Pro 方案 NT$690/月', description: '每站 10 次掃描/月 | 3 個網站 | AI 修復 50 次 | AI 內容 50 次 | 引用監控 30 題 | 多平台 | 自動排程' },
 }
 
 export default function SettingsPage() {

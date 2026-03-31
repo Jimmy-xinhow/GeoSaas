@@ -1,5 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
 import { ConfigService } from '@nestjs/config';
 import { MediumAdapter } from './adapters/medium.adapter';
 import { LinkedInAdapter } from './adapters/linkedin.adapter';
@@ -14,6 +15,7 @@ export class PublishService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private planUsage: PlanUsageService,
     private mediumAdapter: MediumAdapter,
     private linkedInAdapter: LinkedInAdapter,
     private wordPressAdapter: WordPressAdapter,
@@ -28,6 +30,19 @@ export class PublishService {
   async publish(contentId: string, platforms: string[], userId: string) {
     const content = await this.prisma.content.findFirst({ where: { id: contentId, userId } });
     if (!content) throw new NotFoundException('Content not found');
+
+    // Check plan limit: multiPlatform (publishing to multiple platforms)
+    if (platforms.length > 1) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (user) {
+        const check = await this.planUsage.checkAndIncrement(userId, 'multiPlatform', user.plan, user.role);
+        if (!check.allowed) {
+          throw new ForbiddenException(
+            '多平台發布功能需要升級至 PRO 方案才能使用。',
+          );
+        }
+      }
+    }
 
     const publications = await Promise.all(
       platforms.map((platform) =>

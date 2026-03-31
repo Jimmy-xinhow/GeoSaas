@@ -7,6 +7,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { CustomThrottlerGuard } from './common/guards/throttler.guard';
+import { PlanUsageService } from './common/guards/plan.guard';
 import { HealthController } from './health.controller';
 import { AuthModule } from './modules/auth/auth.module';
 import { SitesModule } from './modules/sites/sites.module';
@@ -89,6 +90,8 @@ import { IndustryAiModule } from './modules/industry-ai/industry-ai.module';
       provide: APP_GUARD,
       useClass: CustomThrottlerGuard,
     },
+    PlanUsageService,
   ],
+  exports: [PlanUsageService],
 })
 export class AppModule {}

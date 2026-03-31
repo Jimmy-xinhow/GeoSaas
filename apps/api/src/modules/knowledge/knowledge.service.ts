@@ -1,7 +1,8 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 import { CreateQaDto } from './dto/create-qa.dto';
 import { UpdateQaDto } from './dto/update-qa.dto';
 
@@ -28,6 +29,7 @@ export class KnowledgeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly planUsage: PlanUsageService,
   ) {
     this.initOpenAIClient();
   }
@@ -163,6 +165,17 @@ export class KnowledgeService {
   // ── AI auto-generation: 5 parallel batches (returns preview, NOT saved to DB) ──
   async aiGenerate(siteId: string, userId: string, excludeQuestions?: string[]): Promise<GeneratedQa[]> {
     const site = await this.verifySiteOwnership(siteId, userId);
+
+    // Check plan limit: knowledgePerMonth
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user) {
+      const check = await this.planUsage.checkAndIncrement(userId, 'knowledgePerMonth', user.plan, user.role);
+      if (!check.allowed) {
+        throw new ForbiddenException(
+          `已達本月知識庫生成額度上限（${check.used}/${check.limit}）。請升級方案以繼續使用。`,
+        );
+      }
+    }
 
     if (!this.openai) {
       throw new BadRequestException('AI 功能未啟用（OPENAI_API_KEY 未設定）');

@@ -2,17 +2,16 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { encryptTradeInfo, generateTradeSha, decryptTradeInfo, NewebPayTradeInfo } from './newebpay.util';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 
 const PLAN_PRICE: Record<string, number> = {
-  STARTER: 490,
-  PRO: 1490,
-  ENTERPRISE: 4990,
+  STARTER: 390,
+  PRO: 690,
 };
 
 const PLAN_DESC: Record<string, string> = {
-  STARTER: 'GEO-SaaS Starter 方案',
-  PRO: 'GEO-SaaS Pro 方案',
-  ENTERPRISE: 'GEO-SaaS Enterprise 方案',
+  STARTER: 'Geovault Starter 方案',
+  PRO: 'Geovault Pro 方案',
 };
 
 @Injectable()
@@ -26,6 +25,7 @@ export class BillingService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private planUsage: PlanUsageService,
   ) {
     this.merchantId = this.config.get('NEWEBPAY_MERCHANT_ID') || '';
     this.hashKey = this.config.get('NEWEBPAY_HASH_KEY') || '';
@@ -133,20 +133,14 @@ export class BillingService {
 
   async getSubscription(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return null;
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    const [scansThisMonth, sitesCount] = await Promise.all([
-      this.prisma.scan.count({
-        where: { site: { userId }, createdAt: { gte: startOfMonth } },
-      }),
-      this.prisma.site.count({ where: { userId } }),
-    ]);
+    const usage = await this.planUsage.getUsageSummary(userId, user.plan);
 
     return {
-      plan: user?.plan,
-      usage: { scansThisMonth, sitesCount },
+      plan: user.plan,
+      role: user.role,
+      usage,
     };
   }
 }
