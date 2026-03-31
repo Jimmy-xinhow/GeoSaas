@@ -50,7 +50,7 @@ export default function AdminSchedulerPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Clock className="h-6 w-6" /> 排程管理
         </h1>
-        <p className="text-sm text-gray-500">管理自動化排程任務（爬蟲、分析、生成）</p>
+        <p className="text-sm text-gray-400">管理自動化排程任務（爬蟲、分析、生成）</p>
       </div>
 
       <div className="grid gap-4">
@@ -67,16 +67,16 @@ export default function AdminSchedulerPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
-                      <h3 className="font-semibold text-gray-900">
+                      <h3 className="font-semibold text-white">
                         {TASK_LABELS[task.taskKey] || task.name || task.taskKey}
                       </h3>
-                      <Badge className={task.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}>
+                      <Badge className={task.enabled ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-gray-400'}>
                         {task.enabled ? '啟用' : '停用'}
                       </Badge>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">{task.description || task.taskKey}</p>
+                    <p className="text-sm text-gray-400 mt-1">{task.description || task.taskKey}</p>
                     <div className="flex gap-4 mt-2 text-xs text-gray-400">
-                      <span>Cron: <code className="bg-gray-100 px-1 rounded">{task.cronExpr}</code></span>
+                      <span>Cron: <code className="bg-white/10 px-1 rounded">{task.cronExpr}</code></span>
                       {task.lastRunAt && <span>上次: {new Date(task.lastRunAt).toLocaleString('zh-TW')}</span>}
                       {task.nextRunAt && <span>下次: {new Date(task.nextRunAt).toLocaleString('zh-TW')}</span>}
                     </div>

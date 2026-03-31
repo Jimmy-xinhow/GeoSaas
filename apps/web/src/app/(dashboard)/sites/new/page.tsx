@@ -51,13 +51,13 @@ export default function NewSitePage() {
     <div className="space-y-6">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">新增網站</h1>
+        <h1 className="text-2xl font-bold text-white">新增網站</h1>
         <p className="text-muted-foreground mt-1">
           新增網站並立即開始 GEO 掃描
         </p>
       </div>
 
-      <Card className="max-w-xl">
+      <Card className="max-w-xl bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Globe className="h-5 w-5" />

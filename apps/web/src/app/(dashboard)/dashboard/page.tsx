@@ -44,15 +44,15 @@ function getScoreStatus(score: number): string {
 function getStatusColor(status: string) {
   switch (status) {
     case '優秀':
-      return 'text-green-600 bg-green-50'
+      return 'text-green-600 bg-green-500/20'
     case '良好':
-      return 'text-blue-600 bg-blue-50'
+      return 'text-blue-600 bg-blue-500/20'
     case '需改善':
-      return 'text-yellow-600 bg-yellow-50'
+      return 'text-yellow-600 bg-yellow-500/20'
     case '低分':
-      return 'text-red-600 bg-red-50'
+      return 'text-red-600 bg-red-500/20'
     default:
-      return 'text-gray-600 bg-gray-50'
+      return 'text-gray-400 bg-white/5'
   }
 }
 
@@ -133,28 +133,28 @@ export default function DashboardPage() {
         value: String(sitesCount),
         icon: Globe,
         color: 'text-blue-600',
-        bg: 'bg-blue-50',
+        bg: 'bg-blue-500/20',
       },
       {
         label: '平均 GEO 分數',
         value: String(avgScore),
         icon: TrendingUp,
         color: 'text-green-600',
-        bg: 'bg-green-50',
+        bg: 'bg-green-500/20',
       },
       {
         label: 'AI 引用次數',
         value: String(citationCount),
         icon: MessageSquareQuote,
         color: 'text-purple-600',
-        bg: 'bg-purple-50',
+        bg: 'bg-purple-500/20',
       },
       {
         label: '已發布內容',
         value: String(contentCount),
         icon: FileText,
         color: 'text-orange-600',
-        bg: 'bg-orange-50',
+        bg: 'bg-orange-500/20',
       },
     ]
   }, [sites, contents, monitorData])
@@ -212,7 +212,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">總覽</h1>
+        <h1 className="text-2xl font-bold text-white">總覽</h1>
         <p className="text-muted-foreground mt-1">歡迎回來，以下是您的 GEO 概況</p>
       </div>
 
@@ -221,7 +221,7 @@ export default function DashboardPage() {
         {isLoading
           ? [1, 2, 3, 4].map((i) => <StatCardSkeleton key={i} />)
           : stats.map((stat) => (
-              <Card key={stat.label}>
+              <Card key={stat.label} className="bg-white/5 border-white/10">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -238,7 +238,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick scan */}
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
@@ -276,7 +276,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent scans */}
-        <Card>
+        <Card className="bg-white/5 border-white/10">
           <CardHeader>
             <CardTitle>最近掃描</CardTitle>
           </CardHeader>
@@ -295,7 +295,7 @@ export default function DashboardPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b text-left">
+                    <tr className="border-b border-white/10 text-left">
                       <th className="pb-3 font-medium text-muted-foreground">網站名稱</th>
                       <th className="pb-3 font-medium text-muted-foreground">分數</th>
                       <th className="pb-3 font-medium text-muted-foreground">狀態</th>
@@ -304,7 +304,7 @@ export default function DashboardPage() {
                   </thead>
                   <tbody>
                     {recentScans.map((scan) => (
-                      <tr key={scan.name} className="border-b last:border-0">
+                      <tr key={scan.name} className="border-b border-white/10 last:border-0">
                         <td className="py-3 font-medium">{scan.name}</td>
                         <td className="py-3 font-semibold">{scan.score}</td>
                         <td className="py-3">
@@ -328,7 +328,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Score trend chart */}
-        <Card>
+        <Card className="bg-white/5 border-white/10">
           <CardHeader>
             <CardTitle>分數趨勢</CardTitle>
             <CardDescription>過去 6 個月的平均 GEO 分數變化</CardDescription>

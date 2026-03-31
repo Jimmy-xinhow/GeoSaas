@@ -44,13 +44,13 @@ import { useMonitorDashboard, useCreateMonitor, useCheckCitation, useDeleteMonit
 import { useSites } from '@/hooks/use-sites'
 
 const platformMeta: Record<string, { color: string; bgColor: string; textColor: string; icon: string }> = {
-  ChatGPT: { color: 'bg-green-500', bgColor: 'bg-green-50', textColor: 'text-green-700', icon: '🤖' },
-  Claude: { color: 'bg-orange-500', bgColor: 'bg-orange-50', textColor: 'text-orange-700', icon: '🧠' },
-  Perplexity: { color: 'bg-blue-500', bgColor: 'bg-blue-50', textColor: 'text-blue-700', icon: '🔍' },
-  Gemini: { color: 'bg-purple-500', bgColor: 'bg-purple-50', textColor: 'text-purple-700', icon: '✨' },
-  Copilot: { color: 'bg-cyan-500', bgColor: 'bg-cyan-50', textColor: 'text-cyan-700', icon: '🪟' },
+  ChatGPT: { color: 'bg-green-500', bgColor: 'bg-green-500/20', textColor: 'text-green-300', icon: '🤖' },
+  Claude: { color: 'bg-orange-500', bgColor: 'bg-orange-500/20', textColor: 'text-orange-300', icon: '🧠' },
+  Perplexity: { color: 'bg-blue-500', bgColor: 'bg-blue-500/20', textColor: 'text-blue-300', icon: '🔍' },
+  Gemini: { color: 'bg-purple-500', bgColor: 'bg-purple-500/20', textColor: 'text-purple-300', icon: '✨' },
+  Copilot: { color: 'bg-cyan-500', bgColor: 'bg-cyan-500/20', textColor: 'text-cyan-300', icon: '🪟' },
 }
-const defaultPlatformMeta = { color: 'bg-gray-500', bgColor: 'bg-gray-50', textColor: 'text-gray-700', icon: '🔗' }
+const defaultPlatformMeta = { color: 'bg-gray-500', bgColor: 'bg-white/5', textColor: 'text-gray-300', icon: '🔗' }
 
 function PlatformCardSkeleton() {
   return (
@@ -156,7 +156,7 @@ export default function MonitorPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">AI 引用監控</h1>
+          <h1 className="text-2xl font-bold text-white">AI 引用監控</h1>
           <p className="text-muted-foreground mt-1">
             追蹤您的品牌在各大 AI 平台的引用狀況
           </p>
@@ -175,7 +175,7 @@ export default function MonitorPage() {
 
       {/* Add query form */}
       {showForm && (
-        <Card className="border-blue-200 bg-blue-50/30">
+        <Card className="border-blue-500/30 bg-blue-500/10">
           <CardHeader>
             <CardTitle className="text-lg">新增監控查詢</CardTitle>
             <CardDescription>選擇網站和平台，輸入要追蹤的查詢內容</CardDescription>
@@ -227,7 +227,7 @@ export default function MonitorPage() {
             <CardContent className="p-12">
               <div className="text-center">
                 <Radio className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">尚無平台資料</h3>
+                <h3 className="text-lg font-semibold text-white mb-1">尚無平台資料</h3>
                 <p className="text-muted-foreground">新增查詢後將自動追蹤各平台引用狀態</p>
               </div>
             </CardContent>
@@ -246,12 +246,12 @@ export default function MonitorPage() {
                       </Badge>
                     )}
                   </div>
-                  <h3 className="font-semibold text-gray-900">{platform.name}</h3>
+                  <h3 className="font-semibold text-white">{platform.name}</h3>
                   <div className="flex items-end gap-1 mt-1">
                     <span className="text-3xl font-bold">{platform.rate}%</span>
                     <span className="text-sm text-muted-foreground mb-1">引用率</span>
                   </div>
-                  <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="mt-3 h-2 bg-white/10 rounded-full overflow-hidden">
                     <div
                       className={cn('h-full rounded-full transition-all', meta.color)}
                       style={{ width: `${platform.rate}%` }}
@@ -269,7 +269,7 @@ export default function MonitorPage() {
       </div>
 
       {/* Monitoring queries */}
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle>監控查詢列表</CardTitle>
           <CardDescription>點擊查詢可展開查看 AI 完整回應內容</CardDescription>
@@ -286,7 +286,7 @@ export default function MonitorPage() {
               <p className="text-sm text-muted-foreground mt-1">點擊「新增查詢」開始追蹤 AI 引用狀態</p>
             </div>
           ) : (
-            <div className="border rounded-lg overflow-hidden divide-y">
+            <div className="border border-white/10 rounded-lg overflow-hidden divide-y divide-white/5">
               {queries.map((q: any) => {
                 const isExpanded = expandedId === q.id
                 const meta = platformMeta[q.platform] || defaultPlatformMeta
@@ -296,7 +296,7 @@ export default function MonitorPage() {
                     <div
                       className={cn(
                         'flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors',
-                        isExpanded ? 'bg-blue-50' : 'hover:bg-gray-50',
+                        isExpanded ? 'bg-blue-500/20' : 'hover:bg-white/5',
                       )}
                       onClick={() => setExpandedId(isExpanded ? null : q.id)}
                     >
@@ -307,7 +307,7 @@ export default function MonitorPage() {
                       )}
 
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{q.query}</p>
+                        <p className="text-sm font-medium text-white truncate">{q.query}</p>
                       </div>
 
                       <Badge className={cn('text-[10px] flex-shrink-0', meta.bgColor, meta.textColor)}>
@@ -361,7 +361,7 @@ export default function MonitorPage() {
                         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleCheck(q.id)} disabled={checkingId === q.id}>
                           {checkingId === q.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(q.id)} disabled={deletingId === q.id}>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-red-500 hover:text-red-700 hover:bg-red-500/20" onClick={() => handleDelete(q.id)} disabled={deletingId === q.id}>
                           {deletingId === q.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                         </Button>
                       </div>
@@ -369,7 +369,7 @@ export default function MonitorPage() {
 
                     {/* Expanded detail */}
                     {isExpanded && (
-                      <div className="px-4 pb-4 pt-1 bg-gray-50/70 border-t border-dashed">
+                      <div className="px-4 pb-4 pt-1 bg-white/5 border-t border-dashed border-white/10">
                         <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
                           <span>平台：{q.platform}</span>
                           {q.position != null && <span>引用位置：{q.position}/10{q.position <= 3 ? '（靠前）' : q.position >= 8 ? '（靠後）' : '（中段）'}</span>}
@@ -377,8 +377,8 @@ export default function MonitorPage() {
                         </div>
 
                         {q.status === 'error' && q.errorMessage && (
-                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
-                            <p className="text-xs text-amber-700 flex items-center gap-1">
+                          <div className="bg-amber-500/20 border border-amber-500/30 rounded-lg p-3 mb-3">
+                            <p className="text-xs text-amber-300 flex items-center gap-1">
                               <AlertTriangle className="h-3 w-3" />
                               錯誤訊息：{q.errorMessage}
                             </p>
@@ -386,9 +386,9 @@ export default function MonitorPage() {
                         )}
 
                         {q.response ? (
-                          <div className="bg-white border rounded-lg p-4">
+                          <div className="bg-white/5 border border-white/10 rounded-lg p-4">
                             <p className="text-xs font-medium text-muted-foreground mb-2">AI 回應內容：</p>
-                            <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
+                            <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
                               {q.response}
                             </div>
                           </div>

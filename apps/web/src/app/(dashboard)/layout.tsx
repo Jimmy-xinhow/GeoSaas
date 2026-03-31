@@ -28,7 +28,7 @@ export default function DashboardLayout({
   // Show loading spinner while checking auth status
   if (!isHydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex min-h-screen items-center justify-center bg-gray-900">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
           <p className="text-sm text-muted-foreground">載入中...</p>
@@ -47,7 +47,7 @@ export default function DashboardLayout({
       <Sidebar />
       <main className="flex-1 flex flex-col">
         <Header />
-        <div className="flex-1 overflow-auto p-6 bg-gray-50">
+        <div className="flex-1 overflow-auto p-6 bg-gray-900 text-white">
           <ErrorBoundary>{children}</ErrorBoundary>
         </div>
       </main>

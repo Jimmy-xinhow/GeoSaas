@@ -99,7 +99,7 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
                 <Clock className="h-5 w-5 text-gray-400" />
               )}
               <div>
-                <p className="font-semibold text-gray-900">
+                <p className="font-semibold text-white">
                   {isRunning ? '報告生成中...' : isCompleted ? '報告完成' : '等待中'}
                 </p>
                 <p className="text-sm text-muted-foreground">
@@ -124,7 +124,7 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
           </div>
 
           {/* Progress Bar */}
-          <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${isCompleted ? 'bg-green-500' : 'bg-blue-500'}`}
               style={{ width: `${progressPct}%` }}
@@ -155,7 +155,7 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold text-gray-900">{validCount}</p>
+            <p className="text-3xl font-bold text-white">{validCount}</p>
             <p className="text-xs text-muted-foreground mt-1">已完成查詢</p>
           </CardContent>
         </Card>
@@ -191,21 +191,21 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
           <CardContent>
             <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white">
-                  <tr className="border-b">
-                    <th className="text-left p-2 font-medium text-gray-600 w-8">#</th>
-                    <th className="text-left p-2 font-medium text-gray-600">問題</th>
+                <thead className="sticky top-0 bg-gray-900">
+                  <tr className="border-b border-white/10">
+                    <th className="text-left p-2 font-medium text-gray-400 w-8">#</th>
+                    <th className="text-left p-2 font-medium text-gray-400">問題</th>
                     {PLATFORMS.map((p) => (
-                      <th key={p} className="text-center p-2 font-medium text-gray-600 w-20">{PLATFORM_LABELS[p]}</th>
+                      <th key={p} className="text-center p-2 font-medium text-gray-400 w-20">{PLATFORM_LABELS[p]}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {questionResults.map((qr, i) => (
-                    <tr key={i} className="border-b hover:bg-gray-50">
+                    <tr key={i} className="border-b border-white/10 hover:bg-white/5">
                       <td className="p-2 text-gray-400">{i + 1}</td>
                       <td className="p-2">
-                        <span className="text-gray-900">{qr.question}</span>
+                        <span className="text-white">{qr.question}</span>
                         {qr.category && (
                           <span className="ml-2 text-xs text-gray-400">{qr.category.slice(0, 15)}</span>
                         )}
@@ -266,7 +266,7 @@ export default function ClientReportsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
           <FileText className="h-6 w-6" />
           客戶驗收報告
         </h1>
@@ -297,12 +297,12 @@ export default function ClientReportsPage() {
                 placeholder="搜尋客戶名稱或網址..."
                 value={siteSearch}
                 onChange={(e) => setSiteSearch(e.target.value)}
-                className="w-full h-10 px-3 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-10 px-3 border border-white/10 bg-white/5 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
           {siteSearch && (
-            <div className="max-h-[200px] overflow-y-auto border rounded-md divide-y">
+            <div className="max-h-[200px] overflow-y-auto border border-white/10 rounded-md divide-y divide-white/5">
               {(sites as any[])
                 ?.filter((s: any) => {
                   const q = siteSearch.toLowerCase();
@@ -313,10 +313,10 @@ export default function ClientReportsPage() {
                   <button
                     key={s.id}
                     onClick={() => { setSelectedSiteId(s.id); setSiteSearch(''); setActiveReportId(''); }}
-                    className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors"
+                    className="w-full text-left px-3 py-2 hover:bg-white/5 transition-colors"
                   >
-                    <p className="text-sm font-medium text-gray-900">{s.name}</p>
-                    <p className="text-xs text-gray-500 truncate">{s.url}</p>
+                    <p className="text-sm font-medium text-white">{s.name}</p>
+                    <p className="text-xs text-gray-400 truncate">{s.url}</p>
                   </button>
                 ))}
               {(sites as any[])?.filter((s: any) => {
@@ -371,7 +371,7 @@ export default function ClientReportsPage() {
                     {qs.queries.slice(0, 8).map((q, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <span className="text-gray-400 w-6 text-right shrink-0">{i + 1}.</span>
-                        <span className="text-gray-700 truncate">{q.question}</span>
+                        <span className="text-gray-300 truncate">{q.question}</span>
                       </div>
                     ))}
                     {qs.queries.length > 8 && (
@@ -408,7 +408,7 @@ export default function ClientReportsPage() {
                   {reports.map((r) => (
                     <div
                       key={r.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
+                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg cursor-pointer hover:bg-white/10"
                       onClick={() => { setActiveReportId(r.id); setActiveQsLength((r.summary as any)?.totalQueries || 100); }}
                     >
                       <div className="flex items-center gap-3">

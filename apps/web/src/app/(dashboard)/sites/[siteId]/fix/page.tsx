@@ -60,13 +60,13 @@ function getSeverity(
 function getSeverityStyle(severity: string) {
   switch (severity) {
     case 'high':
-      return 'text-red-600 bg-red-50 border-red-200'
+      return 'text-red-400 bg-red-500/20 border-red-500/30'
     case 'medium':
-      return 'text-yellow-600 bg-yellow-50 border-yellow-200'
+      return 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30'
     case 'low':
-      return 'text-green-600 bg-green-50 border-green-200'
+      return 'text-green-400 bg-green-500/20 border-green-500/30'
     default:
-      return 'text-gray-600 bg-gray-50 border-gray-200'
+      return 'text-gray-400 bg-white/5 border-white/10'
   }
 }
 
@@ -135,7 +135,7 @@ function FixItemCard({
   return (
     <Card>
       <CardHeader
-        className="cursor-pointer hover:bg-gray-50/50 transition-colors"
+        className="cursor-pointer hover:bg-white/5 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center justify-between">
@@ -170,7 +170,7 @@ function FixItemCard({
 
       {isExpanded && (
         <CardContent className="pt-0 space-y-4">
-          <div className="border-t pt-4">
+          <div className="border-t border-white/10 pt-4">
             {/* If already has generated code */}
             {generatedFix ? (
               <div className="space-y-4">
@@ -178,7 +178,7 @@ function FixItemCard({
                   <Sparkles className="h-4 w-4" />
                   <span>程式碼已生成 — 尚未修復，請依照以下步驟操作</span>
                 </div>
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                <div className="p-3 bg-amber-500/20 border border-amber-500/30 rounded-lg text-sm text-amber-300">
                   <p className="font-medium">操作步驟：</p>
                   <ol className="list-decimal list-inside mt-1 space-y-1">
                     <li>點擊右上角「複製」按鈕複製程式碼</li>
@@ -325,7 +325,7 @@ export default function FixPage() {
     return (
       <div className="space-y-6">
         <div className="text-center py-12">
-          <h2 className="text-xl font-semibold text-gray-900">找不到網站</h2>
+          <h2 className="text-xl font-semibold text-white">找不到網站</h2>
           <p className="text-muted-foreground mt-1">
             該網站不存在或您無權存取
           </p>
@@ -346,7 +346,7 @@ export default function FixPage() {
       <div>
         <Link
           href={`/sites/${siteId}`}
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-gray-900 transition-colors mb-4"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-white transition-colors mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
           返回網站詳情
@@ -354,7 +354,7 @@ export default function FixPage() {
         <div className="flex items-center gap-3">
           <Wrench className="h-6 w-6 text-blue-600" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">修復工具</h1>
+            <h1 className="text-2xl font-bold text-white">修復工具</h1>
             <p className="text-muted-foreground mt-1">
               {site.name} -- 根據掃描結果，以下是建議修復的項目
             </p>
@@ -390,7 +390,7 @@ export default function FixPage() {
           <CardContent className="py-12">
             <div className="text-center">
               <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+              <h3 className="text-lg font-semibold text-white mb-1">
                 所有指標都已通過
               </h3>
               <p className="text-muted-foreground">

@@ -19,14 +19,24 @@ import {
 import { cn } from '@/lib/utils';
 import { GeovaultLogoCompactDark } from '@/components/logo';
 
-const adminNav = [
-  { href: '/admin', icon: LayoutDashboard, label: '總覽' },
-  { href: '/admin/sites', icon: Globe, label: '網站管理' },
-  { href: '/admin/articles', icon: FileText, label: '文章管理' },
-  { href: '/admin/users', icon: Users, label: '用戶管理' },
-  { href: '/admin/seeds', icon: Database, label: 'Seed 資料' },
-  { href: '/admin/cases', icon: Trophy, label: '案例審核' },
-  { href: '/admin/scheduler', icon: Clock, label: '排程管理' },
+const adminNavGroups = [
+  {
+    label: '管理',
+    items: [
+      { href: '/admin', icon: LayoutDashboard, label: '總覽' },
+      { href: '/admin/sites', icon: Globe, label: '網站管理' },
+      { href: '/admin/users', icon: Users, label: '用戶管理' },
+    ],
+  },
+  {
+    label: '內容 & 資料',
+    items: [
+      { href: '/admin/articles', icon: FileText, label: '文章管理' },
+      { href: '/admin/cases', icon: Trophy, label: '案例審核' },
+      { href: '/admin/seeds', icon: Database, label: 'Seed 資料' },
+      { href: '/admin/scheduler', icon: Clock, label: '排程管理' },
+    ],
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -64,25 +74,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {adminNav.map((item) => {
-            const isActive = pathname === item.href || (item.href !== '/admin' && pathname?.startsWith(item.href));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors',
-                  isActive
-                    ? 'bg-red-600/20 text-red-400'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800/50',
-                )}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 px-3 py-4 space-y-3 overflow-y-auto">
+          {adminNavGroups.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">{group.label}</p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href || (item.href !== '/admin' && pathname?.startsWith(item.href));
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors',
+                        isActive
+                          ? 'bg-red-600/20 text-red-400'
+                          : 'text-gray-400 hover:text-white hover:bg-gray-800/50',
+                      )}
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         <div className="p-3 border-t border-gray-800">
@@ -96,7 +113,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      <main className="flex-1 bg-gray-50 overflow-auto">
+      <main className="flex-1 bg-gray-900 text-white overflow-auto">
         <div className="p-6">{children}</div>
       </main>
     </div>

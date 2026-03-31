@@ -121,7 +121,7 @@ export default function ContentNewPage() {
     <div className="space-y-6">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">AI 內容生成</h1>
+        <h1 className="text-2xl font-bold text-white">AI 內容生成</h1>
         <p className="text-muted-foreground mt-1">
           使用 AI 自動生成 GEO 優化的品牌內容
         </p>
@@ -140,7 +140,7 @@ export default function ContentNewPage() {
         <h3 className="text-sm font-medium text-muted-foreground mb-3">
           步驟 2：填寫品牌資訊
         </h3>
-        <Card>
+        <Card className="bg-white/5 border-white/10">
           <CardHeader>
             <CardTitle>品牌資訊</CardTitle>
             <CardDescription>
@@ -224,12 +224,12 @@ export default function ContentNewPage() {
 
       {/* Loading indicator for long generation */}
       {generateContent.isPending && (
-        <Card className="border-blue-200 bg-blue-50/50">
+        <Card className="border-blue-500/30 bg-blue-500/20">
           <CardContent className="flex items-center gap-4 py-6">
-            <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+            <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
             <div>
-              <p className="font-medium text-blue-900">AI 正在生成內容...</p>
-              <p className="text-sm text-blue-700 mt-1">
+              <p className="font-medium text-blue-300">AI 正在生成內容...</p>
+              <p className="text-sm text-blue-400 mt-1">
                 AI 內容生成可能需要 10-30 秒，請耐心等待
               </p>
             </div>
@@ -243,7 +243,7 @@ export default function ContentNewPage() {
           <h3 className="text-sm font-medium text-muted-foreground mb-3">
             生成結果預覽
           </h3>
-          <Card>
+          <Card className="bg-white/5 border-white/10">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-purple-600" />

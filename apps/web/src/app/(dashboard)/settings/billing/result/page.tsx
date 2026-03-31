@@ -14,7 +14,7 @@ export default function BillingResultPage() {
 
   return (
     <div className="max-w-md mx-auto mt-12">
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             {success ? (

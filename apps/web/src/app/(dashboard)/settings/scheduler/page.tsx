@@ -64,7 +64,7 @@ function TaskRow({ task }: { task: ScheduledTask }) {
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-gray-900">{task.name}</h3>
+              <h3 className="font-semibold text-white">{task.name}</h3>
               <Badge variant={task.enabled ? 'default' : 'secondary'} className="text-xs">
                 {task.enabled ? '啟用中' : '已停用'}
               </Badge>
@@ -100,7 +100,7 @@ function TaskRow({ task }: { task: ScheduledTask }) {
                     </Button>
                   </span>
                 ) : (
-                  <button onClick={() => setEditing(true)} className="font-mono bg-gray-100 px-1.5 py-0.5 rounded hover:bg-gray-200">
+                  <button onClick={() => setEditing(true)} className="font-mono bg-white/10 px-1.5 py-0.5 rounded hover:bg-white/20">
                     {task.cronExpr}
                   </button>
                 )}
@@ -142,7 +142,7 @@ export default function SchedulerSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
           <Settings2 className="h-6 w-6" />
           自動化排程管理
         </h1>
@@ -151,9 +151,9 @@ export default function SchedulerSettingsPage() {
         </p>
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-        <strong>Cron 格式說明：</strong> 分 時 日 月 週 — 例如 <code className="bg-blue-100 px-1 rounded">0 2 * * *</code> = 每天凌晨 2:00，
-        <code className="bg-blue-100 px-1 rounded">0 3 * * 1</code> = 每週一凌晨 3:00
+      <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-4 text-sm text-blue-300">
+        <strong>Cron 格式說明：</strong> 分 時 日 月 週 — 例如 <code className="bg-blue-500/30 px-1 rounded">0 2 * * *</code> = 每天凌晨 2:00，
+        <code className="bg-blue-500/30 px-1 rounded">0 3 * * 1</code> = 每週一凌晨 3:00
       </div>
 
       {isLoading ? (

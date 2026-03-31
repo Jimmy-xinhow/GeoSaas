@@ -19,15 +19,15 @@ import { useContents, useDeleteContent } from '@/hooks/use-content'
 function getTypeBadgeStyle(type: string) {
   switch (type) {
     case 'FAQ':
-      return 'bg-purple-50 text-purple-700'
+      return 'bg-purple-500/20 text-purple-300'
     case '文章':
     case 'article':
-      return 'bg-blue-50 text-blue-700'
+      return 'bg-blue-500/20 text-blue-300'
     case '知識庫':
     case 'knowledge-base':
-      return 'bg-green-50 text-green-700'
+      return 'bg-green-500/20 text-green-300'
     default:
-      return 'bg-gray-50 text-gray-700'
+      return 'bg-white/5 text-gray-300'
   }
 }
 
@@ -35,15 +35,15 @@ function getStatusBadgeStyle(status: string) {
   switch (status) {
     case '已發布':
     case 'published':
-      return 'bg-green-50 text-green-700'
+      return 'bg-green-500/20 text-green-300'
     case '草稿':
     case 'draft':
-      return 'bg-gray-50 text-gray-700'
+      return 'bg-white/5 text-gray-300'
     case '審核中':
     case 'review':
-      return 'bg-yellow-50 text-yellow-700'
+      return 'bg-yellow-500/20 text-yellow-300'
     default:
-      return 'bg-gray-50 text-gray-700'
+      return 'bg-white/5 text-gray-300'
   }
 }
 
@@ -124,7 +124,7 @@ export default function ContentPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">內容引擎</h1>
+          <h1 className="text-2xl font-bold text-white">內容引擎</h1>
           <p className="text-muted-foreground mt-1">管理和生成 AI 優化內容</p>
         </div>
         <Link href="/content/new">
@@ -147,7 +147,7 @@ export default function ContentPage() {
           <CardContent className="p-12">
             <div className="text-center">
               <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+              <h3 className="text-lg font-semibold text-white mb-1">
                 尚無內容
               </h3>
               <p className="text-muted-foreground mb-4">
@@ -165,11 +165,11 @@ export default function ContentPage() {
       ) : (
         <div className="space-y-4">
           {contents.map((item: any) => (
-            <Card key={item.id} className="hover:shadow-sm transition-shadow">
+            <Card key={item.id} className="bg-white/5 border-white/10 hover:shadow-lg hover:shadow-blue-500/5 transition-shadow">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">{item.title}</h3>
+                    <h3 className="font-semibold text-white">{item.title}</h3>
                     <div className="flex items-center gap-3 mt-2">
                       <span
                         className={cn(
@@ -197,7 +197,7 @@ export default function ContentPage() {
                   <div className="flex items-center gap-2">
                     <Link href={`/content/${item.id}`}>
                       <Button variant="ghost" size="icon">
-                        <Edit className="h-4 w-4 text-gray-500" />
+                        <Edit className="h-4 w-4 text-gray-400" />
                       </Button>
                     </Link>
                     <Button

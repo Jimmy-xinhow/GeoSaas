@@ -48,13 +48,13 @@ function timeAgo(dateStr: string) {
 }
 
 const botColors: Record<string, string> = {
-  GPTBot: 'bg-green-100 text-green-700',
-  ClaudeBot: 'bg-orange-100 text-orange-700',
-  PerplexityBot: 'bg-blue-100 text-blue-700',
-  'Google-Extended': 'bg-red-100 text-red-700',
-  Bingbot: 'bg-cyan-100 text-cyan-700',
-  CopilotBot: 'bg-purple-100 text-purple-700',
-  Bytespider: 'bg-gray-100 text-gray-700',
+  GPTBot: 'bg-green-500/20 text-green-400',
+  ClaudeBot: 'bg-orange-500/20 text-orange-400',
+  PerplexityBot: 'bg-blue-500/20 text-blue-400',
+  'Google-Extended': 'bg-red-500/20 text-red-400',
+  Bingbot: 'bg-cyan-500/20 text-cyan-400',
+  CopilotBot: 'bg-purple-500/20 text-purple-400',
+  Bytespider: 'bg-white/10 text-gray-300',
 };
 
 export default function AdminDashboard() {
@@ -119,18 +119,18 @@ export default function AdminDashboard() {
   const realPercent = c && c.total > 0 ? Math.round((c.real / c.total) * 100) : 0;
 
   const statCards = [
-    { label: '收錄品牌', value: stats?.seeds.scanned || 0, icon: Globe, color: 'text-blue-600' },
-    { label: '文章數量', value: stats?.articles.total || 0, icon: FileText, color: 'text-green-600' },
-    { label: 'Seed 總數', value: stats?.seeds.total || 0, icon: Database, color: 'text-purple-600' },
-    { label: '產業數量', value: stats?.industries.length || 0, icon: BarChart3, color: 'text-orange-600' },
+    { label: '收錄品牌', value: stats?.seeds.scanned || 0, icon: Globe, color: 'text-blue-400' },
+    { label: '文章數量', value: stats?.articles.total || 0, icon: FileText, color: 'text-green-400' },
+    { label: 'Seed 總數', value: stats?.seeds.total || 0, icon: Database, color: 'text-purple-400' },
+    { label: '產業數量', value: stats?.industries.length || 0, icon: BarChart3, color: 'text-orange-400' },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">管理後台</h1>
-          <p className="text-sm text-gray-500 mt-1">Geovault 系統總覽與操作中心</p>
+          <h1 className="text-2xl font-bold text-white">管理後台</h1>
+          <p className="text-sm text-gray-400 mt-1">Geovault 系統總覽與操作中心</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => fetchStats(true)} disabled={refreshing}>
           <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
@@ -145,7 +145,7 @@ export default function AdminDashboard() {
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">{s.label}</p>
+                  <p className="text-sm text-gray-400">{s.label}</p>
                   <p className="text-2xl font-bold mt-1">{s.value}</p>
                 </div>
                 <s.icon className={`h-8 w-8 ${s.color} opacity-60`} />
@@ -156,7 +156,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* ═══ Crawler Data: Real vs Simulated ═══ */}
-      <Card className="border-2 border-blue-200">
+      <Card className="border-2 border-blue-500/30 bg-white/5">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
             <Bot className="h-5 w-5" /> AI 爬蟲數據總覽
@@ -166,74 +166,74 @@ export default function AdminDashboard() {
         <CardContent className="space-y-6">
           {/* Summary Row */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
-              <Eye className="h-5 w-5 mx-auto mb-1 text-green-600" />
-              <p className="text-2xl font-bold text-green-700">{c?.real || 0}</p>
-              <p className="text-xs text-green-600 font-medium">真實爬蟲造訪</p>
+            <div className="text-center p-4 bg-green-500/20 rounded-lg border border-green-500/30">
+              <Eye className="h-5 w-5 mx-auto mb-1 text-green-400" />
+              <p className="text-2xl font-bold text-green-400">{c?.real || 0}</p>
+              <p className="text-xs text-green-400 font-medium">真實爬蟲造訪</p>
             </div>
-            <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <EyeOff className="h-5 w-5 mx-auto mb-1 text-gray-500" />
-              <p className="text-2xl font-bold text-gray-600">{c?.seeded || 0}</p>
-              <p className="text-xs text-gray-500 font-medium">模擬爬蟲數據</p>
+            <div className="text-center p-4 bg-white/5 rounded-lg border border-white/10">
+              <EyeOff className="h-5 w-5 mx-auto mb-1 text-gray-400" />
+              <p className="text-2xl font-bold text-gray-400">{c?.seeded || 0}</p>
+              <p className="text-xs text-gray-400 font-medium">模擬爬蟲數據</p>
             </div>
-            <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <Activity className="h-5 w-5 mx-auto mb-1 text-blue-600" />
-              <p className="text-2xl font-bold text-blue-700">{c?.total || 0}</p>
-              <p className="text-xs text-blue-600 font-medium">總計造訪</p>
+            <div className="text-center p-4 bg-blue-500/20 rounded-lg border border-blue-500/30">
+              <Activity className="h-5 w-5 mx-auto mb-1 text-blue-400" />
+              <p className="text-2xl font-bold text-blue-400">{c?.total || 0}</p>
+              <p className="text-xs text-blue-400 font-medium">總計造訪</p>
             </div>
-            <div className="text-center p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-              <BarChart3 className="h-5 w-5 mx-auto mb-1 text-emerald-600" />
-              <p className="text-2xl font-bold text-emerald-700">{realPercent}%</p>
-              <p className="text-xs text-emerald-600 font-medium">真實數據佔比</p>
+            <div className="text-center p-4 bg-emerald-500/20 rounded-lg border border-emerald-500/30">
+              <BarChart3 className="h-5 w-5 mx-auto mb-1 text-emerald-400" />
+              <p className="text-2xl font-bold text-emerald-400">{realPercent}%</p>
+              <p className="text-xs text-emerald-400 font-medium">真實數據佔比</p>
             </div>
           </div>
 
           {/* Time-based breakdown */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">時間區間分析</h3>
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">時間區間分析</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left">
-                    <th className="pb-2 text-gray-500">區間</th>
-                    <th className="pb-2 text-green-600">真實</th>
-                    <th className="pb-2 text-gray-500">模擬</th>
-                    <th className="pb-2 text-blue-600">合計</th>
-                    <th className="pb-2 text-emerald-600">真實佔比</th>
+                  <tr className="border-b border-white/10 text-left">
+                    <th className="pb-2 text-gray-400">區間</th>
+                    <th className="pb-2 text-green-400">真實</th>
+                    <th className="pb-2 text-gray-400">模擬</th>
+                    <th className="pb-2 text-blue-400">合計</th>
+                    <th className="pb-2 text-emerald-400">真實佔比</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-white/5">
                   <tr>
                     <td className="py-2 font-medium">最近 24 小時</td>
-                    <td className="py-2 text-green-700 font-bold">{c?.real24h || 0}</td>
-                    <td className="py-2 text-gray-500">{c?.seeded24h || 0}</td>
+                    <td className="py-2 text-green-400 font-bold">{c?.real24h || 0}</td>
+                    <td className="py-2 text-gray-400">{c?.seeded24h || 0}</td>
                     <td className="py-2 font-semibold">{(c?.real24h || 0) + (c?.seeded24h || 0)}</td>
                     <td className="py-2">
                       {c && (c.real24h + c.seeded24h) > 0
-                        ? <span className={c.real24h > 0 ? 'text-green-600 font-bold' : 'text-gray-400'}>{Math.round(c.real24h / (c.real24h + c.seeded24h) * 100)}%</span>
+                        ? <span className={c.real24h > 0 ? 'text-green-400 font-bold' : 'text-gray-400'}>{Math.round(c.real24h / (c.real24h + c.seeded24h) * 100)}%</span>
                         : <span className="text-gray-400">—</span>
                       }
                     </td>
                   </tr>
                   <tr>
                     <td className="py-2 font-medium">最近 7 天</td>
-                    <td className="py-2 text-green-700 font-bold">{c?.real7d || 0}</td>
-                    <td className="py-2 text-gray-500">{c?.seeded7d || 0}</td>
+                    <td className="py-2 text-green-400 font-bold">{c?.real7d || 0}</td>
+                    <td className="py-2 text-gray-400">{c?.seeded7d || 0}</td>
                     <td className="py-2 font-semibold">{(c?.real7d || 0) + (c?.seeded7d || 0)}</td>
                     <td className="py-2">
                       {c && (c.real7d + c.seeded7d) > 0
-                        ? <span className={c.real7d > 0 ? 'text-green-600 font-bold' : 'text-gray-400'}>{Math.round(c.real7d / (c.real7d + c.seeded7d) * 100)}%</span>
+                        ? <span className={c.real7d > 0 ? 'text-green-400 font-bold' : 'text-gray-400'}>{Math.round(c.real7d / (c.real7d + c.seeded7d) * 100)}%</span>
                         : <span className="text-gray-400">—</span>
                       }
                     </td>
                   </tr>
                   <tr>
                     <td className="py-2 font-medium">全部</td>
-                    <td className="py-2 text-green-700 font-bold">{c?.real || 0}</td>
-                    <td className="py-2 text-gray-500">{c?.seeded || 0}</td>
+                    <td className="py-2 text-green-400 font-bold">{c?.real || 0}</td>
+                    <td className="py-2 text-gray-400">{c?.seeded || 0}</td>
                     <td className="py-2 font-semibold">{c?.total || 0}</td>
                     <td className="py-2">
-                      <span className={realPercent > 0 ? 'text-green-600 font-bold' : 'text-gray-400'}>{realPercent}%</span>
+                      <span className={realPercent > 0 ? 'text-green-400 font-bold' : 'text-gray-400'}>{realPercent}%</span>
                     </td>
                   </tr>
                 </tbody>
@@ -244,55 +244,55 @@ export default function AdminDashboard() {
           {/* Bot breakdown side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
-              <h3 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-1">
+              <h3 className="text-sm font-semibold text-green-400 mb-2 flex items-center gap-1">
                 <Eye className="h-4 w-4" /> 真實爬蟲（依 Bot）
               </h3>
               {(c?.realByBot?.length || 0) > 0 ? (
                 <div className="space-y-1">
                   {c?.realByBot.map((b) => (
-                    <div key={b.bot} className="flex items-center justify-between p-2 bg-green-50 rounded text-sm">
-                      <Badge className={botColors[b.bot] || 'bg-gray-100 text-gray-700'} variant="secondary">
+                    <div key={b.bot} className="flex items-center justify-between p-2 bg-green-500/20 rounded text-sm">
+                      <Badge className={botColors[b.bot] || 'bg-white/10 text-gray-300'} variant="secondary">
                         {b.bot}
                       </Badge>
-                      <span className="font-bold text-green-700">{b.count}</span>
+                      <span className="font-bold text-green-400">{b.count}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-400 p-3 bg-gray-50 rounded text-center">尚無真實爬蟲造訪</p>
+                <p className="text-sm text-gray-400 p-3 bg-white/5 rounded text-center">尚無真實爬蟲造訪</p>
               )}
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-500 mb-2 flex items-center gap-1">
+              <h3 className="text-sm font-semibold text-gray-400 mb-2 flex items-center gap-1">
                 <EyeOff className="h-4 w-4" /> 模擬爬蟲（依 Bot）
               </h3>
               {(c?.seededByBot?.length || 0) > 0 ? (
                 <div className="space-y-1">
                   {c?.seededByBot.map((b) => (
-                    <div key={b.bot} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                      <Badge variant="outline" className="text-gray-500">
+                    <div key={b.bot} className="flex items-center justify-between p-2 bg-white/5 rounded text-sm">
+                      <Badge variant="outline" className="text-gray-400">
                         {b.bot}
                       </Badge>
-                      <span className="font-mono text-gray-500">{b.count}</span>
+                      <span className="font-mono text-gray-400">{b.count}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-400 p-3 bg-gray-50 rounded text-center">尚無模擬數據</p>
+                <p className="text-sm text-gray-400 p-3 bg-white/5 rounded text-center">尚無模擬數據</p>
               )}
             </div>
           </div>
 
           {/* Recent REAL visits */}
           <div>
-            <h3 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-1">
+            <h3 className="text-sm font-semibold text-green-400 mb-2 flex items-center gap-1">
               <Clock className="h-4 w-4" /> 最近真實爬蟲造訪（最新 20 筆）
             </h3>
             {(c?.recentRealVisits?.length || 0) > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b text-left text-gray-500">
+                    <tr className="border-b border-white/10 text-left text-gray-400">
                       <th className="pb-2">Bot</th>
                       <th className="pb-2">組織</th>
                       <th className="pb-2">網站</th>
@@ -300,29 +300,29 @@ export default function AdminDashboard() {
                       <th className="pb-2">時間</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
+                  <tbody className="divide-y divide-white/5">
                     {c?.recentRealVisits.map((v, i) => (
-                      <tr key={i} className="hover:bg-green-50">
+                      <tr key={i} className="hover:bg-white/5">
                         <td className="py-2">
-                          <Badge className={botColors[v.botName] || 'bg-gray-100 text-gray-700'} variant="secondary">
+                          <Badge className={botColors[v.botName] || 'bg-white/10 text-gray-300'} variant="secondary">
                             {v.botName}
                           </Badge>
                         </td>
-                        <td className="py-2 text-gray-600">{v.botOrg}</td>
+                        <td className="py-2 text-gray-400">{v.botOrg}</td>
                         <td className="py-2 font-medium truncate max-w-[200px]">{v.site?.name || '—'}</td>
                         <td className="py-2">
                           <Badge variant={v.statusCode === 200 ? 'default' : 'destructive'} className="text-xs">
                             {v.statusCode || '—'}
                           </Badge>
                         </td>
-                        <td className="py-2 text-gray-500 text-xs">{timeAgo(v.visitedAt)}</td>
+                        <td className="py-2 text-gray-400 text-xs">{timeAgo(v.visitedAt)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-gray-400 p-4 bg-gray-50 rounded text-center">
+              <p className="text-sm text-gray-400 p-4 bg-white/5 rounded text-center">
                 尚無真實爬蟲造訪紀錄。當真實 AI 爬蟲（GPTBot、ClaudeBot 等）造訪收錄的網站時，會顯示在此。
               </p>
             )}
@@ -337,21 +337,21 @@ export default function AdminDashboard() {
             <Activity className="h-5 w-5" /> Seed 掃描狀態
           </h2>
           <div className="grid grid-cols-4 gap-4 mb-4">
-            <div className="text-center p-3 bg-blue-50 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">{stats?.seeds.scanned}</p>
-              <p className="text-xs text-gray-500">已掃描</p>
+            <div className="text-center p-3 bg-blue-500/20 rounded-lg">
+              <p className="text-2xl font-bold text-blue-400">{stats?.seeds.scanned}</p>
+              <p className="text-xs text-gray-400">已掃描</p>
             </div>
-            <div className="text-center p-3 bg-yellow-50 rounded-lg">
-              <p className="text-2xl font-bold text-yellow-600">{stats?.seeds.pending}</p>
-              <p className="text-xs text-gray-500">等待中</p>
+            <div className="text-center p-3 bg-yellow-500/20 rounded-lg">
+              <p className="text-2xl font-bold text-yellow-400">{stats?.seeds.pending}</p>
+              <p className="text-xs text-gray-400">等待中</p>
             </div>
-            <div className="text-center p-3 bg-red-50 rounded-lg">
-              <p className="text-2xl font-bold text-red-600">{stats?.seeds.failed}</p>
-              <p className="text-xs text-gray-500">失敗</p>
+            <div className="text-center p-3 bg-red-500/20 rounded-lg">
+              <p className="text-2xl font-bold text-red-400">{stats?.seeds.failed}</p>
+              <p className="text-xs text-gray-400">失敗</p>
             </div>
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <p className="text-2xl font-bold text-green-600">{stats?.seeds.isRunning ? '運行中' : '閒置'}</p>
-              <p className="text-xs text-gray-500">爬蟲狀態</p>
+            <div className="text-center p-3 bg-green-500/20 rounded-lg">
+              <p className="text-2xl font-bold text-green-400">{stats?.seeds.isRunning ? '運行中' : '閒置'}</p>
+              <p className="text-xs text-gray-400">爬蟲狀態</p>
             </div>
           </div>
         </CardContent>
@@ -380,7 +380,7 @@ export default function AdminDashboard() {
               <FileText className="h-5 w-5" />
               <span className="text-xs">{actionLoading === 'bulk' ? '生成中...' : '批量生成文章'}</span>
             </Button>
-            <Button variant="outline" className="h-auto py-3 flex-col gap-1 text-red-600 hover:text-red-700" disabled={!!actionLoading} onClick={() => handleAction('audit', '/blog/quality-audit?threshold=85', 'delete')}>
+            <Button variant="outline" className="h-auto py-3 flex-col gap-1 text-red-400 hover:text-red-300" disabled={!!actionLoading} onClick={() => handleAction('audit', '/blog/quality-audit?threshold=85', 'delete')}>
               <BarChart3 className="h-5 w-5" />
               <span className="text-xs">{actionLoading === 'audit' ? '清理中...' : '品質審計 (85)'}</span>
             </Button>
@@ -400,9 +400,9 @@ export default function AdminDashboard() {
             {stats?.industries
               .sort((a, b) => b.count - a.count)
               .map((ind) => (
-                <div key={ind.industry} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                  <span className="text-gray-700 truncate">{ind.industry}</span>
-                  <span className="font-mono font-bold text-gray-900 ml-2">{ind.count}</span>
+                <div key={ind.industry} className="flex items-center justify-between p-2 bg-white/5 rounded text-sm">
+                  <span className="text-gray-300 truncate">{ind.industry}</span>
+                  <span className="font-mono font-bold text-white ml-2">{ind.count}</span>
                 </div>
               ))}
           </div>

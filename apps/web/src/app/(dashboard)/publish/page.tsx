@@ -44,22 +44,22 @@ const STATUS_MAP: Record<string, { label: string; icon: React.ReactNode; style: 
   PUBLISHED: {
     label: '已發布',
     icon: <CheckCircle2 className="h-4 w-4 text-green-500" />,
-    style: 'text-green-600 bg-green-50',
+    style: 'text-green-400 bg-green-500/20',
   },
   PENDING: {
     label: '排程中',
     icon: <Clock className="h-4 w-4 text-yellow-500" />,
-    style: 'text-yellow-600 bg-yellow-50',
+    style: 'text-yellow-400 bg-yellow-500/20',
   },
   PUBLISHING: {
     label: '發布中',
     icon: <Clock className="h-4 w-4 text-blue-500" />,
-    style: 'text-blue-600 bg-blue-50',
+    style: 'text-blue-400 bg-blue-500/20',
   },
   FAILED: {
     label: '發布失敗',
     icon: <XCircle className="h-4 w-4 text-red-500" />,
-    style: 'text-red-600 bg-red-50',
+    style: 'text-red-400 bg-red-500/20',
   },
 }
 
@@ -111,14 +111,14 @@ export default function PublishPage() {
     <div className="space-y-6">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">多平台佈局</h1>
+        <h1 className="text-2xl font-bold text-white">多平台佈局</h1>
         <p className="text-muted-foreground mt-1">
           連線各大平台，一鍵同步發布品牌內容
         </p>
       </div>
 
       {/* Quick publish */}
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Send className="h-5 w-5" />
@@ -137,7 +137,7 @@ export default function PublishPage() {
               </p>
             ) : (
               <select
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
                 value={selectedContentId}
                 onChange={(e) => setSelectedContentId(e.target.value)}
               >
@@ -160,8 +160,8 @@ export default function PublishPage() {
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors',
                     selectedPlatforms.includes(p.key)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                      : 'border-white/10 hover:border-white/20'
                   )}
                 >
                   <div className={cn('h-6 w-6 rounded flex items-center justify-center text-xs font-bold', p.color)}>
@@ -193,8 +193,8 @@ export default function PublishPage() {
             <Card
               key={platform.name}
               className={cn(
-                'transition-shadow hover:shadow-md',
-                platform.connected ? 'border-green-200' : 'border-gray-200'
+                'bg-white/5 transition-shadow hover:shadow-lg hover:shadow-blue-500/5',
+                platform.connected ? 'border-green-500/30' : 'border-white/10'
               )}
             >
               <CardContent className="p-6">
@@ -247,7 +247,7 @@ export default function PublishPage() {
       </div>
 
       {/* Publish history */}
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle>發布記錄</CardTitle>
           <CardDescription>所有平台的內容發布歷史</CardDescription>
@@ -256,7 +256,7 @@ export default function PublishPage() {
           {pubLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />
+                <div key={i} className="h-12 bg-white/10 rounded animate-pulse" />
               ))}
             </div>
           ) : !publications || publications.length === 0 ? (
@@ -267,7 +267,7 @@ export default function PublishPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left">
+                  <tr className="border-b border-white/10 text-left">
                     <th className="pb-3 font-medium text-muted-foreground">內容標題</th>
                     <th className="pb-3 font-medium text-muted-foreground">平台</th>
                     <th className="pb-3 font-medium text-muted-foreground">狀態</th>
@@ -279,12 +279,12 @@ export default function PublishPage() {
                   {publications.map((item) => {
                     const statusInfo = STATUS_MAP[item.status] || STATUS_MAP.PENDING
                     return (
-                      <tr key={item.id} className="border-b last:border-0">
+                      <tr key={item.id} className="border-b border-white/10 last:border-0">
                         <td className="py-3 font-medium">
                           {item.content?.title || '未知內容'}
                         </td>
                         <td className="py-3">
-                          <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium capitalize">
+                          <span className="px-2 py-1 bg-white/10 rounded text-xs font-medium capitalize">
                             {item.platform}
                           </span>
                         </td>

@@ -83,10 +83,10 @@ function StatusIcon({ status }: { status: string }) {
 // ── Scan status badge helper ──
 function ScanStatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; className: string }> = {
-    PENDING: { label: '排隊中', className: 'bg-gray-100 text-gray-600' },
-    RUNNING: { label: '掃描中', className: 'bg-blue-100 text-blue-600' },
-    COMPLETED: { label: '已完成', className: 'bg-green-100 text-green-600' },
-    FAILED: { label: '失敗', className: 'bg-red-100 text-red-600' },
+    PENDING: { label: '排隊中', className: 'bg-white/10 text-gray-400' },
+    RUNNING: { label: '掃描中', className: 'bg-blue-500/20 text-blue-400' },
+    COMPLETED: { label: '已完成', className: 'bg-green-500/20 text-green-400' },
+    FAILED: { label: '失敗', className: 'bg-red-500/20 text-red-400' },
   }
   const c = config[status] || config.PENDING
   return <Badge className={c.className}>{c.label}</Badge>
@@ -122,7 +122,7 @@ function GenerateFixButton({
     <Button
       variant="outline"
       size="sm"
-      className="text-blue-600 border-blue-200 hover:bg-blue-50"
+      className="text-blue-400 border-blue-500/30 hover:bg-blue-500/20"
       onClick={handleGenerate}
       disabled={smartGenerate.isPending}
     >
@@ -164,7 +164,7 @@ function IndicatorRow({
       <CardContent className="p-0">
         {/* Main indicator info */}
         <div
-          className="flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
+          className="flex items-center gap-4 p-4 cursor-pointer hover:bg-white/5 transition-colors"
           onClick={() => canFix && setIsExpanded(!isExpanded)}
         >
           {/* Expand / collapse icon for fixable indicators */}
@@ -191,7 +191,7 @@ function IndicatorRow({
                 {result.score}
               </span>
             </div>
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
                   result.score >= 80
@@ -247,14 +247,14 @@ function IndicatorRow({
 
         {/* Expanded fix section */}
         {isExpanded && canFix && (
-          <div className="border-t bg-gray-50/50 p-4 pl-[3.75rem] space-y-3">
+          <div className="border-t border-white/10 bg-white/5 p-4 pl-[3.75rem] space-y-3">
             {generatedFix ? (
               <>
                 <div className="flex items-center gap-2 text-sm text-blue-600">
                   <Sparkles className="h-4 w-4" />
                   <span>程式碼已生成 — 尚未修復</span>
                 </div>
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                <p className="text-xs text-amber-300 bg-amber-500/20 border border-amber-500/30 rounded p-2">
                   請點擊「複製」按鈕複製程式碼，貼入您網站的 HTML 中，然後重新掃描以驗證修復效果
                 </p>
                 <CodeSnippetViewer
@@ -305,7 +305,7 @@ function DetailSkeleton() {
             <Skeleton className="h-[160px] w-[160px] rounded-full" />
           </CardContent>
         </Card>
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 bg-white/5 border-white/10">
           <CardHeader>
             <Skeleton className="h-5 w-32" />
             <Skeleton className="h-4 w-48 mt-1" />
@@ -410,7 +410,7 @@ export default function SiteDetailPage() {
     return (
       <div className="space-y-6">
         <div className="text-center py-12">
-          <h2 className="text-xl font-semibold text-gray-900">找不到網站</h2>
+          <h2 className="text-xl font-semibold text-white">找不到網站</h2>
           <p className="text-muted-foreground mt-1">
             該網站不存在或您無權存取
           </p>
@@ -436,7 +436,7 @@ export default function SiteDetailPage() {
       <div>
         <Link
           href="/sites"
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-gray-900 transition-colors mb-4"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-white transition-colors mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
           返回網站列表
@@ -444,7 +444,7 @@ export default function SiteDetailPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">{site.name}</h1>
+              <h1 className="text-2xl font-bold text-white">{site.name}</h1>
               {latestScan && <ScanStatusBadge status={latestScan.status} />}
             </div>
             <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
@@ -508,14 +508,14 @@ export default function SiteDetailPage() {
 
       {/* Scan progress banner */}
       {hasActiveScan && (
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="border-blue-500/30 bg-blue-500/20">
           <CardContent className="flex items-center gap-3 py-4">
-            <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+            <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
             <div>
-              <p className="text-sm font-medium text-blue-900">
+              <p className="text-sm font-medium text-blue-300">
                 掃描進行中...
               </p>
-              <p className="text-xs text-blue-700">
+              <p className="text-xs text-blue-400">
                 系統正在分析您的網站，完成後將自動更新結果
               </p>
             </div>
@@ -526,7 +526,7 @@ export default function SiteDetailPage() {
       {/* Score overview row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Big score gauge */}
-        <Card className="lg:col-span-1">
+        <Card className="lg:col-span-1 bg-white/5 border-white/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">GEO 分數</CardTitle>
           </CardHeader>
@@ -559,7 +559,7 @@ export default function SiteDetailPage() {
         </Card>
 
         {/* Right: Indicator results */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 bg-white/5 border-white/10">
           <CardHeader>
             <CardTitle>GEO 指標分析</CardTitle>
             <CardDescription>
@@ -601,7 +601,7 @@ export default function SiteDetailPage() {
       </div>
 
       {/* Scan history chart */}
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle>掃描記錄</CardTitle>
           <CardDescription>歷次掃描分數變化趨勢</CardDescription>

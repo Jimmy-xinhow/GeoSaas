@@ -49,14 +49,14 @@ export default function Header() {
   }
 
   return (
-    <header className="h-16 border-b bg-white flex items-center justify-between px-6 shrink-0">
+    <header className="h-16 border-b border-white/5 bg-gray-900 flex items-center justify-between px-6 shrink-0">
       {/* Left: Page title */}
-      <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+      <h2 className="text-lg font-semibold text-white">{title}</h2>
 
       {/* Right: Notifications + Avatar */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5 text-gray-500" />
+        <Button variant="ghost" size="icon" className="relative text-gray-400 hover:text-white hover:bg-white/10">
+          <Bell className="h-5 w-5" />
           <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full" />
         </Button>
 

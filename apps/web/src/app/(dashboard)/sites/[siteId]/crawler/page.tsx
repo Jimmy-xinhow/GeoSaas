@@ -37,17 +37,17 @@ import {
 } from '@/hooks/use-crawler'
 
 const BOT_COLORS: Record<string, string> = {
-  ClaudeBot: 'bg-orange-100 text-orange-700',
-  GPTBot: 'bg-green-100 text-green-700',
-  'ChatGPT-User': 'bg-green-100 text-green-700',
-  'Google-Extended': 'bg-blue-100 text-blue-700',
-  Googlebot: 'bg-blue-100 text-blue-700',
-  Bingbot: 'bg-cyan-100 text-cyan-700',
-  CopilotBot: 'bg-teal-100 text-teal-700',
-  PerplexityBot: 'bg-purple-100 text-purple-700',
-  YouBot: 'bg-pink-100 text-pink-700',
-  CCBot: 'bg-gray-100 text-gray-700',
-  Bytespider: 'bg-red-100 text-red-700',
+  ClaudeBot: 'bg-orange-500/20 text-orange-300',
+  GPTBot: 'bg-green-500/20 text-green-300',
+  'ChatGPT-User': 'bg-green-500/20 text-green-300',
+  'Google-Extended': 'bg-blue-500/20 text-blue-300',
+  Googlebot: 'bg-blue-500/20 text-blue-300',
+  Bingbot: 'bg-cyan-500/20 text-cyan-300',
+  CopilotBot: 'bg-teal-500/20 text-teal-300',
+  PerplexityBot: 'bg-purple-500/20 text-purple-300',
+  YouBot: 'bg-pink-500/20 text-pink-300',
+  CCBot: 'bg-white/10 text-gray-300',
+  Bytespider: 'bg-red-500/20 text-red-300',
 }
 
 function BotCard({
@@ -59,7 +59,7 @@ function BotCard({
   count: number
   lastVisit: string
 }) {
-  const colorClass = BOT_COLORS[botName] || 'bg-gray-100 text-gray-700'
+  const colorClass = BOT_COLORS[botName] || 'bg-white/10 text-gray-300'
   return (
     <Card>
       <CardContent className="p-4 space-y-2">
@@ -112,8 +112,8 @@ function RobotsPanel({
               key={bot}
               className={`flex items-center justify-between p-2 rounded text-sm ${
                 allowed
-                  ? 'bg-green-50 text-green-700'
-                  : 'bg-red-50 text-red-700'
+                  ? 'bg-green-500/20 text-green-300'
+                  : 'bg-red-500/20 text-red-300'
               }`}
             >
               <span>{bot}</span>
@@ -132,7 +132,7 @@ function RobotsPanel({
       </div>
       <div>
         <h4 className="font-medium text-sm mb-2">robots.txt 原始內容</h4>
-        <pre className="p-3 bg-gray-50 rounded-lg text-xs font-mono max-h-[200px] overflow-auto whitespace-pre-wrap">
+        <pre className="p-3 bg-white/5 rounded-lg text-xs font-mono max-h-[200px] overflow-auto whitespace-pre-wrap">
           {robots.robotsTxt}
         </pre>
       </div>
@@ -265,7 +265,7 @@ export default function CrawlerPage() {
       <div>
         <Link
           href={`/sites/${siteId}`}
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-gray-900 transition-colors mb-4"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-white transition-colors mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
           返回網站詳情
@@ -273,7 +273,7 @@ export default function CrawlerPage() {
         <div className="flex items-center gap-3">
           <Bot className="h-6 w-6 text-blue-600" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-white">
               AI 爬蟲追蹤
             </h1>
             <p className="text-muted-foreground mt-1">
@@ -288,7 +288,7 @@ export default function CrawlerPage() {
         <Card>
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
+              <div className="p-2 bg-blue-500/20 rounded-lg">
                 <Eye className="h-5 w-5 text-blue-600" />
               </div>
               <div>
@@ -303,7 +303,7 @@ export default function CrawlerPage() {
         <Card>
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
+              <div className="p-2 bg-green-500/20 rounded-lg">
                 <Activity className="h-5 w-5 text-green-600" />
               </div>
               <div>
@@ -318,7 +318,7 @@ export default function CrawlerPage() {
         <Card>
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
+              <div className="p-2 bg-purple-500/20 rounded-lg">
                 <Bot className="h-5 w-5 text-purple-600" />
               </div>
               <div>
@@ -333,7 +333,7 @@ export default function CrawlerPage() {
         <Card>
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-100 rounded-lg">
+              <div className="p-2 bg-yellow-500/20 rounded-lg">
                 <Shield className="h-5 w-5 text-yellow-600" />
               </div>
               <div>
@@ -363,7 +363,7 @@ export default function CrawlerPage() {
             <Card>
               <CardContent className="py-12 text-center">
                 <Bot className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-lg font-semibold text-white">
                   尚未偵測到 AI 爬蟲
                 </h3>
                 <p className="text-muted-foreground mt-1">
@@ -401,7 +401,7 @@ export default function CrawlerPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b text-left text-muted-foreground">
+                      <tr className="border-b border-white/10 text-left text-muted-foreground">
                         <th className="pb-2 font-medium">Bot</th>
                         <th className="pb-2 font-medium">組織</th>
                         <th className="pb-2 font-medium">URL</th>
@@ -409,14 +409,14 @@ export default function CrawlerPage() {
                         <th className="pb-2 font-medium">時間</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y">
+                    <tbody className="divide-y divide-white/5">
                       {dashboard.recentVisits.map((v) => (
-                        <tr key={v.id} className="hover:bg-gray-50">
+                        <tr key={v.id} className="hover:bg-white/5">
                           <td className="py-2">
                             <Badge
                               className={
                                 BOT_COLORS[v.botName] ||
-                                'bg-gray-100 text-gray-700'
+                                'bg-white/10 text-gray-300'
                               }
                             >
                               {v.botName}
@@ -433,8 +433,8 @@ export default function CrawlerPage() {
                               <Badge
                                 className={
                                   v.statusCode < 400
-                                    ? 'bg-green-100 text-green-700'
-                                    : 'bg-red-100 text-red-700'
+                                    ? 'bg-green-500/20 text-green-300'
+                                    : 'bg-red-500/20 text-red-300'
                                 }
                               >
                                 {v.statusCode}

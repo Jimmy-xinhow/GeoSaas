@@ -9,9 +9,9 @@ import apiClient from '@/lib/api-client';
 import { Trophy, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-700',
-  approved: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
+  pending: 'bg-yellow-500/20 text-yellow-400',
+  approved: 'bg-green-500/20 text-green-400',
+  rejected: 'bg-red-500/20 text-red-400',
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -56,7 +56,7 @@ export default function AdminCasesPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Trophy className="h-6 w-6" /> 案例審核
         </h1>
-        <p className="text-sm text-gray-500">審核用戶提交的 GEO 成功案例</p>
+        <p className="text-sm text-gray-400">審核用戶提交的 GEO 成功案例</p>
       </div>
 
       <div className="flex gap-2">
@@ -75,23 +75,23 @@ export default function AdminCasesPage() {
       <Card>
         <CardContent className="p-0">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-white/5 border-b border-white/10">
               <tr>
-                <th className="text-left p-3 font-medium text-gray-600">標題</th>
-                <th className="text-center p-3 font-medium text-gray-600">平台</th>
-                <th className="text-center p-3 font-medium text-gray-600">分數變化</th>
-                <th className="text-center p-3 font-medium text-gray-600">狀態</th>
-                <th className="text-right p-3 font-medium text-gray-600">操作</th>
+                <th className="text-left p-3 font-medium text-gray-400">標題</th>
+                <th className="text-center p-3 font-medium text-gray-400">平台</th>
+                <th className="text-center p-3 font-medium text-gray-400">分數變化</th>
+                <th className="text-center p-3 font-medium text-gray-400">狀態</th>
+                <th className="text-right p-3 font-medium text-gray-400">操作</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-white/5">
               {isLoading ? (
                 <tr><td colSpan={5} className="p-8 text-center text-gray-400">載入中...</td></tr>
               ) : cases.length === 0 ? (
                 <tr><td colSpan={5} className="p-8 text-center text-gray-400">目前沒有{statusFilter === 'pending' ? '待審核' : ''}案例</td></tr>
               ) : (
                 cases.map((c: any) => (
-                  <tr key={c.id} className="hover:bg-gray-50">
+                  <tr key={c.id} className="hover:bg-white/5">
                     <td className="p-3">
                       <div className="font-medium">{c.title}</div>
                       <div className="text-xs text-gray-400 mt-0.5 max-w-md truncate">{c.queryUsed}</div>

@@ -52,7 +52,7 @@ export default function AdminSeedsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Seed 資料管理</h1>
-          <p className="text-sm text-gray-500">管理品牌 CSV 匯入與掃描</p>
+          <p className="text-sm text-gray-400">管理品牌 CSV 匯入與掃描</p>
         </div>
         <div className="flex gap-2">
           <Button size="sm" onClick={() => importCsv.mutate()} disabled={importCsv.isPending}>
@@ -73,11 +73,11 @@ export default function AdminSeedsPage() {
       {/* Status Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: '總數', value: status?.total, color: 'bg-blue-50 text-blue-700' },
-          { label: '已掃描', value: status?.scanned, color: 'bg-green-50 text-green-700' },
-          { label: '等待中', value: status?.pending, color: 'bg-yellow-50 text-yellow-700' },
-          { label: '失敗', value: status?.failed, color: 'bg-red-50 text-red-700' },
-          { label: '狀態', value: status?.isRunning ? '運行中' : '閒置', color: status?.isRunning ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-700' },
+          { label: '總數', value: status?.total, color: 'bg-blue-500/20 text-blue-400' },
+          { label: '已掃描', value: status?.scanned, color: 'bg-green-500/20 text-green-400' },
+          { label: '等待中', value: status?.pending, color: 'bg-yellow-500/20 text-yellow-400' },
+          { label: '失敗', value: status?.failed, color: 'bg-red-500/20 text-red-400' },
+          { label: '狀態', value: status?.isRunning ? '運行中' : '閒置', color: status?.isRunning ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-gray-300' },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className={`p-4 text-center ${s.color} rounded-lg`}>
@@ -96,7 +96,7 @@ export default function AdminSeedsPage() {
             {status?.byIndustry
               ?.sort((a: any, b: any) => b.count - a.count)
               .map((ind: any) => (
-                <div key={ind.industry} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+                <div key={ind.industry} className="flex items-center justify-between p-2 bg-white/5 rounded text-sm">
                   <span className="truncate">{ind.industry}</span>
                   <Badge variant="secondary">{ind.count}</Badge>
                 </div>
@@ -115,12 +115,12 @@ export default function AdminSeedsPage() {
             </h2>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {failed.slice(0, 20).map((seed: any) => (
-                <div key={seed.id} className="flex items-center justify-between p-2 bg-red-50 rounded text-sm">
+                <div key={seed.id} className="flex items-center justify-between p-2 bg-red-500/20 rounded text-sm">
                   <div>
                     <span className="font-medium">{seed.brandName}</span>
-                    <span className="text-gray-500 ml-2 text-xs">{seed.url}</span>
+                    <span className="text-gray-400 ml-2 text-xs">{seed.url}</span>
                   </div>
-                  <span className="text-xs text-red-600 max-w-[200px] truncate">{seed.failReason}</span>
+                  <span className="text-xs text-red-400 max-w-[200px] truncate">{seed.failReason}</span>
                 </div>
               ))}
             </div>

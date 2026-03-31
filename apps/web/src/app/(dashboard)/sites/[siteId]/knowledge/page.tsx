@@ -57,11 +57,11 @@ const MAX_QA = 200
 const PAGE_SIZE = 20
 
 const CATEGORY_MAP: Record<string, { label: string; color: string }> = {
-  brand: { label: '品牌核心', color: 'bg-blue-100 text-blue-800' },
-  industry: { label: '行業知識', color: 'bg-green-100 text-green-800' },
-  product: { label: '產品服務', color: 'bg-orange-100 text-orange-800' },
-  consumer: { label: '消費者疑慮', color: 'bg-red-100 text-red-800' },
-  education: { label: '教育延伸', color: 'bg-purple-100 text-purple-800' },
+  brand: { label: '品牌核心', color: 'bg-blue-500/20 text-blue-300' },
+  industry: { label: '行業知識', color: 'bg-green-500/20 text-green-300' },
+  product: { label: '產品服務', color: 'bg-orange-500/20 text-orange-300' },
+  consumer: { label: '消費者疑慮', color: 'bg-red-500/20 text-red-300' },
+  education: { label: '教育延伸', color: 'bg-purple-500/20 text-purple-300' },
 }
 
 // ── Site Profile Form (collapsible) ──
@@ -115,12 +115,12 @@ function ProfileSection({
   return (
     <Card>
       <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors"
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center gap-2">
           <Building2 className="h-5 w-5 text-blue-600" />
-          <h2 className="font-semibold text-gray-900">網站基本資訊</h2>
+          <h2 className="font-semibold text-white">網站基本資訊</h2>
           {hasProfile && !isOpen && (
             <span className="text-sm text-muted-foreground ml-2">
               {profile?.industry}
@@ -134,9 +134,9 @@ function ProfileSection({
           )}
         </div>
         {isOpen ? (
-          <ChevronDown className="h-4 w-4 text-gray-500" />
+          <ChevronDown className="h-4 w-4 text-gray-400" />
         ) : (
-          <ChevronRight className="h-4 w-4 text-gray-500" />
+          <ChevronRight className="h-4 w-4 text-gray-400" />
         )}
       </div>
 
@@ -293,14 +293,14 @@ function QaRow({
 
   if (isEditing) {
     return (
-      <div className="border-b last:border-b-0 p-3 bg-blue-50/50">
+      <div className="border-b last:border-b-0 p-3 bg-blue-500/10">
         <div className="space-y-2">
           <div>
             <Label className="text-xs">問題</Label>
             <Textarea
               value={editQuestion}
               onChange={(e) => setEditQuestion(e.target.value)}
-              className="mt-0.5 text-sm bg-white"
+              className="mt-0.5 text-sm bg-white/5"
               rows={2}
             />
           </div>
@@ -309,7 +309,7 @@ function QaRow({
             <Textarea
               value={editAnswer}
               onChange={(e) => setEditAnswer(e.target.value)}
-              className="mt-0.5 text-sm bg-white"
+              className="mt-0.5 text-sm bg-white/5"
               rows={3}
             />
           </div>
@@ -347,7 +347,7 @@ function QaRow({
   }
 
   return (
-    <div className="border-b last:border-b-0 hover:bg-gray-50 transition-colors">
+    <div className="border-b last:border-b-0 hover:bg-white/5 transition-colors">
       <div
         className="flex items-center gap-3 px-3 py-2.5 cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -356,7 +356,7 @@ function QaRow({
           {index + 1}
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 truncate">
+          <p className="text-sm font-medium text-white truncate">
             {qa.question}
           </p>
           {!isExpanded && (
@@ -398,7 +398,7 @@ function QaRow({
       </div>
       {isExpanded && (
         <div className="px-3 pb-3 pl-14">
-          <p className="text-sm text-gray-700 whitespace-pre-wrap">
+          <p className="text-sm text-gray-300 whitespace-pre-wrap">
             {qa.answer}
           </p>
         </div>
@@ -436,7 +436,7 @@ function AddQaForm({
   }
 
   return (
-    <Card className="border-blue-200 bg-blue-50/30">
+    <Card className="border-blue-200 bg-blue-500/10">
       <CardContent className="p-4 space-y-3">
         <div>
           <Label className="text-sm">問題</Label>
@@ -444,7 +444,7 @@ function AddQaForm({
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="例：你們的服務如何收費？"
-            className="mt-1 bg-white text-sm"
+            className="mt-1 bg-white/5 text-sm"
             rows={2}
           />
         </div>
@@ -454,7 +454,7 @@ function AddQaForm({
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             placeholder="例：我們提供免費方案和 Pro 方案，Pro 方案每月 NT$990..."
-            className="mt-1 bg-white text-sm"
+            className="mt-1 bg-white/5 text-sm"
             rows={3}
           />
         </div>
@@ -519,7 +519,7 @@ function AiGeneratingProgress() {
             <Sparkles className="h-6 w-6 text-purple-600 animate-pulse" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">AI 正在生成問答</h3>
+            <h3 className="font-semibold text-white">AI 正在生成問答</h3>
             <p className="text-xs text-muted-foreground">
               已經過 {elapsed} 秒，5 個分類同時生成中...
             </p>
@@ -554,7 +554,7 @@ function AiGeneratingProgress() {
                 ) : (
                   <StepIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
                 )}
-                <span className={isCurrent ? 'font-medium text-purple-700' : 'text-gray-600'}>
+                <span className={isCurrent ? 'font-medium text-purple-700' : 'text-gray-400'}>
                   {s.label}
                 </span>
               </div>
@@ -743,7 +743,7 @@ function AiGeneratePreview({
       {/* Category Tabs */}
       <div className="flex gap-1 flex-wrap mb-3">
         {categoryKeys.map((cat) => {
-          const catInfo = CATEGORY_MAP[cat] || { label: cat, color: 'bg-gray-100 text-gray-800' }
+          const catInfo = CATEGORY_MAP[cat] || { label: cat, color: 'bg-white/10 text-gray-300' }
           const catItems = categories.get(cat) || []
           const catSelectedCount = catItems.reduce((acc, _, localIdx) => {
             const globalIdx = getGlobalIndex(cat, localIdx)
@@ -755,7 +755,7 @@ function AiGeneratePreview({
               className={`px-3 py-1.5 text-xs rounded-full font-medium transition-colors ${
                 activeTab === cat
                   ? catInfo.color + ' ring-2 ring-offset-1 ring-purple-300'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : 'bg-white/10 text-gray-400 hover:bg-white/20'
               }`}
               onClick={() => setActiveTab(cat)}
             >
@@ -768,7 +768,7 @@ function AiGeneratePreview({
       {items.length === 0 ? (
         <div className="text-center py-10">
           <CircleCheck className="h-12 w-12 text-green-400 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">所有問答已儲存</h3>
+          <h3 className="text-lg font-semibold text-white mb-1">所有問答已儲存</h3>
           <p className="text-sm text-muted-foreground mb-4">
             可以點「繼續生成更多」來新增更多問答，或關閉此面板
           </p>
@@ -808,7 +808,7 @@ function AiGeneratePreview({
       {/* Two-column layout */}
       <div className="flex gap-3" style={{ minHeight: '420px' }}>
         {/* Left: Item list */}
-        <div className="w-2/5 border rounded-lg overflow-y-auto" style={{ maxHeight: '420px' }}>
+        <div className="w-2/5 border border-white/10 rounded-lg overflow-y-auto" style={{ maxHeight: '420px' }}>
           {currentItems.map((item, localIndex) => {
             const globalIndex = getGlobalIndex(activeTab, localIndex)
             const isSelected = selected.has(globalIndex)
@@ -818,10 +818,10 @@ function AiGeneratePreview({
                 key={globalIndex}
                 className={`flex items-start gap-2 p-2 border-b last:border-b-0 cursor-pointer transition-colors ${
                   isFocused
-                    ? 'bg-purple-100 border-l-2 border-l-purple-500'
+                    ? 'bg-purple-500/20 border-l-2 border-l-purple-500'
                     : isSelected
-                      ? 'bg-purple-50/50'
-                      : 'bg-white opacity-60'
+                      ? 'bg-purple-500/10'
+                      : 'bg-white/5 opacity-60'
                 }`}
                 onClick={() => setFocusedIndex(globalIndex)}
               >
@@ -839,7 +839,7 @@ function AiGeneratePreview({
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-900 line-clamp-2">
+                  <p className="text-xs font-medium text-white line-clamp-2">
                     {item.question}
                   </p>
                 </div>
@@ -849,14 +849,14 @@ function AiGeneratePreview({
         </div>
 
         {/* Right: Detail / Edit panel */}
-        <div className="w-3/5 border rounded-lg p-4 bg-gray-50/50 overflow-y-auto" style={{ maxHeight: '420px' }}>
+        <div className="w-3/5 border border-white/10 rounded-lg p-4 bg-white/5 overflow-y-auto" style={{ maxHeight: '420px' }}>
           {focusedItem ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Badge
                   className={
                     CATEGORY_MAP[focusedItem.category || 'brand']?.color ||
-                    'bg-gray-100 text-gray-800'
+                    'bg-white/10 text-gray-300'
                   }
                 >
                   {CATEGORY_MAP[focusedItem.category || 'brand']?.label ||
@@ -867,20 +867,20 @@ function AiGeneratePreview({
                 </span>
               </div>
               <div>
-                <Label className="text-xs font-semibold text-gray-700">問題</Label>
+                <Label className="text-xs font-semibold text-gray-300">問題</Label>
                 <Textarea
                   value={focusedItem.question}
                   onChange={(e) => updateItem(focusedIndex, 'question', e.target.value)}
-                  className="mt-1 text-sm bg-white"
+                  className="mt-1 text-sm bg-white/5"
                   rows={2}
                 />
               </div>
               <div>
-                <Label className="text-xs font-semibold text-gray-700">回答</Label>
+                <Label className="text-xs font-semibold text-gray-300">回答</Label>
                 <Textarea
                   value={focusedItem.answer}
                   onChange={(e) => updateItem(focusedIndex, 'answer', e.target.value)}
-                  className="mt-1 text-sm bg-white"
+                  className="mt-1 text-sm bg-white/5"
                   rows={8}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
@@ -980,10 +980,10 @@ function SavedQaEditor({
   }
 
   return (
-    <Card className="border-blue-200 bg-blue-50/30">
+    <Card className="border-blue-200 bg-blue-500/10">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
             <Pencil className="h-3.5 w-3.5" />
             編輯問答
           </h3>
@@ -991,7 +991,7 @@ function SavedQaEditor({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
+              className="h-7 text-xs text-red-500 hover:text-red-700 hover:bg-red-500/20"
               onClick={handleDelete}
               disabled={deleteMutation.isPending}
             >
@@ -1010,20 +1010,20 @@ function SavedQaEditor({
         </div>
         <div className="space-y-3">
           <div>
-            <Label className="text-xs font-semibold text-gray-700">問題</Label>
+            <Label className="text-xs font-semibold text-gray-300">問題</Label>
             <Textarea
               value={editQuestion}
               onChange={(e) => setEditQuestion(e.target.value)}
-              className="mt-1 text-sm bg-white"
+              className="mt-1 text-sm bg-white/5"
               rows={2}
             />
           </div>
           <div>
-            <Label className="text-xs font-semibold text-gray-700">回答</Label>
+            <Label className="text-xs font-semibold text-gray-300">回答</Label>
             <Textarea
               value={editAnswer}
               onChange={(e) => setEditAnswer(e.target.value)}
-              className="mt-1 text-sm bg-white"
+              className="mt-1 text-sm bg-white/5"
               rows={6}
             />
             <p className="text-xs text-muted-foreground mt-1">{editAnswer.length} 字</p>
@@ -1258,7 +1258,7 @@ export default function KnowledgePage() {
     return (
       <div className="space-y-6">
         <div className="text-center py-12">
-          <h2 className="text-xl font-semibold text-gray-900">找不到網站</h2>
+          <h2 className="text-xl font-semibold text-white">找不到網站</h2>
           <p className="text-muted-foreground mt-1">
             該網站不存在或您無權存取
           </p>
@@ -1278,7 +1278,7 @@ export default function KnowledgePage() {
       {/* Back link */}
       <Link
         href={`/sites/${siteId}`}
-        className="inline-flex items-center text-sm text-muted-foreground hover:text-gray-900 transition-colors"
+        className="inline-flex items-center text-sm text-muted-foreground hover:text-white transition-colors"
       >
         <ArrowLeft className="h-4 w-4 mr-1" />
         返回網站詳情
@@ -1289,7 +1289,7 @@ export default function KnowledgePage() {
         <div className="flex items-center gap-3">
           <BookOpen className="h-6 w-6 text-purple-600" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">知識庫</h1>
+            <h1 className="text-2xl font-bold text-white">知識庫</h1>
             <p className="text-sm text-muted-foreground">
               {site.name} — AI 搜尋引擎收錄用問答
             </p>
@@ -1328,7 +1328,7 @@ export default function KnowledgePage() {
               問答工作區
             </CardTitle>
             {aiResults && aiResults.length > 0 && (
-              <Badge className="bg-purple-100 text-purple-800">
+              <Badge className="bg-purple-500/20 text-purple-300">
                 {aiResults.length} 筆 AI 建議待處理
               </Badge>
             )}
@@ -1427,7 +1427,7 @@ export default function KnowledgePage() {
               className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
                 activeCategory === null
                   ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : 'bg-white/10 text-gray-400 hover:bg-white/20'
               }`}
               onClick={() => handleCategoryFilter(null)}
             >
@@ -1442,7 +1442,7 @@ export default function KnowledgePage() {
                   className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
                     activeCategory === key
                       ? color + ' ring-2 ring-offset-1 ring-gray-300'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      : 'bg-white/10 text-gray-400 hover:bg-white/20'
                   }`}
                   onClick={() => handleCategoryFilter(key)}
                 >
@@ -1457,7 +1457,7 @@ export default function KnowledgePage() {
           {qaCount === 0 ? (
             <div className="text-center py-12">
               <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+              <h3 className="text-lg font-semibold text-white mb-1">
                 尚未建立知識庫
               </h3>
               <p className="text-sm text-muted-foreground mb-4">
@@ -1497,7 +1497,7 @@ export default function KnowledgePage() {
             </div>
           ) : (
             <>
-              <div className="border rounded-lg overflow-hidden divide-y">
+              <div className="border border-white/10 rounded-lg overflow-hidden divide-y divide-white/5">
                 {paginatedQas.map((qa, i) => {
                   const isEditing = editingQaId === qa.id
                   const globalIndex = (currentPage - 1) * PAGE_SIZE + i + 1
@@ -1506,8 +1506,8 @@ export default function KnowledgePage() {
                       key={qa.id}
                       className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
                         isEditing
-                          ? 'bg-blue-50 border-l-2 border-l-blue-500'
-                          : 'hover:bg-gray-50'
+                          ? 'bg-blue-500/20 border-l-2 border-l-blue-500'
+                          : 'hover:bg-white/5'
                       }`}
                       onClick={() => setEditingQaId(isEditing ? null : qa.id)}
                     >
@@ -1515,7 +1515,7 @@ export default function KnowledgePage() {
                         {globalIndex}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-white truncate">
                           {qa.question}
                         </p>
                         <p className="text-xs text-muted-foreground truncate mt-0.5">

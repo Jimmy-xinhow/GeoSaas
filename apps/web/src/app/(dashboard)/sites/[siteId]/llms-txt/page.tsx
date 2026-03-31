@@ -108,7 +108,7 @@ export default function LlmsTxtPage() {
       <div>
         <Link
           href={`/sites/${siteId}`}
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-gray-900 transition-colors mb-4"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-white transition-colors mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
           返回網站詳情
@@ -117,7 +117,7 @@ export default function LlmsTxtPage() {
           <div className="flex items-center gap-3">
             <FileText className="h-6 w-6 text-blue-600" />
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">llms.txt 託管</h1>
+              <h1 className="text-2xl font-bold text-white">llms.txt 託管</h1>
               <p className="text-muted-foreground mt-1">
                 {site.name} — 管理您的 llms.txt 檔案
               </p>
@@ -153,13 +153,13 @@ export default function LlmsTxtPage() {
       </div>
 
       {/* Hosted URL */}
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">託管網址</CardTitle>
           <CardDescription>此為您的 llms.txt 公開託管網址</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-2 p-3 bg-white/5 rounded-lg">
             <code className="text-sm flex-1 text-blue-600 truncate">
               {hostedUrl}
             </code>
@@ -192,7 +192,7 @@ export default function LlmsTxtPage() {
         </TabsList>
 
         <TabsContent value="editor">
-          <Card>
+          <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-6">
               <textarea
                 value={content}
@@ -205,9 +205,9 @@ export default function LlmsTxtPage() {
         </TabsContent>
 
         <TabsContent value="preview">
-          <Card>
+          <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-6">
-              <pre className="w-full h-[400px] p-4 bg-gray-50 rounded-lg overflow-auto whitespace-pre-wrap text-sm font-mono">
+              <pre className="w-full h-[400px] p-4 bg-white/5 rounded-lg overflow-auto whitespace-pre-wrap text-sm font-mono">
                 {content || '(尚無內容)'}
               </pre>
             </CardContent>
@@ -215,7 +215,7 @@ export default function LlmsTxtPage() {
         </TabsContent>
 
         <TabsContent value="install">
-          <Card>
+          <Card className="bg-white/5 border-white/10">
             <CardHeader>
               <CardTitle className="text-base">安裝方式</CardTitle>
               <CardDescription>
@@ -232,7 +232,7 @@ export default function LlmsTxtPage() {
                   在您網站的 HTML &lt;head&gt; 中加入以下 meta 標籤
                 </p>
                 <div className="relative">
-                  <pre className="p-3 bg-gray-50 rounded-lg text-xs font-mono overflow-x-auto">
+                  <pre className="p-3 bg-white/5 rounded-lg text-xs font-mono overflow-x-auto">
 {`<meta name="llms-txt" content="${hostedUrl}" />`}
                   </pre>
                   <Button
@@ -258,7 +258,7 @@ export default function LlmsTxtPage() {
                 <p className="text-xs text-muted-foreground">
                   將上方編輯器的內容複製後，儲存為 /.well-known/llms.txt
                 </p>
-                <div className="p-3 bg-gray-50 rounded-lg text-xs font-mono">
+                <div className="p-3 bg-white/5 rounded-lg text-xs font-mono">
                   您的網站根目錄/.well-known/llms.txt
                 </div>
               </div>
@@ -271,7 +271,7 @@ export default function LlmsTxtPage() {
                 <p className="text-xs text-muted-foreground">
                   將內容存為 /llms.txt，放在網站的根目錄下
                 </p>
-                <div className="p-3 bg-gray-50 rounded-lg text-xs font-mono">
+                <div className="p-3 bg-white/5 rounded-lg text-xs font-mono">
                   您的網站根目錄/llms.txt
                 </div>
               </div>

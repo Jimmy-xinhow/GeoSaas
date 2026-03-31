@@ -33,7 +33,7 @@ function ScoreGauge({ score, size = 80 }: { score: number; size?: number }) {
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#e5e7eb"
+          stroke="rgba(255,255,255,0.1)"
           strokeWidth={6}
         />
         <circle
@@ -89,10 +89,10 @@ function getSiteLatestScan(site: any) {
 
 function ScanStatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; className: string }> = {
-    PENDING: { label: '排隊中', className: 'bg-gray-100 text-gray-600' },
-    RUNNING: { label: '掃描中', className: 'bg-blue-100 text-blue-600' },
-    COMPLETED: { label: '已完成', className: 'bg-green-100 text-green-600' },
-    FAILED: { label: '失敗', className: 'bg-red-100 text-red-600' },
+    PENDING: { label: '排隊中', className: 'bg-white/10 text-gray-400' },
+    RUNNING: { label: '掃描中', className: 'bg-blue-500/20 text-blue-400' },
+    COMPLETED: { label: '已完成', className: 'bg-green-500/20 text-green-400' },
+    FAILED: { label: '失敗', className: 'bg-red-500/20 text-red-400' },
   }
   const c = config[status] || config.PENDING
   return <Badge className={c.className}>{c.label}</Badge>
@@ -196,7 +196,7 @@ export default function SitesPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">我的網站</h1>
+          <h1 className="text-2xl font-bold text-white">我的網站</h1>
           <p className="text-muted-foreground mt-1">管理和監控您的網站 GEO 分數</p>
         </div>
         <Button
@@ -226,7 +226,7 @@ export default function SitesPage() {
 
       {/* Add site form */}
       {showAddForm && (
-        <Card>
+        <Card className="bg-white/5 border-white/10">
           <CardContent className="p-6">
             <div className="space-y-3">
               <Input
@@ -277,11 +277,11 @@ export default function SitesPage() {
           ))}
         </div>
       ) : filteredSites.length === 0 ? (
-        <Card>
+        <Card className="bg-white/5 border-white/10">
           <CardContent className="p-12">
             <div className="text-center">
               <Globe className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+              <h3 className="text-lg font-semibold text-white mb-1">
                 尚無網站
               </h3>
               <p className="text-muted-foreground mb-4">
@@ -305,7 +305,7 @@ export default function SitesPage() {
             const isTriggeringThis = triggerScanMutation.isPending && triggerScanMutation.variables === site.id
 
             return (
-              <Card key={site.id} className={`hover:shadow-md transition-shadow ${isSiteScanning ? 'ring-2 ring-blue-200' : ''}`}>
+              <Card key={site.id} className={`bg-white/5 border-white/10 hover:shadow-lg hover:shadow-blue-500/5 transition-shadow ${isSiteScanning ? 'ring-2 ring-blue-200' : ''}`}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
@@ -321,7 +321,7 @@ export default function SitesPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-500/20 flex-shrink-0"
                       onClick={() => handleDelete(site.id)}
                       disabled={deletingId === site.id}
                     >

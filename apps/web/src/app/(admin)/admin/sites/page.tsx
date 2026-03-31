@@ -10,10 +10,10 @@ import apiClient from '@/lib/api-client';
 import { Search, ExternalLink, RefreshCw, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const TIER_COLORS: Record<string, string> = {
-  platinum: 'bg-blue-100 text-blue-700',
-  gold: 'bg-yellow-100 text-yellow-700',
-  silver: 'bg-gray-100 text-gray-700',
-  bronze: 'bg-orange-100 text-orange-700',
+  platinum: 'bg-blue-500/20 text-blue-400',
+  gold: 'bg-yellow-500/20 text-yellow-400',
+  silver: 'bg-white/10 text-gray-300',
+  bronze: 'bg-orange-500/20 text-orange-400',
 };
 
 export default function AdminSitesPage() {
@@ -52,7 +52,7 @@ export default function AdminSitesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">網站管理</h1>
-        <p className="text-sm text-gray-500">管理所有收錄的網站、觸發掃描、驗證</p>
+        <p className="text-sm text-gray-400">管理所有收錄的網站、觸發掃描、驗證</p>
       </div>
 
       {/* Filters */}
@@ -75,33 +75,33 @@ export default function AdminSitesPage() {
       </div>
 
       {/* Stats */}
-      <p className="text-sm text-gray-500">共 {total} 個網站</p>
+      <p className="text-sm text-gray-400">共 {total} 個網站</p>
 
       {/* Table */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-white/5 border-b border-white/10">
                 <tr>
-                  <th className="text-left p-3 font-medium text-gray-600">品牌</th>
-                  <th className="text-left p-3 font-medium text-gray-600">產業</th>
-                  <th className="text-center p-3 font-medium text-gray-600">分數</th>
-                  <th className="text-center p-3 font-medium text-gray-600">等級</th>
-                  <th className="text-center p-3 font-medium text-gray-600">驗證</th>
-                  <th className="text-right p-3 font-medium text-gray-600">操作</th>
+                  <th className="text-left p-3 font-medium text-gray-400">品牌</th>
+                  <th className="text-left p-3 font-medium text-gray-400">產業</th>
+                  <th className="text-center p-3 font-medium text-gray-400">分數</th>
+                  <th className="text-center p-3 font-medium text-gray-400">等級</th>
+                  <th className="text-center p-3 font-medium text-gray-400">驗證</th>
+                  <th className="text-right p-3 font-medium text-gray-400">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-white/5">
                 {isLoading ? (
                   <tr><td colSpan={6} className="p-8 text-center text-gray-400">載入中...</td></tr>
                 ) : sites.length === 0 ? (
                   <tr><td colSpan={6} className="p-8 text-center text-gray-400">無結果</td></tr>
                 ) : (
                   sites.map((site: any) => (
-                    <tr key={site.id} className="hover:bg-gray-50">
+                    <tr key={site.id} className="hover:bg-white/5">
                       <td className="p-3">
-                        <div className="font-medium text-gray-900">{site.name}</div>
+                        <div className="font-medium text-white">{site.name}</div>
                         <a href={site.url} target="_blank" rel="noopener" className="text-xs text-blue-500 hover:underline flex items-center gap-1">
                           {site.url?.replace(/^https?:\/\//, '').slice(0, 40)}
                           <ExternalLink className="h-3 w-3" />
@@ -115,7 +115,7 @@ export default function AdminSitesPage() {
                       </td>
                       <td className="p-3 text-center">
                         {site.tier ? (
-                          <Badge className={TIER_COLORS[site.tier] || 'bg-gray-100'}>{site.tier}</Badge>
+                          <Badge className={TIER_COLORS[site.tier] || 'bg-white/10'}>{site.tier}</Badge>
                         ) : (
                           <span className="text-gray-300">-</span>
                         )}
@@ -159,7 +159,7 @@ export default function AdminSitesPage() {
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm text-gray-600">{page} / {totalPages}</span>
+          <span className="text-sm text-gray-400">{page} / {totalPages}</span>
           <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>

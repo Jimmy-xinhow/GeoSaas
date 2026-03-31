@@ -98,12 +98,12 @@ export default function SettingsPage() {
     <div className="space-y-6 max-w-2xl">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">設定</h1>
+        <h1 className="text-2xl font-bold text-white">設定</h1>
         <p className="text-muted-foreground mt-1">管理您的帳號和偏好設定</p>
       </div>
 
       {/* Profile card */}
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
@@ -114,8 +114,8 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           {profileLoading ? (
             <div className="space-y-4">
-              <div className="h-10 bg-gray-100 rounded animate-pulse" />
-              <div className="h-10 bg-gray-100 rounded animate-pulse" />
+              <div className="h-10 bg-white/10 rounded animate-pulse" />
+              <div className="h-10 bg-white/10 rounded animate-pulse" />
             </div>
           ) : profileError ? (
             <div className="flex items-center gap-2 text-sm text-red-600 py-4">
@@ -162,7 +162,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Subscription card */}
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
@@ -173,10 +173,10 @@ export default function SettingsPage() {
         <CardContent>
           {subLoading ? (
             <div className="space-y-4">
-              <div className="h-20 bg-gray-100 rounded animate-pulse" />
+              <div className="h-20 bg-white/10 rounded animate-pulse" />
               <div className="grid grid-cols-2 gap-4">
-                <div className="h-16 bg-gray-100 rounded animate-pulse" />
-                <div className="h-16 bg-gray-100 rounded animate-pulse" />
+                <div className="h-16 bg-white/10 rounded animate-pulse" />
+                <div className="h-16 bg-white/10 rounded animate-pulse" />
               </div>
             </div>
           ) : subError ? (
@@ -186,17 +186,17 @@ export default function SettingsPage() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between p-4 rounded-lg bg-blue-50 border border-blue-200">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-blue-500/20 border border-blue-500/30">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-lg font-semibold text-blue-700">
+                    <span className="text-lg font-semibold text-blue-300">
                       {planInfo.label}
                     </span>
                     <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full font-medium">
                       目前方案
                     </span>
                   </div>
-                  <p className="text-sm text-blue-600 mt-1">
+                  <p className="text-sm text-blue-400 mt-1">
                     {planInfo.description}
                   </p>
                 </div>
@@ -215,14 +215,14 @@ export default function SettingsPage() {
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-4">
-                <div className="p-3 rounded-lg border">
+                <div className="p-3 rounded-lg border border-white/10">
                   <p className="text-sm text-muted-foreground">本月掃描</p>
                   <p className="text-2xl font-bold">
                     {subscription?.usage?.scansThisMonth ?? 0}
                     {planInfo.scans > 0 ? `/${planInfo.scans}` : ' / 無限'}
                   </p>
                 </div>
-                <div className="p-3 rounded-lg border">
+                <div className="p-3 rounded-lg border border-white/10">
                   <p className="text-sm text-muted-foreground">已用網站數</p>
                   <p className="text-2xl font-bold">
                     {subscription?.usage?.sitesCount ?? 0}
@@ -236,7 +236,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Password card */}
-      <Card>
+      <Card className="bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Lock className="h-5 w-5" />

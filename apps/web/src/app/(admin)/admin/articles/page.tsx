@@ -60,7 +60,7 @@ export default function AdminArticlesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">文章管理</h1>
-          <p className="text-sm text-gray-500">共 {total} 篇文章</p>
+          <p className="text-sm text-gray-400">共 {total} 篇文章</p>
         </div>
         <div className="flex gap-2">
           <Button size="sm" onClick={() => generateInsights.mutate()} disabled={generateInsights.isPending}>
@@ -79,7 +79,7 @@ export default function AdminArticlesPage() {
       </div>
 
       {auditResult && (
-        <Card className="border-yellow-200 bg-yellow-50">
+        <Card className="border-yellow-500/30 bg-yellow-500/20">
           <CardContent className="p-4 text-sm">
             品質審計完成：保留 <strong>{auditResult.kept}</strong> 篇，刪除 <strong>{auditResult.deleted}</strong> 篇（門檻 {auditResult.threshold} 分）
             <Button variant="ghost" size="sm" className="ml-2" onClick={() => setAuditResult(null)}>關閉</Button>
@@ -91,23 +91,23 @@ export default function AdminArticlesPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-white/5 border-b border-white/10">
                 <tr>
-                  <th className="text-left p-3 font-medium text-gray-600">標題</th>
-                  <th className="text-left p-3 font-medium text-gray-600">類型</th>
-                  <th className="text-left p-3 font-medium text-gray-600">產業</th>
-                  <th className="text-center p-3 font-medium text-gray-600">閱讀時間</th>
-                  <th className="text-center p-3 font-medium text-gray-600">發布</th>
+                  <th className="text-left p-3 font-medium text-gray-400">標題</th>
+                  <th className="text-left p-3 font-medium text-gray-400">類型</th>
+                  <th className="text-left p-3 font-medium text-gray-400">產業</th>
+                  <th className="text-center p-3 font-medium text-gray-400">閱讀時間</th>
+                  <th className="text-center p-3 font-medium text-gray-400">發布</th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-white/5">
                 {isLoading ? (
                   <tr><td colSpan={5} className="p-8 text-center text-gray-400">載入中...</td></tr>
                 ) : (
                   articles.map((a: any) => (
-                    <tr key={a.id || a.slug} className="hover:bg-gray-50">
+                    <tr key={a.id || a.slug} className="hover:bg-white/5">
                       <td className="p-3">
-                        <div className="font-medium text-gray-900 max-w-md truncate">{a.title}</div>
+                        <div className="font-medium text-white max-w-md truncate">{a.title}</div>
                         <div className="text-xs text-gray-400 mt-0.5">{a.slug}</div>
                       </td>
                       <td className="p-3">
@@ -115,13 +115,13 @@ export default function AdminArticlesPage() {
                           {TEMPLATE_LABELS[a.templateType || a.category] || a.category || '-'}
                         </Badge>
                       </td>
-                      <td className="p-3 text-gray-600">{a.industrySlug || '-'}</td>
-                      <td className="p-3 text-center text-gray-600">{a.readTime || a.readingTimeMinutes ? `${a.readingTimeMinutes || '?'} min` : '-'}</td>
+                      <td className="p-3 text-gray-400">{a.industrySlug || '-'}</td>
+                      <td className="p-3 text-center text-gray-400">{a.readTime || a.readingTimeMinutes ? `${a.readingTimeMinutes || '?'} min` : '-'}</td>
                       <td className="p-3 text-center">
                         {a.published ? (
-                          <Badge className="bg-green-100 text-green-700 text-xs">已發布</Badge>
+                          <Badge className="bg-green-500/20 text-green-400 text-xs">已發布</Badge>
                         ) : (
-                          <Badge className="bg-gray-100 text-gray-500 text-xs">草稿</Badge>
+                          <Badge className="bg-white/10 text-gray-400 text-xs">草稿</Badge>
                         )}
                       </td>
                     </tr>
@@ -138,7 +138,7 @@ export default function AdminArticlesPage() {
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm text-gray-600">{page} / {totalPages}</span>
+          <span className="text-sm text-gray-400">{page} / {totalPages}</span>
           <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
