@@ -66,6 +66,7 @@ export function useDirectoryStats() {
       const { data } = await apiClient.get<DirectoryStats>('/directory/stats');
       return data;
     },
+    refetchInterval: 60000,
   });
 }
 
@@ -95,6 +96,7 @@ export function useTodayHottest() {
       const { data } = await apiClient.get<RankedSite[]>('/directory/today-hottest');
       return data;
     },
+    refetchInterval: 60000,
   });
 }
 
@@ -105,6 +107,7 @@ export function useMostCrawled() {
       const { data } = await apiClient.get<RankedSite[]>('/directory/most-crawled');
       return data;
     },
+    refetchInterval: 60000,
   });
 }
 
@@ -115,6 +118,7 @@ export function useRecentlyActive() {
       const { data } = await apiClient.get<RankedSite[]>('/directory/recently-active');
       return data;
     },
+    refetchInterval: 60000,
   });
 }
 

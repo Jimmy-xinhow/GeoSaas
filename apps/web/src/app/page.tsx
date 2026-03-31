@@ -196,16 +196,22 @@ function CrawlerMarquee() {
   const doubled = [...items, ...items]
 
   return (
-    <div className="bg-gray-900 text-white py-2.5 overflow-hidden">
-      <div className="flex items-center gap-8 animate-marquee whitespace-nowrap">
-        {doubled.map((item: any, i: number) => (
-          <span key={`${item.id}-${i}`} className="inline-flex items-center gap-2 text-xs">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-purple-300 font-medium">{item.botName}</span>
-            <span className="text-gray-400">→</span>
-            <span className="text-gray-300">{item.site?.name || item.url}</span>
-          </span>
-        ))}
+    <div className="bg-gray-950 text-white py-2 overflow-hidden border-y border-white/5">
+      <div className="flex items-center">
+        <div className="shrink-0 flex items-center gap-1.5 px-4 border-r border-white/10 mr-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" />
+          <span className="text-[10px] font-bold text-green-400 uppercase tracking-wider">Live</span>
+        </div>
+        <div className="flex items-center gap-8 animate-marquee whitespace-nowrap">
+          {doubled.map((item: any, i: number) => (
+            <span key={`${item.id}-${i}`} className="inline-flex items-center gap-2 text-xs">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" />
+              <span className="text-purple-300 font-medium">{item.botName}</span>
+              <span className="text-gray-600">→</span>
+              <span className="text-gray-400">{item.site?.name || item.url}</span>
+            </span>
+          ))}
+        </div>
       </div>
       <style jsx>{`
         @keyframes marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }

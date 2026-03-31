@@ -153,14 +153,16 @@ function LeaderboardRow({
 
 function CrawlerFeedRow({ item }: { item: CrawlerFeedItem }) {
   const timeAgo = getTimeAgo(item.visitedAt)
+  const isRecent = Date.now() - new Date(item.visitedAt).getTime() < 300000 // < 5 min
   return (
-    <div className="flex items-center gap-3 py-2.5 px-3 hover:bg-white/5 rounded-lg text-sm">
-      <Bot className="h-4 w-4 text-purple-500 shrink-0" />
+    <div className="flex items-center gap-3 py-2.5 px-3 hover:bg-white/5 rounded-lg text-sm animate-fade-in-up">
+      <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${isRecent ? 'bg-green-400 animate-live-dot' : 'bg-gray-600'}`} />
+      <Bot className="h-4 w-4 text-purple-400 shrink-0" />
       <span className="font-medium text-white shrink-0">{item.botName}</span>
       <span className="text-gray-400 truncate flex-1">
         {item.site.name}
       </span>
-      <span className="text-xs text-gray-500 shrink-0">{timeAgo}</span>
+      <span className={`text-xs shrink-0 ${isRecent ? 'text-green-400' : 'text-gray-500'}`}>{timeAgo}</span>
     </div>
   )
 }
@@ -349,17 +351,20 @@ export default function DirectoryPage() {
         </p>
       </div>
 
-      {/* Stats */}
+      {/* Stats — Live updating */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-white/5 border-white/10">
+        <Card className="bg-white/5 border-white/10 animate-glow-pulse">
           <CardContent className="flex items-center gap-4 p-6">
             <div className="p-3 bg-blue-500/20 rounded-full">
               <Globe className="h-6 w-6 text-blue-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">
-                {statsLoading ? <Skeleton className="h-7 w-12" /> : stats?.totalSites || 0}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-2xl font-bold">
+                  {statsLoading ? <Skeleton className="h-7 w-12" /> : stats?.totalSites || 0}
+                </p>
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" />
+              </div>
               <p className="text-sm text-gray-400">收錄網站</p>
             </div>
           </CardContent>
@@ -370,9 +375,12 @@ export default function DirectoryPage() {
               <TrendingUp className="h-6 w-6 text-green-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">
-                {statsLoading ? <Skeleton className="h-7 w-12" /> : stats?.avgScore || 0}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-2xl font-bold">
+                  {statsLoading ? <Skeleton className="h-7 w-12" /> : stats?.avgScore || 0}
+                </p>
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" style={{ animationDelay: '0.5s' }} />
+              </div>
               <p className="text-sm text-gray-400">平均分數</p>
             </div>
           </CardContent>
@@ -383,14 +391,17 @@ export default function DirectoryPage() {
               <Star className="h-6 w-6 text-yellow-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">
-                {statsLoading ? (
-                  <Skeleton className="h-7 w-12" />
-                ) : (
-                  (stats?.tierDistribution?.gold || 0) +
-                  (stats?.tierDistribution?.platinum || 0)
-                )}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-2xl font-bold">
+                  {statsLoading ? (
+                    <Skeleton className="h-7 w-12" />
+                  ) : (
+                    (stats?.tierDistribution?.gold || 0) +
+                    (stats?.tierDistribution?.platinum || 0)
+                  )}
+                </p>
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" style={{ animationDelay: '1s' }} />
+              </div>
               <p className="text-sm text-gray-400">金牌以上</p>
             </div>
           </CardContent>
@@ -401,10 +412,14 @@ export default function DirectoryPage() {
       <Card className="bg-white/5 border-white/10">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
-            <Activity className="h-5 w-5 text-purple-500" />
+            <Activity className="h-5 w-5 text-purple-400 animate-live-pulse" />
             即時 AI 爬蟲動態
+            <span className="inline-flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 text-xs font-normal">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" />
+              LIVE
+            </span>
             {crawlerFeed?.stats && (
-              <Badge variant="secondary" className="ml-auto text-xs font-normal">
+              <Badge variant="secondary" className="ml-auto text-xs font-normal bg-white/10 text-gray-300">
                 24h: {crawlerFeed.stats.last24h} 次造訪
               </Badge>
             )}
