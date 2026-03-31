@@ -60,7 +60,7 @@ export default function CaseDetailPage() {
       <PublicNavbar />
 
       <article className="max-w-3xl mx-auto px-6 py-12">
-        <Link href="/cases" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-300 mb-6">
+        <Link href="/cases" className="inline-flex items-center gap-1 text-sm text-yellow-200/60 hover:text-gray-300 mb-6">
           <ArrowLeft className="h-3.5 w-3.5" />
           返回案例列表
         </Link>
@@ -83,17 +83,17 @@ export default function CaseDetailPage() {
           <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-red-500/10 to-green-500/10 rounded-xl mb-6">
             <div className="text-center">
               <p className="text-2xl font-bold text-red-400">{caseData.beforeGeoScore}</p>
-              <p className="text-xs text-gray-500">優化前</p>
+              <p className="text-xs text-yellow-200/60">優化前</p>
             </div>
             <span className="text-gray-400 text-xl">→</span>
             <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">{caseData.afterGeoScore}</p>
-              <p className="text-xs text-gray-500">優化後</p>
+              <p className="text-2xl font-bold text-green-400">{caseData.afterGeoScore}</p>
+              <p className="text-xs text-yellow-200/60">優化後</p>
             </div>
             <div className="text-center ml-auto">
-              <p className="text-xl font-bold text-green-600">+{caseData.afterGeoScore - caseData.beforeGeoScore}</p>
+              <p className="text-xl font-bold text-green-400">+{caseData.afterGeoScore - caseData.beforeGeoScore}</p>
               {caseData.improvementDays && (
-                <p className="text-xs text-gray-500">{caseData.improvementDays} 天達成</p>
+                <p className="text-xs text-yellow-200/60">{caseData.improvementDays} 天達成</p>
               )}
             </div>
           </div>
@@ -101,7 +101,7 @@ export default function CaseDetailPage() {
 
         {/* Query */}
         <div className="bg-white/5 rounded-xl p-4 mb-6">
-          <p className="text-xs text-gray-500 mb-1">AI 搜尋問題</p>
+          <p className="text-xs text-yellow-200/60 mb-1">AI 搜尋問題</p>
           <p className="text-white font-medium">「{caseData.queryUsed}」</p>
         </div>
 
