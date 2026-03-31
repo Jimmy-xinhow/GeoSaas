@@ -288,6 +288,23 @@ const pricingPlans = [
     popular: false,
   },
   {
+    name: 'Starter',
+    monthlyPrice: 390,
+    yearlyPrice: 351,
+    features: [
+      { text: '1 個網站', included: true },
+      { text: '每站 6 次掃描/月', included: true },
+      { text: 'AI 修復建議（30 次/月）', included: true },
+      { text: 'AI 內容生成（30 次/月）', included: true },
+      { text: '知識庫 Q&A（10 次/月）', included: true },
+      { text: 'AI 引用監控（20 題/月 + 報告 2 次）', included: true },
+      { text: '多平台發佈', included: false },
+      { text: '自動排程', included: false },
+    ],
+    cta: '選擇方案',
+    popular: false,
+  },
+  {
     name: 'Pro',
     monthlyPrice: 690,
     yearlyPrice: 621,
@@ -297,8 +314,9 @@ const pricingPlans = [
       { text: 'AI 修復建議（50 次/月）', included: true },
       { text: 'AI 內容生成（50 次/月）', included: true },
       { text: '知識庫 Q&A（15 次/月）', included: true },
-      { text: '多平台發佈', included: true },
       { text: 'AI 引用監控（30 題/月 + 報告 3 次）', included: true },
+      { text: '多平台發佈', included: true },
+      { text: '自動排程', included: true },
     ],
     cta: '立即升級',
     popular: true,
@@ -1125,7 +1143,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6">
             {pricingPlans.map((plan) => {
               const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice
               const isPopular = plan.popular
@@ -1232,7 +1250,7 @@ export default function LandingPage() {
               },
               {
                 q: '免費方案有什麼限制？',
-                a: '免費方案可以掃描 1 個網站，每月 2 次掃描，查看完整的 GEO 報告和分數，還可以免費體驗 1 次 AI 修復建議。如果需要 AI 內容生成、知識庫、引用監控等完整功能，可以升級到 Pro 方案。',
+                a: '免費方案可以掃描 1 個網站，每月 2 次掃描，查看完整的 GEO 報告和分數，還可以免費體驗 1 次 AI 修復建議。如果需要 AI 內容生成、知識庫、引用監控等完整功能，可以升級到 Starter 或 Pro 方案。',
               },
               {
                 q: '可以隨時取消訂閱嗎？',
