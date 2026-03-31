@@ -24,15 +24,19 @@ export default function ComparePage({ params }: { params: { industry: string } }
   const [siteAId, setSiteAId] = useState('');
   const [siteBId, setSiteBId] = useState('');
   const { data: sites } = useIndustryAiSites(industry);
-  const { data: comparison, isLoading: loadingComparison, refetch } = useBrandComparison(siteAId, siteBId);
+  const { data: comparison, isLoading: loadingComparison, refetch } = useBrandComparison(industry, siteAId, siteBId);
   const runMutation = useRunComparison();
 
   const industryLabel = INDUSTRIES.find((i) => i.value === industry)?.label || industry;
 
   const handleCompare = async () => {
     if (!siteAId || !siteBId) return;
-    await runMutation.mutateAsync({ siteAId, siteBId });
-    refetch();
+    try {
+      await runMutation.mutateAsync({ industry, siteAId, siteBId });
+      refetch();
+    } catch (err) {
+      console.error('Comparison failed:', err);
+    }
   };
 
   return (

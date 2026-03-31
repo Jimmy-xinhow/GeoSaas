@@ -71,9 +71,13 @@ export class IndustryAiController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   @Post(':industry/run')
-  @ApiOperation({ summary: 'Trigger full industry AI test (admin)' })
+  @ApiOperation({ summary: 'Trigger full industry AI test (admin, background)' })
   runTest(@Param('industry') industry: string) {
-    return this.service.runIndustryTest(industry);
+    // Run in background to avoid HTTP timeout
+    this.service.runIndustryTest(industry).catch((err) => {
+      console.error(`Industry AI test failed for ${industry}:`, err);
+    });
+    return { message: `Industry AI test started for ${industry}`, status: 'running' };
   }
 
   @ApiBearerAuth()

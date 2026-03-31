@@ -145,23 +145,26 @@ export function useCitationTrend(siteId: string, weeks = 12) {
   });
 }
 
-export function useBrandComparison(siteAId: string, siteBId: string) {
+export function useBrandComparison(industry: string, siteAId: string, siteBId: string) {
   return useQuery({
-    queryKey: ['industry-ai', 'compare', siteAId, siteBId],
+    queryKey: ['industry-ai', 'compare', industry, siteAId, siteBId],
     queryFn: async () => {
       const { data } = await apiClient.get<ComparisonResponse>(
-        `/industry-ai/compare?a=${siteAId}&b=${siteBId}`,
+        `/industry-ai/${industry}/compare?a=${siteAId}&b=${siteBId}`,
       );
       return data;
     },
-    enabled: !!siteAId && !!siteBId,
+    enabled: !!industry && !!siteAId && !!siteBId,
   });
 }
 
 export function useRunComparison() {
   return useMutation({
-    mutationFn: async (body: { siteAId: string; siteBId: string }) => {
-      const { data } = await apiClient.post('/industry-ai/compare', body);
+    mutationFn: async (body: { industry: string; siteAId: string; siteBId: string }) => {
+      const { data } = await apiClient.post(`/industry-ai/${body.industry}/compare`, {
+        siteAId: body.siteAId,
+        siteBId: body.siteBId,
+      });
       return data;
     },
   });
