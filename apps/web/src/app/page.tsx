@@ -596,24 +596,24 @@ export default function LandingPage() {
               已被台灣品牌信賴
             </h2>
             <p className="mt-3 text-gray-600">
-              超過 180 個台灣品牌已使用 Geovault 優化 AI 搜尋能見度
+              超過 680 個台灣品牌已使用 Geovault 優化 AI 搜尋能見度
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             <div>
-              <p className="text-4xl font-bold text-blue-600">180+</p>
+              <p className="text-4xl font-bold text-blue-600">680+</p>
               <p className="text-sm text-gray-500 mt-1">收錄品牌</p>
             </div>
             <div>
-              <p className="text-4xl font-bold text-green-600">500+</p>
+              <p className="text-4xl font-bold text-green-600">2,800+</p>
               <p className="text-sm text-gray-500 mt-1">分析文章</p>
             </div>
             <div>
-              <p className="text-4xl font-bold text-purple-600">10</p>
+              <p className="text-4xl font-bold text-purple-600">21</p>
               <p className="text-sm text-gray-500 mt-1">行業覆蓋</p>
             </div>
             <div>
-              <p className="text-4xl font-bold text-orange-600">8</p>
+              <p className="text-4xl font-bold text-orange-600">9</p>
               <p className="text-sm text-gray-500 mt-1">AI 可讀性指標</p>
             </div>
           </div>
