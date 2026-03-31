@@ -34,7 +34,7 @@ import { useGuestScan, useGuestScanStatus } from '@/hooks/use-guest-scan'
 import { useSubmitIndexNow } from '@/hooks/use-indexnow'
 import { useCrawlerFeed, usePlatformStats } from '@/hooks/use-directory'
 import PublicNavbar from '@/components/layout/public-navbar'
-import { GeovaultLogoCompact } from '@/components/logo'
+import { GeovaultLogoCompact, GeovaultLogoCompactDark } from '@/components/logo'
 
 /* ─── Animated counter hook ─── */
 function useCountUp(target: number, duration = 2000) {
@@ -450,93 +450,92 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           SECTION 2 — THE PROBLEM: SEO vs GEO
          ════════════════════════════════════════════════════════ */}
-      <section className="py-20 lg:py-28 bg-gray-50">
+      <section className="py-20 lg:py-28 bg-gray-900 text-white">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-red-50 text-red-600 mb-4">
+            <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-red-500/20 text-red-400 mb-4">
               你知道嗎？
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
+            <h2 className="text-3xl sm:text-4xl font-bold">
               傳統 SEO 已經不夠了
             </h2>
-            <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="mt-4 text-lg text-gray-400 max-w-2xl mx-auto">
               AI 搜尋正在改變遊戲規則，你的品牌準備好了嗎？
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {/* Google Search - Old way */}
-            <div className="bg-white rounded-2xl p-8 border-2 border-gray-200 relative">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 relative">
               <div className="absolute -top-3 left-6">
-                <span className="bg-gray-200 text-gray-600 text-xs font-semibold px-3 py-1 rounded-full">過去</span>
+                <span className="bg-gray-700 text-gray-300 text-xs font-semibold px-3 py-1 rounded-full">過去</span>
               </div>
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Search className="h-5 w-5 text-gray-500" />
+                <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
+                  <Search className="h-5 w-5 text-gray-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">Google 搜尋</h3>
+                <h3 className="text-lg font-semibold">Google 搜尋</h3>
               </div>
               <div className="space-y-3 mb-6">
                 <p className="text-sm text-gray-500 mb-4">搜尋「台北推薦整復」</p>
                 {[1,2,3,4,5].map(i => (
-                  <div key={i} className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
-                    <span className="text-xs text-gray-400 w-5">{i}.</span>
+                  <div key={i} className="flex items-center gap-3 py-2 px-3 bg-white/5 rounded-lg">
+                    <span className="text-xs text-gray-500 w-5">{i}.</span>
                     <div className="flex-1">
-                      <div className="h-3 bg-gray-200 rounded w-3/4" />
-                      <div className="h-2 bg-gray-100 rounded w-1/2 mt-1.5" />
+                      <div className="h-3 bg-white/10 rounded w-3/4" />
+                      <div className="h-2 bg-white/5 rounded w-1/2 mt-1.5" />
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="bg-gray-50 rounded-xl p-4 text-center">
-                <p className="text-2xl font-bold text-gray-400">10 個結果</p>
-                <p className="text-sm text-gray-400 mt-1">點擊率分散，每個只拿到 2-10%</p>
+              <div className="bg-white/5 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-gray-500">10 個結果</p>
+                <p className="text-sm text-gray-500 mt-1">點擊率分散，每個只拿到 2-10%</p>
               </div>
             </div>
 
             {/* AI Search - New way */}
-            <div className="bg-white rounded-2xl p-8 border-2 border-blue-500 relative shadow-lg shadow-blue-500/10">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border-2 border-blue-500/50 relative shadow-lg shadow-blue-500/10">
               <div className="absolute -top-3 left-6">
                 <span className="bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full">現在</span>
               </div>
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-lg bg-[#10a37f]/10 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-[#10a37f]/20 flex items-center justify-center">
                   <ChatGPTLogo className="h-5 w-5 text-[#10a37f]" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">AI 搜尋</h3>
+                <h3 className="text-lg font-semibold">AI 搜尋</h3>
               </div>
               <div className="space-y-3 mb-6">
-                <p className="text-sm text-gray-500 mb-4">問 ChatGPT「推薦台北整復」</p>
-                {/* Simulated AI response */}
-                <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
-                  <p className="text-sm text-gray-700 leading-relaxed">
-                    <span className="text-gray-400">AI：</span>根據評價和專業度，我推薦以下幾間：
+                <p className="text-sm text-gray-400 mb-4">問 ChatGPT「推薦台北整復」</p>
+                <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-xl p-4 border border-blue-500/20">
+                  <p className="text-sm text-gray-300 leading-relaxed">
+                    <span className="text-gray-500">AI：</span>根據評價和專業度，我推薦以下幾間：
                   </p>
                   <div className="mt-3 space-y-2">
                     <div className="flex items-center gap-2 text-sm">
-                      <span className="text-blue-600 font-bold">1.</span>
-                      <span className="font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">你的品牌 ✓</span>
+                      <span className="text-blue-400 font-bold">1.</span>
+                      <span className="font-semibold text-green-400 bg-green-500/20 px-2 py-0.5 rounded">你的品牌 ✓</span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                      <span>2.</span><div className="h-3 bg-gray-200 rounded w-24" />
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <span>2.</span><div className="h-3 bg-white/10 rounded w-24" />
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                      <span>3.</span><div className="h-3 bg-gray-200 rounded w-20" />
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <span>3.</span><div className="h-3 bg-white/10 rounded w-20" />
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="bg-blue-50 rounded-xl p-4 text-center">
-                <p className="text-2xl font-bold text-blue-600">只推薦 1-3 個</p>
-                <p className="text-sm text-blue-600/70 mt-1">被選中 = 獨佔高意願流量</p>
+              <div className="bg-blue-500/10 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-blue-400">只推薦 1-3 個</p>
+                <p className="text-sm text-blue-400/70 mt-1">被選中 = 獨佔高意願流量</p>
               </div>
             </div>
           </div>
 
           <div className="mt-12 text-center">
-            <div className="inline-flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-2xl px-6 py-4">
-              <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0" />
-              <p className="text-orange-800 font-medium">
+            <div className="inline-flex items-center gap-3 bg-orange-500/10 border border-orange-500/20 rounded-2xl px-6 py-4">
+              <AlertTriangle className="h-5 w-5 text-orange-400 shrink-0" />
+              <p className="text-orange-300 font-medium">
                 在 AI 搜尋時代，<strong>不被推薦 = 不存在</strong>。你的競爭對手可能已經在優化了。
               </p>
             </div>
@@ -547,57 +546,55 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           SECTION 3 — HOW IT WORKS: 3 Steps
          ════════════════════════════════════════════════════════ */}
-      <section className="py-20 lg:py-28 bg-white">
+      <section className="py-20 lg:py-28 bg-gradient-to-b from-gray-900 to-gray-800 text-white">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-blue-50 text-blue-600 mb-4">
+            <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-blue-500/20 text-blue-400 mb-4">
               簡單三步驟
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
+            <h2 className="text-3xl sm:text-4xl font-bold">
               讓 AI 主動推薦你的品牌
             </h2>
-            <p className="mt-4 text-lg text-gray-600">
+            <p className="mt-4 text-lg text-gray-400">
               不需要技術背景，3 分鐘即可開始
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 relative">
             {/* Connecting lines (desktop only) */}
-            <div className="hidden md:block absolute top-16 left-1/3 w-1/3 h-0.5 bg-gradient-to-r from-blue-200 to-purple-200" />
-            <div className="hidden md:block absolute top-16 right-0 w-1/3 h-0.5 bg-gradient-to-r from-purple-200 to-green-200" />
+            <div className="hidden md:block absolute top-16 left-1/3 w-1/3 h-0.5 bg-gradient-to-r from-blue-500/30 to-purple-500/30" />
+            <div className="hidden md:block absolute top-16 right-0 w-1/3 h-0.5 bg-gradient-to-r from-purple-500/30 to-green-500/30" />
 
             {/* Step 1 */}
-            <div className="relative bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-2xl p-8 text-center group hover:shadow-xl transition-all duration-300">
+            <div className="relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 text-center group hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300">
               <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center mx-auto text-xl font-bold shadow-lg shadow-blue-600/30">
                 1
               </div>
-              <h3 className="mt-6 text-xl font-bold text-gray-900">掃描檢測</h3>
-              <p className="mt-3 text-gray-600 leading-relaxed">
-                輸入網址，<strong>9 項 AI 可讀性指標</strong>全面檢測。立即知道你的品牌在 AI 眼中的「可見度分數」。
+              <h3 className="mt-6 text-xl font-bold">掃描檢測</h3>
+              <p className="mt-3 text-gray-400 leading-relaxed">
+                輸入網址，<strong className="text-gray-200">9 項 AI 可讀性指標</strong>全面檢測。立即知道你的品牌在 AI 眼中的「可見度分數」。
               </p>
-              {/* Visual: Score gauge */}
-              <div className="mt-6 inline-flex items-center gap-2 bg-white rounded-xl px-4 py-3 shadow-sm">
+              <div className="mt-6 inline-flex items-center gap-2 bg-white/10 rounded-xl px-4 py-3">
                 <div className="w-12 h-12 rounded-full border-4 border-blue-500 flex items-center justify-center">
-                  <span className="text-sm font-bold text-blue-600">72</span>
+                  <span className="text-sm font-bold text-blue-400">72</span>
                 </div>
                 <div className="text-left">
                   <p className="text-xs text-gray-500">GEO Score</p>
-                  <p className="text-xs font-medium text-blue-600">Silver</p>
+                  <p className="text-xs font-medium text-blue-400">Silver</p>
                 </div>
               </div>
             </div>
 
             {/* Step 2 */}
-            <div className="relative bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-2xl p-8 text-center group hover:shadow-xl transition-all duration-300">
+            <div className="relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 text-center group hover:border-purple-500/30 hover:shadow-xl hover:shadow-purple-500/5 transition-all duration-300">
               <div className="w-14 h-14 rounded-2xl bg-purple-600 text-white flex items-center justify-center mx-auto text-xl font-bold shadow-lg shadow-purple-600/30">
                 2
               </div>
-              <h3 className="mt-6 text-xl font-bold text-gray-900">AI 自動優化</h3>
-              <p className="mt-3 text-gray-600 leading-relaxed">
-                一鍵生成 <strong>JSON-LD、llms.txt、FAQ Schema</strong>，AI 自動建立品牌知識庫，讓 AI 真正「認識」你。
+              <h3 className="mt-6 text-xl font-bold">AI 自動優化</h3>
+              <p className="mt-3 text-gray-400 leading-relaxed">
+                一鍵生成 <strong className="text-gray-200">JSON-LD、llms.txt、FAQ Schema</strong>，AI 自動建立品牌知識庫，讓 AI 真正「認識」你。
               </p>
-              {/* Visual: Code snippet */}
-              <div className="mt-6 bg-gray-900 rounded-xl p-3 text-left overflow-hidden">
+              <div className="mt-6 bg-black/30 rounded-xl p-3 text-left overflow-hidden border border-white/5">
                 <div className="flex items-center gap-1.5 mb-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
                   <div className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
@@ -613,20 +610,19 @@ export default function LandingPage() {
             </div>
 
             {/* Step 3 */}
-            <div className="relative bg-gradient-to-br from-green-50 to-green-100/50 rounded-2xl p-8 text-center group hover:shadow-xl transition-all duration-300">
+            <div className="relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 text-center group hover:border-green-500/30 hover:shadow-xl hover:shadow-green-500/5 transition-all duration-300">
               <div className="w-14 h-14 rounded-2xl bg-green-600 text-white flex items-center justify-center mx-auto text-xl font-bold shadow-lg shadow-green-600/30">
                 3
               </div>
-              <h3 className="mt-6 text-xl font-bold text-gray-900">即時驗證</h3>
-              <p className="mt-3 text-gray-600 leading-relaxed">
-                <strong>5 大 AI 平台即時監控</strong>，看到 ChatGPT、Claude 真的在推薦你。產出驗收報告，證明效果。
+              <h3 className="mt-6 text-xl font-bold">即時驗證</h3>
+              <p className="mt-3 text-gray-400 leading-relaxed">
+                <strong className="text-gray-200">5 大 AI 平台即時監控</strong>，看到 ChatGPT、Claude 真的在推薦你。產出驗收報告，證明效果。
               </p>
-              {/* Visual: Platform check */}
               <div className="mt-6 space-y-2">
                 {['ChatGPT', 'Claude', 'Perplexity'].map((name) => (
-                  <div key={name} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 shadow-sm">
-                    <span className="text-xs font-medium text-gray-700">{name}</span>
-                    <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                  <div key={name} className="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2">
+                    <span className="text-xs font-medium text-gray-300">{name}</span>
+                    <span className="flex items-center gap-1 text-xs text-green-400 font-medium">
                       <CheckCircle2 className="h-3 w-3" />已引用
                     </span>
                   </div>
@@ -905,81 +901,81 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           SECTION 5 — FEATURES: Deep Dive (6 features)
          ════════════════════════════════════════════════════════ */}
-      <section id="features" className="py-20 lg:py-28 bg-white">
+      <section id="features" className="py-20 lg:py-28 bg-gray-900 text-white">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-purple-50 text-purple-600 mb-4">
+            <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-purple-500/20 text-purple-400 mb-4">
               完整解決方案
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
+            <h2 className="text-3xl sm:text-4xl font-bold">
               不只是檢測，是完整的
               <br className="hidden sm:block" />
-              <span className="text-blue-600">AI 品牌能見度平台</span>
+              <span className="text-blue-400">AI 品牌能見度平台</span>
             </h2>
-            <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="mt-4 text-lg text-gray-400 max-w-2xl mx-auto">
               從掃描診斷到修復優化，從內容生成到效果驗證，一站式搞定
             </p>
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Feature 1 */}
-            <div className="group p-8 rounded-2xl border border-gray-100 hover:border-blue-200 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-blue-50/30">
-              <div className="h-14 w-14 rounded-2xl bg-blue-100 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+            <div className="group p-8 rounded-2xl border border-white/10 hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 bg-white/5">
+              <div className="h-14 w-14 rounded-2xl bg-blue-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                 <Search className="h-7 w-7 text-blue-600" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">9 項 AI 可讀性掃描</h3>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+              <h3 className="text-lg font-bold mb-2">9 項 AI 可讀性掃描</h3>
+              <p className="text-gray-400 text-sm leading-relaxed mb-4">
                 全面檢測 JSON-LD、llms.txt、FAQ Schema、OG Tags、Meta Description、robots.txt AI 政策等 9 項指標。
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {['JSON-LD', 'llms.txt', 'FAQ', 'OG Tags', 'robots.txt'].map(tag => (
-                  <span key={tag} className="px-2 py-0.5 text-[10px] font-medium bg-blue-50 text-blue-600 rounded-full">{tag}</span>
+                  <span key={tag} className="px-2 py-0.5 text-[10px] font-medium bg-blue-500/20 text-blue-400 rounded-full">{tag}</span>
                 ))}
               </div>
             </div>
 
             {/* Feature 2 */}
-            <div className="group p-8 rounded-2xl border border-gray-100 hover:border-purple-200 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-purple-50/30">
-              <div className="h-14 w-14 rounded-2xl bg-purple-100 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <Wrench className="h-7 w-7 text-purple-600" />
+            <div className="group p-8 rounded-2xl border border-white/10 hover:border-purple-500/30 hover:shadow-xl hover:shadow-purple-500/5 transition-all duration-300 bg-white/5">
+              <div className="h-14 w-14 rounded-2xl bg-purple-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                <Wrench className="h-7 w-7 text-purple-400" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">一鍵 AI 自動修復</h3>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+              <h3 className="text-lg font-bold mb-2">一鍵 AI 自動修復</h3>
+              <p className="text-gray-400 text-sm leading-relaxed mb-4">
                 AI 根據你的品牌資料自動生成結構化資料程式碼。複製貼上即可，不需要技術背景。
               </p>
-              <div className="flex items-center gap-2 text-sm text-purple-600">
+              <div className="flex items-center gap-2 text-sm text-purple-400">
                 <Zap className="h-4 w-4" />
                 <span className="font-medium">平均 3 分鐘完成修復</span>
               </div>
             </div>
 
             {/* Feature 3 */}
-            <div className="group p-8 rounded-2xl border border-gray-100 hover:border-green-200 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-green-50/30">
-              <div className="h-14 w-14 rounded-2xl bg-green-100 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <BookOpen className="h-7 w-7 text-green-600" />
+            <div className="group p-8 rounded-2xl border border-white/10 hover:border-green-500/30 hover:shadow-xl hover:shadow-green-500/5 transition-all duration-300 bg-white/5">
+              <div className="h-14 w-14 rounded-2xl bg-green-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                <BookOpen className="h-7 w-7 text-green-400" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">AI 品牌知識庫</h3>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+              <h3 className="text-lg font-bold mb-2">AI 品牌知識庫</h3>
+              <p className="text-gray-400 text-sm leading-relaxed mb-4">
                 AI 自動生成 60+ 題 FAQ 和品牌知識，讓 ChatGPT、Claude 真正「認識」你的品牌。
               </p>
-              <div className="flex items-center gap-2 text-sm text-green-600">
+              <div className="flex items-center gap-2 text-sm text-green-400">
                 <Sparkles className="h-4 w-4" />
                 <span className="font-medium">5 大分類自動覆蓋</span>
               </div>
             </div>
 
             {/* Feature 4 */}
-            <div className="group p-8 rounded-2xl border border-gray-100 hover:border-orange-200 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-orange-50/30">
-              <div className="h-14 w-14 rounded-2xl bg-orange-100 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+            <div className="group p-8 rounded-2xl border border-white/10 hover:border-orange-500/30 hover:shadow-xl hover:shadow-orange-500/5 transition-all duration-300 bg-white/5">
+              <div className="h-14 w-14 rounded-2xl bg-orange-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                 <Eye className="h-7 w-7 text-orange-600" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">5 平台即時引用監控</h3>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+              <h3 className="text-lg font-bold mb-2">5 平台即時引用監控</h3>
+              <p className="text-gray-400 text-sm leading-relaxed mb-4">
                 即時監控 ChatGPT、Claude、Perplexity、Gemini、Copilot 是否正在推薦你的品牌。
               </p>
               <div className="flex flex-wrap gap-2">
                 {aiPlatforms.map(p => (
-                  <span key={p.name} className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium bg-orange-50 text-orange-600 rounded-full">
+                  <span key={p.name} className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium bg-orange-500/20 text-orange-400 rounded-full">
                     <p.Logo className="h-3 w-3" />
                     {p.name}
                   </span>
@@ -988,30 +984,30 @@ export default function LandingPage() {
             </div>
 
             {/* Feature 5 */}
-            <div className="group p-8 rounded-2xl border border-gray-100 hover:border-cyan-200 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-cyan-50/30">
-              <div className="h-14 w-14 rounded-2xl bg-cyan-100 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <ClipboardCheck className="h-7 w-7 text-cyan-600" />
+            <div className="group p-8 rounded-2xl border border-white/10 hover:border-cyan-500/30 hover:shadow-xl hover:shadow-cyan-500/5 transition-all duration-300 bg-white/5">
+              <div className="h-14 w-14 rounded-2xl bg-cyan-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                <ClipboardCheck className="h-7 w-7 text-cyan-400" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">客戶驗收報告</h3>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+              <h3 className="text-lg font-bold mb-2">客戶驗收報告</h3>
+              <p className="text-gray-400 text-sm leading-relaxed mb-4">
                 一鍵生成 5 平台 AI 引用檢測報告，匯出 PDF。用數據向老闆或客戶證明優化成效。
               </p>
-              <div className="flex items-center gap-2 text-sm text-cyan-600">
+              <div className="flex items-center gap-2 text-sm text-cyan-400">
                 <FileText className="h-4 w-4" />
                 <span className="font-medium">50 題 × 5 平台全面檢測</span>
               </div>
             </div>
 
             {/* Feature 6 */}
-            <div className="group p-8 rounded-2xl border border-gray-100 hover:border-indigo-200 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-indigo-50/30">
-              <div className="h-14 w-14 rounded-2xl bg-indigo-100 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <Globe className="h-7 w-7 text-indigo-600" />
+            <div className="group p-8 rounded-2xl border border-white/10 hover:border-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300 bg-white/5">
+              <div className="h-14 w-14 rounded-2xl bg-indigo-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                <Globe className="h-7 w-7 text-indigo-400" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">品牌公開目錄</h3>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+              <h3 className="text-lg font-bold mb-2">品牌公開目錄</h3>
+              <p className="text-gray-400 text-sm leading-relaxed mb-4">
                 你的品牌被收錄到 Geovault 目錄，持續被 AI 爬蟲收錄。越多曝光，AI 越容易找到你。
               </p>
-              <div className="flex items-center gap-2 text-sm text-indigo-600">
+              <div className="flex items-center gap-2 text-sm text-indigo-400">
                 <BarChart3 className="h-4 w-4" />
                 <span className="font-medium">22 個行業分類</span>
               </div>
@@ -1023,52 +1019,52 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           SECTION 6 — ROI: Why it's worth it
          ════════════════════════════════════════════════════════ */}
-      <section className="py-20 lg:py-28 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+      <section className="py-20 lg:py-28 bg-gradient-to-b from-gray-800 to-gray-900 text-white">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-green-50 text-green-600 mb-4">
+            <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-green-500/20 text-green-400 mb-4">
               投資報酬率
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
+            <h2 className="text-3xl sm:text-4xl font-bold">
               一次 AI 推薦的價值是多少？
             </h2>
           </div>
 
           <div className="grid sm:grid-cols-3 gap-6 mb-12">
-            <div className="bg-white rounded-2xl p-8 text-center shadow-sm hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
-                <Search className="h-6 w-6 text-red-500" />
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 text-center border border-white/10 hover:border-red-500/30 transition-all">
+              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
+                <Search className="h-6 w-6 text-red-400" />
               </div>
-              <p className="text-3xl font-bold text-gray-900">NT$15-50</p>
-              <p className="text-sm text-gray-500 mt-2">Google Ads<br />單次點擊費用</p>
+              <p className="text-3xl font-bold">NT$15-50</p>
+              <p className="text-sm text-gray-400 mt-2">Google Ads<br />單次點擊費用</p>
             </div>
-            <div className="bg-white rounded-2xl p-8 text-center shadow-sm hover:shadow-lg transition-shadow relative">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 text-center border border-white/10 hover:border-green-500/30 transition-all relative">
               <div className="absolute -top-2 -right-2">
                 <span className="bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full">FREE</span>
               </div>
-              <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+              <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
                 <ChatGPTLogo className="h-6 w-6 text-[#10a37f]" />
               </div>
-              <p className="text-3xl font-bold text-green-600">$0</p>
-              <p className="text-sm text-gray-500 mt-2">AI 推薦一次<br />免費且最高信任度曝光</p>
+              <p className="text-3xl font-bold text-green-400">$0</p>
+              <p className="text-sm text-gray-400 mt-2">AI 推薦一次<br />免費且最高信任度曝光</p>
             </div>
-            <div className="bg-white rounded-2xl p-8 text-center shadow-sm hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-                <TrendingUp className="h-6 w-6 text-blue-500" />
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 text-center border border-white/10 hover:border-blue-500/30 transition-all">
+              <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-4">
+                <TrendingUp className="h-6 w-6 text-blue-400" />
               </div>
-              <p className="text-3xl font-bold text-gray-900">NT$50</p>
-              <p className="text-sm text-gray-500 mt-2">每天不到一杯咖啡<br />換取持續 AI 曝光</p>
+              <p className="text-3xl font-bold">NT$50</p>
+              <p className="text-sm text-gray-400 mt-2">每天不到一杯咖啡<br />換取持續 AI 曝光</p>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-8 shadow-sm max-w-2xl mx-auto text-center">
-            <p className="text-lg text-gray-700 leading-relaxed">
-              每月 <span className="text-3xl font-bold text-blue-600">NT$1,490</span> 的 Pro 方案
+          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 max-w-2xl mx-auto text-center">
+            <p className="text-lg leading-relaxed">
+              每月 <span className="text-3xl font-bold text-blue-400">NT$1,490</span> 的 Pro 方案
             </p>
-            <p className="mt-3 text-gray-500">
-              = 每天 NT$50 = 讓你的品牌在 <strong>ChatGPT、Claude、Perplexity、Gemini、Copilot</strong> 上被主動推薦
+            <p className="mt-3 text-gray-400">
+              = 每天 NT$50 = 讓你的品牌在 <strong className="text-gray-200">ChatGPT、Claude、Perplexity、Gemini、Copilot</strong> 上被主動推薦
             </p>
-            <p className="mt-4 text-sm text-gray-400">
+            <p className="mt-4 text-sm text-gray-500">
               一個 AI 推薦帶來的高意願客戶，遠比 10 次 Google Ads 點擊更有價值
             </p>
           </div>
@@ -1078,23 +1074,23 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           SECTION 7 — PLATFORM STATS (Social Proof Numbers)
          ════════════════════════════════════════════════════════ */}
-      <section className="py-16 bg-white border-y border-gray-100">
+      <section className="py-16 bg-gray-800/50 border-y border-white/5">
         <div className="max-w-5xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             <div ref={brandCount.ref}>
-              <p className="text-4xl sm:text-5xl font-bold text-blue-600 tabular-nums">{brandCount.count}+</p>
+              <p className="text-4xl sm:text-5xl font-bold text-blue-400 tabular-nums">{brandCount.count}+</p>
               <p className="text-sm text-gray-500 mt-2">收錄品牌</p>
             </div>
             <div ref={articleCount.ref}>
-              <p className="text-4xl sm:text-5xl font-bold text-green-600 tabular-nums">{articleCount.count}+</p>
+              <p className="text-4xl sm:text-5xl font-bold text-green-400 tabular-nums">{articleCount.count}+</p>
               <p className="text-sm text-gray-500 mt-2">AI 分析文章</p>
             </div>
             <div ref={industryCount.ref}>
-              <p className="text-4xl sm:text-5xl font-bold text-purple-600 tabular-nums">{industryCount.count}</p>
+              <p className="text-4xl sm:text-5xl font-bold text-purple-400 tabular-nums">{industryCount.count}</p>
               <p className="text-sm text-gray-500 mt-2">行業覆蓋</p>
             </div>
             <div>
-              <p className="text-4xl sm:text-5xl font-bold text-orange-600">9</p>
+              <p className="text-4xl sm:text-5xl font-bold text-orange-400">9</p>
               <p className="text-sm text-gray-500 mt-2">AI 可讀性指標</p>
             </div>
           </div>
@@ -1104,26 +1100,26 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           SECTION 8 — PRICING with Monthly/Yearly Toggle
          ════════════════════════════════════════════════════════ */}
-      <section id="pricing" className="py-20 lg:py-28 bg-gray-50">
+      <section id="pricing" className="py-20 lg:py-28 bg-gradient-to-b from-gray-900 to-gray-800 text-white">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
-            <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-blue-50 text-blue-600 mb-4">
+            <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-blue-500/20 text-blue-400 mb-4">
               方案定價
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
+            <h2 className="text-3xl sm:text-4xl font-bold">
               選擇適合你的方案
             </h2>
-            <p className="mt-4 text-lg text-gray-600">
+            <p className="mt-4 text-lg text-gray-400">
               免費開始，隨時升級。年繳享 9 折優惠。
             </p>
 
             {/* Monthly/Yearly Toggle */}
-            <div className="mt-8 inline-flex items-center gap-3 bg-white rounded-full p-1.5 shadow-sm border border-gray-200">
+            <div className="mt-8 inline-flex items-center gap-3 bg-white/10 rounded-full p-1.5 border border-white/10">
               <button
                 onClick={() => setIsYearly(false)}
                 className={cn(
                   'px-5 py-2 rounded-full text-sm font-medium transition-all',
-                  !isYearly ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900',
+                  !isYearly ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white',
                 )}
               >
                 月繳
@@ -1132,7 +1128,7 @@ export default function LandingPage() {
                 onClick={() => setIsYearly(true)}
                 className={cn(
                   'px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2',
-                  isYearly ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900',
+                  isYearly ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white',
                 )}
               >
                 年繳
@@ -1155,8 +1151,8 @@ export default function LandingPage() {
                 <div
                   key={plan.name}
                   className={cn(
-                    'bg-white rounded-2xl p-8 border-2 transition-all hover:shadow-xl relative',
-                    isPopular ? 'border-blue-600 shadow-lg shadow-blue-600/10 scale-[1.02]' : 'border-gray-100',
+                    'bg-white/5 backdrop-blur-sm rounded-2xl p-8 border-2 transition-all hover:shadow-xl relative',
+                    isPopular ? 'border-blue-500 shadow-lg shadow-blue-500/20 scale-[1.02] bg-white/10' : 'border-white/10',
                   )}
                 >
                   {isPopular && (
@@ -1168,20 +1164,20 @@ export default function LandingPage() {
                   )}
 
                   <div className="text-center mb-8">
-                    <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
+                    <h3 className="text-lg font-bold">{plan.name}</h3>
                     <div className="mt-4">
                       {price === 0 ? (
-                        <span className="text-4xl font-bold text-gray-900">免費</span>
+                        <span className="text-4xl font-bold">免費</span>
                       ) : (
                         <>
-                          <span className="text-sm text-gray-500">NT$</span>
-                          <span className="text-4xl font-bold text-gray-900">{price.toLocaleString()}</span>
-                          <span className="text-gray-500">/月</span>
+                          <span className="text-sm text-gray-400">NT$</span>
+                          <span className="text-4xl font-bold">{price.toLocaleString()}</span>
+                          <span className="text-gray-400">/月</span>
                         </>
                       )}
                     </div>
                     {isYearly && price > 0 && (
-                      <p className="mt-1 text-sm text-green-600 font-medium">
+                      <p className="mt-1 text-sm text-green-400 font-medium">
                         年繳 NT${(price * 12).toLocaleString()}，省 NT${((plan.monthlyPrice - plan.yearlyPrice) * 12).toLocaleString()}
                       </p>
                     )}
@@ -1191,11 +1187,11 @@ export default function LandingPage() {
                     {plan.features.map((feature) => (
                       <li key={feature.text} className="flex items-start gap-2.5 text-sm">
                         {feature.included ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                          <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0 mt-0.5" />
                         ) : (
-                          <X className="h-4 w-4 text-gray-300 shrink-0 mt-0.5" />
+                          <X className="h-4 w-4 text-gray-600 shrink-0 mt-0.5" />
                         )}
-                        <span className={feature.included ? 'text-gray-700' : 'text-gray-400'}>
+                        <span className={feature.included ? 'text-gray-300' : 'text-gray-600'}>
                           {feature.text}
                         </span>
                       </li>
@@ -1220,7 +1216,7 @@ export default function LandingPage() {
             })}
           </div>
 
-          <p className="text-center mt-8 text-sm text-gray-400">
+          <p className="text-center mt-8 text-sm text-gray-500">
             所有方案均可隨時取消。年繳方案按月計費，一次支付享折扣。
           </p>
         </div>
@@ -1229,10 +1225,10 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           SECTION 9 — FAQ
          ════════════════════════════════════════════════════════ */}
-      <section className="py-20 lg:py-28 bg-white">
+      <section className="py-20 lg:py-28 bg-gray-900 text-white">
         <div className="max-w-3xl mx-auto px-6">
           <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
+            <h2 className="text-3xl sm:text-4xl font-bold">
               常見問題
             </h2>
           </div>
@@ -1260,12 +1256,12 @@ export default function LandingPage() {
                 a: '可以。所有付費方案都可以隨時取消，取消後仍可使用到當期結束。我們也提供年繳方案享 9 折優惠。',
               },
             ].map((item) => (
-              <details key={item.q} className="group bg-gray-50 rounded-2xl overflow-hidden">
-                <summary className="flex items-center justify-between p-6 cursor-pointer list-none hover:bg-gray-100 transition-colors">
-                  <span className="font-semibold text-gray-900 pr-4">{item.q}</span>
-                  <ChevronRight className="h-5 w-5 text-gray-400 shrink-0 transition-transform group-open:rotate-90" />
+              <details key={item.q} className="group bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between p-6 cursor-pointer list-none hover:bg-white/5 transition-colors">
+                  <span className="font-semibold pr-4">{item.q}</span>
+                  <ChevronRight className="h-5 w-5 text-gray-500 shrink-0 transition-transform group-open:rotate-90" />
                 </summary>
-                <div className="px-6 pb-6 text-gray-600 leading-relaxed">
+                <div className="px-6 pb-6 text-gray-400 leading-relaxed">
                   {item.a}
                 </div>
               </details>
@@ -1355,42 +1351,42 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           FOOTER
          ════════════════════════════════════════════════════════ */}
-      <footer className="py-12 border-t bg-white">
+      <footer className="py-12 border-t border-white/5 bg-gray-950 text-white">
         <div className="max-w-6xl mx-auto px-6">
           <div className="grid sm:grid-cols-4 gap-8 mb-8">
             <div>
-              <GeovaultLogoCompact className="h-7 w-auto mb-3" />
+              <GeovaultLogoCompactDark className="h-7 w-auto mb-3" />
               <p className="text-sm text-gray-500 leading-relaxed">
                 APAC 領先的 AI 搜尋優化平台，讓品牌被 AI 主動推薦。
               </p>
             </div>
             <div>
-              <h4 className="font-semibold text-gray-900 mb-3 text-sm">產品</h4>
+              <h4 className="font-semibold mb-3 text-sm">產品</h4>
               <ul className="space-y-2 text-sm text-gray-500">
-                <li><a href="#features" className="hover:text-gray-900 transition-colors">功能</a></li>
-                <li><a href="#pricing" className="hover:text-gray-900 transition-colors">方案定價</a></li>
-                <li><Link href="/directory" className="hover:text-gray-900 transition-colors">品牌目錄</Link></li>
+                <li><a href="#features" className="hover:text-white transition-colors">功能</a></li>
+                <li><a href="#pricing" className="hover:text-white transition-colors">方案定價</a></li>
+                <li><Link href="/directory" className="hover:text-white transition-colors">品牌目錄</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-gray-900 mb-3 text-sm">資源</h4>
+              <h4 className="font-semibold mb-3 text-sm">資源</h4>
               <ul className="space-y-2 text-sm text-gray-500">
-                <li><Link href="/blog" className="hover:text-gray-900 transition-colors">Blog</Link></li>
-                <li><Link href="/cases" className="hover:text-gray-900 transition-colors">成功案例</Link></li>
-                <li><Link href="/news" className="hover:text-gray-900 transition-colors">AI News</Link></li>
+                <li><Link href="/blog" className="hover:text-white transition-colors">Blog</Link></li>
+                <li><Link href="/cases" className="hover:text-white transition-colors">成功案例</Link></li>
+                <li><Link href="/news" className="hover:text-white transition-colors">AI News</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-gray-900 mb-3 text-sm">探索</h4>
+              <h4 className="font-semibold mb-3 text-sm">探索</h4>
               <ul className="space-y-2 text-sm text-gray-500">
-                <li><Link href="/directory/industries" className="hover:text-gray-900 transition-colors">行業分類</Link></li>
-                <li><Link href="/api/llms.txt" className="hover:text-gray-900 transition-colors">llms.txt</Link></li>
-                <li><Link href="/api/llms-full.txt" className="hover:text-gray-900 transition-colors">llms-full.txt</Link></li>
+                <li><Link href="/directory/industries" className="hover:text-white transition-colors">行業分類</Link></li>
+                <li><Link href="/api/llms.txt" className="hover:text-white transition-colors">llms.txt</Link></li>
+                <li><Link href="/api/llms-full.txt" className="hover:text-white transition-colors">llms-full.txt</Link></li>
               </ul>
             </div>
           </div>
-          <div className="border-t pt-8 text-center">
-            <p className="text-gray-400 text-sm">
+          <div className="border-t border-white/5 pt-8 text-center">
+            <p className="text-gray-600 text-sm">
               &copy; {new Date().getFullYear()} Geovault. All rights reserved.
             </p>
           </div>

@@ -30,6 +30,9 @@ export const metadata: Metadata = {
     site: '@geovault',
     creator: '@geovault',
   },
+  icons: {
+    icon: '/icon.svg',
+  },
   other: {
     'origin-verify': 'GEOVAULT-2026-APAC-PRIME',
   },
