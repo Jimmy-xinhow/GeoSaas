@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Param, Query, Body, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -78,5 +78,17 @@ export class AdminUsersController {
       data: { plan: plan as any },
       select: { id: true, email: true, plan: true },
     });
+  }
+
+  @Delete(':userId')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Delete user and all related data (SUPER_ADMIN only)' })
+  async deleteUser(@Param('userId') userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new ForbiddenException('User not found');
+    if (user.role === 'SUPER_ADMIN') throw new ForbiddenException('Cannot delete SUPER_ADMIN');
+
+    await this.prisma.user.delete({ where: { id: userId } });
+    return { deleted: true, email: user.email };
   }
 }

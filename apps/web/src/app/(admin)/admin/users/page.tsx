@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import apiClient from '@/lib/api-client';
-import { Users, Search, ChevronLeft, ChevronRight, Edit2, Globe, FileText, ShoppingCart, X, Check, UserCheck } from 'lucide-react';
+import { Users, Search, ChevronLeft, ChevronRight, Edit2, Globe, FileText, X, Check, UserCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ROLES = ['USER', 'STAFF', 'ADMIN', 'SUPER_ADMIN'] as const;
@@ -26,12 +26,16 @@ const PLAN_COLORS: Record<string, string> = {
   PRO: 'bg-purple-500/20 text-purple-400',
 };
 
+// STAFF/ADMIN/SUPER_ADMIN don't need a plan — they bypass limits
+const isInternalRole = (role: string) => ['STAFF', 'ADMIN', 'SUPER_ADMIN'].includes(role);
+
 export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState('');
   const [editPlan, setEditPlan] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -67,6 +71,19 @@ export default function AdminUsersPage() {
     onError: () => toast.error('方案更新失敗'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) => apiClient.delete(`/admin/users/${userId}`),
+    onSuccess: (_, userId) => {
+      toast.success('用戶已刪除');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setDeleteConfirm(null);
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || '刪除失敗');
+      setDeleteConfirm(null);
+    },
+  });
+
   const users = data?.items || [];
   const total = data?.total || 0;
   const totalPages = data?.totalPages || 1;
@@ -80,16 +97,16 @@ export default function AdminUsersPage() {
   const saveEdit = (userId: string) => {
     const user = users.find((u: any) => u.id === userId);
     if (!user) return;
-
+    let changed = false;
     if (editRole !== user.role) {
       roleMutation.mutate({ userId, role: editRole });
+      changed = true;
     }
-    if (editPlan !== (user.plan || 'FREE')) {
+    if (editPlan !== (user.plan || 'FREE') && !isInternalRole(editRole)) {
       planMutation.mutate({ userId, plan: editPlan });
+      changed = true;
     }
-    if (editRole === user.role && editPlan === (user.plan || 'FREE')) {
-      setEditingId(null);
-    }
+    if (!changed) setEditingId(null);
   };
 
   return (
@@ -101,7 +118,6 @@ export default function AdminUsersPage() {
           </h1>
           <p className="text-sm text-gray-400">共 {total} 位用戶</p>
         </div>
-        {/* Stats */}
         <div className="flex gap-3">
           {['SUPER_ADMIN', 'ADMIN', 'STAFF', 'USER'].map((role) => {
             const count = users.filter((u: any) => u.role === role).length;
@@ -153,8 +169,11 @@ export default function AdminUsersPage() {
                 ) : (
                   users.map((u: any) => {
                     const isEditing = editingId === u.id;
+                    const isDeleting = deleteConfirm === u.id;
+                    const internal = isInternalRole(u.role);
+
                     return (
-                      <tr key={u.id} className={`hover:bg-white/5 ${isEditing ? 'bg-blue-500/5' : ''}`}>
+                      <tr key={u.id} className={`hover:bg-white/5 ${isEditing ? 'bg-blue-500/5' : ''} ${isDeleting ? 'bg-red-500/5' : ''}`}>
                         <td className="p-3">
                           <div className="font-medium text-white">{u.name || '-'}</div>
                           <div className="text-xs text-gray-500">{u.email}</div>
@@ -181,16 +200,22 @@ export default function AdminUsersPage() {
                           )}
                         </td>
                         <td className="p-3 text-center">
-                          {isEditing ? (
-                            <select
-                              value={editPlan}
-                              onChange={(e) => setEditPlan(e.target.value)}
-                              className="bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white"
-                            >
-                              {PLANS.map((p) => (
-                                <option key={p} value={p} className="bg-gray-800">{p}</option>
-                              ))}
-                            </select>
+                          {internal && !isEditing ? (
+                            <span className="text-xs text-gray-500">無限制</span>
+                          ) : isEditing ? (
+                            isInternalRole(editRole) ? (
+                              <span className="text-xs text-gray-500">無限制</span>
+                            ) : (
+                              <select
+                                value={editPlan}
+                                onChange={(e) => setEditPlan(e.target.value)}
+                                className="bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white"
+                              >
+                                {PLANS.map((p) => (
+                                  <option key={p} value={p} className="bg-gray-800">{p}</option>
+                                ))}
+                              </select>
+                            )
                           ) : (
                             <Badge className={PLAN_COLORS[u.plan] || 'bg-white/10'}>{u.plan || 'FREE'}</Badge>
                           )}
@@ -205,7 +230,26 @@ export default function AdminUsersPage() {
                           {u.createdAt ? new Date(u.createdAt).toLocaleDateString('zh-TW') : '-'}
                         </td>
                         <td className="p-3 text-right">
-                          {isEditing ? (
+                          {isDeleting ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-xs text-red-400 mr-1">確定刪除？</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteMutation.mutate(u.id)}
+                                disabled={deleteMutation.isPending}
+                              >
+                                <Check className="h-4 w-4 text-red-400" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setDeleteConfirm(null)}
+                              >
+                                <X className="h-4 w-4 text-gray-500" />
+                              </Button>
+                            </div>
+                          ) : isEditing ? (
                             <div className="flex items-center justify-end gap-1">
                               <Button
                                 variant="ghost"
@@ -224,14 +268,26 @@ export default function AdminUsersPage() {
                               </Button>
                             </div>
                           ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => startEdit(u)}
-                              title="編輯"
-                            >
-                              <Edit2 className="h-3.5 w-3.5 text-gray-400" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => startEdit(u)}
+                                title="編輯"
+                              >
+                                <Edit2 className="h-3.5 w-3.5 text-gray-400" />
+                              </Button>
+                              {u.role !== 'SUPER_ADMIN' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setDeleteConfirm(u.id)}
+                                  title="刪除"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-gray-600 hover:text-red-400" />
+                                </Button>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>
