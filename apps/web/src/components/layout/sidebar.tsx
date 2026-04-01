@@ -17,6 +17,7 @@ import {
   Wrench,
   BookOpen,
   BarChart3,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -51,6 +52,7 @@ const navGroups: NavGroup[] = [
     label: '推廣',
     defaultOpen: false,
     items: [
+      { href: '/brand-spread', icon: Zap, label: '品牌擴散' },
       { href: '/publish', icon: Share2, label: '多平台發佈' },
       { href: '/directory', icon: Trophy, label: '公開目錄' },
     ],

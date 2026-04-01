@@ -34,6 +34,7 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { EmailModule } from './modules/email/email.module';
 import { ClientReportModule } from './modules/client-report/client-report.module';
 import { IndustryAiModule } from './modules/industry-ai/industry-ai.module';
+import { BrandSpreadModule } from './modules/brand-spread/brand-spread.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { IndustryAiModule } from './modules/industry-ai/industry-ai.module';
     EmailModule,
     ClientReportModule,
     IndustryAiModule,
+    BrandSpreadModule,
   ],
   controllers: [HealthController],
   providers: [
