@@ -37,6 +37,12 @@ const adminNavGroups = [
       { href: '/admin/scheduler', icon: Clock, label: '排程管理' },
     ],
   },
+  {
+    label: '營運指南',
+    items: [
+      { href: '/admin/playbook', icon: FileText, label: '客戶操作手冊' },
+    ],
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
