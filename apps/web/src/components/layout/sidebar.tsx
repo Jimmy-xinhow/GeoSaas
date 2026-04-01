@@ -140,6 +140,24 @@ export default function Sidebar() {
           </Link>
         </div>
 
+        {/* Playbook — STAFF + ADMIN + SUPER_ADMIN */}
+        {(user?.role === 'STAFF' || user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
+          <div>
+            <Link
+              href="/playbook"
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                pathname === '/playbook'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50',
+              )}
+            >
+              <BookOpen className="h-4.5 w-4.5 shrink-0" />
+              操作手冊
+            </Link>
+          </div>
+        )}
+
         {/* Admin */}
         {(user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
           <div className="pt-2">
