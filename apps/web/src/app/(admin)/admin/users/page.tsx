@@ -7,7 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import apiClient from '@/lib/api-client';
-import { Users, Search, ChevronLeft, ChevronRight, Edit2, Globe, FileText, X, Check, UserCheck, Trash2 } from 'lucide-react';
+import {
+  Users, Search, ChevronLeft, ChevronRight, Edit2, Globe, FileText,
+  X, Check, UserCheck, Trash2, Key, Save, ChevronDown,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 const ROLES = ['USER', 'STAFF', 'ADMIN', 'SUPER_ADMIN'] as const;
@@ -26,15 +29,16 @@ const PLAN_COLORS: Record<string, string> = {
   PRO: 'bg-purple-500/20 text-purple-400',
 };
 
-// STAFF/ADMIN/SUPER_ADMIN don't need a plan — they bypass limits
 const isInternalRole = (role: string) => ['STAFF', 'ADMIN', 'SUPER_ADMIN'].includes(role);
 
 export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState('');
   const [editPlan, setEditPlan] = useState('');
+  const [editName, setEditName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -49,64 +53,57 @@ export default function AdminUsersPage() {
     retry: false,
   });
 
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+
   const roleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) =>
       apiClient.patch(`/admin/users/${userId}/role`, { role }),
-    onSuccess: () => {
-      toast.success('角色已更新');
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      setEditingId(null);
-    },
+    onSuccess: () => { toast.success('角色已更新'); invalidate(); },
     onError: () => toast.error('角色更新失敗'),
   });
 
   const planMutation = useMutation({
     mutationFn: ({ userId, plan }: { userId: string; plan: string }) =>
       apiClient.patch(`/admin/users/${userId}/plan`, { plan }),
-    onSuccess: () => {
-      toast.success('方案已更新');
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      setEditingId(null);
-    },
+    onSuccess: () => { toast.success('方案已更新'); invalidate(); },
     onError: () => toast.error('方案更新失敗'),
+  });
+
+  const nameMutation = useMutation({
+    mutationFn: ({ userId, name }: { userId: string; name: string }) =>
+      apiClient.patch(`/admin/users/${userId}/name`, { name }),
+    onSuccess: () => { toast.success('名稱已更新'); invalidate(); },
+    onError: () => toast.error('名稱更新失敗'),
+  });
+
+  const passwordMutation = useMutation({
+    mutationFn: ({ userId, password }: { userId: string; password: string }) =>
+      apiClient.patch(`/admin/users/${userId}/password`, { password }),
+    onSuccess: () => { toast.success('密碼已重設'); setNewPassword(''); },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '密碼重設失敗'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (userId: string) => apiClient.delete(`/admin/users/${userId}`),
-    onSuccess: (_, userId) => {
-      toast.success('用戶已刪除');
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      setDeleteConfirm(null);
-    },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || '刪除失敗');
-      setDeleteConfirm(null);
-    },
+    onSuccess: () => { toast.success('用戶已刪除'); invalidate(); setDeleteConfirm(null); setExpandedId(null); },
+    onError: (err: any) => { toast.error(err?.response?.data?.message || '刪除失敗'); setDeleteConfirm(null); },
   });
 
   const users = data?.items || [];
   const total = data?.total || 0;
   const totalPages = data?.totalPages || 1;
 
-  const startEdit = (user: any) => {
-    setEditingId(user.id);
-    setEditRole(user.role);
-    setEditPlan(user.plan || 'FREE');
-  };
-
-  const saveEdit = (userId: string) => {
-    const user = users.find((u: any) => u.id === userId);
-    if (!user) return;
-    let changed = false;
-    if (editRole !== user.role) {
-      roleMutation.mutate({ userId, role: editRole });
-      changed = true;
+  const toggleExpand = (user: any) => {
+    if (expandedId === user.id) {
+      setExpandedId(null);
+    } else {
+      setExpandedId(user.id);
+      setEditRole(user.role);
+      setEditPlan(user.plan || 'FREE');
+      setEditName(user.name || '');
+      setNewPassword('');
+      setDeleteConfirm(null);
     }
-    if (editPlan !== (user.plan || 'FREE') && !isInternalRole(editRole)) {
-      planMutation.mutate({ userId, plan: editPlan });
-      changed = true;
-    }
-    if (!changed) setEditingId(null);
   };
 
   return (
@@ -142,163 +139,196 @@ export default function AdminUsersPage() {
         />
       </div>
 
-      <Card className="bg-white/5 border-white/10">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-white/5 border-b border-white/10">
-                <tr>
-                  <th className="text-left p-3 font-medium text-gray-400">用戶</th>
-                  <th className="text-center p-3 font-medium text-gray-400">角色</th>
-                  <th className="text-center p-3 font-medium text-gray-400">方案</th>
-                  <th className="text-center p-3 font-medium text-gray-400">
-                    <Globe className="h-3.5 w-3.5 inline" /> 網站
-                  </th>
-                  <th className="text-center p-3 font-medium text-gray-400">
-                    <FileText className="h-3.5 w-3.5 inline" /> 內容
-                  </th>
-                  <th className="text-center p-3 font-medium text-gray-400">註冊時間</th>
-                  <th className="text-right p-3 font-medium text-gray-400">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {isLoading ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-gray-400">載入中...</td></tr>
-                ) : users.length === 0 ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-gray-400">無結果</td></tr>
-                ) : (
-                  users.map((u: any) => {
-                    const isEditing = editingId === u.id;
-                    const isDeleting = deleteConfirm === u.id;
-                    const internal = isInternalRole(u.role);
+      <div className="space-y-2">
+        {isLoading ? (
+          <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-16 bg-white/5 rounded-xl animate-pulse" />)}</div>
+        ) : users.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">無結果</div>
+        ) : (
+          users.map((u: any) => {
+            const isExpanded = expandedId === u.id;
+            const internal = isInternalRole(u.role);
+            const isDeleting = deleteConfirm === u.id;
+            const isBusy = roleMutation.isPending || planMutation.isPending || nameMutation.isPending || passwordMutation.isPending;
 
-                    return (
-                      <tr key={u.id} className={`hover:bg-white/5 ${isEditing ? 'bg-blue-500/5' : ''} ${isDeleting ? 'bg-red-500/5' : ''}`}>
-                        <td className="p-3">
-                          <div className="font-medium text-white">{u.name || '-'}</div>
-                          <div className="text-xs text-gray-500">{u.email}</div>
-                          {u.managedBy && (
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <UserCheck className="h-3 w-3 text-yellow-400" />
-                              <span className="text-[10px] text-yellow-400">受管理</span>
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          {isEditing ? (
+            return (
+              <div key={u.id} className={`bg-white/5 border rounded-xl overflow-hidden transition-all ${isExpanded ? 'border-blue-500/30' : 'border-white/10'}`}>
+                {/* Row */}
+                <div
+                  className="flex items-center gap-4 p-4 cursor-pointer hover:bg-white/5"
+                  onClick={() => toggleExpand(u)}
+                >
+                  {/* Avatar */}
+                  <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium shrink-0">
+                    {(u.name || u.email || '?').charAt(0).toUpperCase()}
+                  </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-white truncate">{u.name || '-'}</span>
+                      {u.managedBy && <UserCheck className="h-3 w-3 text-yellow-400 shrink-0" />}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">{u.email}</div>
+                  </div>
+                  {/* Badges */}
+                  <Badge className={`${ROLE_COLORS[u.role] || 'bg-white/10'} shrink-0`}>{u.role}</Badge>
+                  {internal ? (
+                    <span className="text-xs text-gray-500 shrink-0 w-16 text-center">無限制</span>
+                  ) : (
+                    <Badge className={`${PLAN_COLORS[u.plan] || 'bg-white/10'} shrink-0`}>{u.plan || 'FREE'}</Badge>
+                  )}
+                  {/* Stats */}
+                  <div className="flex items-center gap-3 shrink-0 text-xs text-gray-500">
+                    <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{u._count?.sites ?? 0}</span>
+                    <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{u._count?.contents ?? 0}</span>
+                  </div>
+                  <span className="text-xs text-gray-600 shrink-0 w-20 text-right">
+                    {u.createdAt ? new Date(u.createdAt).toLocaleDateString('zh-TW') : '-'}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-gray-500 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                </div>
+
+                {/* Expanded Edit Panel */}
+                {isExpanded && (
+                  <div className="border-t border-white/5 p-4 bg-white/[0.02] space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {/* Name */}
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">名稱</label>
+                        <div className="flex gap-1">
+                          <Input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2"
+                            disabled={isBusy || editName === (u.name || '')}
+                            onClick={() => nameMutation.mutate({ userId: u.id, name: editName })}
+                          >
+                            <Save className="h-3.5 w-3.5 text-blue-400" />
+                          </Button>
+                        </div>
+                      </div>
+                      {/* Role */}
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">角色</label>
+                        <div className="flex gap-1">
+                          <select
+                            value={editRole}
+                            onChange={(e) => setEditRole(e.target.value)}
+                            className="flex-1 h-8 bg-white/10 border border-white/20 rounded px-2 text-sm text-white"
+                          >
+                            {ROLES.map((r) => <option key={r} value={r} className="bg-gray-800">{r}</option>)}
+                          </select>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2"
+                            disabled={isBusy || editRole === u.role}
+                            onClick={() => roleMutation.mutate({ userId: u.id, role: editRole })}
+                          >
+                            <Save className="h-3.5 w-3.5 text-blue-400" />
+                          </Button>
+                        </div>
+                      </div>
+                      {/* Plan */}
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">方案</label>
+                        {isInternalRole(editRole) ? (
+                          <div className="h-8 flex items-center text-sm text-gray-500">無限制（內部角色）</div>
+                        ) : (
+                          <div className="flex gap-1">
                             <select
-                              value={editRole}
-                              onChange={(e) => setEditRole(e.target.value)}
-                              className="bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white"
+                              value={editPlan}
+                              onChange={(e) => setEditPlan(e.target.value)}
+                              className="flex-1 h-8 bg-white/10 border border-white/20 rounded px-2 text-sm text-white"
                             >
-                              {ROLES.map((r) => (
-                                <option key={r} value={r} className="bg-gray-800">{r}</option>
-                              ))}
+                              {PLANS.map((p) => <option key={p} value={p} className="bg-gray-800">{p}</option>)}
                             </select>
-                          ) : (
-                            <Badge className={ROLE_COLORS[u.role] || 'bg-white/10'}>{u.role}</Badge>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          {internal && !isEditing ? (
-                            <span className="text-xs text-gray-500">無限制</span>
-                          ) : isEditing ? (
-                            isInternalRole(editRole) ? (
-                              <span className="text-xs text-gray-500">無限制</span>
-                            ) : (
-                              <select
-                                value={editPlan}
-                                onChange={(e) => setEditPlan(e.target.value)}
-                                className="bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white"
-                              >
-                                {PLANS.map((p) => (
-                                  <option key={p} value={p} className="bg-gray-800">{p}</option>
-                                ))}
-                              </select>
-                            )
-                          ) : (
-                            <Badge className={PLAN_COLORS[u.plan] || 'bg-white/10'}>{u.plan || 'FREE'}</Badge>
-                          )}
-                        </td>
-                        <td className="p-3 text-center text-gray-300 font-mono">
-                          {u._count?.sites ?? 0}
-                        </td>
-                        <td className="p-3 text-center text-gray-300 font-mono">
-                          {u._count?.contents ?? 0}
-                        </td>
-                        <td className="p-3 text-center text-gray-500 text-xs">
-                          {u.createdAt ? new Date(u.createdAt).toLocaleDateString('zh-TW') : '-'}
-                        </td>
-                        <td className="p-3 text-right">
-                          {isDeleting ? (
-                            <div className="flex items-center justify-end gap-1">
-                              <span className="text-xs text-red-400 mr-1">確定刪除？</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteMutation.mutate(u.id)}
-                                disabled={deleteMutation.isPending}
-                              >
-                                <Check className="h-4 w-4 text-red-400" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setDeleteConfirm(null)}
-                              >
-                                <X className="h-4 w-4 text-gray-500" />
-                              </Button>
-                            </div>
-                          ) : isEditing ? (
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => saveEdit(u.id)}
-                                disabled={roleMutation.isPending || planMutation.isPending}
-                              >
-                                <Check className="h-4 w-4 text-green-400" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEditingId(null)}
-                              >
-                                <X className="h-4 w-4 text-gray-500" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => startEdit(u)}
-                                title="編輯"
-                              >
-                                <Edit2 className="h-3.5 w-3.5 text-gray-400" />
-                              </Button>
-                              {u.role !== 'SUPER_ADMIN' && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setDeleteConfirm(u.id)}
-                                  title="刪除"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 text-gray-600 hover:text-red-400" />
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 px-2"
+                              disabled={isBusy || editPlan === (u.plan || 'FREE')}
+                              onClick={() => planMutation.mutate({ userId: u.id, plan: editPlan })}
+                            >
+                              <Save className="h-3.5 w-3.5 text-blue-400" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      {/* Password */}
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">重設密碼</label>
+                        <div className="flex gap-1">
+                          <Input
+                            type="password"
+                            placeholder="輸入新密碼..."
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2"
+                            disabled={isBusy || newPassword.length < 6}
+                            onClick={() => passwordMutation.mutate({ userId: u.id, password: newPassword })}
+                            title={newPassword.length < 6 ? '至少 6 個字元' : '重設密碼'}
+                          >
+                            <Key className="h-3.5 w-3.5 text-yellow-400" />
+                          </Button>
+                        </div>
+                        {newPassword.length > 0 && newPassword.length < 6 && (
+                          <p className="text-[10px] text-red-400 mt-0.5">至少 6 個字元</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bottom actions */}
+                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                      <div className="text-xs text-gray-600">
+                        ID: {u.id} · Email: {u.email} · 註冊: {u.createdAt ? new Date(u.createdAt).toLocaleString('zh-TW') : '-'}
+                      </div>
+                      {u.role !== 'SUPER_ADMIN' && (
+                        isDeleting ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-red-400">確定要刪除此用戶及所有資料？</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => deleteMutation.mutate(u.id)}
+                              disabled={deleteMutation.isPending}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                            >
+                              <Check className="h-4 w-4 mr-1" /> 確定刪除
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setDeleteConfirm(null)}>
+                              <X className="h-4 w-4" /> 取消
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDeleteConfirm(u.id)}
+                            className="text-gray-600 hover:text-red-400 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1" /> 刪除用戶
+                          </Button>
+                        )
+                      )}
+                    </div>
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            );
+          })
+        )}
+      </div>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">

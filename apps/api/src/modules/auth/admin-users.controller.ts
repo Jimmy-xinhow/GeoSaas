@@ -91,4 +91,48 @@ export class AdminUsersController {
     await this.prisma.user.delete({ where: { id: userId } });
     return { deleted: true, email: user.email };
   }
+
+  @Patch(':userId/password')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Reset user password (SUPER_ADMIN only)' })
+  async resetPassword(
+    @Param('userId') userId: string,
+    @Body('password') password: string,
+  ) {
+    if (!password || password.length < 6) throw new ForbiddenException('Password must be at least 6 characters');
+    const bcrypt = await import('bcrypt');
+    const passwordHash = await bcrypt.hash(password, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+    return { success: true };
+  }
+
+  @Patch(':userId/name')
+  @ApiOperation({ summary: 'Update user name (admin)' })
+  async updateName(
+    @Param('userId') userId: string,
+    @Body('name') name: string,
+  ) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { name },
+      select: { id: true, name: true },
+    });
+  }
+
+  @Patch(':userId/managed-by')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Set user managed-by (SUPER_ADMIN only)' })
+  async setManagedBy(
+    @Param('userId') userId: string,
+    @Body('managedBy') managedBy: string | null,
+  ) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { managedBy },
+      select: { id: true, managedBy: true },
+    });
+  }
 }
