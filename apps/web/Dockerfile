@@ -32,8 +32,8 @@ RUN pnpm --filter @geovault/shared build
 
 # Build the Next.js app with production env vars hardcoded
 ENV NEXT_PUBLIC_API_URL=https://api.geovault.app
-ENV NEXT_PUBLIC_SITE_URL=https://geovault.app
-RUN NEXT_PUBLIC_API_URL=https://api.geovault.app NEXT_PUBLIC_SITE_URL=https://geovault.app pnpm --filter @geovault/web build
+ENV NEXT_PUBLIC_SITE_URL=https://www.geovault.app
+RUN NEXT_PUBLIC_API_URL=https://api.geovault.app NEXT_PUBLIC_SITE_URL=https://www.geovault.app pnpm --filter @geovault/web build
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner
@@ -42,7 +42,7 @@ RUN apk add --no-cache dumb-init
 
 ENV NODE_ENV=production
 ENV NEXT_PUBLIC_API_URL=https://api.geovault.app
-ENV NEXT_PUBLIC_SITE_URL=https://geovault.app
+ENV NEXT_PUBLIC_SITE_URL=https://www.geovault.app
 WORKDIR /app
 
 # Create non-root user
