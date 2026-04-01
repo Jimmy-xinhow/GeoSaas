@@ -28,14 +28,16 @@ export default function AdminUsersPage() {
   const total = data?.total || users.length;
 
   const ROLE_COLORS: Record<string, string> = {
-    ADMIN: 'bg-red-500/20 text-red-400',
-    USER: 'bg-blue-500/20 text-blue-400',
+    SUPER_ADMIN: 'bg-red-500/20 text-red-400',
+    ADMIN: 'bg-orange-500/20 text-orange-400',
+    STAFF: 'bg-blue-500/20 text-blue-400',
+    USER: 'bg-white/10 text-gray-400',
   };
 
   const PLAN_COLORS: Record<string, string> = {
     FREE: 'bg-white/10 text-gray-400',
+    STARTER: 'bg-green-500/20 text-green-400',
     PRO: 'bg-purple-500/20 text-purple-400',
-    ENTERPRISE: 'bg-yellow-500/20 text-yellow-400',
   };
 
   return (
