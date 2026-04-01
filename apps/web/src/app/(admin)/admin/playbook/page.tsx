@@ -103,28 +103,6 @@ export default function PlaybookPage() {
         <p className="text-gray-400 mt-1">內部使用 — 如何幫客戶達成 AI 引用目標</p>
       </div>
 
-      {/* SLA */}
-      <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-6">
-        <h2 className="text-lg font-bold text-blue-400 mb-3">對客戶的承諾</h2>
-        <div className="bg-white/5 rounded-xl p-4 text-gray-300 leading-relaxed">
-          <p>「我們會幫你建立 100 題品牌知識庫，目標是在 5 大 AI 平台達成 <strong className="text-white">10% 以上的引用率</strong>。如果 30 天內驗收報告顯示引用率低於 5%，我們免費幫你優化到達標為止。」</p>
-        </div>
-        <div className="grid grid-cols-3 gap-4 mt-4">
-          <div className="bg-white/5 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-white">100 題</p>
-            <p className="text-xs text-gray-400">問題集規模</p>
-          </div>
-          <div className="bg-white/5 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-green-400">10%+</p>
-            <p className="text-xs text-gray-400">目標引用率</p>
-          </div>
-          <div className="bg-white/5 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-yellow-400">30 天</p>
-            <p className="text-xs text-gray-400">驗收週期</p>
-          </div>
-        </div>
-      </div>
-
       {/* Workflow */}
       <div>
         <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -251,24 +229,6 @@ export default function PlaybookPage() {
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Pricing Reference */}
-      <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl p-6">
-        <h2 className="text-lg font-bold mb-4">客戶收費參考</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-            <p className="text-white font-semibold">一次性優化</p>
-            <p className="text-2xl font-bold text-blue-400 mt-1">NT$5,000-10,000</p>
-            <p className="text-xs text-gray-400 mt-2">掃描 + 修復 + 知識庫建立 + 首次驗收</p>
-          </div>
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-            <p className="text-white font-semibold">每月持續經營</p>
-            <p className="text-2xl font-bold text-purple-400 mt-1">NT$3,000-5,000/月</p>
-            <p className="text-xs text-gray-400 mt-2">內容更新 + 監控報告 + 問題集優化</p>
-          </div>
-        </div>
-        <p className="text-xs text-gray-500 mt-3">平台費用 NT$690/月（Pro 方案），毛利 = 顧問費 - 平台費</p>
       </div>
     </div>
   );
