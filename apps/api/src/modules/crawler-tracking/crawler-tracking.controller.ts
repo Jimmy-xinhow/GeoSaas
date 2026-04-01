@@ -17,6 +17,13 @@ export class CrawlerTrackingController {
     return this.service.reportVisit(dto);
   }
 
+  @Public()
+  @Post('crawler/report-platform')
+  @ApiOperation({ summary: 'Report AI crawler visit to Geovault platform (from middleware)' })
+  reportPlatform(@Body() body: { botName: string; url: string; userAgent: string; statusCode: number; source?: string }) {
+    return this.service.reportPlatformVisit(body);
+  }
+
   @ApiBearerAuth()
   @Get('sites/:siteId/crawler')
   @ApiOperation({ summary: 'Get crawler dashboard data' })

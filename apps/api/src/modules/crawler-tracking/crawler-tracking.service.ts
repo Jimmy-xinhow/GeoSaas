@@ -52,6 +52,68 @@ export class CrawlerTrackingService {
     return { ok: true };
   }
 
+  /**
+   * Record AI crawler visiting Geovault platform itself (from Next.js middleware).
+   * No token needed — this is for our own platform, not customer sites.
+   */
+  async reportPlatformVisit(data: {
+    botName: string;
+    url: string;
+    userAgent: string;
+    statusCode: number;
+    source?: string;
+  }) {
+    // Find or get the platform's own site record
+    let platformSite = await this.prisma.site.findFirst({
+      where: { url: 'https://www.geovault.app' },
+      select: { id: true },
+    });
+
+    if (!platformSite) {
+      // Auto-create a platform site record for tracking
+      const adminUser = await this.prisma.user.findFirst({
+        where: { role: 'SUPER_ADMIN' },
+        select: { id: true },
+      });
+      if (!adminUser) return { ok: false, reason: 'no admin user' };
+
+      platformSite = await this.prisma.site.create({
+        data: {
+          name: 'Geovault Platform',
+          url: 'https://www.geovault.app',
+          userId: adminUser.id,
+          isPublic: true,
+          industry: 'technology',
+        },
+        select: { id: true },
+      });
+    }
+
+    // Rate limit: 500 per hour for platform
+    const oneHourAgo = new Date(Date.now() - 3600000);
+    const count = await this.prisma.crawlerVisit.count({
+      where: { siteId: platformSite.id, visitedAt: { gte: oneHourAgo } },
+    });
+    if (count >= 500) return { ok: true, throttled: true };
+
+    const botDef = AI_BOTS.find((b: AiBotDefinition) => b.name === data.botName);
+
+    await this.prisma.crawlerVisit.create({
+      data: {
+        siteId: platformSite.id,
+        botName: data.botName,
+        botOrg: botDef?.org || 'Unknown',
+        url: data.url,
+        statusCode: data.statusCode,
+        userAgent: data.userAgent?.slice(0, 500),
+        isSeeded: false, // real visit, not simulated
+      },
+    });
+
+    this.logger.log(`🤖 Real AI crawler: ${data.botName} → ${data.url}`);
+    return { ok: true };
+  }
+
   async getDashboard(siteId: string) {
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
