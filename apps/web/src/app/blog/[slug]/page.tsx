@@ -5,7 +5,7 @@ import ArticleClient from './article-client';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://geovault.app';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 
 interface Props {
   params: { slug: string };

@@ -167,7 +167,7 @@ export class BadgeService {
     if (!site) return null;
 
     const apiUrl = process.env.API_PUBLIC_URL || 'https://api.geovault.app';
-    const webUrl = process.env.FRONTEND_URL || 'https://geovault.app';
+    const webUrl = process.env.FRONTEND_URL || 'https://www.geovault.app';
     const score = site.bestScore;
 
     const imgTag = `<a href="${webUrl}/directory/${siteId}" target="_blank" rel="noopener">\n  <img src="${apiUrl}/api/badge/${siteId}.svg" alt="GEO Score: ${score} | Verified by Geovault" width="148" height="20">\n</a>`;

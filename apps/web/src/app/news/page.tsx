@@ -3,7 +3,7 @@ import Link from 'next/link';
 import NewsClient from './news-client';
 import PublicNavbar from '@/components/layout/public-navbar';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://geovault.app';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 
 export const metadata: Metadata = {
   title: 'AI News — AI SEO 產業最新動態',

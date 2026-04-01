@@ -29,7 +29,7 @@ export class BlogArticleService {
 
   /** Auto-ping IndexNow when new article is created */
   private pingIndexNow(slug: string) {
-    const webUrl = this.config.get('FRONTEND_URL') || 'https://geovault.app';
+    const webUrl = this.config.get('FRONTEND_URL') || 'https://www.geovault.app';
     this.indexNowService.submitUrl(`${webUrl}/blog/${slug}`).catch(() => {});
   }
 

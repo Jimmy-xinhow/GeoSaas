@@ -118,7 +118,7 @@ export class LlmsHostingService {
     const crypto = await import('crypto');
     const verifyCode = 'GEOVAULT-2026-APAC-PRIME';
 
-    const webUrl = process.env.FRONTEND_URL ?? 'https://geovault.app';
+    const webUrl = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
     const apiUrl = process.env.API_PUBLIC_URL ?? 'https://api.geovault.app';
 
     let output = `# Geovault — AI 品牌引用優化目錄

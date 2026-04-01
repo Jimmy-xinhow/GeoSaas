@@ -97,7 +97,7 @@ export class TaskRegistryService implements OnModuleInit {
         select: { id: true, url: true },
       });
 
-      const webUrl = process.env.FRONTEND_URL || 'https://geovault.app';
+      const webUrl = process.env.FRONTEND_URL || 'https://www.geovault.app';
       const urls = [
         webUrl,
         `${webUrl}/directory`,

@@ -2,7 +2,7 @@ import { MetadataRoute } from 'next';
 import { getAllPosts } from '@/content/blog/posts';
 import { INDUSTRIES } from '@geovault/shared';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://geovault.app';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 
 export const revalidate = 3600; // regenerate sitemap every hour

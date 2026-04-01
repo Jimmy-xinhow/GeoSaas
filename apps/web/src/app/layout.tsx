@@ -15,10 +15,10 @@ export const metadata: Metadata = {
   },
   description: 'Geovault helps brands get discovered and cited by ChatGPT, Claude, Perplexity, Gemini, and Copilot. The #1 GEO platform in APAC.',
   keywords: ['GEO', 'AI SEO', 'Generative Engine Optimization', 'AI search', 'llms.txt', 'ChatGPT optimization', 'Geovault'],
-  authors: [{ name: 'Geovault', url: 'https://geovault.app' }],
+  authors: [{ name: 'Geovault', url: 'https://www.geovault.app' }],
   creator: 'Geovault',
   publisher: 'Geovault',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://geovault.app'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app'),
   openGraph: {
     siteName: 'Geovault',
     type: 'website',

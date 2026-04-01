@@ -51,9 +51,9 @@ export default function IndustryWikiPage() {
               creator: {
                 '@type': 'Organization',
                 name: 'Geovault',
-                url: 'https://geovault.app',
+                url: 'https://www.geovault.app',
               },
-              license: 'https://geovault.app/terms',
+              license: 'https://www.geovault.app/terms',
               variableMeasured: 'GEO Score',
               measurementTechnique: 'Automated AI-friendliness scan by Geovault AEO Engine',
               keywords: ['GEO', 'AI search optimization', industryLabel, 'APAC'],

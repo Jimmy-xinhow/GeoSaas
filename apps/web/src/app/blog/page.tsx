@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import PublicNavbar from '@/components/layout/public-navbar';
 import BlogClient from './blog-client';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://geovault.app';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 
 export const metadata: Metadata = {
   title: 'Blog — AI SEO 優化知識與分析報告',
