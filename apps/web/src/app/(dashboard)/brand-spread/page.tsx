@@ -82,6 +82,19 @@ export default function BrandSpreadPage() {
     onError: () => toast.error('生成失敗，請稍後再試'),
   });
 
+  const weeklyMutation = useMutation({
+    mutationFn: async (siteId: string) => {
+      const { data } = await apiClient.post(`/brand-spread/weekly-plan/${siteId}`);
+      return data;
+    },
+    onSuccess: (data) => {
+      setWeeklyPlan(data);
+      toast.success(`已生成本週 ${data.items?.length || 0} 篇內容`);
+    },
+    onError: () => toast.error('生成失敗，請稍後再試'),
+  });
+
+  const [weeklyPlan, setWeeklyPlan] = useState<any>(null);
   const selectedSite = sites?.find((s: any) => s.id === selectedSiteId);
 
   return (
@@ -233,6 +246,80 @@ export default function BrandSpreadPage() {
             );
           })}
         </div>
+      )}
+
+      {/* Weekly Content Plan */}
+      {selectedSiteId && (
+        <Card className="bg-white/5 border-white/10">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              📅 每週內容排程
+              <Badge className="bg-purple-500/20 text-purple-400 text-xs font-normal">持續經營</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-gray-400">
+              根據 <strong className="text-white">{selectedSite?.name}</strong> 的產業和品牌特性，
+              AI 會自動生成本週應該發佈的內容。每週 2 種類型 × 多平台 = 4-6 篇新內容。
+            </p>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => weeklyMutation.mutate(selectedSiteId)}
+                disabled={weeklyMutation.isPending}
+                className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white"
+              >
+                {weeklyMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" /> 生成本週內容中...</>
+                ) : (
+                  <><FileText className="h-4 w-4 mr-2" /> 生成本週排程</>
+                )}
+              </Button>
+              <span className="text-xs text-gray-500">每週一 07:00 自動生成（客戶站點）</span>
+            </div>
+
+            {weeklyPlan && weeklyPlan.items && (
+              <div className="space-y-3 mt-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-white">
+                    本週內容（{weeklyPlan.weekOf}）— {weeklyPlan.items.length} 篇
+                  </p>
+                </div>
+
+                {weeklyPlan.items.map((item: any, idx: number) => (
+                  <div key={idx} className={`rounded-xl border overflow-hidden ${PLATFORM_COLORS[item.platform] || 'border-white/10 bg-white/5'}`}>
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{PLATFORM_ICONS[item.platform] || '📄'}</span>
+                          <div>
+                            <p className="font-medium text-white text-sm">{item.title}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Badge className="bg-white/10 text-gray-400 text-[10px]">{item.name}</Badge>
+                              <span className="text-[10px] text-gray-500">{item.platform}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <CopyButton text={item.content} />
+                      </div>
+                      <div className="bg-black/20 rounded-lg p-3 max-h-[200px] overflow-y-auto mt-2">
+                        <pre className="text-xs text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">
+                          {item.content}
+                        </pre>
+                      </div>
+                      {item.hashtags?.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                          {item.hashtags.map((tag: string) => (
+                            <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-white/10 rounded-full text-gray-400">#{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

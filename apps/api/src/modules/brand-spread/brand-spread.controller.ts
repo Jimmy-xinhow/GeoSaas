@@ -24,4 +24,10 @@ export class BrandSpreadController {
     const platformList = platforms ? platforms.split(',') : undefined;
     return this.service.generateAll(siteId, platformList);
   }
+
+  @Post('weekly-plan/:siteId')
+  @ApiOperation({ summary: 'Generate weekly content plan for a site' })
+  weeklyPlan(@Param('siteId') siteId: string) {
+    return this.service.generateWeeklyPlan(siteId);
+  }
 }
