@@ -99,7 +99,7 @@ export class AdminUsersController {
     @Param('userId') userId: string,
     @Body('password') password: string,
   ) {
-    if (!password || password.length < 6) throw new ForbiddenException('Password must be at least 6 characters');
+    if (!password || password.length < 8) throw new ForbiddenException('密碼至少需要 8 個字元');
     const bcrypt = await import('bcrypt');
     const passwordHash = await bcrypt.hash(password, 10);
     await this.prisma.user.update({

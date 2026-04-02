@@ -266,7 +266,7 @@ export default function AdminUsersPage() {
                         <div className="flex gap-1">
                           <Input
                             type="text"
-                            placeholder="輸入新密碼（至少6字元）..."
+                            placeholder="輸入新密碼（至少8個字元）..."
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
                             className="h-8 text-sm bg-white/10 text-white"
@@ -274,15 +274,15 @@ export default function AdminUsersPage() {
                           <Button
                             size="sm"
                             className="h-8 px-3 bg-yellow-600 hover:bg-yellow-700 text-white"
-                            disabled={isBusy || newPassword.length < 6}
+                            disabled={isBusy || newPassword.length < 8}
                             onClick={() => passwordMutation.mutate({ userId: u.id, password: newPassword })}
                           >
                             <Key className="h-3.5 w-3.5 mr-1" />
                             重設
                           </Button>
                         </div>
-                        {newPassword.length > 0 && newPassword.length < 6 && (
-                          <p className="text-[10px] text-red-400 mt-0.5">至少 6 個字元</p>
+                        {newPassword.length > 0 && newPassword.length < 8 && (
+                          <p className="text-[10px] text-red-400 mt-0.5">至少 8 個字元</p>
                         )}
                       </div>
                     </div>
