@@ -265,21 +265,20 @@ export default function AdminUsersPage() {
                         <label className="text-xs text-gray-500 block mb-1">重設密碼</label>
                         <div className="flex gap-1">
                           <Input
-                            type="password"
-                            placeholder="輸入新密碼..."
+                            type="text"
+                            placeholder="輸入新密碼（至少6字元）..."
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
-                            className="h-8 text-sm"
+                            className="h-8 text-sm bg-white/10 text-white"
                           />
                           <Button
                             size="sm"
-                            variant="ghost"
-                            className="h-8 px-2"
+                            className="h-8 px-3 bg-yellow-600 hover:bg-yellow-700 text-white"
                             disabled={isBusy || newPassword.length < 6}
                             onClick={() => passwordMutation.mutate({ userId: u.id, password: newPassword })}
-                            title={newPassword.length < 6 ? '至少 6 個字元' : '重設密碼'}
                           >
-                            <Key className="h-3.5 w-3.5 text-yellow-400" />
+                            <Key className="h-3.5 w-3.5 mr-1" />
+                            重設
                           </Button>
                         </div>
                         {newPassword.length > 0 && newPassword.length < 6 && (
