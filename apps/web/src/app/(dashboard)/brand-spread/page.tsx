@@ -13,6 +13,33 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+const PUBLISH_GUIDES: Record<string, { url: string; steps: string[] }> = {
+  medium: {
+    url: 'https://medium.com/new-story',
+    steps: ['到 medium.com 用品牌名建帳號（或登入現有帳號）', '點「Write」→ 貼上標題和內容', '加入 Tags（用下方的 hashtag）', '點「Publish」發佈'],
+  },
+  vocus: {
+    url: 'https://vocus.cc/new',
+    steps: ['到 vocus.cc 註冊帳號（用品牌名）', '點「寫文章」→ 貼上內容', '選擇分類 → 發佈'],
+  },
+  linkedin: {
+    url: 'https://www.linkedin.com/feed/',
+    steps: ['登入 LinkedIn → 點「開始發文」', '貼上內容 → 加入 hashtag', '如果是公司頁面，切換到公司頁面再發'],
+  },
+  facebook: {
+    url: 'https://www.facebook.com/',
+    steps: ['到品牌粉專 → 點「建立貼文」', '貼上內容 → 可加圖片增加觸及', '點「發佈」'],
+  },
+  google_business: {
+    url: 'https://business.google.com/',
+    steps: ['登入 Google 商家檔案（business.google.com）', '點「編輯個人資料」→「商家說明」', '將生成的描述貼上 → 儲存', '這是影響 AI 推薦最重要的平台'],
+  },
+  ptt: {
+    url: 'https://www.ptt.cc/',
+    steps: ['用個人帳號登入 PTT', '到相關看板（如 teeth_salon、car 等）', '發文時注意板規，不要太像業配', '用真實體驗分享的語氣'],
+  },
+};
+
 const PLATFORM_ICONS: Record<string, string> = {
   medium: '📝',
   vocus: '✍️',
@@ -235,11 +262,33 @@ export default function BrandSpreadPage() {
                       </div>
                     )}
 
-                    {/* Actions */}
+                    {/* Actions + Guide */}
                     <div className="flex items-center gap-2 pt-2">
                       <CopyButton text={p.content} />
                       <CopyButton text={p.hashtags?.map((t: string) => `#${t}`).join(' ') || ''} />
+                      {PUBLISH_GUIDES[p.platform] && (
+                        <a href={PUBLISH_GUIDES[p.platform].url} target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" variant="ghost" className="text-blue-400 hover:text-blue-300">
+                            <ExternalLink className="h-3.5 w-3.5 mr-1" /> 前往平台
+                          </Button>
+                        </a>
+                      )}
                     </div>
+
+                    {/* Publish Guide */}
+                    {PUBLISH_GUIDES[p.platform] && (
+                      <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 mt-2">
+                        <p className="text-xs text-blue-400 font-medium mb-2">📋 發佈步驟</p>
+                        <ol className="space-y-1">
+                          {PUBLISH_GUIDES[p.platform].steps.map((step, i) => (
+                            <li key={i} className="text-xs text-gray-400 flex items-start gap-2">
+                              <span className="text-blue-400 font-bold shrink-0">{i + 1}.</span>
+                              {step}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

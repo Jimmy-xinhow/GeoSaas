@@ -375,6 +375,41 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Monthly Task Checklist */}
+      <Card className="bg-white/5 border-white/10">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            📋 本月待辦
+          </CardTitle>
+          <CardDescription>每月完成這些步驟，持續提升 AI 能見度</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {[
+              { label: '掃描網站確認分數', desc: '確認指標沒有退步', href: '/sites', frequency: '每月 1-2 次' },
+              { label: '補充知識庫 Q&A', desc: '新增產品/服務/活動相關問題', href: '/sites', frequency: '每月 1 次' },
+              { label: '生成新內容', desc: '用內容引擎產出新文章', href: '/content', frequency: '每月 2-3 篇' },
+              { label: '跑 AI 引用監控', desc: '看哪些問法 AI 會推薦你', href: '/monitor', frequency: '每月 1-2 次' },
+              { label: '品牌擴散發文', desc: '把新內容發佈到各平台', href: '/brand-spread', frequency: '每週 1-2 篇' },
+              { label: '查看驗收報告', desc: '追蹤引用率是否提升', href: '/monitor/reports', frequency: '每月 1 次' },
+            ].map((task) => (
+              <a
+                key={task.label}
+                href={task.href}
+                className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/10 hover:border-blue-500/30 hover:bg-white/10 transition-all group"
+              >
+                <div className="w-5 h-5 rounded-md border-2 border-white/20 shrink-0 mt-0.5 group-hover:border-blue-400" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white group-hover:text-blue-400 transition-colors">{task.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{task.desc}</p>
+                  <p className="text-[10px] text-gray-600 mt-1">{task.frequency}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
