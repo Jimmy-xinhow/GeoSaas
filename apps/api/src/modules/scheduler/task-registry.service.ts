@@ -141,7 +141,7 @@ export class TaskRegistryService implements OnModuleInit {
           qas: { none: {} },
         },
         select: { id: true, name: true, url: true },
-        take: 10, // 10 sites per run
+        take: 30, // 30 sites per run — target: all brands in 1 month
       });
 
       this.logger.log(`Auto-fill Q&A: ${sitesWithoutQA.length} sites without knowledge base`);
@@ -177,7 +177,7 @@ export class TaskRegistryService implements OnModuleInit {
 
       const needArticles = sites
         .filter((s) => s._count.blogArticles < 3)
-        .slice(0, 10); // 10 sites per run
+        .slice(0, 30); // 30 sites per run — target: all brands in 1 month
 
       this.logger.log(`Auto-fill articles: ${needArticles.length} sites need more articles`);
 

@@ -240,7 +240,7 @@ export class DiscoveryService {
       industries.sort((a, b) => (countMap.get(a) || 0) - (countMap.get(b) || 0));
 
       // Pick top 6 industries with fewest coverage
-      const targetIndustries = industries.slice(0, 6);
+      const targetIndustries = industries.slice(0, 10);
       this.logger.log(`Discovery targeting ${targetIndustries.length} industries: ${targetIndustries.join(', ')}`);
 
       let totalDiscovered = 0;
@@ -292,7 +292,7 @@ export class DiscoveryService {
           // Scan all newly discovered ones for this industry
           const pendingSeeds = await this.prisma.seedSource.findMany({
             where: { industry, status: 'pending', source: 'auto_discovery' },
-            take: 15,
+            take: 20,
           });
 
           let systemUser = await this.prisma.user.findFirst({
