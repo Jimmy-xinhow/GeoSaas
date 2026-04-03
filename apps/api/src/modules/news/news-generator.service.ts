@@ -161,7 +161,8 @@ export class NewsGeneratorService {
    * Search for news/trends using SerpAPI
    */
   private async searchNews(query: string): Promise<NewsSource[]> {
-    const serpKey = this.config.get<string>('SERP_API_KEY');
+    const { SerpKeyPool } = await import('../../common/utils/serp-key-pool');
+    const serpKey = SerpKeyPool.getInstance().getKey();
     if (!serpKey) return [];
 
     try {
@@ -169,14 +170,19 @@ export class NewsGeneratorService {
         q: query,
         api_key: serpKey,
         engine: 'google',
-        tbm: 'nws', // News search
+        tbm: 'nws',
         gl: 'tw',
         hl: 'zh-TW',
         num: '5',
       });
 
       const res = await fetch(`https://serpapi.com/search.json?${params}`);
-      if (!res.ok) return [];
+      if (!res.ok) {
+        if (res.status === 429 || res.status === 403) {
+          SerpKeyPool.getInstance().markFailed(serpKey);
+        }
+        return [];
+      }
 
       const data = await res.json();
       const results = data.news_results || data.organic_results || [];
