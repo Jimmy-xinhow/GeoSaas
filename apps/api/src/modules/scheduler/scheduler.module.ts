@@ -9,10 +9,11 @@ import { SeedModule } from '../seed/seed.module';
 import { IndexNowModule } from '../indexnow/indexnow.module';
 import { ScanModule } from '../scan/scan.module';
 import { DiscoveryModule } from '../discovery/discovery.module';
+import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 
 @Module({
-  imports: [MonitorModule, DirectoryModule, BlogArticleModule, SeedModule, IndexNowModule, ScanModule, DiscoveryModule, PrismaModule],
+  imports: [MonitorModule, DirectoryModule, BlogArticleModule, SeedModule, IndexNowModule, ScanModule, DiscoveryModule, KnowledgeModule, PrismaModule],
   controllers: [SchedulerController],
   providers: [CronManagerService, TaskRegistryService],
   exports: [CronManagerService],

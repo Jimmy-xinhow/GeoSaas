@@ -9,6 +9,7 @@ import { IndexNowService } from '../indexnow/indexnow.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScanPipelineService } from '../scan/scan-pipeline.service';
 import { DiscoveryService } from '../discovery/discovery.service';
+import { KnowledgeService } from '../knowledge/knowledge.service';
 
 @Injectable()
 export class TaskRegistryService implements OnModuleInit {
@@ -25,6 +26,7 @@ export class TaskRegistryService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly scanPipeline: ScanPipelineService,
     private readonly discoveryService: DiscoveryService,
+    private readonly knowledgeService: KnowledgeService,
   ) {}
 
   onModuleInit() {
@@ -127,6 +129,67 @@ export class TaskRegistryService implements OnModuleInit {
     this.cronManager.registerHandler('enrich_industry_content', async () => {
       const result = await this.discoveryService.enrichIndustryContent();
       this.logger.log(`Content enrichment: ${result.created} Q&A created`);
+    });
+
+    // --- Depth: Auto-fill Q&A for brands without knowledge base ---
+    this.cronManager.registerHandler('auto_fill_qa', async () => {
+      // Find public sites that have been scanned but have NO Q&A
+      const sitesWithoutQA = await this.prisma.site.findMany({
+        where: {
+          isPublic: true,
+          bestScore: { gt: 0 },
+          qas: { none: {} },
+        },
+        select: { id: true, name: true, url: true },
+        take: 10, // 10 sites per run
+      });
+
+      this.logger.log(`Auto-fill Q&A: ${sitesWithoutQA.length} sites without knowledge base`);
+
+      for (const site of sitesWithoutQA) {
+        try {
+          // Use the site owner's userId for the knowledge generation
+          const siteWithUser = await this.prisma.site.findUnique({ where: { id: site.id }, select: { userId: true } });
+          if (siteWithUser) {
+            await this.knowledgeService.aiGenerate(site.id, siteWithUser.userId);
+          }
+          this.logger.log(`Auto-fill Q&A: generated for ${site.name}`);
+          await new Promise((r) => setTimeout(r, 3000)); // rate limit
+        } catch (err) {
+          this.logger.warn(`Auto-fill Q&A failed for ${site.name}: ${err}`);
+        }
+      }
+    });
+
+    // --- Depth: Auto-fill articles for brands with < 3 articles ---
+    this.cronManager.registerHandler('auto_fill_articles', async () => {
+      const sites = await this.prisma.site.findMany({
+        where: {
+          isPublic: true,
+          bestScore: { gt: 0 },
+        },
+        select: {
+          id: true,
+          name: true,
+          _count: { select: { blogArticles: true } },
+        },
+      });
+
+      const needArticles = sites
+        .filter((s) => s._count.blogArticles < 3)
+        .slice(0, 10); // 10 sites per run
+
+      this.logger.log(`Auto-fill articles: ${needArticles.length} sites need more articles`);
+
+      for (const site of needArticles) {
+        try {
+          await this.blogArticleService.generateArticlesForSite(site.id);
+          this.logger.log(`Auto-fill articles: generated for ${site.name}`);
+          await new Promise((r) => setTimeout(r, 3000));
+        } catch (err) {
+          this.logger.warn(`Auto-fill articles failed for ${site.name}: ${err}`);
+        }
+      }
     });
   }
 }

@@ -20,6 +20,14 @@ export const INDUSTRIES = [
   { value: 'media', label: '媒體' },
   { value: 'nonprofit', label: '非營利' },
   { value: 'local_life', label: '在地生活' },
+  { value: 'legal', label: '法律事務' },
+  { value: 'dental', label: '牙醫診所' },
+  { value: 'wedding', label: '婚禮攝影' },
+  { value: 'moving', label: '搬家清潔' },
+  { value: 'interior_design', label: '室內設計' },
+  { value: 'florist', label: '花藝禮品' },
+  { value: 'accounting', label: '會計記帳' },
+  { value: 'optical', label: '眼鏡眼科' },
   { value: 'other', label: '其他' },
 ] as const;
 
