@@ -162,41 +162,48 @@ export class NewsGeneratorService {
    */
   private async searchNews(query: string): Promise<NewsSource[]> {
     const { SerpKeyPool } = await import('../../common/utils/serp-key-pool');
-    const serpKey = SerpKeyPool.getInstance().getKey();
-    if (!serpKey) return [];
+    const pool = SerpKeyPool.getInstance();
 
-    try {
-      const params = new URLSearchParams({
-        q: query,
-        api_key: serpKey,
-        engine: 'google',
-        tbm: 'nws',
-        gl: 'tw',
-        hl: 'zh-TW',
-        num: '5',
-      });
+    // Retry with different keys on failure
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const serpKey = pool.getKey();
+      if (!serpKey) return [];
 
-      const res = await fetch(`https://serpapi.com/search.json?${params}`);
-      if (!res.ok) {
-        if (res.status === 429 || res.status === 403) {
-          SerpKeyPool.getInstance().markFailed(serpKey);
+      try {
+        const params = new URLSearchParams({
+          q: query,
+          api_key: serpKey,
+          engine: 'google',
+          tbm: 'nws',
+          gl: 'tw',
+          hl: 'zh-TW',
+          num: '5',
+        });
+
+        const res = await fetch(`https://serpapi.com/search.json?${params}`);
+        if (!res.ok) {
+          if (res.status === 429 || res.status === 403) {
+            pool.markFailed(serpKey);
+            this.logger.warn(`SerpAPI key failed (${res.status}), trying next key...`);
+            continue; // retry with next key
+          }
+          return [];
         }
-        return [];
+
+        const data = await res.json();
+        const results = data.news_results || data.organic_results || [];
+
+        return results.slice(0, 5).map((r: any) => ({
+          title: r.title || '',
+          snippet: r.snippet || r.description || '',
+          url: r.link || '',
+          source: r.source?.name || r.source || '',
+        }));
+      } catch (err) {
+        this.logger.warn(`News search failed: ${err}`);
       }
-
-      const data = await res.json();
-      const results = data.news_results || data.organic_results || [];
-
-      return results.slice(0, 5).map((r: any) => ({
-        title: r.title || '',
-        snippet: r.snippet || r.description || '',
-        url: r.link || '',
-        source: r.source?.name || r.source || '',
-      }));
-    } catch (err) {
-      this.logger.warn(`News search failed: ${err}`);
-      return [];
     }
+    return [];
   }
 
   /**

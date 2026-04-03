@@ -443,10 +443,12 @@ siteIndex 是答案中最相關的品牌在列表中的索引（0-based），如
    * Unified web search: tries SerpAPI → Google → Bing in order.
    */
   private async webSearch(query: string): Promise<Array<{ title: string; snippet: string; url: string }>> {
-    // 1. Try SerpAPI with key pool rotation
+    // 1. Try SerpAPI with key pool rotation + auto retry
     const { SerpKeyPool } = await import('../../common/utils/serp-key-pool');
-    const serpKey = SerpKeyPool.getInstance().getKey();
-    if (serpKey) {
+    const pool = SerpKeyPool.getInstance();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const serpKey = pool.getKey();
+      if (!serpKey) break;
       try {
         const params = new URLSearchParams({
           q: query,
@@ -466,12 +468,15 @@ siteIndex 是答案中最相關的品牌在列表中的索引（0-based），如
           const err = await res.text();
           this.logger.warn(`SerpAPI error ${res.status}: ${err.slice(0, 100)}`);
           if (res.status === 429 || res.status === 403) {
-            SerpKeyPool.getInstance().markFailed(serpKey);
+            pool.markFailed(serpKey);
+            this.logger.warn(`SerpAPI key failed, trying next key...`);
+            continue;
           }
         }
       } catch (err) {
         this.logger.warn(`SerpAPI failed: ${err}`);
       }
+      break;
     }
 
     // 2. Try Google Custom Search
