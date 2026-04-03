@@ -360,7 +360,7 @@ export class BlogArticleService {
             );
 
             const completion = await openai.chat.completions.create({
-              model: 'gpt-4o',
+              model: 'gpt-4o-mini',
               max_tokens: 2000,
               messages: [{ role: 'user', content: prompt }],
             });

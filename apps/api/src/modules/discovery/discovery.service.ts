@@ -365,7 +365,7 @@ export class DiscoveryService {
 siteIndex 是答案中最相關的品牌在列表中的索引（0-based），如果沒有特別相關就填 0。`;
 
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }],
       });
