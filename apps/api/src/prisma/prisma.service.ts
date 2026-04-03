@@ -17,8 +17,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   /** Ensure default admin account exists on every startup */
   private async ensureAdminUser() {
-    const email = process.env.ADMIN_EMAIL || 'admin@geovault.app';
-    const password = process.env.ADMIN_PASSWORD || 'Geovault2026';
+    const email = process.env.ADMIN_EMAIL;
+    const password = process.env.ADMIN_PASSWORD;
+    if (!email || !password) return; // Skip if not configured
 
     try {
       const existing = await this.user.findUnique({ where: { email } });

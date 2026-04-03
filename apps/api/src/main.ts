@@ -12,10 +12,10 @@ async function bootstrap() {
   // Security: Helmet sets various HTTP headers for protection
   app.use(helmet());
 
-  // CORS: Allow frontend origins (dev + production)
+  // CORS: Allow frontend origins
+  const isDev = process.env.NODE_ENV !== 'production';
   const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:3001',
+    ...(isDev ? ['http://localhost:3000', 'http://localhost:3001'] : []),
     'https://geovault.app',
     'https://www.geovault.app',
     process.env.FRONTEND_URL,
