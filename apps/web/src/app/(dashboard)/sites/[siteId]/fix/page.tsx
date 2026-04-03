@@ -276,20 +276,40 @@ export default function FixPage() {
   const { data: site, isLoading: siteLoading } = useSite(siteId)
   const { data: scans, isLoading: scansLoading } = useScanHistory(siteId)
 
-  // Get latest completed scan
-  const latestScan = useMemo(() => {
-    if (!scans || scans.length === 0) return null
-    return scans.find((s) => s.status === 'COMPLETED') || scans[0]
-  }, [scans])
-
-  const latestScanId = latestScan?.id || ''
+  // Get latest completed scan that has results
+  // Some scans have totalScore but empty results (batch rescan bug)
+  const [latestScanId, setLatestScanId] = useState('')
   const { data: scanResults, isLoading: resultsLoading } =
     useScanResults(latestScanId)
 
+  // Try each scan until we find one with results
+  useMemo(() => {
+    if (!scans || scans.length === 0) return
+    const completedScans = scans.filter((s) => s.status === 'COMPLETED')
+    // Start with the latest scan
+    if (completedScans.length > 0 && !latestScanId) {
+      setLatestScanId(completedScans[0].id)
+    }
+  }, [scans])
+
+  // If current scan has no results, try the next one
+  useMemo(() => {
+    if (!scans || !latestScanId) return
+    if (scanResults && scanResults.length === 0) {
+      const completedScans = scans.filter((s) => s.status === 'COMPLETED')
+      const currentIdx = completedScans.findIndex((s) => s.id === latestScanId)
+      if (currentIdx >= 0 && currentIdx < completedScans.length - 1) {
+        setLatestScanId(completedScans[currentIdx + 1].id)
+      }
+    }
+  }, [scanResults, scans, latestScanId])
+
+  const latestScan = scans?.find((s) => s.id === latestScanId) || null
+
   // Filter to only fixable / actionable items (not passing)
   const fixableResults = useMemo(() => {
-    if (!scanResults) return []
-    // Show fail first, then warning, sorted by score ascending within each group
+    if (!scanResults || scanResults.length === 0) return []
+    // Show ALL items — fail first, then warning, then pass
     return [...scanResults]
       .filter((r) => r.status !== 'pass' || r.autoFixable)
       .sort((a, b) => {

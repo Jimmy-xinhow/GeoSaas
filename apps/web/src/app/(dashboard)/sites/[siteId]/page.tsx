@@ -354,17 +354,33 @@ export default function SiteDetailPage() {
     prevActiveRef.current = hasActiveScan
   }, [hasActiveScan, queryClient, siteId])
 
-  // Get the latest scan (prefer completed, fallback to latest)
-  const latestScan = useMemo(() => {
-    if (!scans || scans.length === 0) return null
-    // scans are ordered by createdAt desc from the API
-    return scans.find((s) => s.status === 'COMPLETED') || scans[0]
-  }, [scans])
-
-  const latestScanId = latestScan?.id || ''
+  // Get the latest scan that has results
+  const [latestScanId, setLatestScanId] = useState('')
 
   const { data: scanResults, isLoading: resultsLoading } =
     useScanResults(latestScanId)
+
+  // Find a scan with results — some scans have score but empty results
+  useEffect(() => {
+    if (!scans || scans.length === 0) return
+    const completedScans = scans.filter((s: any) => s.status === 'COMPLETED')
+    if (completedScans.length > 0 && !latestScanId) {
+      setLatestScanId(completedScans[0].id)
+    }
+  }, [scans, latestScanId])
+
+  useEffect(() => {
+    if (!scans || !latestScanId || resultsLoading) return
+    if (scanResults && scanResults.length === 0) {
+      const completedScans = scans.filter((s: any) => s.status === 'COMPLETED')
+      const idx = completedScans.findIndex((s: any) => s.id === latestScanId)
+      if (idx >= 0 && idx < completedScans.length - 1) {
+        setLatestScanId(completedScans[idx + 1].id)
+      }
+    }
+  }, [scanResults, scans, latestScanId, resultsLoading])
+
+  const latestScan = scans?.find((s: any) => s.id === latestScanId) || (scans?.[0] ?? null)
 
   // Prepare chart data from scan history
   const chartData = useMemo(() => {
