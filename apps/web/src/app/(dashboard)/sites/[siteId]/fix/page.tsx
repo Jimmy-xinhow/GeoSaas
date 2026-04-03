@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -276,35 +276,27 @@ export default function FixPage() {
   const { data: site, isLoading: siteLoading } = useSite(siteId)
   const { data: scans, isLoading: scansLoading } = useScanHistory(siteId)
 
-  // Get latest completed scan that has results
-  // Some scans have totalScore but empty results (batch rescan bug)
-  const [latestScanId, setLatestScanId] = useState('')
+  // Find the best scan to show — skip scans with empty results
+  const [scanIdx, setScanIdx] = useState(0)
+
+  const completedScans = useMemo(() => {
+    if (!scans) return []
+    return scans.filter((s) => s.status === 'COMPLETED')
+  }, [scans])
+
+  const latestScanId = completedScans[scanIdx]?.id || ''
+  const latestScan = completedScans[scanIdx] || null
+
   const { data: scanResults, isLoading: resultsLoading } =
     useScanResults(latestScanId)
 
-  // Try each scan until we find one with results
-  useMemo(() => {
-    if (!scans || scans.length === 0) return
-    const completedScans = scans.filter((s) => s.status === 'COMPLETED')
-    // Start with the latest scan
-    if (completedScans.length > 0 && !latestScanId) {
-      setLatestScanId(completedScans[0].id)
+  // If current scan has no results, move to next one
+  useEffect(() => {
+    if (resultsLoading || !latestScanId) return
+    if (scanResults && scanResults.length === 0 && scanIdx < completedScans.length - 1) {
+      setScanIdx((i) => i + 1)
     }
-  }, [scans])
-
-  // If current scan has no results, try the next one
-  useMemo(() => {
-    if (!scans || !latestScanId) return
-    if (scanResults && scanResults.length === 0) {
-      const completedScans = scans.filter((s) => s.status === 'COMPLETED')
-      const currentIdx = completedScans.findIndex((s) => s.id === latestScanId)
-      if (currentIdx >= 0 && currentIdx < completedScans.length - 1) {
-        setLatestScanId(completedScans[currentIdx + 1].id)
-      }
-    }
-  }, [scanResults, scans, latestScanId])
-
-  const latestScan = scans?.find((s) => s.id === latestScanId) || null
+  }, [scanResults, resultsLoading, latestScanId, scanIdx, completedScans.length])
 
   // Filter to only fixable / actionable items (not passing)
   const fixableResults = useMemo(() => {
