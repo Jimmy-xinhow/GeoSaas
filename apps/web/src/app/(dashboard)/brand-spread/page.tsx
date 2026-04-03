@@ -231,7 +231,18 @@ export default function BrandSpreadPage() {
                     <span className="text-2xl">{PLATFORM_ICONS[p.platform] || '📄'}</span>
                     <div className="text-left">
                       <p className="font-semibold text-white">{p.title}</p>
-                      <p className="text-xs text-gray-400">{p.characterCount} 字</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">{p.characterCount} 字</span>
+                        {p.qualityScore && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                            p.qualityScore >= 80 ? 'bg-green-500/20 text-green-400' :
+                            p.qualityScore >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-red-500/20 text-red-400'
+                          }`}>
+                            品質 {p.qualityScore}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

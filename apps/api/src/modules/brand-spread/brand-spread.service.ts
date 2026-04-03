@@ -10,6 +10,8 @@ export interface SpreadContent {
   content: string;
   hashtags: string[];
   characterCount: number;
+  qualityScore?: number;
+  qualityDetails?: Record<string, number>;
 }
 
 export interface SpreadResult {
@@ -130,60 +132,212 @@ export class BrandSpreadService {
   }
 
   /**
-   * Generate for a single platform
+   * Generate for a single platform with quality scoring loop
+   * Generates → Scores → If below 80/100, regenerates (max 2 retries)
    */
   async generateForPlatform(
     platform: typeof PLATFORMS[number],
     brandContext: string,
     site: any,
   ): Promise<SpreadContent> {
-    const response = await this.openai!.chat.completions.create({
-      model: 'gpt-4o',
-      max_tokens: 2000,
-      messages: [
-        {
-          role: 'system',
-          content: `你是一位專業的品牌行銷內容撰寫師。你要幫品牌撰寫適合不同平台發布的推薦內容。
-每篇內容的目標是：讓 AI 搜尋引擎（ChatGPT、Claude、Perplexity、Gemini）在抓取這些平台時，能認識和記住這個品牌。
+    const industry = site.industry || 'other';
+    let bestResult: SpreadContent | null = null;
+    let bestScore = 0;
 
-重要原則：
-1. 內容必須自然，不能像廣告或業配
-2. 要有真實的觀點和體驗感
-3. 品牌名稱至少出現 3 次
-4. 官網連結自然地融入內容
-5. 包含品牌的核心服務和地區資訊
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await this.openai!.chat.completions.create({
+        model: 'gpt-4o',
+        max_tokens: 2500,
+        messages: [
+          {
+            role: 'system',
+            content: `你是一位資深品牌行銷內容策略師，專精於「AI 搜尋優化內容」（GEO Content）。
+你的目標是撰寫能被 AI 搜尋引擎（ChatGPT、Claude、Perplexity、Gemini、Copilot）抓取並引用的品牌內容。
+
+## 核心策略
+AI 搜尋引擎在判斷是否推薦一個品牌時，會看以下信號：
+1. **多平台一致性** — 不同平台的資訊是否一致（名稱、服務、地點）
+2. **專業深度** — 內容是否展現行業專業知識
+3. **真實感** — 內容是否像真人寫的，有觀點和體驗
+4. **結構化資訊** — 品牌名、地址、服務項目、特色是否清楚
+5. **用戶價值** — 內容對消費者是否有幫助
+
+## 寫作規則
+1. 品牌全名至少出現 3-5 次，且在開頭和結尾各出現一次
+2. 明確提到品牌的「地區」和「核心服務」
+3. 加入 1-2 個具體細節（價格帶、特色服務、營業時間等），增加真實感
+4. 官網連結自然融入（不要「點擊這裡」，而是「更多資訊可參考 品牌名 官網」）
+5. 用消費者的語言寫，不用行銷術語
 6. 繁體中文
+7. 不要出現「業配」「推薦碼」「折扣碼」等字眼
+8. 不要用過度正面的形容詞堆砌（最好的、最棒的、第一名）
+
+## 產業特化指引（${industry}）
+${this.getIndustryGuideline(industry)}
 
 回覆格式（JSON）：
 {
-  "title": "文章標題（如果平台需要的話）",
+  "title": "文章標題",
   "content": "完整內容",
-  "hashtags": ["相關標籤1", "相關標籤2", ...]
+  "hashtags": ["標籤1", "標籤2", "標籤3", "標籤4", "標籤5"]
 }`,
-        },
-        {
-          role: 'user',
-          content: `平台：${platform.name}（${platform.lengthGuide}）
+          },
+          {
+            role: 'user',
+            content: `平台：${platform.name}（${platform.lengthGuide}）
 
 ${platform.prompt}
 
 品牌資料：
 ${brandContext}`,
-        },
-      ],
-      response_format: { type: 'json_object' },
-    });
+          },
+        ],
+        response_format: { type: 'json_object' },
+      });
 
-    const text = response.choices[0]?.message?.content || '{}';
-    const parsed = JSON.parse(text);
+      const text = response.choices[0]?.message?.content || '{}';
+      const parsed = JSON.parse(text);
 
-    return {
-      platform: platform.key,
-      title: parsed.title || `${site.name} — ${platform.name}`,
-      content: parsed.content || '',
-      hashtags: parsed.hashtags || [],
-      characterCount: (parsed.content || '').length,
+      const content: SpreadContent = {
+        platform: platform.key,
+        title: parsed.title || `${site.name} — ${platform.name}`,
+        content: parsed.content || '',
+        hashtags: parsed.hashtags || [],
+        characterCount: (parsed.content || '').length,
+      };
+
+      // Quality scoring
+      const score = await this.scoreContent(content, site, platform);
+      content.qualityScore = score.total;
+      content.qualityDetails = score.details;
+
+      if (score.total >= 80) {
+        return content; // Pass — good enough
+      }
+
+      if (score.total > bestScore) {
+        bestScore = score.total;
+        bestResult = content;
+      }
+
+      this.logger.warn(`Quality score ${score.total}/100 for ${platform.key} (attempt ${attempt + 1}), ${score.total >= 80 ? 'pass' : 'retrying'}...`);
+    }
+
+    // Return best attempt even if below threshold
+    return bestResult!;
+  }
+
+  /**
+   * Score content quality (0-100)
+   */
+  private async scoreContent(
+    content: SpreadContent,
+    site: any,
+    platform: typeof PLATFORMS[number],
+  ): Promise<{ total: number; details: Record<string, number> }> {
+    const text = content.content;
+    const brandName = site.name;
+
+    // Rule-based scoring (fast, no API call)
+    const details: Record<string, number> = {};
+
+    // 1. Brand mention count (0-20)
+    const brandMentions = (text.match(new RegExp(brandName, 'g')) || []).length;
+    details.brandMention = Math.min(brandMentions >= 3 ? 20 : brandMentions >= 2 ? 15 : brandMentions >= 1 ? 8 : 0, 20);
+
+    // 2. Length appropriate (0-15)
+    const len = text.length;
+    const [minLen, maxLen] = platform.lengthGuide.match(/\d+/g)?.map(Number) || [200, 800];
+    if (len >= minLen && len <= maxLen * 1.3) {
+      details.length = 15;
+    } else if (len >= minLen * 0.7) {
+      details.length = 10;
+    } else {
+      details.length = 5;
+    }
+
+    // 3. Contains URL (0-10)
+    details.hasUrl = text.includes(site.url) || text.includes('http') ? 10 : 0;
+
+    // 4. Contains location/service info (0-15)
+    const profile = site.profile || {};
+    let infoScore = 0;
+    if (profile.location && text.includes(profile.location.split(' ')[0])) infoScore += 5;
+    if (site.industry && text.length > 100) infoScore += 5;
+    if (profile.services && text.length > 200) infoScore += 5;
+    details.brandInfo = Math.min(infoScore, 15);
+
+    // 5. No spam signals (0-15)
+    const spamWords = ['業配', '折扣碼', '推薦碼', '限時優惠', '最低價', '免費送'];
+    const hasSpam = spamWords.some((w) => text.includes(w));
+    details.noSpam = hasSpam ? 0 : 15;
+
+    // 6. Natural language (0-10) — check for excessive exclamation marks and emoji
+    const exclamations = (text.match(/！|!/g) || []).length;
+    details.naturalTone = exclamations > 5 ? 3 : exclamations > 3 ? 7 : 10;
+
+    // 7. Has hashtags (0-5)
+    details.hashtags = content.hashtags.length >= 3 ? 5 : content.hashtags.length >= 1 ? 3 : 0;
+
+    // 8. Structure — has paragraphs (0-10)
+    const paragraphs = text.split('\n\n').filter((p) => p.trim().length > 10).length;
+    details.structure = paragraphs >= 3 ? 10 : paragraphs >= 2 ? 7 : 3;
+
+    const total = Object.values(details).reduce((sum, v) => sum + v, 0);
+
+    return { total, details };
+  }
+
+  /**
+   * Industry-specific content guidelines
+   */
+  private getIndustryGuideline(industry: string): string {
+    const guides: Record<string, string> = {
+      traditional_medicine: `整復推拿/中醫：
+- 強調「非醫療」「身體調理」，避免療效宣稱
+- 提到服務流程（評估→溝通→調理）增加專業感
+- 適合的角度：久坐上班族保養、產後調理、運動恢復`,
+      auto_care: `汽車美容：
+- 提到具體服務（鍍膜、打蠟、內裝清潔）和持久度
+- 車主最在意：價格透明、施工品質、是否有保固
+- 適合的角度：新車保養、季節保養、DIY vs 專業比較`,
+      beauty_salon: `美容美髮：
+- 提到設計師專長、擅長的髮型風格
+- 消費者在意：溝通過程、作品風格、價位帶
+- 適合的角度：換季造型、染燙護理建議、新手指南`,
+      dental: `牙醫：
+- 強調專業認證、設備先進、環境舒適
+- 消費者最怕痛和貴，要溫和帶過
+- 適合的角度：定期檢查重要性、治療選項比較、兒童牙科`,
+      cafe: `咖啡茶飲：
+- 提到豆子來源、沖煮方式、空間氛圍
+- 消費者在意：口味、環境、是否適合工作
+- 適合的角度：咖啡知識教學、店內特色、推薦品項`,
+      fitness: `健身：
+- 提到教練資歷、課程類型、訓練環境
+- 消費者在意：是否適合新手、價格方案、成效
+- 適合的角度：新手入門、訓練觀念、飲食搭配`,
+      restaurant: `餐飲：
+- 提到招牌菜、食材特色、用餐氛圍
+- 消費者在意：口味、CP值、環境衛生
+- 適合的角度：實際用餐體驗、推薦必點、適合場合`,
+      pet: `寵物服務：
+- 提到服務細節（洗澡、修剪、SPA）和對毛孩的態度
+- 飼主最在意：安全、溫柔、經驗
+- 適合的角度：品種護理知識、季節注意事項`,
+      legal: `法律：
+- 強調專業領域和成功案例類型
+- 消費者在意：保密性、諮詢流程、收費透明
+- 適合的角度：常見法律問題解析、何時需要律師`,
+      interior_design: `室內設計：
+- 提到設計風格、預算範圍、施工流程
+- 消費者在意：溝通過程、追加費用、工期
+- 適合的角度：風格選擇指南、小空間設計、預算規劃`,
     };
+    return guides[industry] || `一般行業：
+- 強調品牌的核心差異化和專業度
+- 提到具體服務內容和流程
+- 用消費者的視角寫，不要用品牌方的視角`;
   }
 
   /**
