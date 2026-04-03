@@ -76,16 +76,6 @@ function JsonLdScript({ site }: { site: DirectorySiteDetail }) {
           ]
         : []),
       {
-        '@type': 'Review',
-        itemReviewed: { '@type': 'WebSite', name: site.name, url: site.url },
-        reviewRating: {
-          '@type': 'Rating',
-          ratingValue: site.bestScore,
-          bestRating: 100,
-        },
-        author: { '@type': 'Organization', name: 'Geovault' },
-      },
-      {
         '@type': 'LocalBusiness',
         name: site.name,
         url: site.url,
@@ -97,6 +87,18 @@ function JsonLdScript({ site }: { site: DirectorySiteDetail }) {
           bestRating: 100,
           worstRating: 0,
           ratingCount: site.latestScan ? 1 : 0,
+        },
+        review: {
+          '@type': 'Review',
+          author: { '@type': 'Organization', name: 'Geovault', url: 'https://www.geovault.app' },
+          reviewRating: {
+            '@type': 'Rating',
+            ratingValue: site.bestScore,
+            bestRating: 100,
+            worstRating: 0,
+          },
+          name: `${site.name} GEO AI 可讀性評分`,
+          reviewBody: `${site.name} 的 GEO 分數為 ${site.bestScore}/100，由 Geovault 平台的 9 項 AI 可讀性指標評估。`,
         },
       },
       {
