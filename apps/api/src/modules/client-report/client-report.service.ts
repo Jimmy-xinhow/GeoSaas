@@ -237,6 +237,12 @@ export class ClientReportService implements OnModuleInit {
     this.logger.log(`Report ${reportId} completed: ${mentionedCount}/${totalChecks} mentions (${summary.mentionRate}%)`);
   }
 
+  /** Delete report */
+  async deleteReport(reportId: string) {
+    await this.prisma.monitorReport.delete({ where: { id: reportId } });
+    return { deleted: true };
+  }
+
   /** Get report by ID */
   async getReport(reportId: string) {
     return this.prisma.monitorReport.findUnique({

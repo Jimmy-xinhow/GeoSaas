@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { FileText, Play, Download, Loader2, CheckCircle2, XCircle, Clock, BarChart3, Timer } from 'lucide-react';
+import { FileText, Play, Download, Loader2, CheckCircle2, XCircle, Clock, BarChart3, Timer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { useSites } from '@/hooks/use-sites';
-import { useClientQuerySets, useRunReport, useSiteReports, useReport } from '@/hooks/use-client-reports';
+import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport } from '@/hooks/use-client-reports';
 
 const PLATFORM_LABELS: Record<string, string> = {
   CHATGPT: 'ChatGPT', CLAUDE: 'Claude', PERPLEXITY: 'Perplexity', GEMINI: 'Gemini', COPILOT: 'Copilot',
@@ -236,6 +236,98 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
   );
 }
 
+function ReportHistory({ reports, selectedSiteName, onView, onDownload }: {
+  reports: any[];
+  selectedSiteName: string;
+  onView: (r: any) => void;
+  onDownload: (id: string) => void;
+}) {
+  const deleteMutation = useDeleteReport();
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <BarChart3 className="h-5 w-5" />
+          歷史報告
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {reports.map((r) => {
+            const results = r.results || [];
+            const totalResults = results.length;
+            const mentionRate = (r.summary as any)?.mentionRate;
+            const createdDate = new Date(r.createdAt).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+            const title = `${selectedSiteName} — ${r.querySet?.name || '驗收報告'} — ${createdDate}`;
+            const isDeleting = deleteConfirm === r.id;
+
+            return (
+              <div
+                key={r.id}
+                className={`flex items-center justify-between p-3 rounded-lg ${isDeleting ? 'bg-red-500/10 border border-red-500/20' : 'bg-white/5 hover:bg-white/10'}`}
+              >
+                <div
+                  className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                  onClick={() => !isDeleting && onView(r)}
+                >
+                  {r.status === 'completed' ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                  ) : r.status === 'running' ? (
+                    <Loader2 className="h-4 w-4 text-blue-500 animate-spin shrink-0" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Badge variant="outline" className="text-[10px]">{r.period}</Badge>
+                      <span className="text-[10px] text-gray-500">{totalResults} 筆查詢</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {mentionRate !== undefined && (
+                    <span className={`text-sm font-bold ${mentionRate >= 20 ? 'text-green-400' : mentionRate >= 10 ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {mentionRate}%
+                    </span>
+                  )}
+                  {r.status === 'completed' && (
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDownload(r.id); }} title="下載 PDF">
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {isDeleting ? (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { deleteMutation.mutate(r.id); setDeleteConfirm(null); toast.success('報告已刪除'); }}
+                        disabled={deleteMutation.isPending}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(null)}>
+                        <XCircle className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(r.id); }} title="刪除">
+                      <Trash2 className="h-3.5 w-3.5 text-gray-600 hover:text-red-400" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ClientReportsPage() {
   const { data: sites } = useSites();
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
@@ -396,47 +488,12 @@ export default function ClientReportsPage() {
 
           {/* Report History */}
           {reports && reports.length > 0 && !activeReportId && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  歷史報告
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {reports.map((r) => (
-                    <div
-                      key={r.id}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg cursor-pointer hover:bg-white/10"
-                      onClick={() => { setActiveReportId(r.id); setActiveQsLength((r.summary as any)?.totalQueries || 100); }}
-                    >
-                      <div className="flex items-center gap-3">
-                        {r.status === 'completed' ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        ) : r.status === 'running' ? (
-                          <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                        ) : (
-                          <Clock className="h-4 w-4 text-gray-400" />
-                        )}
-                        <span className="font-medium text-sm">{r.querySet?.name}</span>
-                        <Badge variant="outline" className="text-xs">{r.period}</Badge>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {r.summary && (
-                          <span className="text-sm font-bold text-blue-600">{(r.summary as any).mentionRate}%</span>
-                        )}
-                        {r.status === 'completed' && (
-                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDownloadPdf(r.id); }}>
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <ReportHistory
+              reports={reports}
+              selectedSiteName={(sites as any[])?.find((s: any) => s.id === selectedSiteId)?.name || ''}
+              onView={(r) => { setActiveReportId(r.id); setActiveQsLength((r.summary as any)?.totalQueries || 100); }}
+              onDownload={handleDownloadPdf}
+            />
           )}
         </>
       )}

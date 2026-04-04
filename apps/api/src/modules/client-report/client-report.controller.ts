@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Res } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
@@ -38,6 +38,12 @@ export class ClientReportController {
   @ApiOperation({ summary: 'Get a single report' })
   getReport(@Param('reportId') reportId: string) {
     return this.service.getReport(reportId);
+  }
+
+  @Delete('report/:reportId')
+  @ApiOperation({ summary: 'Delete a report' })
+  deleteReport(@Param('reportId') reportId: string) {
+    return this.service.deleteReport(reportId);
   }
 
   @Public()

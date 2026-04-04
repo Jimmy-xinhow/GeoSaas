@@ -73,6 +73,17 @@ export function useReport(reportId: string) {
   });
 }
 
+export function useDeleteReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (reportId: string) => {
+      const { data } = await apiClient.delete(`/client-reports/report/${reportId}`);
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['client-reports'] }),
+  });
+}
+
 export function useSiteReports(siteId: string) {
   return useQuery({
     queryKey: ['client-reports', 'reports', siteId],
