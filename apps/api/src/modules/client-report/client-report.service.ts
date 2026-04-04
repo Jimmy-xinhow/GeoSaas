@@ -26,15 +26,33 @@ export class ClientReportService implements OnModuleInit {
     private readonly monitorService: MonitorService,
   ) {}
 
-  /** On startup, mark any orphaned "running" reports as failed */
+  /** On startup, recover orphaned "running" reports */
   async onModuleInit() {
-    const orphaned = await this.prisma.monitorReport.updateMany({
-      where: { status: 'running' },
-      data: { status: 'failed' },
+    const orphaned = await this.prisma.monitorReport.findMany({
+      where: { status: { in: ['running', 'failed'] } },
     });
-    if (orphaned.count > 0) {
-      this.logger.warn(`Marked ${orphaned.count} orphaned running report(s) as failed`);
+
+    let recovered = 0;
+    let marked = 0;
+    for (const report of orphaned) {
+      const results = (report.results as any[]) || [];
+      if (results.length > 0) {
+        // Has results — mark as completed
+        await this.prisma.monitorReport.update({
+          where: { id: report.id },
+          data: { status: 'completed', completedAt: report.completedAt || new Date() },
+        });
+        recovered++;
+      } else if (report.status === 'running') {
+        await this.prisma.monitorReport.update({
+          where: { id: report.id },
+          data: { status: 'failed' },
+        });
+        marked++;
+      }
     }
+    if (recovered > 0) this.logger.log(`Recovered ${recovered} report(s) with results from failed/running status`);
+    if (marked > 0) this.logger.warn(`Marked ${marked} truly empty report(s) as failed`);
   }
 
   /** Create or update a client query set */
@@ -63,8 +81,10 @@ export class ClientReportService implements OnModuleInit {
     });
   }
 
-  /** Run a full report: test all questions against all 5 platforms */
-  async runReport(querySetId: string): Promise<{ reportId: string }> {
+  /** Run a full report: test all questions against all 5 platforms
+   *  If a completed report exists within 14 days, return it directly
+   */
+  async runReport(querySetId: string): Promise<{ reportId: string; cached?: boolean }> {
     const querySet = await this.prisma.clientQuerySet.findUnique({
       where: { id: querySetId },
       include: { site: true },
@@ -72,7 +92,25 @@ export class ClientReportService implements OnModuleInit {
 
     if (!querySet) throw new NotFoundException('Query set not found');
 
-    const period = new Date().toISOString().slice(0, 7); // 2026-03
+    // Check for recent completed report (within 14 days)
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+    const recentReport = await this.prisma.monitorReport.findFirst({
+      where: {
+        querySetId,
+        status: 'completed',
+        createdAt: { gte: fourteenDaysAgo },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (recentReport) {
+      this.logger.log(`Report cache hit: ${recentReport.id} (${recentReport.createdAt.toISOString().slice(0, 10)})`);
+      return { reportId: recentReport.id, cached: true };
+    }
+
+    const period = new Date().toISOString().slice(0, 7);
 
     const report = await this.prisma.monitorReport.create({
       data: {
@@ -84,9 +122,25 @@ export class ClientReportService implements OnModuleInit {
       },
     });
 
-    // Run in background
-    this.executeReport(report.id, querySet.site, querySet.queries as unknown as QueryItem[]).catch((err) => {
-      this.logger.error(`Report ${report.id} failed: ${err}`);
+    // Run in background — always mark completed when done, even if errors
+    this.executeReport(report.id, querySet.site, querySet.queries as unknown as QueryItem[]).catch(async (err) => {
+      this.logger.error(`Report ${report.id} error: ${err}`);
+      // Check if results were actually saved despite the error
+      const current = await this.prisma.monitorReport.findUnique({ where: { id: report.id } });
+      const results = (current?.results as any[]) || [];
+      if (results.length > 0) {
+        // Results exist — mark as completed, not failed
+        await this.prisma.monitorReport.update({
+          where: { id: report.id },
+          data: { status: 'completed', completedAt: new Date() },
+        });
+        this.logger.log(`Report ${report.id} had errors but ${results.length} results saved — marked completed`);
+      } else {
+        await this.prisma.monitorReport.update({
+          where: { id: report.id },
+          data: { status: 'failed' },
+        });
+      }
     });
 
     return { reportId: report.id };
