@@ -66,8 +66,13 @@ export class LlmsHostingService {
     return lines.join('\n');
   }
 
+  private llmsFullCache: { data: string; expiresAt: number } | null = null;
+
   /** Platform-level llms-full.txt — enhanced with industry stats, indicators, FAQ, verification */
   async getPlatformLlmsFullTxt(): Promise<string> {
+    if (this.llmsFullCache && Date.now() < this.llmsFullCache.expiresAt) {
+      return this.llmsFullCache.data;
+    }
     const sites = await this.prisma.site.findMany({
       where: { isPublic: true },
       select: {
@@ -185,6 +190,7 @@ Source: https://geovault.app/llms-full.txt
 This dataset is maintained by Geovault — The APAC Authority on GEO.
 `;
 
+    this.llmsFullCache = { data: output, expiresAt: Date.now() + 3600000 }; // 1 hour cache
     return output;
   }
 

@@ -4,9 +4,28 @@ import { QueryDirectoryDto } from './dto/query-directory.dto';
 import { TogglePublicDto } from './dto/toggle-public.dto';
 import { IndexNowService } from '../indexnow/indexnow.service';
 
+// Simple in-memory cache with TTL
+class MemCache {
+  private store = new Map<string, { data: any; expiresAt: number }>();
+
+  get<T>(key: string): T | null {
+    const entry = this.store.get(key);
+    if (!entry || Date.now() > entry.expiresAt) {
+      this.store.delete(key);
+      return null;
+    }
+    return entry.data as T;
+  }
+
+  set(key: string, data: any, ttlMs: number) {
+    this.store.set(key, { data, expiresAt: Date.now() + ttlMs });
+  }
+}
+
 @Injectable()
 export class DirectoryService {
   private readonly logger = new Logger(DirectoryService.name);
+  private readonly cache = new MemCache();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -74,6 +93,9 @@ export class DirectoryService {
   }
 
   async getStats() {
+    const cached = this.cache.get('directory-stats');
+    if (cached) return cached;
+
     const [totalSites, avgResult, tierCounts] = await Promise.all([
       this.prisma.site.count({ where: { isPublic: true } }),
       this.prisma.site.aggregate({
@@ -92,11 +114,13 @@ export class DirectoryService {
       if (t.tier) tierDistribution[t.tier] = t._count;
     }
 
-    return {
+    const statsResult = {
       totalSites,
       avgScore: Math.round(avgResult._avg.bestScore || 0),
       tierDistribution,
     };
+    this.cache.set('directory-stats', statsResult, 120000); // 2 min cache
+    return statsResult;
   }
 
   async getNewcomers() {
@@ -343,6 +367,9 @@ export class DirectoryService {
   }
 
   async getPlatformStats() {
+    const cached = this.cache.get('platform-stats');
+    if (cached) return cached;
+
     const oneDayAgo = new Date(Date.now() - 86400000);
 
     const [
@@ -362,16 +389,22 @@ export class DirectoryService {
       }).then((r: any) => r.length),
     ]);
 
-    return {
+    const result = {
       totalSites: totalPublicSites,
       totalScans,
       totalCrawlerVisits,
       crawlerVisits24h,
       activeBots: activeBotCount,
     };
+    this.cache.set('platform-stats', result, 60000); // 1 minute cache
+    return result;
   }
 
   async getCrawlerFeed(limit = 20) {
+    const cacheKey = `crawler-feed-${limit}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached) return cached;
+
     const recentVisits = await this.prisma.crawlerVisit.findMany({
       where: {
         site: { isPublic: true },
@@ -414,7 +447,7 @@ export class DirectoryService {
       }),
     ]);
 
-    return {
+    const feedResult = {
       feed: recentVisits,
       stats: {
         last24h: last24hCount,
@@ -424,6 +457,8 @@ export class DirectoryService {
         })),
       },
     };
+    this.cache.set(cacheKey, feedResult, 30000); // 30 second cache
+    return feedResult;
   }
 
   async getSiteDetail(siteId: string) {
