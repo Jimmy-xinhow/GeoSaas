@@ -155,39 +155,52 @@ export class ClientReportService implements OnModuleInit {
       this.logger.log(`Report ${reportId}: question ${qi + 1}/${queries.length} — ${q.question.slice(0, 30)}`);
 
       for (const platform of platforms) {
-        try {
-          const monitor = await this.prisma.monitor.create({
-            data: { siteId: site.id, platform, query: q.question, checkedAt: new Date() },
-          });
+        let success = false;
 
-          // Timeout per check: 30 seconds
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('timeout')), 30000),
-          );
-          const checked = await Promise.race([
-            this.monitorService.checkCitation(monitor.id),
-            timeoutPromise,
-          ]);
+        // Retry up to 2 times on failure (rate limit recovery)
+        for (let attempt = 0; attempt < 2 && !success; attempt++) {
+          try {
+            const monitor = await this.prisma.monitor.create({
+              data: { siteId: site.id, platform, query: q.question, checkedAt: new Date() },
+            });
 
-          results.push({
-            question: q.question,
-            category: q.category,
-            platform,
-            mentioned: checked.mentioned,
-            position: checked.position,
-            response: checked.response?.slice(0, 500) || '',
-          });
+            const timeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('timeout')), 30000),
+            );
+            const checked = await Promise.race([
+              this.monitorService.checkCitation(monitor.id),
+              timeoutPromise,
+            ]);
 
-          await this.prisma.monitor.delete({ where: { id: monitor.id } }).catch(() => {});
-        } catch (err) {
-          results.push({
-            question: q.question,
-            category: q.category,
-            platform,
-            mentioned: false,
-            position: null,
-            response: `[Error] ${err instanceof Error ? err.message : err}`,
-          });
+            results.push({
+              question: q.question,
+              category: q.category,
+              platform,
+              mentioned: checked.mentioned,
+              position: checked.position,
+              response: checked.response?.slice(0, 500) || '',
+            });
+
+            await this.prisma.monitor.delete({ where: { id: monitor.id } }).catch(() => {});
+            success = true;
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            if (attempt === 0 && (errMsg.includes('429') || errMsg.includes('rate') || errMsg.includes('overloaded'))) {
+              // Rate limited — wait longer and retry
+              this.logger.warn(`Rate limited on ${platform}, waiting 10s before retry...`);
+              await new Promise((r) => setTimeout(r, 10000));
+              continue;
+            }
+            results.push({
+              question: q.question,
+              category: q.category,
+              platform,
+              mentioned: false,
+              position: null,
+              response: `[Error] ${errMsg}`,
+            });
+            success = true; // Don't retry on non-rate-limit errors
+          }
         }
 
         // Save after every platform call (real-time progress)
@@ -196,8 +209,9 @@ export class ClientReportService implements OnModuleInit {
           data: { results: results as any },
         });
 
-        // 2 second delay between API calls
-        await new Promise((r) => setTimeout(r, 2000));
+        // Delay between calls — Claude needs more time
+        const delay = platform === 'CLAUDE' ? 4000 : 2000;
+        await new Promise((r) => setTimeout(r, delay));
       }
     }
 

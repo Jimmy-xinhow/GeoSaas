@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import apiClient from '@/lib/api-client';
-import { Globe, FileText, Users, Database, RefreshCw, Zap, BarChart3, Activity, Bot, Eye, EyeOff, Clock } from 'lucide-react';
+import { Globe, FileText, Users, Database, RefreshCw, Zap, BarChart3, Activity, Bot, Eye, EyeOff, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
 
 interface BotCount { bot: string; count: number; }
 interface RealVisit {
@@ -56,6 +56,65 @@ const botColors: Record<string, string> = {
   CopilotBot: 'bg-purple-500/20 text-purple-400',
   Bytespider: 'bg-white/10 text-gray-300',
 };
+
+function ApiBalanceAlerts() {
+  const [alerts, setAlerts] = useState<{ provider: string; message: string; url: string }[]>([]);
+
+  useEffect(() => {
+    // Check API health by making lightweight calls
+    const checkApis = async () => {
+      const issues: { provider: string; message: string; url: string }[] = [];
+      try {
+        const res = await apiClient.post('/news/generate?count=0');
+        // If we get here, OpenAI is fine
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || err?.message || '';
+        if (msg.includes('429') || msg.includes('quota') || msg.includes('billing') || msg.includes('餘額')) {
+          issues.push({ provider: 'OpenAI', message: 'GPT-4o API 額度不足', url: 'https://platform.openai.com/account/billing' });
+        }
+      }
+      // Check recent reports for Claude errors
+      try {
+        const { data } = await apiClient.get('/client-reports/reports/cmn9128eo00pl8mq3391820gm');
+        const reports = data || [];
+        if (reports.length > 0) {
+          const latest = reports[0];
+          const results = latest.results || [];
+          const claudeErrors = results.filter((r: any) => r.platform === 'CLAUDE' && r.response?.includes('[Error]'));
+          if (claudeErrors.length > 0) {
+            issues.push({ provider: 'Anthropic', message: `Claude API 額度不足（最近報告有 ${claudeErrors.length} 個 Claude 查詢失敗）`, url: 'https://console.anthropic.com/settings/billing' });
+          }
+        }
+      } catch {}
+      setAlerts(issues);
+    };
+    checkApis();
+  }, []);
+
+  if (alerts.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {alerts.map((alert) => (
+        <div key={alert.provider} className="flex items-center justify-between p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-red-400">{alert.provider} API 需要加值</p>
+              <p className="text-xs text-gray-400">{alert.message}</p>
+            </div>
+          </div>
+          <a href={alert.url} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">
+              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+              前往加值
+            </Button>
+          </a>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -137,6 +196,9 @@ export default function AdminDashboard() {
           {refreshing ? '刷新中...' : '刷新'}
         </Button>
       </div>
+
+      {/* API Balance Alerts */}
+      <ApiBalanceAlerts />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
