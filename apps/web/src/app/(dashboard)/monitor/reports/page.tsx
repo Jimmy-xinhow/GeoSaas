@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { FileText, Play, Download, Loader2, CheckCircle2, XCircle, Clock, BarChart3, Timer, Trash2 } from 'lucide-react';
+import { FileText, Play, Download, Loader2, CheckCircle2, XCircle, Clock, BarChart3, Timer, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSites } from '@/hooks/use-sites';
 import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport } from '@/hooks/use-client-reports';
 
@@ -330,6 +331,7 @@ function ReportHistory({ reports, selectedSiteName, onView, onDownload }: {
 
 export default function ClientReportsPage() {
   const { data: sites } = useSites();
+  const queryClient = useQueryClient();
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
   const [activeReportId, setActiveReportId] = useState<string>('');
   const [activeQsLength, setActiveQsLength] = useState(0);
@@ -357,14 +359,27 @@ export default function ClientReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <FileText className="h-6 w-6" />
-          客戶驗收報告
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          一鍵查詢客戶問題集在 5 大 AI 平台的引用狀態，即時追蹤進度
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <FileText className="h-6 w-6" />
+            驗收報告
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            一鍵查詢問題集在 5 大 AI 平台的引用狀態，即時追蹤進度
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            queryClient.invalidateQueries({ queryKey: ['client-reports'] });
+            toast.success('已刷新');
+          }}
+        >
+          <RefreshCw className="h-4 w-4 mr-1" />
+          刷新
+        </Button>
       </div>
 
       {/* Site Selector: Search + Dropdown */}
