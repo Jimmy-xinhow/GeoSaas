@@ -37,10 +37,11 @@ export class ClientReportService implements OnModuleInit {
     for (const report of orphaned) {
       const results = (report.results as any[]) || [];
       if (results.length > 0) {
-        // Has results — mark as completed
+        // Has results — mark as completed and compute summary if missing
+        const summary = report.summary || this.computeSummary(results);
         await this.prisma.monitorReport.update({
           where: { id: report.id },
-          data: { status: 'completed', completedAt: report.completedAt || new Date() },
+          data: { status: 'completed', completedAt: report.completedAt || new Date(), summary: summary as any },
         });
         recovered++;
       } else if (report.status === 'running') {
@@ -129,10 +130,11 @@ export class ClientReportService implements OnModuleInit {
       const current = await this.prisma.monitorReport.findUnique({ where: { id: report.id } });
       const results = (current?.results as any[]) || [];
       if (results.length > 0) {
-        // Results exist — mark as completed, not failed
+        // Results exist — mark as completed, not failed; compute summary
+        const summary = current?.summary || this.computeSummary(results);
         await this.prisma.monitorReport.update({
           where: { id: report.id },
-          data: { status: 'completed', completedAt: new Date() },
+          data: { status: 'completed', completedAt: new Date(), summary: summary as any },
         });
         this.logger.log(`Report ${report.id} had errors but ${results.length} results saved — marked completed`);
       } else {
@@ -249,6 +251,33 @@ export class ClientReportService implements OnModuleInit {
     });
 
     this.logger.log(`Report ${reportId} completed: ${mentionedCount}/${totalChecks} mentions (${summary.mentionRate}%)`);
+  }
+
+  /** Compute summary from results (used when recovery marks completed without summary) */
+  private computeSummary(results: any[]) {
+    const platforms = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'];
+    const totalChecks = results.filter((r) => !r.response?.startsWith('[Error]')).length;
+    const mentionedCount = results.filter((r) => r.mentioned).length;
+    const questions = new Set(results.map((r) => r.question));
+    const byPlatform: Record<string, { total: number; mentioned: number; rate: number }> = {};
+
+    for (const platform of platforms) {
+      const pResults = results.filter((r) => r.platform === platform && !r.response?.startsWith('[Error]'));
+      const pMentioned = pResults.filter((r) => r.mentioned).length;
+      byPlatform[platform] = {
+        total: pResults.length,
+        mentioned: pMentioned,
+        rate: pResults.length > 0 ? Math.round((pMentioned / pResults.length) * 100) : 0,
+      };
+    }
+
+    return {
+      totalQueries: questions.size,
+      totalChecks,
+      mentionedCount,
+      mentionRate: totalChecks > 0 ? Math.round((mentionedCount / totalChecks) * 100) : 0,
+      byPlatform,
+    };
   }
 
   /** Delete report */
