@@ -2,6 +2,7 @@ import { Controller, Get, Post, Delete, Param, Body, Res } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ClientReportService } from './client-report.service';
 
 @ApiTags('Client Reports')
@@ -12,37 +13,60 @@ export class ClientReportController {
 
   @Post('query-sets')
   @ApiOperation({ summary: 'Create/update a client query set' })
-  upsertQuerySet(@Body() body: { siteId: string; name: string; queries: { category: string; question: string }[] }) {
+  async upsertQuerySet(
+    @Body() body: { siteId: string; name: string; queries: { category: string; question: string }[] },
+    @CurrentUser('role') role: string,
+  ) {
+    await this.service.assertSiteAccess(body.siteId, role);
     return this.service.upsertQuerySet(body.siteId, body.name, body.queries);
   }
 
   @Get('query-sets/:siteId')
   @ApiOperation({ summary: 'Get query sets for a site' })
-  getQuerySets(@Param('siteId') siteId: string) {
+  async getQuerySets(
+    @Param('siteId') siteId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    await this.service.assertSiteAccess(siteId, role);
     return this.service.getQuerySets(siteId);
   }
 
   @Post('run/:querySetId')
   @ApiOperation({ summary: 'Run a full report (all questions × all platforms)' })
-  runReport(@Param('querySetId') querySetId: string) {
-    return this.service.runReport(querySetId);
+  runReport(
+    @Param('querySetId') querySetId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.runReport(querySetId, role);
   }
 
   @Get('reports/:siteId')
   @ApiOperation({ summary: 'Get all reports for a site' })
-  getReports(@Param('siteId') siteId: string) {
+  async getReports(
+    @Param('siteId') siteId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    await this.service.assertSiteAccess(siteId, role);
     return this.service.getReports(siteId);
   }
 
   @Get('report/:reportId')
   @ApiOperation({ summary: 'Get a single report' })
-  getReport(@Param('reportId') reportId: string) {
+  async getReport(
+    @Param('reportId') reportId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    await this.service.assertReportAccess(reportId, role);
     return this.service.getReport(reportId);
   }
 
   @Delete('report/:reportId')
   @ApiOperation({ summary: 'Delete a report' })
-  deleteReport(@Param('reportId') reportId: string) {
+  async deleteReport(
+    @Param('reportId') reportId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    await this.service.assertReportAccess(reportId, role);
     return this.service.deleteReport(reportId);
   }
 

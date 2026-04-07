@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MonitorService } from '../monitor/monitor.service';
 import pLimit from 'p-limit';
@@ -56,6 +56,37 @@ export class ClientReportService implements OnModuleInit {
     if (marked > 0) this.logger.warn(`Marked ${marked} truly empty report(s) as failed`);
   }
 
+  /**
+   * Assert that the current user role can access a site's reports.
+   * STAFF can only access isClient=true sites; ADMIN/SUPER_ADMIN can access any.
+   */
+  async assertSiteAccess(siteId: string, role: string): Promise<void> {
+    if (role === 'ADMIN' || role === 'SUPER_ADMIN') return;
+
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { isClient: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+    if (role === 'STAFF' && !site.isClient) {
+      throw new ForbiddenException('此網站不在您的權限範圍內');
+    }
+  }
+
+  /**
+   * Assert that the current user role can access a specific report.
+   */
+  async assertReportAccess(reportId: string, role: string): Promise<void> {
+    if (role === 'ADMIN' || role === 'SUPER_ADMIN') return;
+
+    const report = await this.prisma.monitorReport.findUnique({
+      where: { id: reportId },
+      select: { siteId: true },
+    });
+    if (!report) throw new NotFoundException('Report not found');
+    await this.assertSiteAccess(report.siteId, role);
+  }
+
   /** Create or update a client query set */
   async upsertQuerySet(siteId: string, name: string, queries: QueryItem[]) {
     const existing = await this.prisma.clientQuerySet.findFirst({
@@ -85,13 +116,17 @@ export class ClientReportService implements OnModuleInit {
   /** Run a full report: test all questions against all 5 platforms
    *  If a completed report exists within 14 days, return it directly
    */
-  async runReport(querySetId: string): Promise<{ reportId: string; cached?: boolean }> {
+  async runReport(querySetId: string, role?: string): Promise<{ reportId: string; cached?: boolean }> {
     const querySet = await this.prisma.clientQuerySet.findUnique({
       where: { id: querySetId },
       include: { site: true },
     });
 
     if (!querySet) throw new NotFoundException('Query set not found');
+
+    if (role) {
+      await this.assertSiteAccess(querySet.siteId, role);
+    }
 
     // Check for recent completed report (within 14 days)
     const fourteenDaysAgo = new Date();

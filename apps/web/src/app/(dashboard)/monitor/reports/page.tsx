@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { FileText, Play, Download, Loader2, CheckCircle2, XCircle, Clock, BarChart3, Timer, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -332,7 +333,21 @@ function ReportHistory({ reports, selectedSiteName, onView, onDownload }: {
 export default function ClientReportsPage() {
   const { data: sites } = useSites();
   const queryClient = useQueryClient();
-  const [selectedSiteId, setSelectedSiteId] = useState<string>('');
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Read siteId from URL on mount, persist selection to URL
+  const selectedSiteId = searchParams.get('siteId') || '';
+  const setSelectedSiteId = useCallback((id: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (id) {
+      params.set('siteId', id);
+    } else {
+      params.delete('siteId');
+    }
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [searchParams, router]);
+
   const [activeReportId, setActiveReportId] = useState<string>('');
   const [activeQsLength, setActiveQsLength] = useState(0);
   const [siteSearch, setSiteSearch] = useState('');
