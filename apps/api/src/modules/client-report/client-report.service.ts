@@ -30,30 +30,38 @@ export class ClientReportService implements OnModuleInit {
   async onModuleInit() {
     const orphaned = await this.prisma.monitorReport.findMany({
       where: { status: { in: ['running', 'failed'] } },
+      include: { querySet: { select: { queries: true } } },
     });
 
     let recovered = 0;
     let marked = 0;
     for (const report of orphaned) {
       const results = (report.results as any[]) || [];
-      if (results.length > 0) {
-        // Has results — mark as completed and compute summary if missing
+      const expectedTotal = ((report.querySet?.queries as any[])?.length || 0) * 5;
+      const isComplete = expectedTotal > 0 && results.length >= expectedTotal;
+
+      if (isComplete) {
+        // All questions processed — mark as completed
         const summary = report.summary || this.computeSummary(results);
         await this.prisma.monitorReport.update({
           where: { id: report.id },
           data: { status: 'completed', completedAt: report.completedAt || new Date(), summary: summary as any },
         });
         recovered++;
-      } else if (report.status === 'running') {
+      } else {
+        // Incomplete or empty — mark as failed so user can re-run
         await this.prisma.monitorReport.update({
           where: { id: report.id },
           data: { status: 'failed' },
         });
         marked++;
+        if (results.length > 0) {
+          this.logger.warn(`Report ${report.id} had ${results.length}/${expectedTotal} results — marked failed (incomplete)`);
+        }
       }
     }
-    if (recovered > 0) this.logger.log(`Recovered ${recovered} report(s) with results from failed/running status`);
-    if (marked > 0) this.logger.warn(`Marked ${marked} truly empty report(s) as failed`);
+    if (recovered > 0) this.logger.log(`Recovered ${recovered} fully completed report(s)`);
+    if (marked > 0) this.logger.warn(`Marked ${marked} incomplete/empty report(s) as failed`);
   }
 
   /**
@@ -142,8 +150,16 @@ export class ClientReportService implements OnModuleInit {
     });
 
     if (recentReport) {
-      this.logger.log(`Report cache hit: ${recentReport.id} (${recentReport.createdAt.toISOString().slice(0, 10)})`);
-      return { reportId: recentReport.id, cached: true };
+      // Verify the cached report is actually complete
+      const cachedResults = (recentReport.results as any[]) || [];
+      const expectedTotal = (querySet.queries as any[]).length * 5;
+      if (cachedResults.length >= expectedTotal) {
+        this.logger.log(`Report cache hit: ${recentReport.id} (${recentReport.createdAt.toISOString().slice(0, 10)})`);
+        return { reportId: recentReport.id, cached: true };
+      }
+      // Incomplete cached report — delete it and re-run
+      this.logger.warn(`Cached report ${recentReport.id} incomplete (${cachedResults.length}/${expectedTotal}) — deleting and re-running`);
+      await this.prisma.monitorReport.delete({ where: { id: recentReport.id } });
     }
 
     const period = new Date().toISOString().slice(0, 7);
@@ -158,25 +174,28 @@ export class ClientReportService implements OnModuleInit {
       },
     });
 
-    // Run in background — always mark completed when done, even if errors
+    // Run in background
+    const expectedTotal = (querySet.queries as any[]).length * 5;
     this.executeReport(report.id, querySet.site, querySet.queries as unknown as QueryItem[]).catch(async (err) => {
       this.logger.error(`Report ${report.id} error: ${err}`);
-      // Check if results were actually saved despite the error
       const current = await this.prisma.monitorReport.findUnique({ where: { id: report.id } });
       const results = (current?.results as any[]) || [];
-      if (results.length > 0) {
-        // Results exist — mark as completed, not failed; compute summary
+
+      if (results.length >= expectedTotal) {
+        // All questions were actually processed — mark as completed
         const summary = current?.summary || this.computeSummary(results);
         await this.prisma.monitorReport.update({
           where: { id: report.id },
           data: { status: 'completed', completedAt: new Date(), summary: summary as any },
         });
-        this.logger.log(`Report ${report.id} had errors but ${results.length} results saved — marked completed`);
+        this.logger.log(`Report ${report.id} error but all ${results.length}/${expectedTotal} results present — marked completed`);
       } else {
+        // Incomplete — mark as failed so user can re-run
         await this.prisma.monitorReport.update({
           where: { id: report.id },
           data: { status: 'failed' },
         });
+        this.logger.warn(`Report ${report.id} failed at ${results.length}/${expectedTotal} results`);
       }
     });
 
