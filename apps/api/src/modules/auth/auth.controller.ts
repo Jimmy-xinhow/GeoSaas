@@ -32,6 +32,12 @@ export class AuthController {
   }
 
   @ApiBearerAuth()
+  @Post('logout')
+  logout() {
+    return { message: 'Logged out' };
+  }
+
+  @ApiBearerAuth()
   @Get('me')
   getProfile(@CurrentUser('userId') userId: string) {
     return this.authService.getProfile(userId);

@@ -68,7 +68,7 @@ export function useLogout() {
 
   return useMutation({
     mutationFn: async () => {
-      await apiClient.post('/auth/logout');
+      await apiClient.post('/auth/logout').catch(() => {});
     },
     onSettled: () => {
       logout();
