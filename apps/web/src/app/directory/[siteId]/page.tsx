@@ -22,9 +22,13 @@ export async function generateMetadata({
     return {
       title: `${site.name} — GEO 分數 ${site.bestScore}/100${tierText}`,
       description: `${site.name} (${site.url}) 的 AI 可見度分數為 ${site.bestScore}/100。${industryText ? `行業：${site.industry}。` : ''}查看完整的 AI 優化指標、爬蟲活動和品牌知識庫。`,
+      alternates: {
+        canonical: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app'}/directory/${params.siteId}`,
+      },
       openGraph: {
         title: `${site.name} — GEO Score: ${site.bestScore}/100`,
         description: `AI visibility optimization profile for ${site.name}`,
+        url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app'}/directory/${params.siteId}`,
         type: 'website',
       },
     };

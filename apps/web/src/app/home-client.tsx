@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   Search,
   Wrench,
@@ -223,7 +224,7 @@ function CrawlerMarquee() {
 
 /* ─── AI Platform Logo (image-based) ─── */
 function PlatformLogo({ src, alt, className }: { src: string; alt: string; className?: string }) {
-  return <img src={src} alt={alt} className={cn('object-contain rounded-lg', className)} />
+  return <Image src={src} alt={alt} width={20} height={20} className={cn('object-contain rounded-lg', className)} />
 }
 
 /* Platform data with image paths */

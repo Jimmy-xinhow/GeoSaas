@@ -120,24 +120,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // API unavailable — skip
   }
 
-  // ─── Industry AI recommendation pages ───
-  const pilotIndustries = ['auto_care', 'traditional_medicine'];
-  for (const ind of pilotIndustries) {
+  // ─── Industry AI recommendation pages (all industries) ───
+  for (const ind of INDUSTRIES) {
+    if (ind.value === 'other') continue; // skip generic "other"
+
     entries.push({
-      url: `${BASE_URL}/industry/${ind}`,
+      url: `${BASE_URL}/industry/${ind.value}`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.8,
     });
     entries.push({
-      url: `${BASE_URL}/industry/${ind}/compare`,
+      url: `${BASE_URL}/industry/${ind.value}/compare`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.6,
     });
 
     try {
-      const res = await fetch(`${API_URL}/api/industry-ai/${ind}/sites`, {
+      const res = await fetch(`${API_URL}/api/industry-ai/${ind.value}/sites`, {
         next: { revalidate: 3600 },
       });
       if (res.ok) {
@@ -145,7 +146,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         const items = data?.data || data || [];
         for (const site of items) {
           entries.push({
-            url: `${BASE_URL}/industry/${ind}/${site.id}`,
+            url: `${BASE_URL}/industry/${ind.value}/${site.id}`,
             lastModified: new Date(),
             changeFrequency: 'weekly',
             priority: 0.7,
