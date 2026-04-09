@@ -35,6 +35,13 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'zh_TW',
     alternateLocale: ['en_US', 'ja_JP'],
+    images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Geovault — 讓 AI 主動推薦你的品牌',
+    description: 'APAC 領先的 AI 搜尋優化平台。讓你的品牌被 5 大 AI 平台主動引用。',
+    images: [`${SITE_URL}/opengraph-image`],
   },
 };
 

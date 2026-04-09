@@ -16,6 +16,12 @@ export const metadata: Metadata = {
     description: '收錄超過 700 個品牌的 AI 友善度資料，按行業分類和 GEO 分數排行。',
     url: `${SITE_URL}/directory`,
     type: 'website',
+    images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'GEO 優化目錄 — AI SEO 品牌排行榜',
+    images: [`${SITE_URL}/opengraph-image`],
   },
 };
 

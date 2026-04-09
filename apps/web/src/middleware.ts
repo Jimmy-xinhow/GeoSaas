@@ -41,6 +41,13 @@ export function middleware(request: NextRequest) {
 
   response.headers.set('X-Canonical-URL', `${SITE_URL}${pathname}`);
 
+  // ─── Security headers ───
+  response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  response.headers.set('X-DNS-Prefetch-Control', 'on');
+
   // ─── Detect AI crawler from User-Agent (server-side, no JS needed) ───
   const detectedBot = AI_BOT_PATTERNS.find((bot) => ua.includes(bot.pattern));
 

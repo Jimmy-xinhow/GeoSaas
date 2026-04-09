@@ -130,7 +130,7 @@ export default async function BlogPostPage({ params }: Props) {
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: '首頁', item: SITE_URL },
       { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
-      { '@type': 'ListItem', position: 3, name: staticPost?.title || 'Article' },
+      { '@type': 'ListItem', position: 3, name: staticPost?.title || 'Article', item: `${SITE_URL}/blog/${params.slug}` },
     ],
   };
 
