@@ -50,6 +50,10 @@ export default async function RootLayout({
     <html lang={locale} suppressHydrationWarning>
       <head>
         <link rel="alternate" type="application/rss+xml" title="Geovault Blog RSS" href="/feed" />
+        <link rel="alternate" hrefLang="zh-TW" href="https://www.geovault.app" />
+        <link rel="alternate" hrefLang="en" href="https://www.geovault.app/en" />
+        <link rel="alternate" hrefLang="ja" href="https://www.geovault.app/ja" />
+        <link rel="alternate" hrefLang="x-default" href="https://www.geovault.app" />
       </head>
       <body className={inter.className}>
         <NextIntlClientProvider messages={messages}>
