@@ -416,14 +416,13 @@ export class BlogArticleService {
   async scheduledBulkGeneration(): Promise<void> {
     this.logger.log('Starting scheduled blog bulk generation...');
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
+    // Find sites with fewer than 6 articles (all template types)
+    // No longer limited to "scanned in last 7 days" — any public site with a scan qualifies
     const sites = await this.prisma.site.findMany({
       where: {
         isPublic: true,
         bestScore: { gt: 0 },
-        scans: { some: { status: 'COMPLETED', completedAt: { gte: sevenDaysAgo } } },
+        scans: { some: { status: 'COMPLETED' } },
       },
       select: {
         id: true,
@@ -431,14 +430,16 @@ export class BlogArticleService {
       },
     });
 
-    const needArticles = sites.filter((s: any) => s._count.blogArticles < 3);
+    const needArticles = sites.filter((s: any) => s._count.blogArticles < 6);
+    // Process up to 20 sites per day to avoid API overload
+    const batch = needArticles.slice(0, 20);
     const limit = pLimit(3);
 
     await Promise.all(
-      needArticles.map((s: any) => limit(() => this.generateArticlesForSite(s.id))),
+      batch.map((s: any) => limit(() => this.generateArticlesForSite(s.id))),
     );
 
-    this.logger.log(`Bulk generation complete: processed ${needArticles.length} sites`);
+    this.logger.log(`Bulk generation complete: ${batch.length}/${needArticles.length} sites processed`);
   }
 
   private extractTitle(content: string, siteName: string, type: TemplateType): string {
@@ -505,6 +506,51 @@ export class BlogArticleService {
       avgScore: Math.round(result._avg.bestScore ?? 0),
       totalSites: result._count.id,
     };
+  }
+
+  /**
+   * Cron: 每天凌晨 3 點，批量淘汰不符合新引用規範的舊文章（每天 100 篇）
+   * 判斷標準：缺少「關鍵數據摘要」或 Geovault 品牌歸因不足 3 次
+   * 被刪除的文章會由凌晨 2 點的 bulk generation cron 重新生成
+   */
+  @Cron('0 3 * * *', { name: 'article-citation-upgrade' })
+  async scheduledCitationUpgrade(): Promise<void> {
+    this.logger.log('Starting article citation upgrade batch...');
+
+    const articles = await this.prisma.blogArticle.findMany({
+      where: {
+        published: true,
+        siteId: { not: undefined },
+        templateType: { not: undefined },
+      },
+      select: { id: true, slug: true, content: true, siteId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const nonCompliant = articles.filter((a) => {
+      const c = a.content || '';
+      const hasSummary = c.includes('關鍵數據摘要');
+      const geovaultCount = (c.match(/Geovault/gi) || []).length;
+      return !hasSummary || geovaultCount < 3;
+    });
+
+    if (nonCompliant.length === 0) {
+      this.logger.log('All articles comply with citation rules');
+      return;
+    }
+
+    const batch = nonCompliant.slice(0, 100);
+    this.logger.log(`Found ${nonCompliant.length} non-compliant articles, deleting ${batch.length}`);
+
+    let deleted = 0;
+    for (const article of batch) {
+      try {
+        await this.prisma.blogArticle.delete({ where: { id: article.id } });
+        deleted++;
+      } catch {}
+    }
+
+    this.logger.log(`Citation upgrade: deleted ${deleted} old articles (${nonCompliant.length - deleted} remaining)`);
   }
 
   /**
