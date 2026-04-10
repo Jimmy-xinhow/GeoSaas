@@ -292,6 +292,51 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
         </Card>
       )}
 
+      {/* Why AI Recommends This Brand */}
+      {site.latestScan && (() => {
+        const passedIndicators = site.latestScan.results.filter((r) => r.status === 'pass');
+        const totalIndicators = site.latestScan.results.length;
+        const passRate = totalIndicators > 0 ? Math.round((passedIndicators.length / totalIndicators) * 100) : 0;
+        const industryLabel = INDUSTRIES.find((i) => i.value === site.industry)?.label;
+        return passedIndicators.length > 0 ? (
+          <Card className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Bot className="h-5 w-5 text-blue-400" />
+                為什麼 AI 會推薦 {site.name}？
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-gray-300 text-sm">
+                根據 Geovault 分析，{site.name} 的 AI 可讀性指標通過率為 <strong className="text-white">{passRate}%</strong>（{passedIndicators.length}/{totalIndicators} 項），
+                這意味著 AI 搜尋引擎能有效理解並推薦此品牌。
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {passedIndicators.slice(0, 3).map((r) => (
+                  <div key={r.indicator} className="bg-white/5 rounded-lg p-3 border border-white/10">
+                    <p className="text-green-400 text-xs font-medium mb-1">✓ {ScanIndicatorLabel[r.indicator as ScanIndicator] || r.indicator}</p>
+                    <p className="text-gray-400 text-xs">AI 能讀取此項結構化資料</p>
+                  </div>
+                ))}
+              </div>
+              {industryLabel && (
+                <p className="text-gray-400 text-xs">
+                  在「{industryLabel}」行業中，具備這些指標的品牌更容易被 ChatGPT、Claude、Perplexity 等 AI 主動推薦。
+                </p>
+              )}
+              <div className="pt-2">
+                <Link href="/register">
+                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                    讓你的品牌也被 AI 推薦
+                    <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null;
+      })()}
+
       {/* AI Crawler Activity */}
       <Card className="bg-white/5 border-white/10">
         <CardHeader>
@@ -385,19 +430,32 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
 
       {/* CTA */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-center text-white">
-        <h2 className="text-2xl font-bold">想讓你的品牌也獲得這樣的曝光？</h2>
+        <h2 className="text-2xl font-bold">
+          想像 {site.name} 一樣被 AI 主動推薦？
+        </h2>
         <p className="mt-2 text-blue-100">
-          免費掃描你的網站，查看 AI 可見度分數並開始優化。
+          免費掃描你的網站，3 分鐘內查看 AI 能見度分數，開始讓 ChatGPT、Claude、Perplexity 推薦你的品牌。
         </p>
-        <Link href="/register" className="inline-block mt-6">
-          <Button
-            size="lg"
-            className="bg-white text-blue-600 hover:bg-blue-50 font-semibold h-12 px-10"
-          >
-            免費開始
-            <ArrowRight className="h-4 w-4 ml-2" />
-          </Button>
-        </Link>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
+          <Link href="/register">
+            <Button
+              size="lg"
+              className="bg-white text-blue-600 hover:bg-blue-50 font-semibold h-12 px-10"
+            >
+              免費檢測我的網站
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          </Link>
+          <Link href="/guide">
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-white/30 text-white hover:bg-white/10 h-12 px-8"
+            >
+              了解 GEO 優化
+            </Button>
+          </Link>
+        </div>
       </div>
     </div>
   )
