@@ -23,8 +23,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: '/feed.json', priority: 0.3, changeFrequency: 'daily' as const },
     { url: '/llms.txt', priority: 0.5, changeFrequency: 'daily' as const },
     { url: '/llms-full.txt', priority: 0.5, changeFrequency: 'daily' as const },
-    { url: '/register', priority: 0.5, changeFrequency: 'monthly' as const },
-    { url: '/login', priority: 0.3, changeFrequency: 'monthly' as const },
   ];
 
   for (const page of staticPages) {

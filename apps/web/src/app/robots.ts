@@ -8,7 +8,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/api/', '/settings'],
+        disallow: ['/api/', '/settings', '/admin/', '/dashboard/'],
       },
       {
         userAgent: ['GPTBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended', 'Bytespider', 'Amazonbot', 'FacebookBot', 'CopilotBot', 'bingbot'],

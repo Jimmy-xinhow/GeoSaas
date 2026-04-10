@@ -35,7 +35,7 @@ export default function CompareClient({ params }: { params: { industry: string }
       await runMutation.mutateAsync({ industry, siteAId, siteBId });
       refetch();
     } catch (err) {
-      console.error('Comparison failed:', err);
+      // comparison failed — silent
     }
   };
 

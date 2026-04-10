@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { getPost, getAllPosts } from '@/content/blog/posts';
 import ArticleClient from './article-client';
 import PublicNavbar from '@/components/layout/public-navbar';
@@ -29,8 +28,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         authors: ['Geovault'],
         siteName: 'Geovault',
         url: `${SITE_URL}/blog/${params.slug}`,
+        images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
       },
-      twitter: { card: 'summary_large_image', title: staticPost.title, description: staticPost.description },
+      twitter: { card: 'summary_large_image', title: staticPost.title, description: staticPost.description, images: [`${SITE_URL}/opengraph-image`] },
       alternates: { canonical: `${SITE_URL}/blog/${params.slug}` },
     };
   }
@@ -51,7 +51,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             publishedTime: article.createdAt,
             authors: ['Geovault'],
             siteName: 'Geovault',
+            url: `${SITE_URL}/blog/${params.slug}`,
+            images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
           },
+          twitter: { card: 'summary_large_image', title: article.title, description: article.description?.slice(0, 160), images: [`${SITE_URL}/opengraph-image`] },
           alternates: { canonical: `${SITE_URL}/blog/${params.slug}` },
         };
       }

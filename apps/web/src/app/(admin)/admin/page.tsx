@@ -141,7 +141,7 @@ export default function AdminDashboard() {
         crawler: seedRes.data?.crawler || { total: 0, real: 0, seeded: 0, real24h: 0, seeded24h: 0, real7d: 0, seeded7d: 0, realByBot: [], seededByBot: [], recentRealVisits: [] },
       });
     } catch (err) {
-      console.error('Failed to fetch stats:', err);
+      // stats fetch failed — silent
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -160,7 +160,7 @@ export default function AdminDashboard() {
       }
       await fetchStats();
     } catch (err) {
-      console.error(`Action ${action} failed:`, err);
+      // action failed — silent
     } finally {
       setActionLoading('');
     }

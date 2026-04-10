@@ -41,6 +41,12 @@ export async function generateMetadata({
         description: `被 ${platformLabel} 主動引用的成功案例${scoreChange}`,
         url: `${SITE_URL}/cases/${params.id}`,
         type: 'article',
+        images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: `${caseData.title} — ${platformLabel} 引用案例`,
+        images: [`${SITE_URL}/opengraph-image`],
       },
     };
   } catch {

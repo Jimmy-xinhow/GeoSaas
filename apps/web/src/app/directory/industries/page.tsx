@@ -15,6 +15,12 @@ export const metadata: Metadata = {
     description: '22 大行業的 AI 搜尋優化數據一覽。',
     url: `${SITE_URL}/directory/industries`,
     type: 'website',
+    images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '行業分類總覽 — AI 搜尋優化現況',
+    images: [`${SITE_URL}/opengraph-image`],
   },
 };
 

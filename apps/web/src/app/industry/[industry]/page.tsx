@@ -23,6 +23,12 @@ export async function generateMetadata({
       description: `${industryLabel}行業 AI 引用率排行與各平台推薦分析。`,
       url: `${SITE_URL}/industry/${params.industry}`,
       type: 'website',
+      images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${industryLabel} — AI 搜尋推薦排行`,
+      images: [`${SITE_URL}/opengraph-image`],
     },
   };
 }

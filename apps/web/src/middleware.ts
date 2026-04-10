@@ -48,6 +48,11 @@ export function middleware(request: NextRequest) {
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   response.headers.set('X-DNS-Prefetch-Control', 'on');
 
+  // ─── Prevent indexing of private pages ───
+  if (pathname.startsWith('/admin') || pathname.startsWith('/dashboard') || pathname.startsWith('/settings') || pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')) {
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
+
   // ─── Detect AI crawler from User-Agent (server-side, no JS needed) ───
   const detectedBot = AI_BOT_PATTERNS.find((bot) => ua.includes(bot.pattern));
 
