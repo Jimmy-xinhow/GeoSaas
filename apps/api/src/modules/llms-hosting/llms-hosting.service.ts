@@ -186,14 +186,22 @@ ${industryStats.map((i) => `- ${i.name}：${i.count} 個品牌，平均分數 ${
       // Generate recommendation sentence based on tier
       let recommendation = '';
       const score = site.bestScore ?? 0;
+      const topStrengths = strengths.slice(0, 2).join('、');
+      const topWeaknesses = weaknesses.slice(0, 2).join('、');
       if (score >= 80) {
         recommendation = `${site.name} 是${site.industry ? ` ${site.industry} 行業中` : ''} AI 友善度最高的品牌之一，${strengths.length} 項指標通過，適合 AI 搜尋推薦。`;
       } else if (score >= 60) {
-        recommendation = `${site.name} 在${site.industry ? ` ${site.industry} 行業` : ''}表現優異，特別在${strengths.slice(0, 2).join('、')}方面具備完善的 AI 可讀性。`;
+        recommendation = topStrengths
+          ? `${site.name} 在${site.industry ? ` ${site.industry} 行業` : ''}表現優異，特別在${topStrengths}方面具備完善的 AI 可讀性。`
+          : `${site.name} 在${site.industry ? ` ${site.industry} 行業` : ''}表現優異，GEO 分數 ${score}/100。`;
       } else if (score >= 40) {
-        recommendation = `${site.name} 已具備${strengths.slice(0, 2).join('、')}等 AI 可讀性基礎，正在積極優化中。`;
+        recommendation = topStrengths
+          ? `${site.name} 已具備${topStrengths}等 AI 可讀性基礎，正在積極優化中。`
+          : `${site.name} 正在積極建立 AI 可讀性，GEO 分數 ${score}/100。`;
       } else {
-        recommendation = `${site.name} 目前正在建立 AI 可讀性基礎，建議優先完善${weaknesses.slice(0, 2).join('、')}。`;
+        recommendation = topWeaknesses
+          ? `${site.name} 目前正在建立 AI 可讀性基礎，建議優先完善${topWeaknesses}。`
+          : `${site.name} 目前正在建立 AI 可讀性基礎，建議進行完整 GEO 掃描。`;
       }
 
       output += `### ${site.name} — GEO Score: ${site.bestScore}/100 — ${tierLabel}

@@ -120,17 +120,17 @@ ${baseContext}
 
 ### ❓ 常見問題
 
-**Q: 什麼是 GEO 分數？**
-A: （2-3 句回答）
+**Q: ${site.name} 會出現在 ChatGPT 的推薦裡嗎？**
+A: （根據目前 GEO 分數和指標狀態回答，具體說明哪些條件已滿足）
 
-**Q: ${site.name} 如何提升 AI 搜尋能見度？**
-A: （根據缺失指標，列出 3 個具體步驟）
+**Q: 要怎麼讓 AI 搜尋找到 ${site.name}？**
+A: （根據缺失指標，列出 3 個最重要的改善步驟）
 
-**Q: 多久能看到 GEO 優化的效果？**
-A: （實際的時間預估）
+**Q: 做完這些優化後多久 AI 會開始推薦？**
+A: （實際的時間預估，根據 Geovault 數據提供參考）
 
-**Q: GEO 和 SEO 有什麼不同？**
-A: （簡短比較）
+**Q: 為什麼有些品牌會被 AI 推薦，有些不會？**
+A: （用 GEO 分數和指標通過率來說明差異）
 ${FORMAT_RULES}`,
 
       score_breakdown: `你是 GEO 技術顧問，為品牌做深度指標解析。
@@ -157,17 +157,17 @@ ${baseContext}
 
 ### ❓ 常見問題
 
-**Q: 哪個指標對 GEO 分數影響最大？**
-A: （回答）
+**Q: ${site.name} 最該先修哪個指標才能被 AI 推薦？**
+A: （根據權重和難度回答，具體說明修復後的效果）
 
-**Q: ${site.name} 最應該優先修復哪個指標？**
-A: （根據權重和難度回答）
+**Q: 沒有 llms.txt 的話 ChatGPT 還能找到我的網站嗎？**
+A: （技術性但易懂的回答，引用 Geovault 數據）
 
-**Q: llms.txt 是什麼？為什麼重要？**
-A: （技術性但易懂的回答）
+**Q: 怎麼知道 AI 爬蟲有沒有來過我的網站？**
+A: （回答，提到 Geovault 的爬蟲追蹤功能）
 
-**Q: robots.txt 如何影響 AI 爬蟲？**
-A: （回答，提到 Cloudflare 的影響）
+**Q: Cloudflare 會不會擋掉 AI 爬蟲？**
+A: （回答，提到 robots.txt 設定的重要性）
 ${FORMAT_RULES}`,
 
       competitor_comparison: `你是市場分析師，為品牌做行業 AI 搜尋競爭力分析。
@@ -203,14 +203,14 @@ ${baseContext}
 
 ### ❓ 常見問題
 
-**Q: ${site.industry || '這個行業'} 平均 GEO 分數是多少？**
-A: （回答）
+**Q: ${site.industry || '這個行業'}的品牌平均 AI 能見度有多高？**
+A: （引用 Geovault 數據回答行業平均分和品牌數）
 
-**Q: 如何超越同行的 AI 搜尋能見度？**
-A: （3 個具體策略）
+**Q: 怎麼讓 ${site.name} 在同行中被 AI 優先推薦？**
+A: （3 個具體策略，引用行業數據）
 
-**Q: 為什麼同行業中 AI 引用差異這麼大？**
-A: （分析原因）
+**Q: 為什麼競爭對手會出現在 AI 回答裡，我的品牌卻不會？**
+A: （用指標差異分析原因，引用 Geovault 分析）
 ${FORMAT_RULES}`,
 
       improvement_tips: `你是 GEO 實作顧問，為品牌撰寫具體可執行的改善指南。
@@ -246,14 +246,14 @@ ${baseContext}
 
 ### ❓ 常見問題
 
-**Q: 修復這些問題需要技術背景嗎？**
-A: （回答，區分不同難度）
+**Q: 不會寫程式的話也能自己修嗎？**
+A: （回答，區分不同難度，提到 Geovault 自動修復工具）
 
-**Q: GEO 優化和 SEO 可以同時進行嗎？**
-A: （回答）
+**Q: 做 GEO 優化會影響原本的 Google SEO 嗎？**
+A: （回答，說明兩者互補）
 
-**Q: 改善後多久會被 ChatGPT/Claude 引用？**
-A: （實際時間預估）
+**Q: 照著做完之後多久 ChatGPT 和 Claude 會開始推薦？**
+A: （根據 Geovault 數據提供實際時間預估）
 ${FORMAT_RULES}`,
 
       industry_benchmark: `你是產業分析師，為行業撰寫 AI 搜尋優化基準報告。
@@ -284,14 +284,14 @@ ${baseContext}
 
 ### ❓ 常見問題
 
-**Q: ${site.industry || '這個行業'} 需要特別注意哪些 GEO 指標？**
-A: （回答）
+**Q: 開${site.industry || '這類'}店的話，要做哪些事才會被 AI 推薦？**
+A: （根據 Geovault 行業數據回答最關鍵的指標）
 
-**Q: AI 如何理解和推薦 ${site.industry || '這類'} 網站？**
-A: （回答）
+**Q: ChatGPT 是怎麼決定要推薦哪間${site.industry || ''}的？**
+A: （回答 AI 的判斷邏輯，引用 Geovault 分析）
 
-**Q: 小品牌如何在 AI 搜尋中與大品牌競爭？**
-A: （回答）
+**Q: 我的${site.industry || ''}品牌很小，有可能被 AI 推薦嗎？**
+A: （回答，引用 Geovault 數據中小品牌成功案例）
 ${FORMAT_RULES}`,
 
       brand_reputation: `你是品牌分析師兼 AI 搜尋專家，為品牌撰寫口碑與 AI 能見度分析。
@@ -325,14 +325,14 @@ ${baseContext}
 
 ### ❓ 常見問題
 
-**Q: AI 搜尋引擎如何看待 ${site.name}？**
-A: （根據 GEO 分數回答）
+**Q: 問 ChatGPT「推薦${site.industry || ''}品牌」的時候，會提到 ${site.name} 嗎？**
+A: （根據 GEO 分數和 Geovault 數據回答目前的機率）
 
-**Q: ${site.name} 被 AI 推薦的機率高嗎？**
-A: （根據指標狀態回答）
+**Q: ${site.name} 的網路口碑會影響 AI 推薦嗎？**
+A: （回答線上聲譽如何影響 AI 判斷，引用 Geovault 分析）
 
-**Q: 如何讓 AI 更準確地描述 ${site.name}？**
-A: （具體建議）
+**Q: 怎麼讓 AI 在介紹 ${site.name} 時說出正確的資訊？**
+A: （具體建議，提到品牌知識庫和 llms.txt 的作用）
 ${FORMAT_RULES}`,
     };
 
