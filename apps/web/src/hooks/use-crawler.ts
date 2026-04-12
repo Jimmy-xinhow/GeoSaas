@@ -97,6 +97,32 @@ export function useCrawlerSnippet(siteId: string) {
   });
 }
 
+export interface VerifyResult {
+  installed: boolean;
+  verified?: boolean;
+  message: string;
+  snippetFound: boolean;
+  reportsReceived: number;
+  lastReport: string | null;
+  details?: string;
+}
+
+export function useVerifyInstallation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (siteId: string) => {
+      const { data } = await apiClient.post<VerifyResult>(
+        `/sites/${siteId}/crawler/verify`,
+      );
+      return data;
+    },
+    onSuccess: (_, siteId) => {
+      queryClient.invalidateQueries({ queryKey: ['crawler', siteId] });
+    },
+  });
+}
+
 export function useRegenerateToken() {
   const queryClient = useQueryClient();
 

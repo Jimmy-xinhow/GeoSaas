@@ -231,6 +231,103 @@ export class CrawlerTrackingService {
     return { snippet, token: site.crawlerToken };
   }
 
+  /**
+   * Verify tracking snippet installation:
+   * 1. Fetch user's site HTML and check if snippet script is present
+   * 2. Check if any report has been received for this token
+   */
+  async verifyInstallation(siteId: string) {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { id: true, url: true, crawlerToken: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+    if (!site.crawlerToken) {
+      return { installed: false, reason: 'no_token', message: '尚未產生追蹤碼，請先取得追蹤碼。' };
+    }
+
+    const results: { snippetFound: boolean; reportsReceived: number; lastReport: Date | null; details: string } = {
+      snippetFound: false,
+      reportsReceived: 0,
+      lastReport: null,
+      details: '',
+    };
+
+    // Step 1: Fetch site HTML and check for snippet
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(site.url, {
+        headers: { 'User-Agent': 'Geovault-Verifier/1.0' },
+        signal: controller.signal,
+        redirect: 'follow',
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const html = await res.text();
+        // Check if our tracking token appears in the page
+        if (html.includes(site.crawlerToken) && html.includes('crawler/report')) {
+          results.snippetFound = true;
+        } else if (html.includes('geo-saas') || html.includes('geovault')) {
+          results.details = '偵測到 Geovault 相關代碼，但追蹤碼的 Token 不正確或不完整。';
+        }
+      } else {
+        results.details = `網站回應 ${res.status}，無法驗證。`;
+      }
+    } catch (err: any) {
+      results.details = err.name === 'AbortError'
+        ? '網站連線逾時（10 秒），請確認網址可正常存取。'
+        : `無法連線到 ${site.url}：${err.message}`;
+    }
+
+    // Step 2: Check if any reports have been received
+    const reportsCount = await this.prisma.crawlerVisit.count({
+      where: { siteId },
+    });
+    results.reportsReceived = reportsCount;
+
+    if (reportsCount > 0) {
+      const latest = await this.prisma.crawlerVisit.findFirst({
+        where: { siteId },
+        orderBy: { visitedAt: 'desc' },
+        select: { visitedAt: true },
+      });
+      results.lastReport = latest?.visitedAt || null;
+    }
+
+    // Build verdict
+    if (results.snippetFound && results.reportsReceived > 0) {
+      return {
+        installed: true,
+        verified: true,
+        message: '追蹤碼安裝正確，已收到爬蟲回報。',
+        ...results,
+      };
+    } else if (results.snippetFound) {
+      return {
+        installed: true,
+        verified: false,
+        message: '追蹤碼已安裝，但尚未收到任何 AI 爬蟲回報。這是正常的，等待 AI 爬蟲造訪即可。',
+        ...results,
+      };
+    } else if (results.reportsReceived > 0) {
+      return {
+        installed: true,
+        verified: true,
+        message: '已收到爬蟲回報，追蹤碼運作正常。（HTML 中未直接偵測到代碼，可能是透過 Tag Manager 載入。）',
+        ...results,
+      };
+    } else {
+      return {
+        installed: false,
+        verified: false,
+        message: results.details || '未在網站中偵測到追蹤碼，且尚未收到任何回報。請確認追蹤碼已正確貼入網站 HTML。',
+        ...results,
+      };
+    }
+  }
+
   async regenerateToken(siteId: string) {
     const site = await this.prisma.site.findUnique({ where: { id: siteId } });
     if (!site) throw new NotFoundException('Site not found');

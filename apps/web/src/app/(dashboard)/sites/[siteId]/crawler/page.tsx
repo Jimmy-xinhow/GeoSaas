@@ -15,6 +15,9 @@ import {
   RefreshCw,
   Code,
   Clock,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -34,6 +37,7 @@ import {
   useCrawlerRobots,
   useCrawlerSnippet,
   useRegenerateToken,
+  useVerifyInstallation,
 } from '@/hooks/use-crawler'
 
 const BOT_COLORS: Record<string, string> = {
@@ -148,6 +152,7 @@ function RobotsPanel({
 function SnippetGuide({ siteId }: { siteId: string }) {
   const { data: snippetData, isLoading } = useCrawlerSnippet(siteId)
   const regenerateMutation = useRegenerateToken()
+  const verifyMutation = useVerifyInstallation()
   const [copied, setCopied] = useState(false)
 
   const handleCopy = () => {
@@ -168,6 +173,19 @@ function SnippetGuide({ siteId }: { siteId: string }) {
     }
   }
 
+  const handleVerify = async () => {
+    try {
+      const result = await verifyMutation.mutateAsync(siteId)
+      if (result.installed) {
+        toast.success(result.message)
+      } else {
+        toast.error(result.message)
+      }
+    } catch {
+      toast.error('驗證失敗，請稍後再試')
+    }
+  }
+
   if (isLoading) {
     return <Skeleton className="h-[300px] w-full" />
   }
@@ -181,7 +199,7 @@ function SnippetGuide({ siteId }: { siteId: string }) {
           <li>
             貼到您網站所有頁面的 &lt;head&gt; 或 &lt;body&gt; 結尾處
           </li>
-          <li>部署後，AI 爬蟲的造訪記錄將自動出現在此頁面</li>
+          <li>部署後，點擊下方「驗證安裝」確認是否成功</li>
         </ol>
       </div>
 
@@ -200,23 +218,77 @@ function SnippetGuide({ siteId }: { siteId: string }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          Token: {snippetData?.token?.substring(0, 12)}...
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRegenerate}
-          disabled={regenerateMutation.isPending}
-        >
-          {regenerateMutation.isPending ? (
-            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3 w-3 mr-1" />
-          )}
-          重新產生 Token
-        </Button>
+      {/* Verify Installation */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={handleVerify}
+            disabled={verifyMutation.isPending}
+          >
+            {verifyMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Shield className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            驗證安裝
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRegenerate}
+            disabled={regenerateMutation.isPending}
+          >
+            {regenerateMutation.isPending ? (
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3 w-3 mr-1" />
+            )}
+            重新產生 Token
+          </Button>
+          <p className="text-xs text-muted-foreground ml-auto">
+            Token: {snippetData?.token?.substring(0, 12)}...
+          </p>
+        </div>
+
+        {verifyMutation.data && (
+          <div
+            className={`flex items-start gap-3 p-4 rounded-lg border ${
+              verifyMutation.data.verified
+                ? 'bg-green-500/10 border-green-500/30'
+                : verifyMutation.data.installed
+                ? 'bg-yellow-500/10 border-yellow-500/30'
+                : 'bg-red-500/10 border-red-500/30'
+            }`}
+          >
+            {verifyMutation.data.verified ? (
+              <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
+            ) : verifyMutation.data.installed ? (
+              <AlertTriangle className="h-5 w-5 text-yellow-400 shrink-0 mt-0.5" />
+            ) : (
+              <XCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+            )}
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-white">
+                {verifyMutation.data.message}
+              </p>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <span>
+                  HTML 偵測：{verifyMutation.data.snippetFound ? '✓ 找到' : '✗ 未找到'}
+                </span>
+                <span>
+                  回報記錄：{verifyMutation.data.reportsReceived} 筆
+                </span>
+                {verifyMutation.data.lastReport && (
+                  <span>
+                    最後回報：{new Date(verifyMutation.data.lastReport).toLocaleString('zh-TW')}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

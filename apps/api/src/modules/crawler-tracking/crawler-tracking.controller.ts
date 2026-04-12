@@ -53,6 +53,13 @@ export class CrawlerTrackingController {
   }
 
   @ApiBearerAuth()
+  @Post('sites/:siteId/crawler/verify')
+  @ApiOperation({ summary: 'Verify tracking snippet installation on user site' })
+  verifyInstallation(@Param('siteId') siteId: string) {
+    return this.service.verifyInstallation(siteId);
+  }
+
+  @ApiBearerAuth()
   @Post('sites/:siteId/crawler/token/regenerate')
   @ApiOperation({ summary: 'Regenerate crawler tracking token' })
   regenerateToken(@Param('siteId') siteId: string) {
