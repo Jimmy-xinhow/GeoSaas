@@ -6,7 +6,7 @@ export class SnippetGeneratorService {
   constructor(private readonly config: ConfigService) {}
 
   generate(siteId: string, token: string): string {
-    const apiUrl = this.config.get<string>('API_URL') || 'http://localhost:4000';
+    const apiUrl = this.config.get<string>('API_PUBLIC_URL') || 'https://api.geovault.app';
 
     return `<!-- GEO-SaaS AI Crawler Tracker -->
 <script>
