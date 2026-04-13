@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { getPost, getAllPosts } from '@/content/blog/posts';
 import ArticleClient from './article-client';
 import PublicNavbar from '@/components/layout/public-navbar';
@@ -85,6 +86,20 @@ function extractFaqJsonLd(content: string) {
 
 export default async function BlogPostPage({ params }: Props) {
   const staticPost = getPost(params.slug);
+
+  // If not a static post, check API
+  if (!staticPost) {
+    try {
+      const res = await fetch(`${API_URL}/api/blog/articles/${params.slug}`, { next: { revalidate: 3600 } });
+      if (!res.ok) notFound();
+      const data = await res.json();
+      const article = data?.data || data;
+      if (!article) notFound();
+    } catch {
+      notFound();
+    }
+  }
+
   let articleJsonLd: any = null;
   let faqJsonLd: any = null;
 

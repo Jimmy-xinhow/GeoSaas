@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import SiteDetailClient from './site-detail-client';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -64,6 +65,7 @@ export default async function SiteDetailPage({
   params: { siteId: string };
 }) {
   const site = await getSiteData(params.siteId);
+  if (!site) notFound();
 
   const jsonLd = site
     ? {
