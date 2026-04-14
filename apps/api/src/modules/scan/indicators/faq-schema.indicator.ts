@@ -1,17 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { IIndicatorAnalyzer, IndicatorResult, AnalysisInput } from './indicator.interface';
 
+/**
+ * Flatten JSON-LD: extract individual schemas from @graph arrays and nested structures.
+ */
+function flattenJsonLd(raw: any[]): any[] {
+  const result: any[] = [];
+  for (const item of raw) {
+    if (Array.isArray(item)) {
+      result.push(...flattenJsonLd(item));
+    } else if (item && typeof item === 'object') {
+      if (Array.isArray(item['@graph'])) {
+        const ctx = item['@context'];
+        for (const node of item['@graph']) {
+          result.push({ ...(ctx && !node['@context'] ? { '@context': ctx } : {}), ...node });
+        }
+      } else {
+        result.push(item);
+      }
+    }
+  }
+  return result;
+}
+
 @Injectable()
 export class FaqSchemaIndicator implements IIndicatorAnalyzer {
   name = 'faq_schema';
 
   async analyze({ $ }: AnalysisInput): Promise<IndicatorResult> {
-    const jsonLd: any[] = [];
+    const rawScripts: any[] = [];
     $('script[type="application/ld+json"]').each((_, el) => {
-      try { jsonLd.push(JSON.parse($(el).html() || '')); } catch {}
+      try { rawScripts.push(JSON.parse($(el).html() || '')); } catch {}
     });
 
-    const faqSchemas = jsonLd.filter((item) => item['@type'] === 'FAQPage');
+    const schemas = flattenJsonLd(rawScripts);
+    const faqSchemas = schemas.filter((item) => item['@type'] === 'FAQPage');
     const totalQuestions = faqSchemas.reduce((acc, faq) => acc + (faq.mainEntity?.length || 0), 0);
 
     if (faqSchemas.length === 0) {
