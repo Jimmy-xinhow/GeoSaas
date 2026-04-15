@@ -11,8 +11,8 @@ export async function GET() {
       url: 'https://www.geovault.app/.well-known/openapi.json',
     },
     logo_url: 'https://www.geovault.app/icon.svg',
-    contact_email: 'hello@geovault.app',
-    legal_info_url: 'https://www.geovault.app/guide',
+    contact_email: 'service@xinhow.com.tw',
+    legal_info_url: 'https://www.geovault.app/privacy',
   };
 
   return new Response(JSON.stringify(manifest, null, 2), {

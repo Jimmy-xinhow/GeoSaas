@@ -1354,10 +1354,10 @@ export default function HomeClient() {
               </ul>
             </div>
           </div>
-          <div className="border-t border-white/5 pt-8 text-center">
-            <p className="text-gray-600 text-sm">
-              &copy; {new Date().getFullYear()} Geovault. All rights reserved.
-            </p>
+          <div className="border-t border-white/5 pt-8 flex items-center justify-center gap-4 text-sm text-gray-600">
+            <span>&copy; {new Date().getFullYear()} Geovault</span>
+            <span>·</span>
+            <Link href="/privacy" className="hover:text-white transition-colors">隱私權政策</Link>
           </div>
         </div>
       </footer>
