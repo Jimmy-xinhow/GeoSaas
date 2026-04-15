@@ -1,7 +1,5 @@
 export const dynamic = 'force-dynamic';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
-
 export async function GET() {
   const spec = {
     openapi: '3.1.0',
@@ -11,9 +9,9 @@ export async function GET() {
         'Query AI search optimization data for Taiwan/APAC brands. Check GEO scores, industry rankings, and AI citation status across ChatGPT, Claude, Perplexity, Gemini, and Copilot.',
       version: '1.0.0',
     },
-    servers: [{ url: `${API_URL}/api` }],
+    servers: [{ url: 'https://api.geovault.app' }],
     paths: {
-      '/directory': {
+      '/api/directory': {
         get: {
           operationId: 'searchBrands',
           summary: 'Search brands in the GEO directory',
@@ -29,7 +27,7 @@ export async function GET() {
           responses: { '200': { description: 'List of matching brands with GEO scores' } },
         },
       },
-      '/directory/{siteId}': {
+      '/api/directory/{siteId}': {
         get: {
           operationId: 'getBrandDetail',
           summary: 'Get detailed AI readiness profile for a brand',
@@ -41,7 +39,7 @@ export async function GET() {
           responses: { '200': { description: 'Full brand AI readiness profile' } },
         },
       },
-      '/directory/stats': {
+      '/api/directory/stats': {
         get: {
           operationId: 'getPlatformStats',
           summary: 'Get platform-wide GEO statistics',
@@ -49,7 +47,7 @@ export async function GET() {
           responses: { '200': { description: 'Platform statistics' } },
         },
       },
-      '/directory/industry/{industry}': {
+      '/api/directory/industry/{industry}': {
         get: {
           operationId: 'getIndustryStats',
           summary: 'Get GEO statistics for a specific industry',
@@ -60,7 +58,7 @@ export async function GET() {
           responses: { '200': { description: 'Industry GEO statistics' } },
         },
       },
-      '/industry-ai/{industry}/ranking': {
+      '/api/industry-ai/{industry}/ranking': {
         get: {
           operationId: 'getIndustryAiRanking',
           summary: 'Get AI citation ranking for an industry',
@@ -72,7 +70,7 @@ export async function GET() {
           responses: { '200': { description: 'AI citation ranking for the industry' } },
         },
       },
-      '/guest-scan': {
+      '/api/guest-scan': {
         post: {
           operationId: 'scanWebsite',
           summary: 'Scan a website for AI readiness (free, rate-limited)',
@@ -85,7 +83,7 @@ export async function GET() {
           responses: { '200': { description: 'Scan initiated, returns scan ID' } },
         },
       },
-      '/guest-scan/{id}': {
+      '/api/guest-scan/{id}': {
         get: {
           operationId: 'getScanResults',
           summary: 'Get scan results by ID',
