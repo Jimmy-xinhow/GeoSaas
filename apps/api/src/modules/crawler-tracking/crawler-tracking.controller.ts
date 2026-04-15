@@ -1,14 +1,19 @@
-import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { Roles, RolesGuard } from '../../common/guards/roles.guard';
 import { CrawlerTrackingService } from './crawler-tracking.service';
+import { PerplexityPingService } from './perplexity-ping.service';
 import { ReportVisitDto } from './dto/report-visit.dto';
 import { QueryVisitsDto } from './dto/query-visits.dto';
 
 @ApiTags('Crawler Tracking')
 @Controller()
 export class CrawlerTrackingController {
-  constructor(private readonly service: CrawlerTrackingService) {}
+  constructor(
+    private readonly service: CrawlerTrackingService,
+    private readonly perplexityPing: PerplexityPingService,
+  ) {}
 
   @Public()
   @Post('crawler/report')
@@ -64,5 +69,14 @@ export class CrawlerTrackingController {
   @ApiOperation({ summary: 'Regenerate crawler tracking token' })
   regenerateToken(@Param('siteId') siteId: string) {
     return this.service.regenerateToken(siteId);
+  }
+
+  @ApiBearerAuth()
+  @Post('admin/crawler/perplexity-ping')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  @ApiOperation({ summary: 'Manually trigger a Perplexity search ping' })
+  perplexityPingManual(@Body('query') query?: string) {
+    return this.perplexityPing.manualPing(query);
   }
 }
