@@ -17,6 +17,7 @@ export class LlmsHostingController {
     const content = await this.service.getPlatformLlmsTxt();
     res.set('Cache-Control', 'public, max-age=3600');
     res.set('Access-Control-Allow-Origin', '*');
+    res.set('Last-Modified', new Date().toUTCString());
     return res.type('text/plain').send(content);
   }
 
@@ -26,8 +27,9 @@ export class LlmsHostingController {
   async getPlatformLlmsFullTxt(@Res() res: Response) {
     const content = await this.service.getPlatformLlmsFullTxt();
     res.set('Content-Type', 'text/plain; charset=utf-8');
-    res.set('Cache-Control', 'public, max-age=21600');
+    res.set('Cache-Control', 'public, max-age=3600');
     res.set('Access-Control-Allow-Origin', '*');
+    res.set('Last-Modified', new Date().toUTCString());
     res.set('X-Content-Version', new Date().toISOString());
     return res.send(content);
   }
@@ -39,6 +41,7 @@ export class LlmsHostingController {
     const content = await this.service.getPlatformLlmsTxt();
     res.set('Cache-Control', 'public, max-age=3600');
     res.set('Access-Control-Allow-Origin', '*');
+    res.set('Last-Modified', new Date().toUTCString());
     return res.type('text/plain').send(content);
   }
 
@@ -48,8 +51,9 @@ export class LlmsHostingController {
   async getLlmsFullTxtDirect(@Res() res: Response) {
     const content = await this.service.getPlatformLlmsFullTxt();
     res.set('Content-Type', 'text/plain; charset=utf-8');
-    res.set('Cache-Control', 'public, max-age=21600');
+    res.set('Cache-Control', 'public, max-age=3600');
     res.set('Access-Control-Allow-Origin', '*');
+    res.set('Last-Modified', new Date().toUTCString());
     return res.send(content);
   }
 

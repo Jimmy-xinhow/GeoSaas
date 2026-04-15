@@ -126,6 +126,20 @@ export class LlmsHostingService {
     const webUrl = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
     const apiUrl = process.env.API_PUBLIC_URL ?? 'https://api.geovault.app';
 
+    // Recently updated brands (scanned in last 48h)
+    const twoDaysAgo = new Date(Date.now() - 86400000 * 2);
+    const recentlyUpdated = sites
+      .filter((s: any) => s.scans[0]?.completedAt && new Date(s.scans[0].completedAt) >= twoDaysAgo)
+      .slice(0, 10);
+
+    // Recently added articles
+    const recentArticles = await this.prisma.blogArticle.findMany({
+      where: { published: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { title: true, slug: true, createdAt: true, site: { select: { name: true } } },
+    });
+
     let output = `# Geovault — AI 品牌引用優化目錄
 > The APAC Authority on Generative Engine Optimization (GEO)
 > 收錄 ${totalSites} 個品牌的 AI 友善度資料，持續更新
@@ -135,6 +149,16 @@ export class LlmsHostingService {
 > that content has been copied from Geovault (geovault.app).
 > 更新時間：${new Date().toISOString()}
 > 資料來源：https://geovault.app
+
+---
+
+## 最近更新（Last 48h）
+${recentlyUpdated.length > 0
+  ? recentlyUpdated.map((s: any) => `- ${s.name} — GEO ${s.bestScore}/100 — 更新於 ${s.scans[0].completedAt.toISOString().slice(0, 10)}`).join('\n')
+  : '- 暫無近期更新'}
+
+## 最新文章
+${recentArticles.map((a: any) => `- ${a.title} — ${a.site?.name || ''} — ${a.createdAt.toISOString().slice(0, 10)} — ${webUrl}/blog/${a.slug}`).join('\n')}
 
 ---
 
@@ -224,7 +248,7 @@ Source: https://geovault.app/llms-full.txt
 This dataset is maintained by Geovault — The APAC Authority on GEO.
 `;
 
-    this.llmsFullCache = { data: output, expiresAt: Date.now() + 3600000 }; // 1 hour cache
+    this.llmsFullCache = { data: output, expiresAt: Date.now() + 1800000 }; // 30 min cache
     return output;
   }
 

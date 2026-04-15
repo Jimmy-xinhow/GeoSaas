@@ -7,9 +7,9 @@ export async function GET() {
   let blogArticles: any[] = [];
   let newsArticles: any[] = [];
 
-  // Fetch blog articles
+  // Fetch blog articles (increased from 50 to 200)
   try {
-    const res = await fetch(`${API_URL}/api/blog/articles?limit=50`, { cache: 'no-store' });
+    const res = await fetch(`${API_URL}/api/blog/articles?limit=200`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       blogArticles = (data?.data?.items || data?.items || []).map((a: any) => ({
@@ -42,10 +42,29 @@ export async function GET() {
     }
   } catch {}
 
+  // Fetch recently scanned sites (new content signal)
+  let siteUpdates: any[] = [];
+  try {
+    const res = await fetch(`${API_URL}/api/directory?limit=20&sort=recent`, { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      const items = data?.data?.items || data?.items || [];
+      siteUpdates = items.map((s: any) => ({
+        title: `${s.name} — GEO 分數更新：${s.bestScore}/100`,
+        link: `${SITE_URL}/directory/${s.id}`,
+        description: `${s.name} (${s.url}) 的最新 AI 可見度分數為 ${s.bestScore}/100。${s.industry ? `行業：${s.industry}。` : ''}`,
+        pubDate: new Date(s.bestScoreAt || s.updatedAt || Date.now()).toUTCString(),
+        guid: `${SITE_URL}/directory/${s.id}#${s.bestScore}-${new Date(s.bestScoreAt || Date.now()).toISOString().slice(0, 10)}`,
+        category: 'site-update',
+        type: 'site',
+      }));
+    }
+  } catch {}
+
   // Merge and sort by date (newest first)
-  const allItems = [...blogArticles, ...newsArticles]
+  const allItems = [...blogArticles, ...newsArticles, ...siteUpdates]
     .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
-    .slice(0, 100);
+    .slice(0, 200);
 
   const items = allItems.map((a) => `
     <item>
