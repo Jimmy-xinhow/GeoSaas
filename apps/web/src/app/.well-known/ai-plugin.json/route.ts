@@ -8,7 +8,7 @@ export async function GET() {
     auth: { type: 'none' },
     api: {
       type: 'openapi',
-      url: 'https://api.geovault.app/api/docs-json',
+      url: 'https://www.geovault.app/.well-known/openapi.json',
     },
     logo_url: 'https://www.geovault.app/icon.svg',
     contact_email: 'hello@geovault.app',
