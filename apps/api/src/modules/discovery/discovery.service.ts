@@ -464,7 +464,9 @@ siteIndex 是答案中最相關的品牌在列表中的索引（0-based），如
             industry,
             description: item.snippet,
           });
-        } catch {}
+        } catch (err) {
+          this.logger.warn(`Failed to process discovered site ${item.url}: ${err}`);
+        }
       }
     } catch (err) {
       this.logger.warn(`Search failed for "${query}": ${err}`);

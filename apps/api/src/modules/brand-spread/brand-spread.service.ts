@@ -19,6 +19,7 @@ export interface SpreadResult {
   siteName: string;
   generatedAt: string;
   platforms: SpreadContent[];
+  saved?: number;
 }
 
 const PLATFORMS = [
@@ -123,11 +124,30 @@ export class BrandSpreadService {
       }
     }
 
+    // Save generated content as Content records for future publishing
+    for (const result of results) {
+      try {
+        await this.prisma.content.create({
+          data: {
+            userId: site.userId,
+            siteId: site.id,
+            type: 'ARTICLE',
+            title: `[${result.platform}] ${result.title}`,
+            body: result.content,
+            status: 'DRAFT',
+          },
+        });
+      } catch (err) {
+        this.logger.warn(`Failed to save spread content for ${result.platform}: ${err}`);
+      }
+    }
+
     return {
       siteId: site.id,
       siteName: site.name,
       generatedAt: new Date().toISOString(),
       platforms: results,
+      saved: results.length,
     };
   }
 

@@ -143,7 +143,9 @@ export class NewsGeneratorService {
         try {
           const webUrl = this.config.get<string>('WEB_URL') || 'https://www.geovault.app';
           await this.indexNow.submitUrl(`${webUrl}/news`);
-        } catch {}
+        } catch (err) {
+          this.logger.warn(`IndexNow ping failed for news: ${err}`);
+        }
 
         // Rate limit
         await new Promise((r) => setTimeout(r, 2000));

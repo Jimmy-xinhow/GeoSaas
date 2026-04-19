@@ -1,6 +1,7 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateSuccessCaseDto } from './dto/create-success-case.dto';
 import OpenAI from 'openai';
 
@@ -11,6 +12,7 @@ export class SuccessCasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(userId: string, dto: CreateSuccessCaseDto) {
@@ -106,11 +108,42 @@ export class SuccessCasesService {
     return item;
   }
 
+  async update(caseId: string, userId: string, dto: Partial<CreateSuccessCaseDto>) {
+    const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
+    if (!existing) throw new NotFoundException('Case not found');
+    if (existing.userId !== userId) throw new ForbiddenException('只能編輯自己的案例');
+    if (existing.status !== 'pending') throw new ForbiddenException('只能編輯審核中的案例');
+
+    return this.prisma.geoSuccessCase.update({
+      where: { id: caseId },
+      data: { ...dto, tags: dto.tags || undefined },
+    });
+  }
+
+  async delete(caseId: string, userId: string, role: string) {
+    const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
+    if (!existing) throw new NotFoundException('Case not found');
+    if (existing.userId !== userId && role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('無權刪除此案例');
+    }
+
+    await this.prisma.geoSuccessCase.delete({ where: { id: caseId } });
+    return { deleted: true };
+  }
+
   async approve(caseId: string) {
     const updated = await this.prisma.geoSuccessCase.update({
       where: { id: caseId },
       data: { status: 'approved', featuredAt: new Date() },
     });
+
+    // Notify user
+    this.notifications.create(
+      updated.userId,
+      'case_approved',
+      '案例審核通過',
+      `您提交的案例「${updated.title}」已通過審核，將出現在成功案例頁面。`,
+    ).catch(() => {});
 
     // Generate article in background
     this.generateCaseArticle(caseId).catch((err) => {
@@ -121,10 +154,20 @@ export class SuccessCasesService {
   }
 
   async reject(caseId: string, reason: string) {
-    return this.prisma.geoSuccessCase.update({
+    const updated = await this.prisma.geoSuccessCase.update({
       where: { id: caseId },
       data: { status: 'rejected', rejectionReason: reason },
     });
+
+    // Notify user
+    this.notifications.create(
+      updated.userId,
+      'case_rejected',
+      '案例審核未通過',
+      `您提交的案例「${updated.title}」未通過審核。原因：${reason}`,
+    ).catch(() => {});
+
+    return updated;
   }
 
   async generateCaseArticle(caseId: string) {

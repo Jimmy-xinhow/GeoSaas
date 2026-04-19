@@ -38,6 +38,27 @@ const PLATFORMS = [
     description: '自架部落格與內容管理系統',
     color: 'bg-blue-500 text-white',
   },
+  {
+    key: 'vocus',
+    name: '方格子',
+    icon: 'V',
+    description: '台灣原生創作發布平台',
+    color: 'bg-emerald-600 text-white',
+  },
+  {
+    key: 'facebook',
+    name: 'Facebook',
+    icon: 'f',
+    description: '社群貼文與粉絲頁發布',
+    color: 'bg-blue-600 text-white',
+  },
+  {
+    key: 'google_business',
+    name: 'Google 商家',
+    icon: 'G',
+    description: 'Google 商家檔案貼文',
+    color: 'bg-red-500 text-white',
+  },
 ]
 
 const STATUS_MAP: Record<string, { label: string; icon: React.ReactNode; style: string }> = {

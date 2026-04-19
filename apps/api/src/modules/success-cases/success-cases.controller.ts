@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -50,6 +50,28 @@ export class SuccessCasesController {
     @Body() dto: CreateSuccessCaseDto,
   ) {
     return this.service.create(userId, dto);
+  }
+
+  @ApiBearerAuth()
+  @Put('success-cases/:id')
+  @ApiOperation({ summary: 'Update own pending success case' })
+  update(
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+    @Body() dto: CreateSuccessCaseDto,
+  ) {
+    return this.service.update(id, userId, dto);
+  }
+
+  @ApiBearerAuth()
+  @Delete('success-cases/:id')
+  @ApiOperation({ summary: 'Delete own success case' })
+  delete(
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.delete(id, userId, role);
   }
 
   @ApiBearerAuth()

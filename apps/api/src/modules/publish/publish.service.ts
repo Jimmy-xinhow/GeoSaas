@@ -5,6 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import { MediumAdapter } from './adapters/medium.adapter';
 import { LinkedInAdapter } from './adapters/linkedin.adapter';
 import { WordPressAdapter } from './adapters/wordpress.adapter';
+import { VocusAdapter } from './adapters/vocus.adapter';
+import { FacebookAdapter } from './adapters/facebook.adapter';
+import { GoogleBusinessAdapter } from './adapters/google-business.adapter';
 import { IPlatformAdapter } from './adapters/adapter.interface';
 
 @Injectable()
@@ -19,11 +22,17 @@ export class PublishService {
     private mediumAdapter: MediumAdapter,
     private linkedInAdapter: LinkedInAdapter,
     private wordPressAdapter: WordPressAdapter,
+    private vocusAdapter: VocusAdapter,
+    private facebookAdapter: FacebookAdapter,
+    private googleBusinessAdapter: GoogleBusinessAdapter,
   ) {
     this.adapterMap = {
       medium: this.mediumAdapter,
       linkedin: this.linkedInAdapter,
       wordpress: this.wordPressAdapter,
+      vocus: this.vocusAdapter,
+      facebook: this.facebookAdapter,
+      google_business: this.googleBusinessAdapter,
     };
   }
 
@@ -93,6 +102,19 @@ export class PublishService {
           siteUrl: this.config.get('WORDPRESS_SITE_URL') || '',
           username: this.config.get('WORDPRESS_USERNAME') || '',
           appPassword: this.config.get('WORDPRESS_APP_PASSWORD') || '',
+        };
+      case 'vocus':
+        return { accessToken: this.config.get('VOCUS_ACCESS_TOKEN') || '' };
+      case 'facebook':
+        return {
+          accessToken: this.config.get('FACEBOOK_ACCESS_TOKEN') || '',
+          pageId: this.config.get('FACEBOOK_PAGE_ID') || '',
+        };
+      case 'google_business':
+        return {
+          accessToken: this.config.get('GOOGLE_BUSINESS_TOKEN') || '',
+          accountId: this.config.get('GOOGLE_BUSINESS_ACCOUNT_ID') || '',
+          locationId: this.config.get('GOOGLE_BUSINESS_LOCATION_ID') || '',
         };
       default:
         return {};

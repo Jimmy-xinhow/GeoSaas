@@ -99,6 +99,20 @@ const DEFAULT_TASKS: Array<{
     cronExpr: '0 5 * * *',
     enabled: true,
   },
+  {
+    taskKey: 'auto_fill_qa',
+    name: '自動補齊品牌知識庫',
+    description: '為知識庫不足的客戶站點自動生成 Q&A',
+    cronExpr: '0 6 * * *',
+    enabled: true,
+  },
+  {
+    taskKey: 'auto_fill_articles',
+    name: '自動補齊品牌文章',
+    description: '為文章不足的客戶站點自動生成分析文章',
+    cronExpr: '30 6 * * *',
+    enabled: true,
+  },
 ];
 
 @Injectable()

@@ -7,6 +7,7 @@ import { AdminUsersController } from './admin-users.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
         signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '7d') },
       }),
     }),
+    NotificationsModule,
   ],
   controllers: [AuthController, AdminUsersController],
   providers: [AuthService, JwtStrategy, JwtRefreshStrategy],

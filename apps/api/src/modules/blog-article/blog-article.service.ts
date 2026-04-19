@@ -547,7 +547,9 @@ export class BlogArticleService {
       try {
         await this.prisma.blogArticle.delete({ where: { id: article.id } });
         deleted++;
-      } catch {}
+      } catch (err) {
+        this.logger.warn(`Failed to delete article ${article.id}: ${err}`);
+      }
     }
 
     this.logger.log(`Citation upgrade: deleted ${deleted} old articles (${nonCompliant.length - deleted} remaining)`);
