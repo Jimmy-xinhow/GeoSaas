@@ -117,3 +117,44 @@ export function useCreateCheckout() {
     },
   });
 }
+
+export interface CreditBalance {
+  credits: number;
+  freeGenerations: {
+    used: number;
+    total: number;
+    remaining: number;
+    resetsAt: string | null;
+  };
+  expiringSoon: number;
+  transactions: Array<{
+    type: string;
+    amount: number;
+    balance: number;
+    description: string;
+    expiresAt: string | null;
+    createdAt: string;
+  }>;
+}
+
+export function useCredits() {
+  return useQuery({
+    queryKey: ['credits'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<CreditBalance>('/billing/credits');
+      return data;
+    },
+  });
+}
+
+export function useCreditCheckout() {
+  return useMutation({
+    mutationFn: async (points: number) => {
+      const { data } = await apiClient.post<CheckoutFormData>('/billing/credits/checkout', { points });
+      return data;
+    },
+    onSuccess: (data) => {
+      submitNewebPayForm(data);
+    },
+  });
+}

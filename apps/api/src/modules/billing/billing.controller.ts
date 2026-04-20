@@ -1,14 +1,18 @@
 import { Controller, Get, Post, Body, Res, HttpCode } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Response } from 'express';
 import { BillingService } from './billing.service';
+import { CreditService } from './credit.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Billing')
 @Controller('billing')
 export class BillingController {
-  constructor(private billingService: BillingService) {}
+  constructor(
+    private billingService: BillingService,
+    private creditService: CreditService,
+  ) {}
 
   @ApiBearerAuth()
   @Post('checkout')
@@ -48,5 +52,22 @@ export class BillingController {
   @Get('subscription')
   getSubscription(@CurrentUser('userId') userId: string) {
     return this.billingService.getSubscription(userId);
+  }
+
+  @ApiBearerAuth()
+  @Post('credits/checkout')
+  @ApiOperation({ summary: 'Purchase credit points (50/100/200)' })
+  createCreditCheckout(
+    @Body('points') points: number,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.billingService.createCreditOrder(points, userId);
+  }
+
+  @ApiBearerAuth()
+  @Get('credits')
+  @ApiOperation({ summary: 'Get credit balance and transaction history' })
+  getCredits(@CurrentUser('userId') userId: string) {
+    return this.creditService.getBalance(userId);
   }
 }

@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Query, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { BrandSpreadService } from './brand-spread.service';
+import { CreditService } from '../billing/credit.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PlanUsageService } from '../../common/guards/plan.guard';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -13,6 +14,7 @@ export class BrandSpreadController {
     private readonly service: BrandSpreadService,
     private readonly planUsage: PlanUsageService,
     private readonly prisma: PrismaService,
+    private readonly credits: CreditService,
   ) {}
 
   @Get('platforms')
@@ -28,15 +30,11 @@ export class BrandSpreadController {
     @Query('platforms') platforms?: string,
     @CurrentUser('userId') userId?: string,
   ) {
-    // Check plan — counts as content generation (6 calls = 6 content uses)
     if (userId) {
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (user) {
-        const check = await this.planUsage.checkAndIncrement(userId, 'contentPerMonth', user.plan, user.role);
-        if (!check.allowed) {
-          throw new ForbiddenException(`已達本月內容生成額度上限（${check.used}/${check.limit}）。請升級方案以繼續使用。`);
-        }
-      }
+      const platformList = platforms ? platforms.split(',') : ['medium', 'vocus', 'linkedin', 'facebook', 'google_business', 'ptt'];
+      const totalPoints = platformList.length * 2; // 2 points per platform
+      const check = await this.credits.checkAndDeduct(userId, totalPoints, `品牌擴散內容生成（${platformList.length} 平台，${totalPoints} 點）`);
+      if (!check.allowed) throw new ForbiddenException(check.message);
     }
     const platformList = platforms ? platforms.split(',') : undefined;
     return this.service.generateAll(siteId, platformList);
@@ -49,13 +47,8 @@ export class BrandSpreadController {
     @CurrentUser('userId') userId?: string,
   ) {
     if (userId) {
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (user) {
-        const check = await this.planUsage.checkAndIncrement(userId, 'contentPerMonth', user.plan, user.role);
-        if (!check.allowed) {
-          throw new ForbiddenException(`已達本月內容生成額度上限（${check.used}/${check.limit}）。請升級方案以繼續使用。`);
-        }
-      }
+      const check = await this.credits.checkAndDeduct(userId, 2, '生成週內容計畫');
+      if (!check.allowed) throw new ForbiddenException(check.message);
     }
     return this.service.generateWeeklyPlan(siteId);
   }

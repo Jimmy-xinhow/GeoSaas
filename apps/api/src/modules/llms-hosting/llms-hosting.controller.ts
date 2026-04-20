@@ -1,14 +1,19 @@
-import { Controller, Get, Put, Post, Param, Body, Res, Header } from '@nestjs/common';
+import { Controller, Get, Put, Post, Param, Body, Res, Header, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CreditService } from '../billing/credit.service';
 import { LlmsHostingService } from './llms-hosting.service';
 import { UpdateLlmsTxtDto } from './dto/update-llms-txt.dto';
 
 @ApiTags('llms-hosting')
 @Controller()
 export class LlmsHostingController {
-  constructor(private readonly service: LlmsHostingService) {}
+  constructor(
+    private readonly service: LlmsHostingService,
+    private readonly credits: CreditService,
+  ) {}
 
   @Public()
   @Get('platform/llms.txt')
@@ -95,7 +100,9 @@ export class LlmsHostingController {
   @ApiBearerAuth()
   @Post('sites/:siteId/llms-txt/generate')
   @ApiOperation({ summary: 'AI generate llms.txt content' })
-  async generateLlmsTxt(@Param('siteId') siteId: string) {
+  async generateLlmsTxt(@Param('siteId') siteId: string, @CurrentUser('userId') userId: string) {
+    const check = await this.credits.checkAndDeduct(userId, 1, '生成 llms.txt');
+    if (!check.allowed) throw new ForbiddenException(check.message);
     return this.service.generateLlmsTxt(siteId);
   }
 }

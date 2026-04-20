@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { User, CreditCard, Lock, AlertCircle } from 'lucide-react'
+import { User, CreditCard, Lock, AlertCircle, Coins, ArrowUp, ArrowDown, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +19,10 @@ import {
   useChangePassword,
   useSubscription,
   useCreateCheckout,
+  useCredits,
+  useCreditCheckout,
 } from '@/hooks/use-settings'
+import { Badge } from '@/components/ui/badge'
 
 const PLAN_LIMITS: Record<string, { scans: number; sites: number; label: string; description: string }> = {
   FREE: { scans: 2, sites: 1, label: 'Free 方案', description: '每站 2 次掃描/月 | 1 個網站 | 1 次修復體驗' },
@@ -33,6 +36,8 @@ export default function SettingsPage() {
   const updateProfile = useUpdateProfile()
   const changePassword = useChangePassword()
   const createCheckout = useCreateCheckout()
+  const { data: creditData } = useCredits()
+  const creditCheckout = useCreditCheckout()
 
   if (profileError) {
     toast.error('無法載入個人資料', { id: 'profile-error' })
@@ -232,6 +237,94 @@ export default function SettingsPage() {
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Credits card */}
+      <Card className="bg-white/5 border-white/10">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Coins className="h-5 w-5 text-yellow-400" />
+            AI 生成點數
+          </CardTitle>
+          <CardDescription>手動生成 AI 內容所需的點數餘額</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Balance */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 text-center">
+              <p className="text-3xl font-bold text-yellow-400">{creditData?.credits ?? 0}</p>
+              <p className="text-xs text-yellow-400/70 mt-1">可用點數</p>
+            </div>
+            <div className="p-3 rounded-lg border border-white/10 text-center">
+              <p className="text-2xl font-bold text-white">
+                {creditData?.freeGenerations.remaining ?? 0}/{creditData?.freeGenerations.total ?? 0}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">本月免費額度</p>
+            </div>
+            <div className="p-3 rounded-lg border border-white/10 text-center">
+              <p className="text-2xl font-bold text-orange-400">{creditData?.expiringSoon ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">30天內到期</p>
+            </div>
+          </div>
+
+          {/* Top-up buttons */}
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">充值點數（1 點 = NT$5，購買後 12 個月內有效）</p>
+            <div className="flex gap-2">
+              {[
+                { points: 50, price: 250 },
+                { points: 100, price: 500 },
+                { points: 200, price: 1000 },
+              ].map((pkg) => (
+                <Button
+                  key={pkg.points}
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  disabled={creditCheckout.isPending}
+                  onClick={() => creditCheckout.mutate(pkg.points)}
+                >
+                  {pkg.points} 點 · NT${pkg.price}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Transaction history */}
+          {creditData?.transactions && creditData.transactions.length > 0 && (
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">交易記錄</p>
+              <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                {creditData.transactions.map((tx, i) => (
+                  <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-white/5 text-xs">
+                    <div className="flex items-center gap-2">
+                      {tx.type === 'topup' ? (
+                        <ArrowUp className="h-3 w-3 text-green-400" />
+                      ) : tx.type === 'expire' ? (
+                        <Clock className="h-3 w-3 text-orange-400" />
+                      ) : (
+                        <ArrowDown className="h-3 w-3 text-red-400" />
+                      )}
+                      <span className="text-gray-400">{tx.description}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={tx.amount > 0 ? 'text-green-400' : 'text-red-400'}>
+                        {tx.amount > 0 ? '+' : ''}{tx.amount}
+                      </span>
+                      <span className="text-gray-600 w-12 text-right">餘 {tx.balance}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pricing info */}
+          <div className="text-xs text-muted-foreground border-t border-white/5 pt-3 space-y-1">
+            <p>訂閱用戶每月贈送 10 次免費生成額度，超額後依點數扣除</p>
+            <p>扣點：AI 內容/知識庫/缺口填補 = 2 點，修復/llms.txt = 1 點，品牌擴散 = 2 點/平台</p>
+          </div>
         </CardContent>
       </Card>
 

@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ContentService } from './content.service';
 import { CitationGapService } from './citation-gap.service';
+import { CreditService } from '../billing/credit.service';
 import { GenerateContentDto } from './dto/generate-content.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles, RolesGuard } from '../../common/guards/roles.guard';
@@ -13,6 +14,7 @@ export class ContentController {
   constructor(
     private contentService: ContentService,
     private citationGap: CitationGapService,
+    private credits: CreditService,
   ) {}
 
   @Get()
@@ -26,7 +28,9 @@ export class ContentController {
   }
 
   @Post('generate')
-  generate(@Body() dto: GenerateContentDto, @CurrentUser('userId') userId: string) {
+  async generate(@Body() dto: GenerateContentDto, @CurrentUser('userId') userId: string) {
+    const check = await this.credits.checkAndDeduct(userId, 2, '手動生成 AI 內容（文章/FAQ）');
+    if (!check.allowed) throw new ForbiddenException(check.message);
     return this.contentService.generate(dto, userId);
   }
 
@@ -48,7 +52,9 @@ export class ContentController {
 
   @Post('citation-gaps/:siteId/fill')
   @ApiOperation({ summary: 'Run citation gap fill for a site (generate Q&A + articles)' })
-  fillGaps(@Param('siteId') siteId: string) {
+  async fillGaps(@Param('siteId') siteId: string, @CurrentUser('userId') userId: string) {
+    const check = await this.credits.checkAndDeduct(userId, 2, '手動生成引用缺口內容');
+    if (!check.allowed) throw new ForbiddenException(check.message);
     return this.citationGap.runForSite(siteId);
   }
 

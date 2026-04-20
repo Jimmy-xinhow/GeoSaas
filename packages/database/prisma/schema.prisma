@@ -69,17 +69,38 @@ model User {
   role             UserRole  @default(USER)
   plan             Plan      @default(FREE)
   managedBy        String?   // SUPER_ADMIN userId who manages this client
+  credits          Int       @default(0)
+  freeGenUsed      Int       @default(0)    // monthly free generation counter
+  freeGenResetAt   DateTime? // when to reset freeGenUsed (start of next month)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  sites         Site[]
-  contents      Content[]
-  notifications Notification[]
-  orders        Order[]
-  successCases  GeoSuccessCase[]
+  sites              Site[]
+  contents           Content[]
+  notifications      Notification[]
+  orders             Order[]
+  successCases       GeoSuccessCase[]
+  creditTransactions CreditTransaction[]
 
   @@index([managedBy])
   @@map("users")
+}
+
+model CreditTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // topup | deduct | expire | refund
+  amount      Int      // positive for topup, negative for deduct
+  balance     Int      // balance after transaction
+  description String   // "充值 50 點" / "手動生成知識庫 Q&A (-2點)"
+  orderId     String?  // linked to Order if topup via payment
+  expiresAt   DateTime? // for topup: purchase date + 12 months
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("credit_transactions")
 }
 
 model Site {

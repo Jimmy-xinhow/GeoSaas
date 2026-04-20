@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { KnowledgeService } from './knowledge.service';
+import { CreditService } from '../billing/credit.service';
 import { CreateQaDto, UpdateQaDto, BatchCreateQaDto, AiGenerateQaDto } from './dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
@@ -9,7 +10,10 @@ import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 @ApiBearerAuth()
 @Controller('sites/:siteId/knowledge')
 export class KnowledgeController {
-  constructor(private readonly knowledgeService: KnowledgeService) {}
+  constructor(
+    private readonly knowledgeService: KnowledgeService,
+    private readonly credits: CreditService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List all Q&A pairs for a site' })
@@ -63,11 +67,13 @@ export class KnowledgeController {
 
   @Post('ai-generate')
   @ApiOperation({ summary: 'AI auto-generate Q&A pairs (preview only, not saved)' })
-  aiGenerate(
+  async aiGenerate(
     @Param('siteId') siteId: string,
     @Body() dto: AiGenerateQaDto,
     @CurrentUser('userId') userId: string,
   ) {
+    const check = await this.credits.checkAndDeduct(userId, 2, '手動生成知識庫 Q&A');
+    if (!check.allowed) throw new ForbiddenException(check.message);
     return this.knowledgeService.aiGenerate(siteId, userId, dto.excludeQuestions);
   }
 
