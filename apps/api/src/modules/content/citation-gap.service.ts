@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
+import { IndexNowService } from '../indexnow/indexnow.service';
 import OpenAI from 'openai';
 import pLimit from 'p-limit';
 
@@ -33,6 +34,7 @@ export class CitationGapService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly indexNow: IndexNowService,
   ) {
     const apiKey = this.config.get<string>('OPENAI_API_KEY');
     if (apiKey) this.openai = new OpenAI({ apiKey });
@@ -79,25 +81,37 @@ export class CitationGapService {
       if (!uniqueQueries.has(m.query)) uniqueQueries.set(m.query, m);
     }
 
+    // Also check existing blog articles to avoid duplicating
+    const existingArticles = await this.prisma.blogArticle.findMany({
+      where: { siteId, templateType: 'citation_gap' },
+      select: { title: true },
+    });
+    const existingArticleTopics = existingArticles.map((a) => a.title.toLowerCase());
+
     const gaps: CitationGap[] = [];
     for (const [, miss] of uniqueQueries) {
-      // Skip if we already have a Q&A covering this topic
       const queryLower = miss.query.toLowerCase();
-      const alreadyCovered = existingTopics.some(
-        (t) => t.includes(queryLower.slice(0, 10)) || queryLower.includes(t.slice(0, 10)),
+      const queryWords = queryLower.split(/\s+/).filter((w) => w.length > 2);
+
+      // Skip if existing Q&A or article already covers this topic (keyword overlap)
+      const alreadyCoveredByQa = existingTopics.some((t) =>
+        queryWords.some((w) => t.includes(w)),
       );
-      if (alreadyCovered) continue;
+      const alreadyCoveredByArticle = existingArticleTopics.some((t) =>
+        queryWords.some((w) => t.includes(w)),
+      );
+      if (alreadyCoveredByQa || alreadyCoveredByArticle) continue;
 
       gaps.push({
         query: miss.query,
         platform: miss.platform,
         aiResponse: miss.response?.slice(0, 500) || '',
         suggestedTopic: miss.query,
-        suggestedType: miss.query.length < 30 ? 'qa' : 'article',
+        suggestedType: 'qa', // Default to Q&A; articles only for top gaps
       });
     }
 
-    return gaps.slice(0, 20); // Max 20 gaps per analysis
+    return gaps.slice(0, 20);
   }
 
   /**
@@ -181,8 +195,8 @@ ${gap.aiResponse}
       this.logger.warn(`Failed to generate gap QAs for ${site.name}: ${err}`);
     }
 
-    // 2. If this is a significant gap (long query = specific topic), generate a blog article
-    if (gap.suggestedType === 'article' || gap.query.length > 20) {
+    // 2. Generate blog article only if explicitly requested (top gaps only)
+    if (gap.suggestedType === 'article') {
       try {
         const articlePrompt = `你是 GEO 內容策略師。以下品牌在 AI 搜尋中未被引用：
 
@@ -231,6 +245,10 @@ AI 回答了其他品牌但沒提到 ${site.name}。
             },
           });
           articleCreated = true;
+
+          // Notify search engines about new article
+          const webUrl = this.config.get('FRONTEND_URL') || 'https://www.geovault.app';
+          this.indexNow.submitUrl(`${webUrl}/blog/${slug}`).catch(() => {});
         }
       } catch (err) {
         this.logger.warn(`Failed to generate gap article for ${site.name}: ${err}`);
@@ -256,8 +274,9 @@ AI 回答了其他品牌但沒提到 ${site.name}。
     let totalArticles = 0;
     const limit = pLimit(1); // Sequential to avoid rate limits
 
-    // Fill top 5 gaps per run
+    // Fill top 5 gaps: first 2 get article + Q&A, rest get Q&A only
     const topGaps = gaps.slice(0, 5);
+    topGaps.slice(0, 2).forEach((g) => { g.suggestedType = 'article'; });
     for (const gap of topGaps) {
       const result = await limit(() => this.fillGap(siteId, gap));
       totalQas += result.qasCreated;
@@ -265,22 +284,14 @@ AI 回答了其他品牌但沒提到 ${site.name}。
       await new Promise((r) => setTimeout(r, 2000));
     }
 
-    // Regenerate llms.txt for the site to include new Q&As
+    // Mark llms.txt as needing refresh (next request will regenerate)
     try {
-      const site = await this.prisma.site.findUnique({
+      await this.prisma.site.update({
         where: { id: siteId },
-        select: { name: true, url: true, industry: true, bestScore: true, qas: { take: 20 } },
+        data: { llmsTxtUpdatedAt: new Date() },
       });
-      if (site) {
-        const qasText = site.qas.map((q: any) => `Q: ${q.question}\nA: ${q.answer}`).join('\n\n');
-        const llmsTxt = `# ${site.name}\n> ${site.url}\n> 行業：${site.industry || '未分類'}\n> GEO 分數：${site.bestScore}/100\n\n## 常見問題\n${qasText}\n\n---\n> Powered by Geovault (https://geovault.app)`;
-        await this.prisma.site.update({
-          where: { id: siteId },
-          data: { llmsTxt, llmsTxtUpdatedAt: new Date() },
-        });
-      }
     } catch (err) {
-      this.logger.warn(`Failed to update llms.txt for site ${siteId}: ${err}`);
+      this.logger.warn(`Failed to mark llms.txt update for site ${siteId}: ${err}`);
     }
 
     this.logger.log(`Gap fill complete for ${siteId}: ${totalQas} QAs, ${totalArticles} articles`);
