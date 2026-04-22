@@ -25,7 +25,13 @@ function sendConditional(
 
   const ifNoneMatch = req.headers['if-none-match'];
   const ifModifiedSince = req.headers['if-modified-since'];
-  const etagMatches = typeof ifNoneMatch === 'string' && ifNoneMatch === etag;
+  // Weak comparison per RFC 7232 §2.3.2: strip the optional "W/" prefix on
+  // both sides before matching. Proxies and CDNs (Next.js, Cloudflare) often
+  // weaken strong ETags, which would otherwise cause a false 200.
+  const normalize = (v: string) => v.replace(/^W\//, '');
+  const etagMatches =
+    typeof ifNoneMatch === 'string' &&
+    ifNoneMatch.split(',').map((s) => normalize(s.trim())).includes(normalize(etag));
   const notModifiedSince =
     typeof ifModifiedSince === 'string' &&
     !Number.isNaN(Date.parse(ifModifiedSince)) &&
