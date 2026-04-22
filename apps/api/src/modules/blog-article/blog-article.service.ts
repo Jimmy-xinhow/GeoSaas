@@ -16,9 +16,24 @@ const ALL_TEMPLATE_TYPES: TemplateType[] = [
   'brand_reputation',
 ];
 
+export interface BatchRunRecord {
+  startedAt: Date;
+  finishedAt?: Date;
+  limit: number;
+  attempted: number;
+  generated: number;
+  rejected: number;
+  skipped: number;
+  rejectedReasons: Record<string, number>;
+}
+
 @Injectable()
 export class BlogArticleService {
   private readonly logger = new Logger(BlogArticleService.name);
+  // Ring buffer of the last 10 brand_showcase batch runs so the status
+  // endpoint can show "current run in progress" + recent history without
+  // needing a DB table.
+  private readonly recentBrandShowcaseBatches: BatchRunRecord[] = [];
 
   constructor(
     private readonly prisma: PrismaService,
@@ -1040,6 +1055,17 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     skipped: number;
     rejectedReasons: Record<string, number>;
   }> {
+    const run: BatchRunRecord = {
+      startedAt: new Date(),
+      limit,
+      attempted: 0,
+      generated: 0,
+      rejected: 0,
+      skipped: 0,
+      rejectedReasons: {},
+    };
+    this.recentBrandShowcaseBatches.unshift(run);
+    if (this.recentBrandShowcaseBatches.length > 10) this.recentBrandShowcaseBatches.pop();
     this.logger.log(`brand_showcase batch start (limit=${limit})`);
 
     const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000);
@@ -1080,18 +1106,31 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       candidates.slice(0, limit).map((site) =>
         queue(async () => {
           attempted++;
+          run.attempted = attempted;
           try {
             const result = await this.generateBrandShowcaseForSite(site.id);
-            if (result.status === 'generated') generated++;
-            else if (result.status === 'rejected') {
+            if (result.status === 'generated') {
+              generated++;
+              run.generated = generated;
+            } else if (result.status === 'rejected') {
               rejected++;
+              run.rejected = rejected;
               for (const r of result.reasons ?? []) {
-                rejectedReasons[r] = (rejectedReasons[r] ?? 0) + 1;
+                // Bucket granular reason strings by prefix so the histogram
+                // stays meaningful (e.g. "too_short:847" -> "too_short").
+                const bucket = r.includes(':') ? r.split(':')[0] : r;
+                rejectedReasons[bucket] = (rejectedReasons[bucket] ?? 0) + 1;
+                run.rejectedReasons[bucket] = rejectedReasons[bucket];
               }
-            } else skipped++;
+            } else {
+              skipped++;
+              run.skipped = skipped;
+            }
           } catch (err) {
             rejected++;
+            run.rejected = rejected;
             rejectedReasons['exception'] = (rejectedReasons['exception'] ?? 0) + 1;
+            run.rejectedReasons['exception'] = rejectedReasons['exception'];
             this.logger.warn(
               `brand_showcase error for ${site.name}: ${err instanceof Error ? err.message : err}`,
             );
@@ -1100,10 +1139,34 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       ),
     );
 
+    run.finishedAt = new Date();
     this.logger.log(
       `brand_showcase batch done: ${generated} generated, ${rejected} rejected, ${skipped} skipped`,
     );
     return { attempted, generated, rejected, skipped, rejectedReasons };
+  }
+
+  /** Expose recent batch history + current run-in-progress to the admin UI. */
+  getBrandShowcaseStatus() {
+    const now = Date.now();
+    const oneDayAgo = new Date(now - 86400000);
+    return this.prisma.blogArticle
+      .count({
+        where: {
+          templateType: 'brand_showcase',
+          createdAt: { gte: oneDayAgo },
+        },
+      })
+      .then((last24h) =>
+        this.prisma.blogArticle
+          .count({ where: { templateType: 'brand_showcase' } })
+          .then((total) => ({
+            totalBrandShowcase: total,
+            last24h,
+            currentRun: this.recentBrandShowcaseBatches.find((r) => !r.finishedAt) ?? null,
+            recentRuns: this.recentBrandShowcaseBatches.slice(0, 10),
+          })),
+      );
   }
 
   async qualityAudit(minScore: number = 85) {

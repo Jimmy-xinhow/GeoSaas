@@ -124,11 +124,28 @@ export class BlogArticleController {
   @Post('brand-showcase/batch')
   @ApiOperation({
     summary:
-      'Run a one-shot brand_showcase batch. ?limit=30 (default 15, max 200). Picks public sites with missing or >90-day-old brand_showcase articles.',
+      'Kick off a brand_showcase batch (fire-and-forget, returns immediately). ?limit=30 (default 15, max 200). Use /blog/brand-showcase/batch-status to check progress.',
   })
   brandShowcaseBatch(@Query('limit') limit?: string) {
     const n = Math.max(1, Math.min(200, limit ? parseInt(limit, 10) : 15));
-    return this.service.runBrandShowcaseBatch(n);
+    // Fire-and-forget so Cloudflare (100s) / Railway proxies don't drop us.
+    // Results land in DB + service logs; poll /batch-status for progress.
+    this.service.runBrandShowcaseBatch(n).catch((err) => {
+      console.error('brand_showcase batch crashed:', err);
+    });
+    return { message: 'batch started', limit: n, pollAt: '/blog/brand-showcase/batch-status' };
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('brand-showcase/batch-status')
+  @ApiOperation({
+    summary:
+      'Latest aggregate stats for brand_showcase: total, last 24h, average quality metrics from an in-memory ring of recent batch runs.',
+  })
+  brandShowcaseStatus() {
+    return this.service.getBrandShowcaseStatus();
   }
 
   @ApiBearerAuth()
