@@ -248,9 +248,16 @@ export class ProfileEnrichmentService {
     const emailMatch =
       mailHref?.[1] || text.match(/[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}/)?.[0];
 
+    // Address regex — narrow char classes so we don't bleed into adjacent
+    // navigation text. Post-road segment restricted to: digits, -, /, 號,
+    // 樓, F, 之, 室 (plus a few spaces). Anything outside that stops the match.
     const cityAlt = TW_CITIES.map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
     const addrRegex = new RegExp(
-      `(?:${cityAlt})[^，。,；;]{2,80}(?:路|街|巷|大道|段)[^，。,；;]{0,30}號?[之\\d樓F]*`,
+      `(?:${cityAlt})` +
+        `[一-鿿]{1,10}(?:區|鄉|鎮|市)` +
+        `[一-鿿]{1,15}(?:路|街|巷|弄|大道|大街|段)` +
+        `\\s?\\d{1,4}(?:[-\\/]\\d{1,4})*\\s?號?` +
+        `(?:\\s?(?:\\d{1,3}|[之])\\s?(?:[之]\\s?\\d{1,3}|樓|F|室)?){0,3}`,
     );
     const addressMatch = footer.match(addrRegex)?.[0] || text.match(addrRegex)?.[0];
 
@@ -259,16 +266,27 @@ export class ProfileEnrichmentService {
       /(?:營業時間|Hours|Opening)[^：:]*[：:]?\s*([0-9]{1,2}[:：][0-9]{2}\s?[-–—至到]\s?[0-9]{1,2}[:：][0-9]{2})/,
     );
 
-    // Social links
+    // Social links — exclude system paths (tracking pixels, share widgets,
+    // oauth dialogs, iframe embeds) which produce garbage like .../tr.
     const socialLinks: EnrichedProfile['socialLinks'] = {};
-    const fb = cleaned.match(/https?:\/\/(?:www\.)?facebook\.com\/[\w.\-]+/i)?.[0];
-    const ig = cleaned.match(/https?:\/\/(?:www\.)?instagram\.com\/[\w.\-]+/i)?.[0];
-    const yt = cleaned.match(/https?:\/\/(?:www\.)?youtube\.com\/(?:channel\/|c\/|@)[\w.\-]+/i)?.[0];
-    const line = cleaned.match(/https?:\/\/(?:line\.me|lin\.ee)\/[\w.\-\/]+/i)?.[0];
-    if (fb) socialLinks.facebook = fb;
-    if (ig) socialLinks.instagram = ig;
-    if (yt) socialLinks.youtube = yt;
-    if (line) socialLinks.line = line;
+    const fbPages = cleaned.match(
+      /https?:\/\/(?:www\.|m\.)?facebook\.com\/(?!tr\/?|sharer|plugins|dialog|iframe|v\d+|ajax|login|ads|business|help|privacy|policies|ic\/|rsrc|connect|comments|badges|webmasters|about|pages\/launchpoint)[\w.\-]{3,}(?:\/[\w.\-]+)*/gi,
+    ) || [];
+    const igPages = cleaned.match(
+      /https?:\/\/(?:www\.)?instagram\.com\/(?!p\/|reel\/|tv\/|explore|web|accounts|about|developer|press|embed)[\w.\-]{3,}\/?/gi,
+    ) || [];
+    const ytPages = cleaned.match(
+      /https?:\/\/(?:www\.)?youtube\.com\/(?:channel\/[\w\-]+|c\/[\w.\-]+|@[\w.\-]+|user\/[\w.\-]+)/gi,
+    ) || [];
+    const linePages = cleaned.match(
+      /https?:\/\/(?:line\.me\/ti\/p\/|lin\.ee\/)[\w.\-]+/gi,
+    ) || [];
+    // Take the first non-empty, shortest path (usually the brand home page,
+    // not some deep-link).
+    if (fbPages.length > 0) socialLinks.facebook = fbPages[0];
+    if (igPages.length > 0) socialLinks.instagram = igPages[0];
+    if (ytPages.length > 0) socialLinks.youtube = ytPages[0];
+    if (linePages.length > 0) socialLinks.line = linePages[0];
 
     // Short description fallback: <meta name="description">
     const metaDesc = html.match(
