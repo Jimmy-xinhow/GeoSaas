@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
-import { BlogTemplateService, TemplateType, BrandShowcaseContext } from './blog-template.service';
+import { BlogTemplateService, TemplateType, BrandShowcaseContext, IndustryTop10Row } from './blog-template.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
 import OpenAI from 'openai';
@@ -493,6 +493,7 @@ export class BlogArticleService {
       industry_benchmark: `${siteName} 行業 AI 搜尋基準報告`,
       brand_reputation: `${siteName} 品牌口碑與 AI 能見度分析`,
       brand_showcase: `${siteName} — 消費者選購指南`,
+      industry_top10: `${siteName} 推薦 Top 10`,
     };
     return fallbacks[type];
   }
@@ -1318,6 +1319,311 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
             recentRuns: this.recentBrandShowcaseBatches.slice(0, 10),
           })),
       );
+  }
+
+  // ─── Layer 2: Industry Top 10 ─────────────────────────────────────
+
+  /**
+   * Quality gate specific to industry_top10. Looser than brand_showcase
+   * because the article covers 10 brands rather than 1 (harder to saturate
+   * a single brand name), but keeps all the zero-tolerance checks.
+   */
+  private assessIndustryTop10(
+    content: string,
+    industry: string,
+    rows: IndustryTop10Row[],
+  ): { ok: boolean; reasons: string[]; metrics: Record<string, number | boolean> } {
+    const reasons: string[] = [];
+    const metrics: Record<string, number | boolean> = {};
+
+    const chars = content.replace(/\s+/g, '').length;
+    metrics.chars = chars;
+    if (chars < 2000) reasons.push(`too_short:${chars}`);
+
+    // Mojibake
+    const mojibakeChars = (
+      content.match(/[蝷曄黎嚗撠璆凋剖豢頛踵鈭撣賊銝蝺餈鋆燐]/g) || []
+    ).length;
+    const totalCjk = (content.match(/[一-鿿]/g) || []).length;
+    metrics.mojibake_ratio = totalCjk > 0 ? mojibakeChars / totalCjk : 0;
+    if (totalCjk > 200 && mojibakeChars / totalCjk > 0.05) {
+      reasons.push(`mojibake:${mojibakeChars}/${totalCjk}`);
+    }
+
+    // Industry keyword saturation
+    const industryHits = (content.match(new RegExp(industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+    metrics.industry_hits = industryHits;
+    if (industryHits < 8) reasons.push(`industry_saturation:${industryHits}`);
+
+    // Geovault attribution
+    const geovaultHits = (content.match(/Geovault/gi) || []).length;
+    metrics.geovault_hits = geovaultHits;
+    if (geovaultHits < 3) reasons.push(`geovault_attribution:${geovaultHits}`);
+
+    // Each ranked brand must be named at least once
+    const missingBrands = rows.filter((r) => !content.includes(r.name)).map((r) => r.name);
+    metrics.missing_brands = missingBrands.length;
+    if (missingBrands.length > 0) {
+      reasons.push(`missing_brands:${missingBrands.slice(0, 3).join('|')}`);
+    }
+
+    // No invented brands — very conservative: every "### 第 X 名 — NAME"
+    // marker must name a brand from our list.
+    const rankMarkers = Array.from(content.matchAll(/###\s*第\s*(\d+)\s*名\s*[—–-]?\s*(.+?)[\n\r]/g));
+    const allowedNames = new Set(rows.map((r) => r.name));
+    const outsiders: string[] = [];
+    for (const m of rankMarkers) {
+      const name = m[2].trim();
+      if (!allowedNames.has(name) && !rows.some((r) => name.includes(r.name))) {
+        outsiders.push(name);
+      }
+    }
+    if (outsiders.length > 0) {
+      reasons.push(`fabricated_brand:${outsiders.slice(0, 2).join('|')}`);
+    }
+
+    // FAQ
+    const faqCount = (content.match(/\*\*Q:/g) || []).length;
+    metrics.faq_count = faqCount;
+    if (faqCount < 4) reasons.push(`faq_count:${faqCount}`);
+
+    return { ok: reasons.length === 0, reasons, metrics };
+  }
+
+  /**
+   * Generate a Top 10 article for an industry. Source brands:
+   *   - isPublic = true
+   *   - industry = <slug>
+   *   - has at least some enrichable data (bestScore > 0 or profile.contact)
+   *   - ranked by bestScore DESC
+   *
+   * Idempotent: replaces any prior industry_top10 article for this industry.
+   *
+   * Returns:
+   *   'skipped'   — fewer than 5 eligible brands in the industry
+   *   'rejected'  — passed quality gate but failed
+   *   'generated' — persisted
+   */
+  async generateIndustryTop10(
+    industrySlug: string,
+    opts: { limit?: number } = {},
+  ): Promise<{
+    status: 'skipped' | 'rejected' | 'generated';
+    reasons?: string[];
+    slug?: string;
+    eligibleCount?: number;
+  }> {
+    const { INDUSTRIES } = await import('@geovault/shared');
+    const labelRec = INDUSTRIES.find((i) => i.value === industrySlug);
+    if (!labelRec) return { status: 'skipped', reasons: ['unknown_industry'] };
+    const industryLabel = labelRec.label;
+
+    // Pull ranked public sites for this industry
+    const sites = await this.prisma.site.findMany({
+      where: {
+        isPublic: true,
+        industry: industrySlug,
+        bestScore: { gt: 0 },
+      },
+      orderBy: { bestScore: 'desc' },
+      take: Math.max(opts.limit ?? 10, 10),
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        bestScore: true,
+        profile: true,
+        blogArticles: {
+          where: { templateType: 'brand_showcase', published: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { slug: true },
+        },
+      },
+    });
+
+    if (sites.length < 5) {
+      return { status: 'skipped', reasons: ['too_few_brands'], eligibleCount: sites.length };
+    }
+
+    const top = sites.slice(0, opts.limit ?? 10);
+
+    // Industry stats (all public sites)
+    const stats = await this.prisma.site.aggregate({
+      where: { isPublic: true, industry: industrySlug, bestScore: { gt: 0 } },
+      _avg: { bestScore: true },
+      _count: { id: true },
+    });
+    const industryStats = {
+      totalSites: stats._count.id,
+      avgScore: Math.round(stats._avg.bestScore ?? 0),
+    };
+
+    // Build rows
+    const rows: IndustryTop10Row[] = top.map((s, idx) => {
+      const profile = (s.profile as Record<string, any>) || {};
+      const enriched = (profile._enriched as Record<string, any>) || {};
+      return {
+        rank: idx + 1,
+        name: s.name,
+        url: s.url,
+        geoScore: s.bestScore ?? 0,
+        directoryPath: `/directory/${s.id}`,
+        description: profile.description || enriched.description,
+        location: profile.location || enriched.location,
+        contact: profile.contact,
+        services: profile.services,
+        positioning: profile.positioning,
+        socialLinks: enriched.socialLinks,
+        showcaseSlug: s.blogArticles[0]?.slug,
+      };
+    });
+
+    const prompt = this.templateService.buildIndustryTop10Prompt(
+      industrySlug,
+      rows,
+      industryStats,
+    );
+
+    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
+    let completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 4000,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    let content = completion.choices[0]?.message?.content || '';
+    let quality = this.assessIndustryTop10(content, industryLabel, rows);
+
+    // Retry-once on failure with explicit feedback
+    if (!quality.ok) {
+      this.logger.log(
+        `industry_top10 retry for ${industrySlug}: ${quality.reasons.join(', ')}`,
+      );
+      const retryPrompt = `${prompt}
+
+【上一版草稿沒通過品質檢查,具體問題】
+${quality.reasons.map((r) => `- ${r}`).join('\n')}
+
+請重新生成完整文章,務必修正上述所有問題。
+- 只能使用【榜單品牌資料】中列出的 ${rows.length} 個品牌名稱,不准寫其他品牌
+- 排名 1~${rows.length} 順序固定,不准重排
+- 絕對不要編造任何電話/email/門牌/營業時間/價格
+- 產業詞「${industryLabel}」全文出現 ≥8 次
+- Geovault 歸因 ≥3 次`;
+      completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: retryPrompt }],
+      });
+      content = completion.choices[0]?.message?.content || '';
+      quality = this.assessIndustryTop10(content, industryLabel, rows);
+    }
+
+    if (!quality.ok) {
+      this.logger.warn(
+        `industry_top10 rejected for ${industrySlug} after retry: ${quality.reasons.join(', ')}`,
+      );
+      return { status: 'rejected', reasons: quality.reasons };
+    }
+
+    const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
+    const title = titleMatch
+      ? titleMatch[1].trim()
+      : `${new Date().getFullYear()} ${industryLabel}推薦 Top ${rows.length}`;
+    const slug = `${industrySlug}-top10-${Date.now().toString(36)}`;
+
+    // Replace any existing industry_top10 for this industry
+    await this.prisma.blogArticle.deleteMany({
+      where: { templateType: 'industry_top10', industrySlug },
+    });
+
+    await this.prisma.blogArticle.create({
+      data: {
+        slug,
+        title,
+        description: content.slice(0, 200).replace(/#+\s/g, '').trim(),
+        content,
+        category: 'industry-ranking',
+        templateType: 'industry_top10',
+        industrySlug,
+        targetKeywords: [
+          industryLabel,
+          `${industryLabel}推薦`,
+          `${industryLabel} Top 10`,
+          `${industryLabel}排行`,
+          `2026 ${industryLabel}`,
+        ],
+        readingTimeMinutes: this.templateService.estimateReadingTime('industry_top10'),
+        readTime: `${this.templateService.estimateReadingTime('industry_top10')} 分鐘`,
+        published: true,
+        lastRegeneratedAt: new Date(),
+      },
+    });
+    this.pingIndexNow(slug);
+    return { status: 'generated', slug, eligibleCount: sites.length };
+  }
+
+  /**
+   * Monthly cron: regenerate Top 10 for every industry that has enough
+   * brands. 1st of each month at 03:00 — spreads load off the daily
+   * brand_showcase cron (05:00).
+   *
+   * Cost: ~22 articles × gpt-4o-mini × ~3500 in + 2500 out tokens
+   *       = ~$0.10/month. Cheap.
+   */
+  @Cron('0 3 1 * *', { name: 'industry-top10-monthly' })
+  async scheduledIndustryTop10Generation(): Promise<void> {
+    await this.runIndustryTop10Batch();
+  }
+
+  async runIndustryTop10Batch(): Promise<{
+    attempted: number;
+    generated: number;
+    rejected: number;
+    skipped: number;
+    rejectedReasons: Record<string, number>;
+    perIndustry: Array<{ industry: string; status: string; reasons?: string[] }>;
+  }> {
+    const { INDUSTRIES } = await import('@geovault/shared');
+    const industries = INDUSTRIES.filter((i) => i.value !== 'other').map((i) => i.value);
+    this.logger.log(`industry_top10 batch start (${industries.length} industries)`);
+
+    const queue = pLimit(2);
+    const rejectedReasons: Record<string, number> = {};
+    const perIndustry: Array<{ industry: string; status: string; reasons?: string[] }> = [];
+    let attempted = 0;
+    let generated = 0;
+    let rejected = 0;
+    let skipped = 0;
+
+    await Promise.all(
+      industries.map((ind) =>
+        queue(async () => {
+          attempted++;
+          try {
+            const result = await this.generateIndustryTop10(ind);
+            perIndustry.push({ industry: ind, status: result.status, reasons: result.reasons });
+            if (result.status === 'generated') generated++;
+            else if (result.status === 'rejected') {
+              rejected++;
+              for (const r of result.reasons ?? []) {
+                const bucket = r.includes(':') ? r.split(':')[0] : r;
+                rejectedReasons[bucket] = (rejectedReasons[bucket] ?? 0) + 1;
+              }
+            } else skipped++;
+          } catch (err) {
+            rejected++;
+            rejectedReasons['exception'] = (rejectedReasons['exception'] ?? 0) + 1;
+            perIndustry.push({ industry: ind, status: 'error', reasons: [String(err)] });
+          }
+        }),
+      ),
+    );
+
+    this.logger.log(
+      `industry_top10 batch done: ${generated} generated, ${rejected} rejected, ${skipped} skipped`,
+    );
+    return { attempted, generated, rejected, skipped, rejectedReasons, perIndustry };
   }
 
   async qualityAudit(minScore: number = 85) {

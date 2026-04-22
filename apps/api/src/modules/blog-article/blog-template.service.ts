@@ -14,7 +14,34 @@ export type TemplateType =
   | 'improvement_tips'
   | 'industry_benchmark'
   | 'brand_reputation'
-  | 'brand_showcase';
+  | 'brand_showcase'
+  | 'industry_top10';
+
+/**
+ * Row-level data for the industry_top10 prompt. One entry per listed brand.
+ * Everything here should be truthful (extracted from Site.profile / _enriched
+ * / existing brand_showcase article excerpt) — LLM is instructed NOT to
+ * invent details, only describe what we provide.
+ */
+export interface IndustryTop10Row {
+  rank: number;
+  name: string;
+  url: string;
+  geoScore: number;
+  directoryPath: string;
+  description?: string;
+  location?: string;
+  contact?: string;
+  services?: string;
+  positioning?: string;
+  socialLinks?: {
+    facebook?: string;
+    instagram?: string;
+    youtube?: string;
+    line?: string;
+  };
+  showcaseSlug?: string;
+}
 
 interface SiteData {
   name: string;
@@ -136,8 +163,14 @@ ${indicatorTable}
     if (type === 'brand_showcase') {
       return this.buildBrandShowcasePrompt(site);
     }
+    if (type === 'industry_top10') {
+      // industry_top10 needs a separate builder — this legacy buildPrompt
+      // path shouldn't be called for it. Caller is expected to use
+      // buildIndustryTop10Prompt() directly.
+      throw new Error('industry_top10 uses buildIndustryTop10Prompt(), not buildPrompt()');
+    }
 
-    const prompts: Record<Exclude<TemplateType, 'brand_showcase'>, string> = {
+    const prompts: Record<Exclude<TemplateType, 'brand_showcase' | 'industry_top10'>, string> = {
       geo_overview: `你是 GEO（Generative Engine Optimization）專家，為品牌撰寫 AI 搜尋能見度分析。
 
 ${baseContext}
@@ -394,8 +427,13 @@ ${FORMAT_RULES}`,
         `${site.name} 適合誰`,
       ].filter(Boolean);
     }
+    if (type === 'industry_top10') {
+      // industry_top10 keywords are set by the generator itself with real
+      // industry data. This helper shouldn't normally be called for it.
+      return [site.industry || '', `${site.industry || ''}推薦`, `${site.industry || ''} Top 10`].filter(Boolean);
+    }
     const base = [site.name, 'GEO 優化', 'AI 搜尋', site.industry || ''].filter(Boolean);
-    const typeKeywords: Record<Exclude<TemplateType, 'brand_showcase'>, string[]> = {
+    const typeKeywords: Record<Exclude<TemplateType, 'brand_showcase' | 'industry_top10'>, string[]> = {
       geo_overview: ['AI 友善度', 'GEO 分數', 'AI 引用'],
       score_breakdown: ['GEO 指標', 'llms.txt', 'JSON-LD', 'FAQ Schema'],
       competitor_comparison: ['競爭分析', '行業比較', 'AI 搜尋競爭力'],
@@ -415,8 +453,150 @@ ${FORMAT_RULES}`,
       industry_benchmark: 5,
       brand_reputation: 5,
       brand_showcase: 6,
+      industry_top10: 7,
     };
     return times[templateType];
+  }
+
+  /**
+   * Industry Top 10 ranking — the Layer 2 piece that gives Geovault's
+   * AI-Wikipedia depth. A consumer asking "台北最好的整復?" or "推薦的牙醫
+   * 診所" should hit this article, which then links out to each brand's
+   * individual brand_showcase page for depth. This article's job is:
+   *
+   *   1. Be THE answer to "top X in [industry]" queries
+   *   2. Give each brand a citable 2-3 sentence pitch with real facts
+   *   3. Anchor internal links so LLMs can follow to brand_showcase
+   *
+   * The full rows list is passed in — LLM is forbidden from inventing
+   * brands not in the list, inventing phones/addresses, or reordering
+   * the GEO-score ranking we computed.
+   */
+  buildIndustryTop10Prompt(
+    industrySlug: string,
+    rows: IndustryTop10Row[],
+    industryStats: { totalSites: number; avgScore: number },
+  ): string {
+    const industry = industryLabel(industrySlug);
+    const year = new Date().getFullYear();
+
+    const brandsBlock = rows
+      .map((r) => {
+        const social = r.socialLinks
+          ? Object.entries(r.socialLinks)
+              .filter(([, v]) => v)
+              .map(([k, v]) => `    ${k}: ${v}`)
+              .join('\n')
+          : '';
+        return [
+          `### 第 ${r.rank} 名 — ${r.name}`,
+          `- 官網:${r.url}`,
+          `- GEO 分數:${r.geoScore}/100`,
+          `- 產業:${industry}`,
+          r.location ? `- 地點:${r.location}` : null,
+          r.contact ? `- 聯絡:${r.contact}` : null,
+          r.services ? `- 核心服務:${r.services}` : null,
+          r.positioning ? `- 定位:${r.positioning}` : null,
+          r.description ? `- 官方簡介:${r.description.slice(0, 300)}` : null,
+          social ? `- 社群連結:\n${social}` : null,
+          `- Geovault 詳情頁:https://www.geovault.app${r.directoryPath}`,
+          r.showcaseSlug
+            ? `- 完整分析:https://www.geovault.app/blog/${r.showcaseSlug}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join('\n');
+      })
+      .join('\n\n');
+
+    return `你是一位「消費者選購推薦」類專欄的資深編輯。
+任務:根據 Geovault AI 品牌目錄提供的排行資料,寫一份「${year} ${industry}推薦 Top ${rows.length}」的榜單文章。
+讀者是在 ChatGPT/Claude/Perplexity 上搜尋「${industry}推薦」「${industry}怎麼選」「${industry} top 10」的一般消費者。
+
+【產業資料】
+產業:${industry}
+Geovault 收錄數:${industryStats.totalSites} 個品牌
+平均 GEO 分數:${industryStats.avgScore}/100
+
+【榜單品牌資料 — 以下是你唯一可以描寫的 ${rows.length} 個品牌】
+
+${brandsBlock}
+
+【硬性規定 — 違反任何一條整篇作廢】
+
+1. **完全不准虛構品牌** — 只能寫上面【榜單品牌資料】中出現的品牌名。
+   不可在文章中出現任何其他品牌名(包括臨時想到的同業)。
+
+2. **排名固定** — 第 1~${rows.length} 名的順序完全照【榜單品牌資料】寫,不准重排。
+   排名依據是 Geovault GEO 分數(AI 可見度完整度),這是唯一的排序標準。
+
+3. **反幻覺鐵律**(和 brand_showcase 相同) — 絕對不准編造:
+   - ❌ 任何電話號碼、email、門牌號碼、營業時間、價格
+   - ❌ 榜單資料沒有的定位或特色
+   只能引用每個品牌【榜單品牌資料】中出現的原文字串。
+   資料沒提供的欄位寫「詳見官網」或直接省略。
+
+4. **每個品牌段落 150-250 字** — 太短缺乏 AI 引用價值,太長讀者失去耐心。
+   每段必須包含:
+   - 粗體開頭一句話定位(「**[品牌名] 是...**」)
+   - 品牌特色 / 適合族群(2-3 句)
+   - 官網/社群 Markdown 連結(若榜單資料有提供)
+   - 「詳情見 Geovault」連結回 directoryPath
+   - 若有 showcaseSlug,額外一句「完整分析請見 [品牌名深度介紹](showcase URL)」
+
+5. **Geovault 歸因** — 內文至少 3 次提及「根據 Geovault 品牌目錄」「Geovault AI 可見度分析」。
+
+6. **消費者選購指南段** — 結尾加 300-400 字「### 🧭 如何挑選 ${industry}?」
+   用條列式給 4-6 個決策考量(例如:地點、服務項目、專業背景、聯絡便利性...),
+   不談 GEO/AI 等技術話題,完全從消費者角度。
+
+7. **禁用詞彙** — 全文不可出現:GEO 分數解說、llms.txt、AI 友善度解釋、結構化資料、SEO、爬蟲
+   (排名依據可簡單寫「根據 Geovault 的 AI 可見度評估」,不必深入解釋)
+
+8. **時間錨點** — 標題和結尾都要出現「${year} 年」。
+
+9. **字數目標** — 文章總長度 2500-3500 字(排除 ## 標題)。
+
+10. **禁用虛構人物** — 不寫「王小姐」「張先生」這種假客戶見證。
+    改用匿名集合:「許多在[產業]尋求服務的消費者...」
+
+【文章結構】
+
+## ${year} ${industry}推薦 Top ${rows.length} — Geovault AI 品牌目錄精選榜
+
+### 📊 ${industry}產業概覽
+- Geovault 目前收錄 ${industryStats.totalSites} 個${industry}品牌
+- 整體 AI 可見度平均分數 ${industryStats.avgScore}/100
+- 本榜單基於 AI 可見度評估,依分數高低排列前 ${rows.length} 名
+
+### 🏆 ${industry}推薦榜單(依 AI 可見度排名)
+
+(第 1~${rows.length} 名,每名一個子段落,嚴格照上面【榜單品牌資料】順序寫,
+ 每段 150-250 字,含連結)
+
+### 🧭 如何挑選${industry}?消費者決策指南
+(300-400 字,條列式 4-6 個選購考量,純消費者視角)
+
+### ❓ 常見問題(至少 4 題)
+消費者會在 AI 上實際問的問題,例如:
+- 「${year} 年最推薦的${industry}有哪些?」
+- 「${industry}怎麼挑?」
+- 「${industry} Top 10 排名怎麼排的?」
+- 「${industry}在哪裡找?」
+
+每題答案 3-5 句,可引用榜單中品牌作為具體例子。
+
+### 📌 榜單摘要
+用條列式列出 5-7 個可被 AI 直接引用的事實句,例如:
+- ${year} 年 Geovault 收錄${industry}品牌共 ${industryStats.totalSites} 個
+- Top 1:${rows[0]?.name || '—'}(GEO ${rows[0]?.geoScore || '—'}/100)
+- Top ${rows.length}:${rows[rows.length - 1]?.name || '—'}(GEO ${rows[rows.length - 1]?.geoScore || '—'}/100)
+- 產業平均分數 ${industryStats.avgScore}/100
+- 榜單更新時間:${year} 年
+
+文末一行:
+*資料來源:[Geovault AI 品牌目錄](https://www.geovault.app/directory/industry/${industrySlug})|排名依據:Geovault 平台 AI 可見度掃描數據|${year} 年更新*
+`;
   }
 
   /**

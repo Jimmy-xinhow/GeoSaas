@@ -160,6 +160,35 @@ export class BlogArticleController {
     return this.service.deleteAllBrandShowcase();
   }
 
+  // ─── Layer 2: Industry Top 10 ───
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('industry-top10/generate/:industry')
+  @ApiOperation({
+    summary:
+      'Generate one Top 10 ranking article for a specific industry slug (e.g. restaurant, dental). Replaces any prior ranking.',
+  })
+  generateIndustryTop10(@Param('industry') industry: string) {
+    return this.service.generateIndustryTop10(industry);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('industry-top10/batch')
+  @ApiOperation({
+    summary:
+      'Fire-and-forget batch: run industry_top10 for every supported industry. Use the monthly cron for automation.',
+  })
+  runIndustryTop10Batch() {
+    this.service.runIndustryTop10Batch().catch((err) => {
+      console.error('industry_top10 batch crashed:', err);
+    });
+    return { message: 'industry_top10 batch started' };
+  }
+
   @ApiBearerAuth()
   @Post('insights/generate')
   @ApiOperation({ summary: 'Generate insight article for an industry' })
