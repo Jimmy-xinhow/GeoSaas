@@ -30,6 +30,19 @@ export class SitesController {
     });
   }
 
+  @Post('admin/cleanup-corrupt-names')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  cleanupCorruptNames(
+    @Query('industry') industry?: string,
+    @Query('dryRun') dryRun?: string,
+  ) {
+    return this.profileEnrichment.cleanupCorruptNames({
+      industrySlug: industry,
+      dryRun: dryRun === 'true' || dryRun === '1',
+    });
+  }
+
   @Post()
   create(@Body() dto: CreateSiteDto, @CurrentUser('userId') userId: string) {
     return this.sitesService.create(dto, userId);

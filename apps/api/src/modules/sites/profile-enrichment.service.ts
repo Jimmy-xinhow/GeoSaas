@@ -8,6 +8,7 @@ export interface EnrichedProfile {
   address?: string;
   location?: string;
   openingHours?: string;
+  cleanName?: string;
   socialLinks?: {
     facebook?: string;
     instagram?: string;
@@ -17,6 +18,23 @@ export interface EnrichedProfile {
   sourceUrl: string;
   extractedAt: string;
   sourceMethod: 'json-ld' | 'html-regex' | 'mixed' | 'failed';
+}
+
+/**
+ * Detect names that can't safely be used in prompts/articles — same ruleset
+ * as the industry_top10 filter, exported so the cleanup path can flag sites
+ * in the DB.
+ */
+export function isNameCorrupt(name: string | null | undefined): boolean {
+  if (!name) return true;
+  if (name.length > 50) return true;
+  if (/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(name)) return true;
+  if (/[｜|]/.test(name) && name.length > 25) return true;
+  const punct = (name.match(/[,，、／/｜|【】()（）:：?？!!]/g) || []).length;
+  if (punct >= 3) return true;
+  if ((name.match(/\?/g) || []).length >= 2) return true;
+  if (/[蝷曄黎嚗撠璆凋剖豢頛踵鈭撣賊銝蝺餈鋆燐擃瘜敺蝢]/.test(name)) return true;
+  return false;
 }
 
 const LOCAL_BUSINESS_TYPES = [
@@ -106,6 +124,10 @@ export class ProfileEnrichmentService {
     const fromJsonLd = this.extractFromJsonLd(html);
     const fromHtml = this.extractFromHtmlFallback(html);
 
+    // Extract a clean brand name candidate (for repairing corrupt Site.name)
+    const jsonLdItems = this.parseJsonLdItems(html);
+    const cleanName = this.extractCleanName(html, jsonLdItems);
+
     // JSON-LD beats HTML scan for every field because it's structured
     // author-intent data. Only use HTML fallback where JSON-LD left a gap.
     const merged: Partial<EnrichedProfile> = {
@@ -116,6 +138,7 @@ export class ProfileEnrichmentService {
       openingHours: fromJsonLd.openingHours ?? fromHtml.openingHours,
       description: fromJsonLd.description ?? fromHtml.description,
       socialLinks: fromHtml.socialLinks,
+      cleanName,
     };
 
     const hasAnything =
@@ -212,7 +235,53 @@ export class ProfileEnrichmentService {
     }
   }
 
-  private extractFromJsonLd(html: string): Partial<EnrichedProfile> {
+  /**
+   * Derive a clean brand name candidate from scraped HTML. Tries, in order:
+   *   1. JSON-LD LocalBusiness/Organization `name`
+   *   2. og:site_name meta tag
+   *   3. <title> tag (split on common separators, take the shortest clean
+   *      part since site titles are usually "Brand | Tagline" or
+   *      "Page — Brand")
+   *
+   * Returns undefined if nothing passes the corruption filter. Caller uses
+   * this to quarantine / repair Site.name on seed rows with garbage names.
+   */
+  private extractCleanName(html: string, jsonLdItems: any[]): string | undefined {
+    const candidates: string[] = [];
+
+    for (const item of jsonLdItems) {
+      const t = item?.['@type'];
+      const types = Array.isArray(t) ? t : [t];
+      const isOrg = types.some(
+        (x) =>
+          typeof x === 'string' &&
+          LOCAL_BUSINESS_TYPES.some((b) => x.includes(b)),
+      );
+      if (isOrg && typeof item.name === 'string') candidates.push(item.name);
+    }
+
+    const ogSiteName = html.match(
+      /<meta\s+property=["']og:site_name["']\s+content=["']([^"']+)["']/i,
+    )?.[1];
+    if (ogSiteName) candidates.push(ogSiteName);
+
+    const rawTitle = html.match(/<title>([^<]+)<\/title>/i)?.[1];
+    if (rawTitle) {
+      // Split on common title separators and score the shortest clean piece
+      // as the brand name (usually the right-hand side of "Page | Brand"
+      // or left of "Brand - Description").
+      const parts = rawTitle
+        .split(/\s*[|｜\-–—]\s*/)
+        .map((p) => p.trim())
+        .filter((p) => p.length >= 2 && p.length <= 30);
+      candidates.push(...parts);
+    }
+
+    const cleaned = candidates.find((c) => !isNameCorrupt(c) && c.length >= 2);
+    return cleaned?.trim();
+  }
+
+  private parseJsonLdItems(html: string): any[] {
     const blocks = Array.from(
       html.matchAll(
         /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
@@ -231,6 +300,11 @@ export class ProfileEnrichmentService {
         // malformed JSON-LD — skip
       }
     }
+    return items;
+  }
+
+  private extractFromJsonLd(html: string): Partial<EnrichedProfile> {
+    const items = this.parseJsonLdItems(html);
 
     // Prefer items with LocalBusiness-family @type
     const candidates = items.filter((it) => {
@@ -382,6 +456,92 @@ export class ProfileEnrichmentService {
       return lines.length > 0 ? lines.join(' ; ') : undefined;
     }
     return undefined;
+  }
+
+  /**
+   * Scan Site.name across all public sites, flag corrupt ones, and try to
+   * repair via enrichment.cleanName. Sites that can't be repaired are
+   * quarantined (isPublic=false) so they stop polluting Layer 1/Layer 2
+   * generation paths.
+   *
+   * This is a one-shot cleanup run — not scheduled. Intended to fix the
+   * seed-import mojibake that blocked the `legal` industry (all 43 sites
+   * have corrupt names scraped from SEO blog titles).
+   */
+  async cleanupCorruptNames(opts: { industrySlug?: string; dryRun?: boolean } = {}): Promise<{
+    scanned: number;
+    corrupt: number;
+    repaired: number;
+    quarantined: number;
+    skipped: number;
+    examples: Array<{ url: string; before: string; after?: string; action: string }>;
+  }> {
+    const where: any = { isPublic: true };
+    if (opts.industrySlug) where.industry = opts.industrySlug;
+
+    const sites = await this.prisma.site.findMany({
+      where,
+      select: { id: true, name: true, url: true, industry: true },
+    });
+
+    const corrupt = sites.filter((s) => isNameCorrupt(s.name));
+    let repaired = 0;
+    let quarantined = 0;
+    const examples: Array<{ url: string; before: string; after?: string; action: string }> = [];
+
+    for (const site of corrupt) {
+      try {
+        const enriched = await this.enrichSite(site.id, { force: true });
+        const candidate = enriched?.cleanName;
+        if (candidate && !isNameCorrupt(candidate)) {
+          if (!opts.dryRun) {
+            await this.prisma.site.update({
+              where: { id: site.id },
+              data: { name: candidate },
+            });
+          }
+          repaired++;
+          if (examples.length < 10) {
+            examples.push({
+              url: site.url,
+              before: site.name.slice(0, 40),
+              after: candidate,
+              action: 'repaired',
+            });
+          }
+          this.logger.log(`repaired Site.name for ${site.url}: ${candidate}`);
+        } else {
+          if (!opts.dryRun) {
+            await this.prisma.site.update({
+              where: { id: site.id },
+              data: { isPublic: false },
+            });
+          }
+          quarantined++;
+          if (examples.length < 10) {
+            examples.push({
+              url: site.url,
+              before: site.name.slice(0, 40),
+              action: 'quarantined',
+            });
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`cleanup failed for ${site.url}: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+
+    this.logger.log(
+      `cleanupCorruptNames: scanned=${sites.length} corrupt=${corrupt.length} repaired=${repaired} quarantined=${quarantined}`,
+    );
+    return {
+      scanned: sites.length,
+      corrupt: corrupt.length,
+      repaired,
+      quarantined,
+      skipped: corrupt.length - repaired - quarantined,
+      examples,
+    };
   }
 
   private deriveLocation(address?: string): string | undefined {
