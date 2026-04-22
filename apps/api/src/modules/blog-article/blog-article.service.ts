@@ -889,6 +889,20 @@ export class BlogArticleService {
       reasons.push(`forbidden_phrase:${forbiddenHits.slice(0, 3).join('|')}`);
     }
 
+    // MOJIBAKE DETECTION — catch Big5→UTF-8 double-decode garbage. These
+    // 15 characters are all real Chinese chars but they appear very rarely
+    // in natural Chinese writing; they show up at high density when the
+    // enrichment scraper decoded Big5/GBK bytes as UTF-8. If >5% of the
+    // article's CJK characters come from this set, the article is corrupt.
+    const mojibakeChars = (
+      content.match(/[蝷曄黎嚗撠璆凋剖豢頛踵鈭撣賊銝蝺餈鋆燐]/g) || []
+    ).length;
+    const totalCjk = (content.match(/[一-鿿]/g) || []).length;
+    metrics.mojibake_ratio = totalCjk > 0 ? Math.round((mojibakeChars / totalCjk) * 1000) / 1000 : 0;
+    if (totalCjk > 200 && mojibakeChars / totalCjk > 0.05) {
+      reasons.push(`mojibake:${mojibakeChars}/${totalCjk}`);
+    }
+
     // HALLUCINATION DETECTION — zero-tolerance.
     // Any specific phone/email/address/hours/price appearing in the article
     // MUST be substring-present in the profile reference text (contact +

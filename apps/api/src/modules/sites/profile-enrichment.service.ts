@@ -82,7 +82,16 @@ export class ProfileEnrichmentService {
 
     // Re-enrich only if older than 90 days (or forced). Scraping the same
     // site daily is wasteful; brand contact info changes rarely.
-    if (!opts.force && existingEnriched) {
+    // Exception: if the cached description is mojibake (Big5 decoded as
+    // UTF-8), ignore the cooldown so the encoding-aware fetcher can fix it.
+    const isMojibake = (s?: string): boolean => {
+      if (!s) return false;
+      const cjk = (s.match(/[一-鿿]/g) || []).length;
+      if (cjk < 20) return false;
+      const bad = (s.match(/[蝷曄黎嚗撠璆凋剖豢頛踵鈭撣賊銝蝺餈鋆燐]/g) || []).length;
+      return bad / cjk > 0.05;
+    };
+    if (!opts.force && existingEnriched && !isMojibake(existingEnriched.description)) {
       const extractedAt = new Date(existingEnriched.extractedAt);
       const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000);
       if (extractedAt > ninetyDaysAgo) return existingEnriched;
@@ -164,7 +173,37 @@ export class ProfileEnrichmentService {
         redirect: 'follow',
       });
       if (!res.ok) return null;
-      return await res.text();
+
+      // Encoding detection: Taiwan sites still ship Big5 and some mainland
+      // sites ship GBK. res.text() always decodes as UTF-8, producing the
+      // Big5→UTF-8 mojibake we saw on CakeResume. Read bytes first, sniff
+      // charset from Content-Type header, then HTML meta tag, then default.
+      const buf = Buffer.from(await res.arrayBuffer());
+
+      const ct = res.headers.get('content-type') || '';
+      let charset = /charset=["']?([a-zA-Z0-9_\-]+)/i.exec(ct)?.[1]?.toLowerCase();
+
+      if (!charset || charset === 'utf-8') {
+        const head = buf.subarray(0, 4096).toString('ascii');
+        const metaCharset =
+          /<meta\s+charset=["']?([a-zA-Z0-9_\-]+)/i.exec(head)?.[1]?.toLowerCase() ||
+          /<meta\s+http-equiv=["']content-type["']\s+content=["'][^"']*charset=([a-zA-Z0-9_\-]+)/i
+            .exec(head)?.[1]
+            ?.toLowerCase();
+        if (metaCharset) charset = metaCharset;
+      }
+
+      charset = charset || 'utf-8';
+      // Normalize common aliases to what TextDecoder accepts.
+      if (charset === 'big5-hkscs' || charset === 'cn-big5' || charset === 'csbig5') charset = 'big5';
+      if (charset === 'gb2312' || charset === 'gb18030' || charset === 'cp936') charset = 'gbk';
+
+      try {
+        return new TextDecoder(charset, { fatal: false }).decode(buf);
+      } catch {
+        // Unsupported label — fall back to UTF-8 (better than crashing).
+        return new TextDecoder('utf-8', { fatal: false }).decode(buf);
+      }
     } catch (err) {
       this.logger.debug(
         `fetchHomepage ${url}: ${err instanceof Error ? err.message : err}`,
