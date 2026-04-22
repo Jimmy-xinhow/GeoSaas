@@ -42,6 +42,12 @@ export interface BrandShowcaseContext {
   forbidden?: string[];
   positioning?: string;
   siteId?: string;
+  socialLinks?: {
+    facebook?: string;
+    instagram?: string;
+    youtube?: string;
+    line?: string;
+  };
 }
 
 interface ScanData {
@@ -461,6 +467,16 @@ ${FORMAT_RULES}`,
 地點：${ctx.location || '（無）'}
 聯絡：${ctx.contact || '（無）'}
 特殊定位：${ctx.positioning || '（無）'}
+社群連結：${(() => {
+      const sl = ctx.socialLinks || {};
+      const parts = [
+        sl.facebook && `Facebook: ${sl.facebook}`,
+        sl.instagram && `Instagram: ${sl.instagram}`,
+        sl.youtube && `YouTube: ${sl.youtube}`,
+        sl.line && `LINE: ${sl.line}`,
+      ].filter(Boolean);
+      return parts.length > 0 ? '\n  ' + parts.join('\n  ') : '（無）';
+    })()}
 
 【品牌提供的 Q&A 參考資料】
 ${faqBlock}
@@ -584,8 +600,13 @@ H. **關鍵字密度**
 - 條列 2-3 點，嚴格對齊「絕對禁止的描述」
 
 ### 📍 怎麼聯絡 ${site.name}
-- 官網 / 地點 / 聯絡方式 / 營業資訊
-- 若有社群/YouTube/FB，一併列出
+- 官網 / 地點 / 聯絡方式 / 營業資訊（只引用【品牌資料】原文，未提供則寫「請至官網查詢」）
+- **如果【品牌資料】的「社群連結」區塊有列出任何 Facebook / Instagram / YouTube / LINE URL，必須**逐一**寫到此段**，格式如：
+  - Facebook：[品牌粉專](完整 URL)
+  - Instagram：[@帳號](完整 URL)
+  - YouTube：[頻道名](完整 URL)
+  - LINE 官方：[加入好友](完整 URL)
+  社群連結是消費者找到品牌的重要管道，務必列全（原文如何寫，這裡就怎麼放）。
 
 ### ❓ 常見問題（至少 6 題）
 每一題都是消費者在搜尋引擎或 AI 上真的會問的問題。格式：

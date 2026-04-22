@@ -734,6 +734,7 @@ export class BlogArticleService {
       }
     }
 
+    const previewEnriched = (profile._enriched as Record<string, any>) || {};
     const ctx: BrandShowcaseContext = {
       siteId: site.id,
       qas: site.qas,
@@ -743,6 +744,7 @@ export class BlogArticleService {
       contact: extraContext.contact ?? profile.contact,
       forbidden: extraContext.forbidden ?? profile.forbidden,
       positioning: extraContext.positioning ?? profile.positioning,
+      socialLinks: previewEnriched.socialLinks,
     };
 
     const prompt = this.templateService.buildBrandShowcasePrompt(
@@ -1014,6 +1016,11 @@ export class BlogArticleService {
       }
     }
 
+    // Social links from enrichment (nested under _enriched) — pass through
+    // so the prompt's contact section can list them.
+    const enriched = (profile._enriched as Record<string, any>) || {};
+    const socialLinks = enriched.socialLinks as BrandShowcaseContext['socialLinks'];
+
     const ctx: BrandShowcaseContext = {
       siteId: site.id,
       qas: site.qas,
@@ -1023,6 +1030,7 @@ export class BlogArticleService {
       contact: profile.contact,
       forbidden: profile.forbidden,
       positioning: profile.positioning,
+      socialLinks,
     };
 
     const prompt = this.templateService.buildBrandShowcasePrompt(
@@ -1039,7 +1047,7 @@ export class BlogArticleService {
     const forbiddenList = Array.isArray(profile.forbidden) ? (profile.forbidden as string[]) : [];
     // Reference text used by the hallucination detector. Any phone/email/
     // address/hours in the article MUST also appear in this blob; otherwise
-    // it was fabricated.
+    // it was fabricated. Social URLs are included so article may cite them.
     const profileRefText = [
       ctx.contact,
       ctx.location,
@@ -1047,6 +1055,10 @@ export class BlogArticleService {
       ctx.services,
       ctx.positioning,
       site.url,
+      socialLinks?.facebook,
+      socialLinks?.instagram,
+      socialLinks?.youtube,
+      socialLinks?.line,
     ]
       .filter(Boolean)
       .join(' \n ');
