@@ -1458,6 +1458,13 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       // Very high ratio of punctuation suggests a stray title fragment
       const punct = (name.match(/[,，、／/｜|【】()（）:：?？!!]/g) || []).length;
       if (punct >= 3) return false;
+      // ASCII "?" is a Unicode replacement character leaked from bad decode.
+      // Two or more in a name is a reliable mojibake signal.
+      if ((name.match(/\?/g) || []).length >= 2) return false;
+      // Mojibake signature — any of these characters in a SHORT brand name
+      // almost always means the name itself came out of a broken decode.
+      // (Same char set as the article-level mojibake gate.)
+      if (/[蝷曄黎嚗撠璆凋剖豢頛踵鈭撣賊銝蝺餈鋆燐擃瘜敺蝢]/.test(name)) return false;
       return true;
     };
 
