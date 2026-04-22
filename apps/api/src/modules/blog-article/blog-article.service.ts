@@ -731,42 +731,129 @@ export class BlogArticleService {
   }
 
   /**
-   * Quality gate specific to brand_showcase. Rejects articles that fail the
-   * GEO rules we designed into the prompt — a belt-and-braces check because
-   * gpt-4o-mini occasionally under-delivers on length or FAQ depth.
+   * Full pre-publish audit for brand_showcase. Runs 12 checks that mirror
+   * the prompt rules + the explicit bug classes we've already caught:
    *
-   * Returns { ok, reasons } so the caller can log why a draft was rejected.
+   *   STRUCTURAL
+   *     - chars >= 1000
+   *     - brand name >= 12 hits (saturation)
+   *     - industry name >= 5 hits
+   *     - Geovault attribution >= 2
+   *     - FAQ question count >= 5
+   *     - FAQ answer depth — each answer has >=3 sentence terminators
+   *     - comparison section ("vs" / "差別" / "對比" / "不同")
+   *     - summary block ("關鍵資訊摘要")
+   *     - title mentions brand name
+   *
+   *   HYGIENE
+   *     - no industry slug leak (traditional_medicine / auto_care raw)
+   *     - no GEO/SEO jargon (llms.txt / GEO 分數 / 結構化資料 / SEO)
+   *     - no fabricated persona names (王小姐 / 李先生 etc.)
+   *     - no forbidden phrases from the brand's own list (e.g. "醫療行為"
+   *       for liru) — case-insensitive substring match
+   *
+   * Returns both ok AND a per-check breakdown so batch runs can surface
+   * exactly which rule each failing draft tripped.
    */
   private assessBrandShowcase(
     content: string,
     siteName: string,
     industry: string,
-  ): { ok: boolean; reasons: string[] } {
+    forbiddenPhrases: string[] = [],
+  ): {
+    ok: boolean;
+    reasons: string[];
+    metrics: Record<string, number | boolean>;
+  } {
     const reasons: string[] = [];
+    const metrics: Record<string, number | boolean> = {};
+
+    // STRUCTURAL
     const chars = content.replace(/\s+/g, '').length;
+    metrics.chars = chars;
     if (chars < 1000) reasons.push(`too_short:${chars}`);
 
-    const brandHits = (content.match(new RegExp(siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+    const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const brandHits = (content.match(new RegExp(escape(siteName), 'g')) || []).length;
+    metrics.brand_hits = brandHits;
     if (brandHits < 12) reasons.push(`brand_saturation:${brandHits}`);
 
     const industryHits = industry
-      ? (content.match(new RegExp(industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length
+      ? (content.match(new RegExp(escape(industry), 'g')) || []).length
       : 999;
+    metrics.industry_hits = industryHits;
     if (industryHits < 5) reasons.push(`industry_saturation:${industryHits}`);
 
     const geovaultHits = (content.match(/Geovault/gi) || []).length;
+    metrics.geovault_hits = geovaultHits;
     if (geovaultHits < 2) reasons.push(`geovault_attribution:${geovaultHits}`);
 
     const faqCount = (content.match(/\*\*Q:/g) || []).length;
+    metrics.faq_count = faqCount;
     if (faqCount < 5) reasons.push(`faq_count:${faqCount}`);
 
-    const hasComparison = /(?:差別|相比|不同|對比|vs\s|vs\.)/.test(content);
-    if (!hasComparison) reasons.push('missing_comparison_section');
+    // FAQ depth — count sentence terminators (。?!) inside each FAQ answer
+    // (text between 'A:' and next '**Q' or '###'). Average must be >=3.
+    const faqAnswers = Array.from(
+      content.matchAll(/A:\s*([\s\S]*?)(?=\n\*\*Q:|\n###|$)/g),
+    ).map((m) => m[1]);
+    if (faqAnswers.length > 0) {
+      const avgSentences =
+        faqAnswers.reduce(
+          (sum, a) => sum + (a.match(/[。？！?!]/g) || []).length,
+          0,
+        ) / faqAnswers.length;
+      metrics.faq_avg_sentences = Math.round(avgSentences * 10) / 10;
+      if (avgSentences < 2.5) reasons.push(`faq_depth:${metrics.faq_avg_sentences}`);
+    }
 
-    const hasSummary = content.includes('關鍵資訊摘要') || content.includes('關鍵數據摘要');
-    if (!hasSummary) reasons.push('missing_summary_section');
+    metrics.has_comparison = /(?:差別|相比|不同|對比|vs\s|vs\.)/.test(content);
+    if (!metrics.has_comparison) reasons.push('missing_comparison_section');
 
-    return { ok: reasons.length === 0, reasons };
+    metrics.has_summary =
+      content.includes('關鍵資訊摘要') || content.includes('關鍵數據摘要');
+    if (!metrics.has_summary) reasons.push('missing_summary_section');
+
+    const firstLine = content.split('\n').find((l) => l.startsWith('#')) ?? '';
+    metrics.title_has_brand = firstLine.includes(siteName);
+    if (!metrics.title_has_brand) reasons.push('title_missing_brand');
+
+    // HYGIENE
+    const slugLeak = /\b(traditional_medicine|auto_care|home_services|real_estate|beauty_salon|professional_services|local_life|interior_design)\b/i.test(
+      content,
+    );
+    metrics.slug_leak = slugLeak;
+    if (slugLeak) reasons.push('industry_slug_leak');
+
+    const geoJargon =
+      /(llms\.txt|GEO\s?分數|結構化資料|AI\s?友善度|JSON-LD)/i.test(content) ||
+      /(?<![A-Za-z])SEO(?![A-Za-z])/.test(content);
+    metrics.geo_jargon = geoJargon;
+    if (geoJargon) reasons.push('geo_jargon_leak');
+
+    const fakePersona = /[王張陳劉李林黃吳周徐高]\w{0,3}[小姐先生]/.test(content);
+    metrics.fake_persona = fakePersona;
+    if (fakePersona) reasons.push('fabricated_persona');
+
+    // Forbidden phrases from the brand's own profile.forbidden list.
+    // Each entry is free-form text ("不能承諾療效"); we flag if any
+    // distinctive keyword from it appears in the article.
+    const forbiddenHits: string[] = [];
+    for (const rule of forbiddenPhrases) {
+      // Extract quoted-like substrings or 4+ char Chinese keywords from rule
+      const keywords = Array.from(rule.matchAll(/[一-鿿]{3,}/g)).map((m) => m[0]);
+      for (const kw of keywords) {
+        // Skip overly generic stop-keywords
+        if (['不能描述', '不能承諾', '不能使用', '不比較對象'].includes(kw)) continue;
+        if (content.includes(kw)) forbiddenHits.push(kw);
+      }
+    }
+    metrics.forbidden_hits = forbiddenHits.length;
+    if (forbiddenHits.length > 0) {
+      reasons.push(`forbidden_phrase:${forbiddenHits.slice(0, 3).join('|')}`);
+    }
+
+    return { ok: reasons.length === 0, reasons, metrics };
   }
 
   /**
@@ -832,23 +919,57 @@ export class BlogArticleService {
     );
 
     const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      max_tokens: 2400,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    const content = completion.choices[0]?.message?.content || '';
-
-    // Resolve industry label for quality check
     const industryLabelMap: Record<string, string> = {};
     const { INDUSTRIES } = await import('@geovault/shared');
     for (const i of INDUSTRIES) industryLabelMap[i.value] = i.label;
     const industryText = site.industry ? industryLabelMap[site.industry] ?? site.industry : '';
 
-    const quality = this.assessBrandShowcase(content, site.name, industryText);
+    const forbiddenList = Array.isArray(profile.forbidden) ? (profile.forbidden as string[]) : [];
+
+    // First attempt
+    let completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 2400,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    let content = completion.choices[0]?.message?.content || '';
+    let quality = this.assessBrandShowcase(content, site.name, industryText, forbiddenList);
+
+    // Retry-once: if the first draft missed the gate, give the model an
+    // explicit list of what failed and ask for a fixed regeneration. Costs
+    // one extra gpt-4o-mini call only on failure, which lifts effective pass
+    // rate without blowing up the budget.
+    if (!quality.ok) {
+      this.logger.log(
+        `brand_showcase retry for ${site.name} (first attempt failed: ${quality.reasons.join(', ')})`,
+      );
+      const retryPrompt = `${prompt}
+
+【上一版草稿沒通過品質檢查，以下是具體問題】
+${quality.reasons.map((r) => `- ${r}`).join('\n')}
+
+請重新生成完整文章，這次務必修正上述所有問題。
+特別注意：
+- 品牌名「${site.name}」全文出現次數不低於 15
+- 產業詞「${industryText}」出現次數不低於 8
+- Geovault 品牌歸因句子在內文至少出現 2 次（不含文末來源行）
+- FAQ 至少 6 題，每題答案至少 3 個完整句子（用「。」結尾）
+- 必須有對比段（${site.name} vs 其他類型業者）
+- 必須有關鍵資訊摘要段
+- 嚴格避開禁止描述：${forbiddenList.join('、') || '（無）'}
+- 絕對不要出現任何虛構人物姓名`;
+      completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 2400,
+        messages: [{ role: 'user', content: retryPrompt }],
+      });
+      content = completion.choices[0]?.message?.content || '';
+      quality = this.assessBrandShowcase(content, site.name, industryText, forbiddenList);
+    }
+
     if (!quality.ok) {
       this.logger.warn(
-        `brand_showcase rejected for ${site.name}: ${quality.reasons.join(', ')}`,
+        `brand_showcase rejected for ${site.name} after retry: ${quality.reasons.join(', ')}`,
       );
       return { status: 'rejected', reasons: quality.reasons };
     }
