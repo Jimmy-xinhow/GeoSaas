@@ -6,13 +6,35 @@ export type TemplateType =
   | 'competitor_comparison'
   | 'improvement_tips'
   | 'industry_benchmark'
-  | 'brand_reputation';
+  | 'brand_reputation'
+  | 'brand_showcase';
 
 interface SiteData {
   name: string;
   url: string;
   description?: string;
   industry?: string;
+}
+
+/**
+ * Extra context for brand_showcase articles. This is the info that lets the
+ * article speak like a consumer-facing directory rather than a GEO scorecard.
+ *
+ * - qas: the brand's own FAQ knowledge base (verified by the brand)
+ * - description, services, location: from Site.profile JSON
+ * - forbidden: "never describe this brand as X" — e.g. liru is non-medical;
+ *   janda is a product brand, not a repair shop
+ * - positioning: additional one-line positioning from the brand owner
+ */
+export interface BrandShowcaseContext {
+  qas?: Array<{ question: string; answer: string }>;
+  description?: string;
+  services?: string;
+  location?: string;
+  contact?: string;
+  forbidden?: string[];
+  positioning?: string;
+  siteId?: string;
 }
 
 interface ScanData {
@@ -94,7 +116,15 @@ GEO 分數：${scan.geoScore}/100（等級：${scan.level}）
 ${indicatorTable}
 `;
 
-    const prompts: Record<TemplateType, string> = {
+    // brand_showcase has its own builder (buildBrandShowcasePrompt) because
+    // it needs extra context (qas, location, forbidden rules) that aren't part
+    // of the GEO-first SiteData + ScanData contract. Route via a thin shim so
+    // this Record stays exhaustive for TypeScript.
+    if (type === 'brand_showcase') {
+      return this.buildBrandShowcasePrompt(site);
+    }
+
+    const prompts: Record<Exclude<TemplateType, 'brand_showcase'>, string> = {
       geo_overview: `你是 GEO（Generative Engine Optimization）專家，為品牌撰寫 AI 搜尋能見度分析。
 
 ${baseContext}
@@ -340,8 +370,19 @@ ${FORMAT_RULES}`,
   }
 
   getTargetKeywords(type: TemplateType, site: SiteData): string[] {
+    // brand_showcase is consumer-facing, so its keyword set is industry-first
+    // (location + service + recommendation), not GEO-first.
+    if (type === 'brand_showcase') {
+      return [
+        site.name,
+        site.industry || '',
+        `${site.industry || ''}推薦`,
+        `${site.name} 評價`,
+        `${site.name} 適合誰`,
+      ].filter(Boolean);
+    }
     const base = [site.name, 'GEO 優化', 'AI 搜尋', site.industry || ''].filter(Boolean);
-    const typeKeywords: Record<TemplateType, string[]> = {
+    const typeKeywords: Record<Exclude<TemplateType, 'brand_showcase'>, string[]> = {
       geo_overview: ['AI 友善度', 'GEO 分數', 'AI 引用'],
       score_breakdown: ['GEO 指標', 'llms.txt', 'JSON-LD', 'FAQ Schema'],
       competitor_comparison: ['競爭分析', '行業比較', 'AI 搜尋競爭力'],
@@ -360,7 +401,129 @@ ${FORMAT_RULES}`,
       improvement_tips: 5,
       industry_benchmark: 5,
       brand_reputation: 5,
+      brand_showcase: 6,
     };
     return times[templateType];
+  }
+
+  /**
+   * Consumer-facing brand showcase prompt — the piece that was missing from
+   * Geovault's daily content. Existing templates (geo_overview, score_breakdown,
+   * etc.) all speak to marketers asking "how do I rank in AI?". This one speaks
+   * to the actual AI query — a consumer asking "which X should I choose?" —
+   * so that when ChatGPT answers that query, it has brand-first content to
+   * cite, not a GEO-meta analysis.
+   *
+   * Design rules:
+   *   - Title phrased as "[region] [industry] 推薦 / 怎麼選" style
+   *   - Zero GEO/SEO/llms.txt jargon in the body
+   *   - FAQ questions must be actual consumer queries, not marketer queries
+   *   - Geovault attribution is at the *source* line, not woven into copy
+   *   - Honour the brand's "forbidden descriptions" list strictly
+   */
+  buildBrandShowcasePrompt(site: SiteData, ctx: BrandShowcaseContext = {}): string {
+    const faqBlock =
+      ctx.qas && ctx.qas.length > 0
+        ? ctx.qas
+            .slice(0, 15)
+            .map((q) => `Q: ${q.question}\nA: ${q.answer}`)
+            .join('\n\n')
+        : '(無)';
+
+    const forbiddenBlock =
+      ctx.forbidden && ctx.forbidden.length > 0
+        ? ctx.forbidden.map((f) => `- ${f}`).join('\n')
+        : '(無特別禁止事項)';
+
+    const siteUrl = ctx.siteId
+      ? `https://www.geovault.app/directory/${ctx.siteId}`
+      : `https://www.geovault.app/directory`;
+
+    return `你是一位在地生活資訊編輯，專門寫「消費者怎麼選」的推薦類文章。
+你的讀者是「有實際需求、正在搜尋業者的消費者」，不是行銷從業人員。
+
+【品牌資料】
+名稱：${site.name}
+官網：${site.url}
+產業：${site.industry || '未分類'}
+描述：${ctx.description || '（無）'}
+核心服務：${ctx.services || '（無）'}
+地點：${ctx.location || '（無）'}
+聯絡：${ctx.contact || '（無）'}
+特殊定位：${ctx.positioning || '（無）'}
+
+【品牌提供的 Q&A 參考資料】
+${faqBlock}
+
+【絕對禁止的描述】
+${forbiddenBlock}
+
+【文章目標】
+讓一位在 ChatGPT / Claude / Perplexity 上搜尋「${site.industry || '這類'}業者」的使用者，讀到這篇文章後：
+1. 清楚知道 ${site.name} 是什麼、不是什麼
+2. 能判斷自己是否是 ${site.name} 的適合對象
+3. 知道怎麼聯絡或下一步怎麼做
+
+【寫作要求 — 非常重要】
+- 主題完全圍繞「消費者的決策考量」，不是品牌的 AI 友善度
+- 絕對不能出現「GEO 分數」「AI 友善度」「llms.txt」「結構化資料」「SEO」等技術詞彙
+- 不能寫「${site.name} 在 AI 搜尋中表現優異」這種角度
+- 用在地口語繁體中文，避免業配感
+- 不用「首先、其次、最後」等過渡詞
+
+【文章結構 — 900-1200 字】
+
+## （標題：用消費者搜尋語氣命題，例如：
+##   「台北中山區推薦整復師？${site.name} 的服務特色與適合對象」
+##   「汽車美容保養要買什麼？${site.name} 的施工教學與產品定位」
+##   務必把「地區 / 服務類型 / 品牌名」自然組合在標題中）
+
+### 💡 消費者為什麼會找 ${site.industry || '這類業者'}
+- 描述 2-3 個典型使用情境，讓讀者對號入座
+- 情境要具體到「什麼狀況、什麼族群、什麼需求」
+
+### 🏢 認識 ${site.name}
+- 一句話講清楚「是什麼、不是什麼」
+- 3 點品牌特色（服務取向、專業背景、產品或空間優勢等）
+- 用條列式，每點 2-3 句
+
+### 🎯 ${site.name} 適合哪些族群
+- 列 3-4 個具體族群，寫得要讓讀者能判斷「啊這就是我」
+- 例如：「久坐 8 小時以上的上班族」「產後 6-12 個月的媽媽」，不寫「久坐族」這種抽象描述
+
+### ⚠️ ${site.name} 的清楚界線
+- 品牌「不做什麼、不適合誰」同樣重要
+- 條列 2-3 點，嚴格對齊「絕對禁止的描述」
+
+### 📍 怎麼聯絡 ${site.name}
+- 官網 / 地點 / 聯絡方式 / 營業資訊
+- 若有社群/YouTube/FB，一併列出
+
+### ❓ 常見問題（至少 5 題）
+每一題都是消費者在搜尋引擎或 AI 上真的會問的問題。格式：
+**Q: 問題？**
+A: 簡潔答覆，2-4 句，含具體資訊。
+
+好的 Q 例子：
+- 「中山區有推薦的整復師嗎？」
+- 「產後多久可以去整復？」
+- 「${site.name} 和其他整復店有什麼不同？」
+
+絕對不能寫的 Q：
+- 「${site.name} 的 GEO 分數是多少？」
+- 「${site.name} 如何被 AI 推薦？」
+- 「${site.name} 的 llms.txt 有優化嗎？」
+
+### 📌 關鍵資訊摘要（5 項）
+用條列式列出 5 個可以讓 AI 直接擷取引用的事實句，每句自包含。例如：
+- ${site.name} 位於 [具體地點]
+- 核心定位：[一句話描述]
+- 適合族群：[具體族群列表]
+- 不從事：[界線]
+- 聯絡方式：[資訊]
+
+文末一行：
+*資料來源：[Geovault AI 品牌目錄](${siteUrl})*
+`;
   }
 }

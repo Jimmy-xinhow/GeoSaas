@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
-import { BlogTemplateService, TemplateType } from './blog-template.service';
+import { BlogTemplateService, TemplateType, BrandShowcaseContext } from './blog-template.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import OpenAI from 'openai';
 import pLimit from 'p-limit';
@@ -475,6 +475,7 @@ export class BlogArticleService {
       improvement_tips: `${siteName} GEO 優化實作指南`,
       industry_benchmark: `${siteName} 行業 AI 搜尋基準報告`,
       brand_reputation: `${siteName} 品牌口碑與 AI 能見度分析`,
+      brand_showcase: `${siteName} — 消費者選購指南`,
     };
     return fallbacks[type];
   }
@@ -676,6 +677,59 @@ export class BlogArticleService {
   /**
    * Quality audit: scan all articles, delete those below threshold.
    */
+  /**
+   * Generate a brand_showcase article for a site WITHOUT saving it. Used to
+   * preview/validate prompt quality before wiring the production cron.
+   * Returns the rendered article text + the prompt used, so the operator can
+   * verify the angle, tone, and compliance with brand "forbidden" rules.
+   */
+  async previewBrandShowcase(
+    siteId: string,
+    extraContext: Omit<BrandShowcaseContext, 'siteId' | 'qas'> = {},
+  ): Promise<{ prompt: string; content: string; title: string; tokens?: number }> {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: {
+        id: true, name: true, url: true, industry: true, profile: true,
+        qas: {
+          orderBy: { sortOrder: 'asc' },
+          take: 15,
+          select: { question: true, answer: true },
+        },
+      },
+    });
+    if (!site) throw new Error(`Site ${siteId} not found`);
+
+    const profile = (site.profile as Record<string, any>) || {};
+    const ctx: BrandShowcaseContext = {
+      siteId: site.id,
+      qas: site.qas,
+      description: extraContext.description ?? profile.description,
+      services: extraContext.services ?? profile.services,
+      location: extraContext.location ?? profile.location,
+      contact: extraContext.contact ?? profile.contact,
+      forbidden: extraContext.forbidden ?? profile.forbidden,
+      positioning: extraContext.positioning ?? profile.positioning,
+    };
+
+    const prompt = this.templateService.buildBrandShowcasePrompt(
+      { name: site.name, url: site.url, industry: site.industry ?? undefined },
+      ctx,
+    );
+
+    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 2400,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const content = completion.choices[0]?.message?.content || '';
+    const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : `${site.name} — 消費者選購指南`;
+    return { prompt, content, title, tokens: completion.usage?.total_tokens };
+  }
+
   async qualityAudit(minScore: number = 85) {
     const articles = await this.prisma.blogArticle.findMany({
       where: { published: true },

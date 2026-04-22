@@ -80,6 +80,28 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('preview/brand-showcase/:siteId')
+  @ApiOperation({
+    summary:
+      'Preview a brand_showcase article without saving. Body may include description/services/location/contact/forbidden/positioning overrides.',
+  })
+  previewBrandShowcase(
+    @Param('siteId') siteId: string,
+    @Body() body: {
+      description?: string;
+      services?: string;
+      location?: string;
+      contact?: string;
+      forbidden?: string[];
+      positioning?: string;
+    } = {},
+  ) {
+    return this.service.previewBrandShowcase(siteId, body);
+  }
+
+  @ApiBearerAuth()
   @Post('insights/generate')
   @ApiOperation({ summary: 'Generate insight article for an industry' })
   generateInsight(@Body() body: { industry: string; type?: InsightType }) {
