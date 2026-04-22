@@ -27,10 +27,21 @@ export class BlogArticleService {
     private readonly indexNowService: IndexNowService,
   ) {}
 
-  /** Auto-ping IndexNow when new article is created */
+  /**
+   * Auto-ping IndexNow + WebSub hub when a new article is published.
+   * - IndexNow: the article page, blog index, platform feeds
+   * - WebSub: platform RSS + JSON Feed (so subscribed crawlers get push)
+   * Fire-and-forget; failures don't block the publish path.
+   */
   private pingIndexNow(slug: string) {
     const webUrl = this.config.get('FRONTEND_URL') || 'https://www.geovault.app';
-    this.indexNowService.submitUrl(`${webUrl}/blog/${slug}`).catch(() => {});
+    const paths = [`/blog/${slug}`, '/blog', '/feed', '/feed.json'];
+    for (const path of paths) {
+      this.indexNowService.submitUrl(`${webUrl}${path}`).catch(() => {});
+    }
+    this.indexNowService
+      .notifyWebSubHub([`${webUrl}/feed`, `${webUrl}/feed.json`])
+      .catch(() => {});
   }
 
   /** List published articles (paginated) */

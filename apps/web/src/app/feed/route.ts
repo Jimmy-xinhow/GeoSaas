@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 
@@ -85,6 +86,7 @@ export async function GET() {
     <language>zh-TW</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <atom:link href="${SITE_URL}/feed" rel="self" type="application/rss+xml"/>
+    <atom:link href="https://pubsubhubbub.appspot.com/" rel="hub"/>
     <generator>Geovault</generator>
     <managingEditor>hello@geovault.app (Geovault)</managingEditor>
     <webMaster>hello@geovault.app (Geovault)</webMaster>

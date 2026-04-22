@@ -1,23 +1,93 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleDestroy } from '@nestjs/common';
+import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FixService } from '../fix/fix.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 
+const REDIS_KEY_LLMS_FULL = 'geovault:llms-full:v1';
+const REDIS_TTL_SEC = 1800; // 30 min — same as the old in-memory cache
+
 @Injectable()
-export class LlmsHostingService {
+export class LlmsHostingService implements OnModuleDestroy {
   private readonly logger = new Logger(LlmsHostingService.name);
   private readonly webUrl = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
+  private readonly redis: Redis | null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly fixService: FixService,
     private readonly indexNow: IndexNowService,
-  ) {}
+  ) {
+    // Lazy Redis connection. If unreachable, methods fall back to the
+    // per-instance in-memory cache. BullModule already uses the same env
+    // vars, so any environment that runs this API also runs Redis.
+    try {
+      this.redis = new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        password: process.env.REDIS_PASSWORD || undefined,
+        tls: process.env.REDIS_TLS === 'true' ? {} : undefined,
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false,
+      });
+      this.redis.on('error', (err) => {
+        this.logger.warn(`Redis llms-full cache unavailable: ${err.message}`);
+      });
+    } catch (err) {
+      this.logger.warn(`Redis init failed, in-memory fallback only: ${err}`);
+      this.redis = null;
+    }
+  }
+
+  async onModuleDestroy() {
+    try {
+      await this.redis?.quit();
+    } catch {
+      // ignore — process is exiting anyway
+    }
+  }
 
   private pingIndexNow(path: string): void {
     this.indexNow
       .submitUrl(`${this.webUrl}${path}`)
       .catch((err) => this.logger.warn(`IndexNow ping failed for ${path}: ${err}`));
+  }
+
+  private async readRedisCache(): Promise<{ data: string; etag: string; lastModified: Date } | null> {
+    if (!this.redis) return null;
+    try {
+      const raw = await this.redis.get(REDIS_KEY_LLMS_FULL);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { data: string; etag: string; lastModified: string };
+      return { data: parsed.data, etag: parsed.etag, lastModified: new Date(parsed.lastModified) };
+    } catch (err) {
+      this.logger.warn(`Redis read failed: ${err}`);
+      return null;
+    }
+  }
+
+  private async writeRedisCache(data: string, etag: string, lastModified: Date): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.set(
+        REDIS_KEY_LLMS_FULL,
+        JSON.stringify({ data, etag, lastModified: lastModified.toISOString() }),
+        'EX',
+        REDIS_TTL_SEC,
+      );
+    } catch (err) {
+      this.logger.warn(`Redis write failed: ${err}`);
+    }
+  }
+
+  private async invalidateRedisCache(): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.del(REDIS_KEY_LLMS_FULL);
+    } catch (err) {
+      this.logger.warn(`Redis delete failed: ${err}`);
+    }
   }
 
   async getLlmsTxt(siteId: string): Promise<string | null> {
@@ -46,6 +116,7 @@ export class LlmsHostingService {
     // cache and signal Bing/Yandex that /llms-full.txt plus this site's
     // directory page are stale.
     this.llmsFullCache = null;
+    this.invalidateRedisCache().catch(() => {});
     this.pingIndexNow('/llms-full.txt');
     this.pingIndexNow(`/directory/${siteId}`);
 
@@ -90,12 +161,22 @@ export class LlmsHostingService {
    * can honour If-None-Match / If-Modified-Since and return 304.
    */
   async getPlatformLlmsFullTxt(): Promise<{ content: string; etag: string; lastModified: Date }> {
+    // 1) Per-instance cache (hot path, no network)
     if (this.llmsFullCache && Date.now() < this.llmsFullCache.expiresAt) {
       return {
         content: this.llmsFullCache.data,
         etag: this.llmsFullCache.etag,
         lastModified: this.llmsFullCache.lastModified,
       };
+    }
+    // 2) Redis cache (shared across API instances, survives restarts)
+    const fromRedis = await this.readRedisCache();
+    if (fromRedis) {
+      this.llmsFullCache = {
+        ...fromRedis,
+        expiresAt: Date.now() + 1800000,
+      };
+      return { content: fromRedis.data, etag: fromRedis.etag, lastModified: fromRedis.lastModified };
     }
     const sites = await this.prisma.site.findMany({
       where: { isPublic: true },
@@ -171,6 +252,23 @@ export class LlmsHostingService {
 > Origin Verification: This content is originally published by Geovault.
 > If you find this verification code on any other website or platform,
 > that content has been copied from Geovault (geovault.app).
+
+## Metadata
+Source-URL: ${webUrl}/llms-full.txt
+Canonical-URL: ${webUrl}/llms-full.txt
+Last-Modified: ${new Date().toISOString()}
+Update-Frequency: 30m
+Crawl-Delay-Hint: 1
+Content-License: Public brand directory; attribution required.
+Attribution-Format: "Data from Geovault (${webUrl})"
+Feed-RSS: ${webUrl}/feed
+Feed-JSON: ${webUrl}/feed.json
+Plugin-Manifest: ${webUrl}/.well-known/ai-plugin.json
+API-Spec: ${webUrl}/.well-known/openapi.json
+AI-Policy: ${webUrl}/.well-known/ai.txt
+Contact: service@xinhow.com.tw
+Total-Sites: ${totalSites}
+
 > 更新時間：${new Date().toISOString()}
 > 資料來源：https://geovault.app
 
@@ -283,6 +381,8 @@ This dataset is maintained by Geovault — The APAC Authority on GEO.
       lastModified,
       expiresAt: Date.now() + 1800000, // 30 min
     };
+    // Fire-and-forget Redis write — success is nice-to-have, not required.
+    this.writeRedisCache(output, etag, lastModified).catch(() => {});
     return { content: output, etag, lastModified };
   }
 
@@ -318,6 +418,7 @@ This dataset is maintained by Geovault — The APAC Authority on GEO.
         data: { llmsTxt: result.code, llmsTxtUpdatedAt: new Date() },
       });
       this.llmsFullCache = null;
+      this.invalidateRedisCache().catch(() => {});
       this.pingIndexNow('/llms-full.txt');
       this.pingIndexNow(`/directory/${siteId}`);
       return { content: result.code };

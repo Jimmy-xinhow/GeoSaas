@@ -52,6 +52,7 @@ export async function GET(
     description: `${site.name} 的 AI 可見度更新、常見問題、徽章與分析文章`,
     language: 'zh-TW',
     authors: [{ name: 'Geovault', url: SITE_URL }],
+    hubs: [{ type: 'WebSub', url: 'https://pubsubhubbub.appspot.com/' }],
     items: events.map((e) => ({
       id: e.id,
       url: e.url ? `${SITE_URL}${e.url}` : brandUrl,

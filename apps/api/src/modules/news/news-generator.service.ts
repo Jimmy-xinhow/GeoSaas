@@ -44,6 +44,11 @@ const CATEGORIES = [
 export class NewsGeneratorService {
   private readonly logger = new Logger(NewsGeneratorService.name);
   private openai: OpenAI | null = null;
+  // query -> last-fired timestamp. Pre-LLM dedup so we don't waste gpt-4o-mini
+  // tokens generating an article whose title will clash with an article from
+  // the same query earlier today. TTL is checked inline (12h).
+  private readonly recentQueryFires = new Map<string, number>();
+  private static readonly QUERY_DEDUP_TTL_MS = 12 * 3600 * 1000;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -90,6 +95,15 @@ export class NewsGeneratorService {
 
     for (const query of queries) {
       try {
+        // Pre-LLM dedup: skip the whole pipeline if this query already produced
+        // an article in the last 12h. Avoids spending tokens on a generation
+        // that would be discarded post-hoc.
+        const lastFired = this.recentQueryFires.get(query);
+        if (lastFired && Date.now() - lastFired < NewsGeneratorService.QUERY_DEDUP_TTL_MS) {
+          this.logger.log(`Skip recently-fired query: ${query}`);
+          continue;
+        }
+
         // 1. Search for trending topics
         const sources = await this.searchNews(query);
         if (sources.length === 0) {
@@ -100,8 +114,12 @@ export class NewsGeneratorService {
         // 2. Generate original analysis article
         const article = await this.generateArticle(sources, query);
         if (!article) continue;
+        // Record success BEFORE DB write so a later DB failure doesn't let us
+        // retry the same query; it's cheaper to miss a retry than to double-spend.
+        this.recentQueryFires.set(query, Date.now());
 
-        // 3. Check for duplicates (similar title in last 7 days)
+        // 3. Belt-and-braces: also guard on title similarity in last 7 days
+        // (protects against restart-losing the in-memory map).
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         const existing = await this.prisma.newsArticle.findFirst({

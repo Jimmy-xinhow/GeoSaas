@@ -94,4 +94,37 @@ export class IndexNowService {
   getApiKey(): string {
     return this.apiKey;
   }
+
+  /**
+   * WebSub / PubSubHubbub publisher ping. Tells the hub that a topic URL
+   * (typically an RSS/JSON feed) has new content, so the hub can push to
+   * subscribers without them polling. Fire-and-forget.
+   *
+   * Hub: Google's pubsubhubbub.appspot.com (still operational, free).
+   */
+  async notifyWebSubHub(topicUrls: string[]): Promise<void> {
+    const hub = 'https://pubsubhubbub.appspot.com/';
+    await Promise.all(
+      topicUrls.map(async (topic) => {
+        try {
+          const body = new URLSearchParams({
+            'hub.mode': 'publish',
+            'hub.url': topic,
+          });
+          const res = await fetch(hub, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body,
+          });
+          if (!res.ok) {
+            this.logger.warn(`WebSub ping failed for ${topic}: ${res.status}`);
+          }
+        } catch (err) {
+          this.logger.warn(
+            `WebSub ping error for ${topic}: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }),
+    );
+  }
 }

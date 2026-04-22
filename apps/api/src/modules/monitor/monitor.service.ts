@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import pLimit from 'p-limit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
 import { ChatgptDetector } from './platforms/chatgpt.detector';
@@ -10,6 +11,12 @@ import { CopilotDetector } from './platforms/copilot.detector';
 @Injectable()
 export class MonitorService {
   private readonly logger = new Logger(MonitorService.name);
+
+  // Serialize background auto-checks so a burst of create() calls can't
+  // fan out into parallel LLM hits. Plan limits guard the monthly total,
+  // but not concurrency — without this, a programmatic bulk-create of
+  // N monitors would fire N detectors simultaneously.
+  private readonly autoCheckQueue = pLimit(2);
 
   constructor(
     private prisma: PrismaService,
@@ -44,9 +51,19 @@ export class MonitorService {
       data: { ...data, platform: data.platform.toUpperCase(), checkedAt: new Date() },
     });
 
-    // Auto-run first citation check in background (don't block the response)
-    this.checkCitation(monitor.id).catch((err) => {
-      this.logger.warn(`Auto-check failed for monitor ${monitor.id}: ${err.message}`);
+    // Auto-run first citation check in background (don't block the response).
+    // Routed through autoCheckQueue so concurrent creates serialize to 2-wide.
+    this.autoCheckQueue(async () => {
+      try {
+        await this.checkCitation(monitor.id);
+        // Small breather between queued checks to smooth out the rate to
+        // detector APIs when the queue drains.
+        await new Promise((r) => setTimeout(r, 500));
+      } catch (err) {
+        this.logger.warn(
+          `Auto-check failed for monitor ${monitor.id}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
     });
 
     return monitor;

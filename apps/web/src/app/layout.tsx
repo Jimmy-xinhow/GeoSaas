@@ -57,6 +57,7 @@ export default async function RootLayout({
         <link rel="ai-content" type="text/plain" href="/llms.txt" />
         <link rel="ai-content-full" type="text/plain" href="/llms-full.txt" />
         <link rel="ai-plugin" type="application/json" href="/.well-known/ai-plugin.json" />
+        <link rel="ai-policy" type="text/plain" href="/.well-known/ai.txt" />
 
         {/* hreflang */}
         <link rel="alternate" hrefLang="zh-TW" href="https://www.geovault.app" />

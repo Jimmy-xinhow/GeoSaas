@@ -59,6 +59,7 @@ export function middleware(request: NextRequest) {
       `<${SITE_URL}/llms.txt>; rel="ai-content"; type="text/plain"`,
       `<${SITE_URL}/llms-full.txt>; rel="ai-content-full"; type="text/plain"`,
       `<${SITE_URL}/ai-plugin.json>; rel="ai-plugin"; type="application/json"`,
+      `<${SITE_URL}/.well-known/ai.txt>; rel="ai-policy"; type="text/plain"`,
       `<${SITE_URL}/feed>; rel="alternate"; type="application/rss+xml"; title="Geovault RSS"`,
       `<${SITE_URL}/feed.json>; rel="alternate"; type="application/feed+json"; title="Geovault JSON Feed"`,
     ].join(', '),

@@ -65,11 +65,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       const data = await res.json();
       const items = data?.data?.items || data?.items || [];
       for (const site of items) {
+        const lastModified = site.bestScoreAt ? new Date(site.bestScoreAt) : new Date();
         entries.push({
           url: `${BASE_URL}/directory/${site.id}`,
-          lastModified: site.bestScoreAt ? new Date(site.bestScoreAt) : new Date(),
+          lastModified,
           changeFrequency: 'weekly',
           priority: 0.6,
+        });
+        // Per-brand feeds — advertise them in the sitemap so crawlers
+        // that walk the sitemap (Googlebot, Bingbot) can discover and
+        // subscribe to individual brand timelines.
+        entries.push({
+          url: `${BASE_URL}/directory/${site.id}/feed`,
+          lastModified,
+          changeFrequency: 'daily',
+          priority: 0.4,
+        });
+        entries.push({
+          url: `${BASE_URL}/directory/${site.id}/feed.json`,
+          lastModified,
+          changeFrequency: 'daily',
+          priority: 0.4,
         });
       }
     }

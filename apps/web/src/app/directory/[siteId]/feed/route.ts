@@ -70,6 +70,7 @@ export async function GET(
     <language>zh-TW</language>
     <lastBuildDate>${lastModified.toUTCString()}</lastBuildDate>
     <atom:link href="${selfUrl}" rel="self" type="application/rss+xml"/>
+    <atom:link href="https://pubsubhubbub.appspot.com/" rel="hub"/>
     <generator>Geovault</generator>
     <ttl>60</ttl>
 ${items}
