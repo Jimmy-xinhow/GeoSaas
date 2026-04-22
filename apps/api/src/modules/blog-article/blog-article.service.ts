@@ -4,6 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BlogTemplateService, TemplateType, BrandShowcaseContext } from './blog-template.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
+import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
 import OpenAI from 'openai';
 import pLimit from 'p-limit';
 
@@ -40,6 +41,7 @@ export class BlogArticleService {
     private readonly config: ConfigService,
     private readonly templateService: BlogTemplateService,
     private readonly indexNowService: IndexNowService,
+    private readonly profileEnrichment: ProfileEnrichmentService,
   ) {}
 
   /**
@@ -715,7 +717,23 @@ export class BlogArticleService {
     });
     if (!site) throw new Error(`Site ${siteId} not found`);
 
-    const profile = (site.profile as Record<string, any>) || {};
+    let profile = (site.profile as Record<string, any>) || {};
+
+    // Auto-enrich from homepage if profile is thin, unless caller explicitly
+    // provided contact/location (they know better).
+    if (!extraContext.contact && !profile.contact) {
+      try {
+        await this.profileEnrichment.enrichSite(site.id);
+        const refreshed = await this.prisma.site.findUnique({
+          where: { id: site.id },
+          select: { profile: true },
+        });
+        profile = (refreshed?.profile as Record<string, any>) || profile;
+      } catch {
+        // fall through with original profile
+      }
+    }
+
     const ctx: BrandShowcaseContext = {
       siteId: site.id,
       qas: site.qas,
@@ -974,7 +992,28 @@ export class BlogArticleService {
       if (recent) return { status: 'skipped', reasons: ['cooldown'] };
     }
 
-    const profile = (site.profile as Record<string, any>) || {};
+    let profile = (site.profile as Record<string, any>) || {};
+
+    // Enrich profile from homepage scrape if we don't already have contact
+    // or location data. This is the step that upgrades a bare seed site
+    // (name + url + industry) into something the LLM can write concrete,
+    // verifiable facts about — preventing "詳情見官網" filler.
+    if (!profile.contact || !profile.location) {
+      try {
+        await this.profileEnrichment.enrichSite(site.id);
+        // Re-read so we pick up the newly-filled top-level fields.
+        const refreshed = await this.prisma.site.findUnique({
+          where: { id: site.id },
+          select: { profile: true },
+        });
+        profile = (refreshed?.profile as Record<string, any>) || profile;
+      } catch (err) {
+        this.logger.debug(
+          `enrichment failed for ${site.name}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
     const ctx: BrandShowcaseContext = {
       siteId: site.id,
       qas: site.qas,
