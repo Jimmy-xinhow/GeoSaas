@@ -57,13 +57,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // ─── Dynamic: Directory sites ───
+  // The /api/directory endpoint caps limit at 50, so paginate until drained.
+  // Cap at ~40 pages (2000 sites) to keep sitemap build bounded.
   try {
-    const res = await fetch(`${API_URL}/api/directory?limit=1000`, {
-      next: { revalidate: 3600 },
-    });
-    if (res.ok) {
+    const PAGE_SIZE = 50;
+    const MAX_PAGES = 40;
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const res = await fetch(
+        `${API_URL}/api/directory?limit=${PAGE_SIZE}&page=${page}`,
+        { next: { revalidate: 3600 } },
+      );
+      if (!res.ok) break;
       const data = await res.json();
       const items = data?.data?.items || data?.items || [];
+      if (items.length === 0) break;
       for (const site of items) {
         const lastModified = site.bestScoreAt ? new Date(site.bestScoreAt) : new Date();
         entries.push({
@@ -88,6 +95,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           priority: 0.4,
         });
       }
+      if (items.length < PAGE_SIZE) break;
     }
   } catch {
     // API unavailable — skip
