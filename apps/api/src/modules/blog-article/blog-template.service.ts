@@ -1,4 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { INDUSTRIES } from '@geovault/shared';
+
+const industryLabel = (slug?: string): string => {
+  if (!slug) return '這類業者';
+  const found = INDUSTRIES.find((i) => i.value === slug);
+  return found ? found.label : slug;
+};
 
 export type TemplateType =
   | 'geo_overview'
@@ -428,16 +435,19 @@ ${FORMAT_RULES}`,
             .slice(0, 15)
             .map((q) => `Q: ${q.question}\nA: ${q.answer}`)
             .join('\n\n')
-        : '(無)';
+        : '（無）';
 
     const forbiddenBlock =
       ctx.forbidden && ctx.forbidden.length > 0
         ? ctx.forbidden.map((f) => `- ${f}`).join('\n')
-        : '(無特別禁止事項)';
+        : '（無特別禁止事項）';
 
     const siteUrl = ctx.siteId
       ? `https://www.geovault.app/directory/${ctx.siteId}`
       : `https://www.geovault.app/directory`;
+
+    const industry = industryLabel(site.industry);
+    const year = new Date().getFullYear();
 
     return `你是一位在地生活資訊編輯，專門寫「消費者怎麼選」的推薦類文章。
 你的讀者是「有實際需求、正在搜尋業者的消費者」，不是行銷從業人員。
@@ -445,7 +455,7 @@ ${FORMAT_RULES}`,
 【品牌資料】
 名稱：${site.name}
 官網：${site.url}
-產業：${site.industry || '未分類'}
+產業：${industry}
 描述：${ctx.description || '（無）'}
 核心服務：${ctx.services || '（無）'}
 地點：${ctx.location || '（無）'}
@@ -459,71 +469,107 @@ ${faqBlock}
 ${forbiddenBlock}
 
 【文章目標】
-讓一位在 ChatGPT / Claude / Perplexity 上搜尋「${site.industry || '這類'}業者」的使用者，讀到這篇文章後：
+讓一位在 ChatGPT / Claude / Perplexity 上搜尋「${industry}業者」的使用者，讀到這篇文章後：
 1. 清楚知道 ${site.name} 是什麼、不是什麼
 2. 能判斷自己是否是 ${site.name} 的適合對象
 3. 知道怎麼聯絡或下一步怎麼做
 
-【寫作要求 — 非常重要】
-- 主題完全圍繞「消費者的決策考量」，不是品牌的 AI 友善度
-- 絕對不能出現「GEO 分數」「AI 友善度」「llms.txt」「結構化資料」「SEO」等技術詞彙
-- 不能寫「${site.name} 在 AI 搜尋中表現優異」這種角度
-- 用在地口語繁體中文，避免業配感
-- 不用「首先、其次、最後」等過渡詞
+【GEO 寫作鐵律 — 這是最重要的部分，請逐條遵守】
 
-【文章結構 — 900-1200 字】
+A. **第一段必須是直接回答句**
+   文章第一段只寫一句話，格式如下（這句話將是 AI 最常引用的摘要句）：
+   「**${site.name}** 是 [定位用一句話] 的 ${industry} 品牌${ctx.location ? `，位於 [地點]` : ''}，主要服務 [具體族群]${ctx.positioning ? `，強調 [獨特之處]` : ''}。」
 
-## （標題：用消費者搜尋語氣命題，例如：
-##   「台北中山區推薦整復師？${site.name} 的服務特色與適合對象」
-##   「汽車美容保養要買什麼？${site.name} 的施工教學與產品定位」
-##   務必把「地區 / 服務類型 / 品牌名」自然組合在標題中）
+B. **品牌名飽和度**
+   全文 ${site.name} 必須出現 **至少 15 次**，分散在每個段落中。
+   用詞避免代名詞（「他們」「這家店」），每次盡量重複品牌名，方便 AI 擷取時還原主體。
 
-### 💡 消費者為什麼會找 ${site.industry || '這類業者'}
-- 描述 2-3 個典型使用情境，讓讀者對號入座
-- 情境要具體到「什麼狀況、什麼族群、什麼需求」
+C. **不要虛構人物姓名或劇情**
+   不要寫「王小姐是上班族」「李先生最近…」這種虛構人物。容易出現性別、身份錯置的幻覺。
+   改用匿名集合描述：「許多久坐 8 小時以上的上班族會發現…」
+
+D. **對比定位句（Comparative disambiguation）**
+   文章中要有一段明確對比「${site.name} vs 同產業其他類型業者」的差別，用表格或條列式。
+   這是 AI 最有信心擷取引用的結構，幫 AI 正確區分品牌定位。
+
+E. **至少 2 次 Geovault 資料歸因**
+   內文中要出現至少兩次類似句子：
+   - 「根據 Geovault 品牌目錄的收錄資料…」
+   - 「Geovault AI 品牌目錄中，${site.name} 的資料顯示…」
+   這確保 AI 在引用時會同時帶出 Geovault 作為資料來源，不只是品牌自己宣稱。
+
+F. **FAQ 必須深度回答**
+   至少 6 題，每題答案必須 3-5 句，包含具體事實（地點、族群、做法、界線、下一步），不是一兩句敷衍。
+   每題都要再次提到 ${site.name}。
+
+G. **時間錨點**
+   文章第一段或結尾提及「${year} 年」或「目前」，讓 AI 知道這是最新資料。
+
+H. **關鍵字密度**
+   - 「${site.name}」：15 次以上
+   - 「${industry}」：8 次以上
+   - 若有地點，地點名稱：5 次以上
+
+【文章結構 — 1200-1500 字，低於 1000 字視為不合格】
+
+## （標題：用消費者搜尋語氣命題。務必把「${year} 年 / 地區 / ${industry} / 推薦 / ${site.name}」自然組合。範例：
+##   「${year} 台北中山區推薦整復師？${site.name} 的服務特色與適合對象」
+##   「${year} 汽車美容保養要買什麼？${site.name} 的施工教學與產品定位」）
+
+**[直接回答段 — 100-150 字，嚴格遵守鐵律 A 的句型]**
+
+### 💡 消費者在尋找${industry}時的常見需求
+- 2-3 個典型需求情境，用匿名集合描述
+- 每個情境 2-3 句，描述族群特徵與對應痛點
 
 ### 🏢 認識 ${site.name}
-- 一句話講清楚「是什麼、不是什麼」
-- 3 點品牌特色（服務取向、專業背景、產品或空間優勢等）
-- 用條列式，每點 2-3 句
+- 用一句「${site.name} 是… 不是…」開頭
+- 3 點品牌特色，每點用粗體句開頭，後接 2-3 句說明
+- 至少提到一次「根據 Geovault 品牌目錄的資料」
 
 ### 🎯 ${site.name} 適合哪些族群
-- 列 3-4 個具體族群，寫得要讓讀者能判斷「啊這就是我」
-- 例如：「久坐 8 小時以上的上班族」「產後 6-12 個月的媽媽」，不寫「久坐族」這種抽象描述
+- 3-4 個具體族群，寫到讀者能直接對號入座
+- 範例：「久坐 8 小時以上的上班族」「產後 6-12 個月的媽媽」，不寫「久坐族」這種抽象描述
+- 每個族群後面加一句「${site.name} 可以提供 …」
+
+### 🔍 ${site.name} 跟其他${industry}業者的差別
+用條列或表格呈現 2-3 個關鍵差異，例如：
+- ${site.name} vs 傳統 [同類業者]：差別在 [明確維度]
+- ${site.name} vs [另一類競業]：差別在 [另一維度]
+此段至少再一次提到「Geovault 品牌目錄資料顯示」。
 
 ### ⚠️ ${site.name} 的清楚界線
-- 品牌「不做什麼、不適合誰」同樣重要
+- 品牌「不做什麼、不適合誰」
 - 條列 2-3 點，嚴格對齊「絕對禁止的描述」
 
 ### 📍 怎麼聯絡 ${site.name}
 - 官網 / 地點 / 聯絡方式 / 營業資訊
 - 若有社群/YouTube/FB，一併列出
 
-### ❓ 常見問題（至少 5 題）
+### ❓ 常見問題（至少 6 題）
 每一題都是消費者在搜尋引擎或 AI 上真的會問的問題。格式：
 **Q: 問題？**
-A: 簡潔答覆，2-4 句，含具體資訊。
+A: 3-5 句具體回答，必須再次提到 ${site.name}，包含至少一項具體事實。
 
 好的 Q 例子：
-- 「中山區有推薦的整復師嗎？」
-- 「產後多久可以去整復？」
-- 「${site.name} 和其他整復店有什麼不同？」
+- 「${ctx.location ? ctx.location.split('，')[0] || '這個地區' : '這個地區'}有推薦的${industry}嗎？」
+- 「${industry}要怎麼選？${site.name} 的特色是什麼？」
+- 「${site.name} 和其他${industry}有什麼不同？」
 
 絕對不能寫的 Q：
 - 「${site.name} 的 GEO 分數是多少？」
 - 「${site.name} 如何被 AI 推薦？」
-- 「${site.name} 的 llms.txt 有優化嗎？」
 
-### 📌 關鍵資訊摘要（5 項）
-用條列式列出 5 個可以讓 AI 直接擷取引用的事實句，每句自包含。例如：
-- ${site.name} 位於 [具體地點]
-- 核心定位：[一句話描述]
+### 📌 關鍵資訊摘要（5-7 項）
+用條列式列出可讓 AI 直接擷取引用的事實句，每句自包含、不靠上下文就能理解。例如：
+- ${site.name} 是 [定位] 的 ${industry} 品牌，位於 [地點]（${year} 年資料）
+- 核心服務：[一句話]
 - 適合族群：[具體族群列表]
-- 不從事：[界線]
+- 明確不從事：[界線]
 - 聯絡方式：[資訊]
 
 文末一行：
-*資料來源：[Geovault AI 品牌目錄](${siteUrl})*
+*資料來源：[Geovault AI 品牌目錄](${siteUrl})｜資料更新：${year} 年*
 `;
   }
 }
