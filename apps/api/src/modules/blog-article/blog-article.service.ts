@@ -1418,15 +1418,16 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     if (!labelRec) return { status: 'skipped', reasons: ['unknown_industry'] };
     const industryLabel = labelRec.label;
 
-    // Pull ranked public sites for this industry
-    const sites = await this.prisma.site.findMany({
+    // Pull ranked public sites for this industry. Take 3x the limit so we
+    // can filter out sites with corrupt names and still land 10 clean ones.
+    const rawSites = await this.prisma.site.findMany({
       where: {
         isPublic: true,
         industry: industrySlug,
         bestScore: { gt: 0 },
       },
       orderBy: { bestScore: 'desc' },
-      take: Math.max(opts.limit ?? 10, 10),
+      take: Math.max(opts.limit ?? 10, 10) * 3,
       select: {
         id: true,
         name: true,
@@ -1442,8 +1443,32 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       },
     });
 
+    // Site-name hygiene: seed data for some industries (restaurant, cafe,
+    // beauty_salon, legal, etc.) contains brand names scraped from SEO blog
+    // titles that were mangled at ingest — unpaired UTF-16 surrogates and
+    // truncated clauses. These names can't be rendered by the LLM faithfully
+    // (it paraphrases them, which then fails missing_brands gate). Skip.
+    const isCleanName = (name: string): boolean => {
+      if (!name) return false;
+      if (name.length > 50) return false; // blog-title-style junk
+      // Unpaired surrogate bytes — classic byte-level encoding corruption
+      if (/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(name)) return false;
+      // Contains obvious URL-title separators
+      if (/[｜|]/.test(name) && name.length > 25) return false;
+      // Very high ratio of punctuation suggests a stray title fragment
+      const punct = (name.match(/[,，、／/｜|【】()（）:：?？!!]/g) || []).length;
+      if (punct >= 3) return false;
+      return true;
+    };
+
+    const sites = rawSites.filter((s) => isCleanName(s.name)).slice(0, opts.limit ?? 10);
+
     if (sites.length < 5) {
-      return { status: 'skipped', reasons: ['too_few_brands'], eligibleCount: sites.length };
+      return {
+        status: 'skipped',
+        reasons: [`too_few_clean_brands:${sites.length}_of_${rawSites.length}`],
+        eligibleCount: sites.length,
+      };
     }
 
     const top = sites.slice(0, opts.limit ?? 10);
