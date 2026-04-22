@@ -149,6 +149,18 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Delete('brand-showcase/all')
+  @ApiOperation({
+    summary:
+      'Delete every brand_showcase article. Escape hatch for when quality rules change and prior generations are no longer trusted.',
+  })
+  deleteAllBrandShowcase() {
+    return this.service.deleteAllBrandShowcase();
+  }
+
+  @ApiBearerAuth()
   @Post('insights/generate')
   @ApiOperation({ summary: 'Generate insight article for an industry' })
   generateInsight(@Body() body: { industry: string; type?: InsightType }) {

@@ -775,6 +775,7 @@ export class BlogArticleService {
     siteName: string,
     industry: string,
     forbiddenPhrases: string[] = [],
+    profileRefText: string = '',
   ): {
     ok: boolean;
     reasons: string[];
@@ -868,6 +869,63 @@ export class BlogArticleService {
       reasons.push(`forbidden_phrase:${forbiddenHits.slice(0, 3).join('|')}`);
     }
 
+    // HALLUCINATION DETECTION — zero-tolerance.
+    // Any specific phone/email/address/hours/price appearing in the article
+    // MUST be substring-present in the profile reference text (contact +
+    // location + description + services + positioning). Otherwise it's
+    // almost certainly fabricated by the LLM — reject.
+    //
+    // We normalize whitespace/hyphens before comparing so "0908-600-512"
+    // in article matches "0908600512" in contact.
+    const normalizeDigits = (s: string) => s.replace(/[-\s.()]/g, '');
+    const refNormalized = normalizeDigits(profileRefText);
+    const refRaw = profileRefText;
+
+    // Taiwan phone-like tokens (landline 02-XXXX-XXXX / 0X-XXX-XXXX,
+    // mobile 09XX-XXX-XXX, +886 variants, 4/8-digit chains)
+    const phoneMatches =
+      content.match(/\b(?:\+?886[-\s.]?\d|0\d)[-\s.]?\d{2,4}[-\s.]?\d{3,4}(?:[-\s.]?\d{2,4})?\b/g) || [];
+    const fakePhones = phoneMatches.filter((p) => {
+      const pNorm = normalizeDigits(p);
+      return pNorm.length >= 7 && !refNormalized.includes(pNorm);
+    });
+    if (fakePhones.length > 0) {
+      reasons.push(`fabricated_phone:${fakePhones.slice(0, 2).join('|')}`);
+    }
+    metrics.fake_phone_hits = fakePhones.length;
+
+    // Email addresses
+    const emailMatches = content.match(/[\w._%+-]+@[\w.-]+\.[A-Za-z]{2,}/g) || [];
+    const fakeEmails = emailMatches.filter((e) => !refRaw.toLowerCase().includes(e.toLowerCase()));
+    if (fakeEmails.length > 0) {
+      reasons.push(`fabricated_email:${fakeEmails.slice(0, 2).join('|')}`);
+    }
+    metrics.fake_email_hits = fakeEmails.length;
+
+    // Street-level addresses with specific 號 numbers (e.g. "民權西路 27 號")
+    // If profile doesn't already contain "號", any 號 in the article is fabricated.
+    const addressMatches =
+      content.match(/[一-鿿]{2,10}(?:路|街|巷|弄|大道|段)\s*\d+\s*號(?:[之\d樓F]+)?/g) || [];
+    const fakeAddresses = addressMatches.filter((a) => !refRaw.includes(a));
+    if (fakeAddresses.length > 0) {
+      reasons.push(`fabricated_address:${fakeAddresses.slice(0, 2).join('|')}`);
+    }
+    metrics.fake_address_hits = fakeAddresses.length;
+
+    // Business hours — only flag if profile has no hours info at all
+    const profileHasHours = /(營業|時間|hours?|\d{1,2}[:：]\d{2})/i.test(profileRefText);
+    if (!profileHasHours) {
+      const hoursMatches =
+        content.match(/\d{1,2}\s?[:：點]\s?\d{0,2}\s?[至到~\-–—]\s?\d{1,2}\s?[:：點]\s?\d{0,2}/g) ||
+        [];
+      if (hoursMatches.length > 0) {
+        reasons.push(`fabricated_hours:${hoursMatches.slice(0, 2).join('|')}`);
+      }
+      metrics.fake_hours_hits = hoursMatches.length;
+    } else {
+      metrics.fake_hours_hits = 0;
+    }
+
     return { ok: reasons.length === 0, reasons, metrics };
   }
 
@@ -940,6 +998,19 @@ export class BlogArticleService {
     const industryText = site.industry ? industryLabelMap[site.industry] ?? site.industry : '';
 
     const forbiddenList = Array.isArray(profile.forbidden) ? (profile.forbidden as string[]) : [];
+    // Reference text used by the hallucination detector. Any phone/email/
+    // address/hours in the article MUST also appear in this blob; otherwise
+    // it was fabricated.
+    const profileRefText = [
+      ctx.contact,
+      ctx.location,
+      ctx.description,
+      ctx.services,
+      ctx.positioning,
+      site.url,
+    ]
+      .filter(Boolean)
+      .join(' \n ');
 
     // First attempt
     let completion = await openai.chat.completions.create({
@@ -948,7 +1019,7 @@ export class BlogArticleService {
       messages: [{ role: 'user', content: prompt }],
     });
     let content = completion.choices[0]?.message?.content || '';
-    let quality = this.assessBrandShowcase(content, site.name, industryText, forbiddenList);
+    let quality = this.assessBrandShowcase(content, site.name, industryText, forbiddenList, profileRefText);
 
     // Retry-once: if the first draft missed the gate, give the model an
     // explicit list of what failed and ask for a fixed regeneration. Costs
@@ -972,14 +1043,15 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
 - 必須有對比段（${site.name} vs 其他類型業者）
 - 必須有關鍵資訊摘要段
 - 嚴格避開禁止描述：${forbiddenList.join('、') || '（無）'}
-- 絕對不要出現任何虛構人物姓名`;
+- 絕對不要出現任何虛構人物姓名
+- **絕對不要編造任何電話、email、門牌號碼、營業時間、價格** — 若【品牌資料】沒提供，就寫「請至官網查詢」`;
       completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         max_tokens: 2400,
         messages: [{ role: 'user', content: retryPrompt }],
       });
       content = completion.choices[0]?.message?.content || '';
-      quality = this.assessBrandShowcase(content, site.name, industryText, forbiddenList);
+      quality = this.assessBrandShowcase(content, site.name, industryText, forbiddenList, profileRefText);
     }
 
     if (!quality.ok) {
@@ -1144,6 +1216,20 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       `brand_showcase batch done: ${generated} generated, ${rejected} rejected, ${skipped} skipped`,
     );
     return { attempted, generated, rejected, skipped, rejectedReasons };
+  }
+
+  /**
+   * Nuke all brand_showcase articles. Admin-only escape hatch for when the
+   * template/quality-gate rules change and existing articles are no longer
+   * trusted (e.g. batch-1 was generated before hallucination detection
+   * landed, so we can't verify it's clean — delete and regenerate).
+   */
+  async deleteAllBrandShowcase(): Promise<{ deleted: number }> {
+    const result = await this.prisma.blogArticle.deleteMany({
+      where: { templateType: 'brand_showcase' },
+    });
+    this.logger.warn(`brand_showcase nuke: deleted ${result.count} articles`);
+    return { deleted: result.count };
   }
 
   /** Expose recent batch history + current run-in-progress to the admin UI. */
