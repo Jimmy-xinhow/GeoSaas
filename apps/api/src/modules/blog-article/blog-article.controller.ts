@@ -102,6 +102,36 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('brand-showcase/generate/:siteId')
+  @ApiOperation({
+    summary:
+      'Generate + persist one brand_showcase article for a site. Respects the 90-day cooldown; pass ?force=true to bypass.',
+  })
+  generateBrandShowcase(
+    @Param('siteId') siteId: string,
+    @Query('force') force?: string,
+  ) {
+    return this.service.generateBrandShowcaseForSite(siteId, {
+      force: force === 'true' || force === '1',
+    });
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('brand-showcase/batch')
+  @ApiOperation({
+    summary:
+      'Run a one-shot brand_showcase batch. ?limit=30 (default 15, max 200). Picks public sites with missing or >90-day-old brand_showcase articles.',
+  })
+  brandShowcaseBatch(@Query('limit') limit?: string) {
+    const n = Math.max(1, Math.min(200, limit ? parseInt(limit, 10) : 15));
+    return this.service.runBrandShowcaseBatch(n);
+  }
+
+  @ApiBearerAuth()
   @Post('insights/generate')
   @ApiOperation({ summary: 'Generate insight article for an industry' })
   generateInsight(@Body() body: { industry: string; type?: InsightType }) {

@@ -730,6 +730,261 @@ export class BlogArticleService {
     return { prompt, content, title, tokens: completion.usage?.total_tokens };
   }
 
+  /**
+   * Quality gate specific to brand_showcase. Rejects articles that fail the
+   * GEO rules we designed into the prompt — a belt-and-braces check because
+   * gpt-4o-mini occasionally under-delivers on length or FAQ depth.
+   *
+   * Returns { ok, reasons } so the caller can log why a draft was rejected.
+   */
+  private assessBrandShowcase(
+    content: string,
+    siteName: string,
+    industry: string,
+  ): { ok: boolean; reasons: string[] } {
+    const reasons: string[] = [];
+    const chars = content.replace(/\s+/g, '').length;
+    if (chars < 1000) reasons.push(`too_short:${chars}`);
+
+    const brandHits = (content.match(new RegExp(siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+    if (brandHits < 12) reasons.push(`brand_saturation:${brandHits}`);
+
+    const industryHits = industry
+      ? (content.match(new RegExp(industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length
+      : 999;
+    if (industryHits < 5) reasons.push(`industry_saturation:${industryHits}`);
+
+    const geovaultHits = (content.match(/Geovault/gi) || []).length;
+    if (geovaultHits < 2) reasons.push(`geovault_attribution:${geovaultHits}`);
+
+    const faqCount = (content.match(/\*\*Q:/g) || []).length;
+    if (faqCount < 5) reasons.push(`faq_count:${faqCount}`);
+
+    const hasComparison = /(?:差別|相比|不同|對比|vs\s|vs\.)/.test(content);
+    if (!hasComparison) reasons.push('missing_comparison_section');
+
+    const hasSummary = content.includes('關鍵資訊摘要') || content.includes('關鍵數據摘要');
+    if (!hasSummary) reasons.push('missing_summary_section');
+
+    return { ok: reasons.length === 0, reasons };
+  }
+
+  /**
+   * Production generator for brand_showcase. Idempotent: skips if the site
+   * already has a brand_showcase article less than 90 days old. Runs the
+   * quality gate before persisting; failed drafts are discarded silently.
+   *
+   * Returns:
+   *   'skipped'    — cooldown still active
+   *   'rejected'   — generated but failed quality gate
+   *   'generated'  — new article persisted
+   */
+  async generateBrandShowcaseForSite(
+    siteId: string,
+    opts: { force?: boolean } = {},
+  ): Promise<{ status: 'skipped' | 'rejected' | 'generated'; reasons?: string[]; slug?: string }> {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: {
+        id: true, name: true, url: true, industry: true, profile: true, isPublic: true,
+        qas: {
+          orderBy: { sortOrder: 'asc' },
+          take: 15,
+          select: { question: true, answer: true },
+        },
+      },
+    });
+    if (!site || !site.isPublic) return { status: 'skipped', reasons: ['not_public'] };
+
+    // 90-day cooldown: skip if this site already has a brand_showcase article
+    // regenerated within the window. `force` bypasses for manual ops.
+    if (!opts.force) {
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000);
+      const recent = await this.prisma.blogArticle.findFirst({
+        where: {
+          siteId,
+          templateType: 'brand_showcase',
+          OR: [
+            { lastRegeneratedAt: { gte: ninetyDaysAgo } },
+            { lastRegeneratedAt: null, createdAt: { gte: ninetyDaysAgo } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (recent) return { status: 'skipped', reasons: ['cooldown'] };
+    }
+
+    const profile = (site.profile as Record<string, any>) || {};
+    const ctx: BrandShowcaseContext = {
+      siteId: site.id,
+      qas: site.qas,
+      description: profile.description,
+      services: profile.services,
+      location: profile.location,
+      contact: profile.contact,
+      forbidden: profile.forbidden,
+      positioning: profile.positioning,
+    };
+
+    const prompt = this.templateService.buildBrandShowcasePrompt(
+      { name: site.name, url: site.url, industry: site.industry ?? undefined },
+      ctx,
+    );
+
+    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 2400,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const content = completion.choices[0]?.message?.content || '';
+
+    // Resolve industry label for quality check
+    const industryLabelMap: Record<string, string> = {};
+    const { INDUSTRIES } = await import('@geovault/shared');
+    for (const i of INDUSTRIES) industryLabelMap[i.value] = i.label;
+    const industryText = site.industry ? industryLabelMap[site.industry] ?? site.industry : '';
+
+    const quality = this.assessBrandShowcase(content, site.name, industryText);
+    if (!quality.ok) {
+      this.logger.warn(
+        `brand_showcase rejected for ${site.name}: ${quality.reasons.join(', ')}`,
+      );
+      return { status: 'rejected', reasons: quality.reasons };
+    }
+
+    const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : `${site.name} — 消費者選購指南`;
+    const slug = `${site.name.toLowerCase().replace(/[^a-z0-9一-鿿]+/g, '-').slice(0, 30)}-brand-showcase-${Date.now().toString(36)}`;
+
+    // If an older brand_showcase exists for this site, replace it rather
+    // than accumulate. 90-day cooldown above already prevents churn; this
+    // just keeps the DB clean when force=true or cooldown was out of window.
+    const existing = await this.prisma.blogArticle.findFirst({
+      where: { siteId: site.id, templateType: 'brand_showcase' },
+      select: { id: true },
+    });
+    if (existing) {
+      await this.prisma.blogArticle.delete({ where: { id: existing.id } });
+    }
+
+    await this.prisma.blogArticle.create({
+      data: {
+        slug,
+        title,
+        description: content.slice(0, 200).replace(/#+\s/g, '').trim(),
+        content,
+        category: 'brand-directory',
+        siteId: site.id,
+        templateType: 'brand_showcase',
+        industrySlug: site.industry ?? undefined,
+        targetKeywords: this.templateService.getTargetKeywords('brand_showcase', {
+          name: site.name,
+          url: site.url,
+          industry: site.industry ?? undefined,
+        }),
+        readingTimeMinutes: this.templateService.estimateReadingTime('brand_showcase'),
+        readTime: `${this.templateService.estimateReadingTime('brand_showcase')} 分鐘`,
+        published: true,
+        lastRegeneratedAt: new Date(),
+      },
+    });
+    this.pingIndexNow(slug);
+    return { status: 'generated', slug };
+  }
+
+  /**
+   * Cron: every day at 05:00 — rotate 15 public sites through brand_showcase
+   * generation. The 90-day cooldown inside generateBrandShowcaseForSite keeps
+   * this from double-processing; rotation order is by oldest-article-first so
+   * stale brands surface first.
+   *
+   * Rough cost: 15 calls × ~$0.002 (gpt-4o-mini, ~2500 in + ~1800 out tokens)
+   * = ~$0.03/day = ~$1/month. Full 1333-site turnover takes ~89 days.
+   */
+  @Cron('0 5 * * *', { name: 'brand-showcase-daily' })
+  async scheduledBrandShowcaseGeneration(): Promise<void> {
+    await this.runBrandShowcaseBatch(15);
+  }
+
+  /**
+   * Shared batch runner used by the cron and the admin one-shot trigger.
+   * Picks public sites that either have no brand_showcase yet, or whose
+   * existing article is > 90 days old. Oldest/missing first.
+   */
+  async runBrandShowcaseBatch(limit: number): Promise<{
+    attempted: number;
+    generated: number;
+    rejected: number;
+    skipped: number;
+    rejectedReasons: Record<string, number>;
+  }> {
+    this.logger.log(`brand_showcase batch start (limit=${limit})`);
+
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000);
+
+    // Candidates: public sites where brand_showcase is missing or stale.
+    // We fetch 3× the batch limit to account for skips/rejects in-flight.
+    const candidates = await this.prisma.site.findMany({
+      where: {
+        isPublic: true,
+        OR: [
+          { blogArticles: { none: { templateType: 'brand_showcase' } } },
+          {
+            blogArticles: {
+              some: {
+                templateType: 'brand_showcase',
+                OR: [
+                  { lastRegeneratedAt: { lt: ninetyDaysAgo } },
+                  { lastRegeneratedAt: null, createdAt: { lt: ninetyDaysAgo } },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      orderBy: { updatedAt: 'asc' }, // oldest updated first
+      take: limit * 3,
+      select: { id: true, name: true },
+    });
+
+    const queue = pLimit(2);
+    const rejectedReasons: Record<string, number> = {};
+    let attempted = 0;
+    let generated = 0;
+    let rejected = 0;
+    let skipped = 0;
+
+    await Promise.all(
+      candidates.slice(0, limit).map((site) =>
+        queue(async () => {
+          attempted++;
+          try {
+            const result = await this.generateBrandShowcaseForSite(site.id);
+            if (result.status === 'generated') generated++;
+            else if (result.status === 'rejected') {
+              rejected++;
+              for (const r of result.reasons ?? []) {
+                rejectedReasons[r] = (rejectedReasons[r] ?? 0) + 1;
+              }
+            } else skipped++;
+          } catch (err) {
+            rejected++;
+            rejectedReasons['exception'] = (rejectedReasons['exception'] ?? 0) + 1;
+            this.logger.warn(
+              `brand_showcase error for ${site.name}: ${err instanceof Error ? err.message : err}`,
+            );
+          }
+        }),
+      ),
+    );
+
+    this.logger.log(
+      `brand_showcase batch done: ${generated} generated, ${rejected} rejected, ${skipped} skipped`,
+    );
+    return { attempted, generated, rejected, skipped, rejectedReasons };
+  }
+
   async qualityAudit(minScore: number = 85) {
     const articles = await this.prisma.blogArticle.findMany({
       where: { published: true },
