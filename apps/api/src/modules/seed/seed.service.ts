@@ -312,6 +312,68 @@ export class SeedService {
     return { created };
   }
 
+  /**
+   * Register Geovault's own site (www.geovault.app) as a scannable site owned
+   * by admin@geovault.app, then trigger an initial scan. Idempotent — safe to
+   * call repeatedly. Returns the site and the newly-created scan record.
+   */
+  async seedGeovaultSelf(): Promise<{
+    site: { id: string; url: string; name: string };
+    scan: { id: string; status: string };
+  }> {
+    const admin = await this.prisma.user.findUnique({
+      where: { email: 'admin@geovault.app' },
+    });
+    if (!admin) {
+      throw new Error('Admin user admin@geovault.app not found — cannot seed self.');
+    }
+
+    const url = 'https://www.geovault.app';
+
+    let site = await this.prisma.site.findFirst({ where: { url } });
+    if (!site) {
+      site = await this.prisma.site.create({
+        data: {
+          url,
+          name: 'Geovault',
+          userId: admin.id,
+          industry: 'technology',
+          isPublic: true,
+          isClient: true,
+          isVerified: true,
+          verifiedAt: new Date(),
+        },
+      });
+      this.logger.log(`Created Geovault self-site ${site.id}`);
+    } else {
+      site = await this.prisma.site.update({
+        where: { id: site.id },
+        data: {
+          isPublic: true,
+          isClient: true,
+          isVerified: true,
+          verifiedAt: site.verifiedAt ?? new Date(),
+        },
+      });
+      this.logger.log(`Updated existing Geovault self-site ${site.id}`);
+    }
+
+    const scan = await this.prisma.scan.create({
+      data: { siteId: site.id, status: 'PENDING' },
+    });
+
+    this.scanPipeline.executeScan(scan.id, url).catch((err) => {
+      this.logger.error(
+        `Geovault self-scan ${scan.id} failed: ${err instanceof Error ? err.stack : err}`,
+      );
+    });
+
+    return {
+      site: { id: site.id, url: site.url, name: site.name },
+      scan: { id: scan.id, status: scan.status },
+    };
+  }
+
   // ─── Continuous Simulation ─────────────────────────────────────────
 
   private readonly bots = [

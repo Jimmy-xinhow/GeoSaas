@@ -49,7 +49,16 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
-        <link rel="alternate" type="application/rss+xml" title="Geovault Blog RSS" href="/feed" />
+        {/* Syndication feeds — discoverable via HTML (not only Link header) */}
+        <link rel="alternate" type="application/rss+xml" title="Geovault RSS" href="/feed" />
+        <link rel="alternate" type="application/feed+json" title="Geovault JSON Feed" href="/feed.json" />
+
+        {/* AI crawler discovery */}
+        <link rel="ai-content" type="text/plain" href="/llms.txt" />
+        <link rel="ai-content-full" type="text/plain" href="/llms-full.txt" />
+        <link rel="ai-plugin" type="application/json" href="/.well-known/ai-plugin.json" />
+
+        {/* hreflang */}
         <link rel="alternate" hrefLang="zh-TW" href="https://www.geovault.app" />
         <link rel="alternate" hrefLang="en" href="https://www.geovault.app/en" />
         <link rel="alternate" hrefLang="ja" href="https://www.geovault.app/ja" />

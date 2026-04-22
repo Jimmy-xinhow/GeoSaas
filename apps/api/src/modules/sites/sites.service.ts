@@ -1,14 +1,19 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
+import { IndexNowService } from '../indexnow/indexnow.service';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
 
 @Injectable()
 export class SitesService {
+  private readonly logger = new Logger(SitesService.name);
+  private readonly webUrl = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
+
   constructor(
     private prisma: PrismaService,
     private planUsage: PlanUsageService,
+    private indexNow: IndexNowService,
   ) {}
 
   async create(dto: CreateSiteDto, userId: string) {
@@ -21,9 +26,30 @@ export class SitesService {
       );
     }
 
-    return this.prisma.site.create({
+    const site = await this.prisma.site.create({
       data: { ...dto, userId },
     });
+
+    // If the new site is public, AI crawlers should learn about it fast:
+    // ping the new directory page + the platform-wide feeds that list it.
+    if (site.isPublic) {
+      this.pingDirectoryUrls(site.id);
+    }
+
+    return site;
+  }
+
+  private pingDirectoryUrls(siteId: string): void {
+    const urls = [
+      `${this.webUrl}/directory/${siteId}`,
+      `${this.webUrl}/llms-full.txt`,
+      `${this.webUrl}/sitemap.xml`,
+    ];
+    for (const url of urls) {
+      this.indexNow
+        .submitUrl(url)
+        .catch((err) => this.logger.warn(`IndexNow ping failed for ${url}: ${err}`));
+    }
   }
 
   /**
@@ -71,8 +97,23 @@ export class SitesService {
   }
 
   async update(id: string, dto: UpdateSiteDto, userId: string, userRole?: string) {
-    await this.findOne(id, userId, userRole);
-    return this.prisma.site.update({ where: { id }, data: dto });
+    const before = await this.findOne(id, userId, userRole);
+    const after = await this.prisma.site.update({ where: { id }, data: dto });
+
+    // Ping when a site transitions to public or when a public site's
+    // identity-shaping fields (name/url/industry/description) change —
+    // those affect how the directory page + llms-full.txt render.
+    const becamePublic = !before.isPublic && after.isPublic;
+    const publicFieldsChanged =
+      after.isPublic &&
+      (before.name !== after.name ||
+        before.url !== after.url ||
+        before.industry !== after.industry);
+    if (becamePublic || publicFieldsChanged) {
+      this.pingDirectoryUrls(id);
+    }
+
+    return after;
   }
 
   async remove(id: string, userId: string, userRole?: string) {

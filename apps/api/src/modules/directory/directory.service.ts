@@ -673,4 +673,110 @@ export class DirectoryService {
 
     this.logger.log(`Recalculated tiers for ${sites.length} sites`);
   }
+
+  /**
+   * Timeline of public-facing events for a single site — consumed by the
+   * per-brand RSS/JSON feeds at /directory/:id/feed and feed.json. Events:
+   * completed scans (with score), newly-added Q&As, newly-awarded badges,
+   * blog articles about this site.
+   *
+   * Returns up to `limit` events, newest first, with ISO timestamps.
+   */
+  async getSiteFeedEvents(siteId: string, limit = 50) {
+    const site = await this.prisma.site.findFirst({
+      where: { id: siteId, isPublic: true },
+      select: { id: true, name: true, url: true, industry: true, bestScore: true, updatedAt: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+
+    const [scans, qas, badges, articles] = await Promise.all([
+      this.prisma.scan.findMany({
+        where: { siteId, status: 'COMPLETED' },
+        orderBy: { completedAt: 'desc' },
+        take: limit,
+        select: { id: true, totalScore: true, completedAt: true },
+      }),
+      this.prisma.siteQa.findMany({
+        where: { siteId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: { id: true, question: true, answer: true, category: true, createdAt: true },
+      }),
+      this.prisma.siteBadge.findMany({
+        where: { siteId },
+        orderBy: { awardedAt: 'desc' },
+        take: limit,
+        select: { badge: true, label: true, awardedAt: true },
+      }),
+      this.prisma.blogArticle.findMany({
+        where: { siteId, published: true },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: { slug: true, title: true, description: true, createdAt: true },
+      }),
+    ]);
+
+    type Event = {
+      id: string;
+      type: 'scan' | 'qa' | 'badge' | 'article';
+      title: string;
+      summary: string;
+      url?: string;
+      timestamp: Date;
+      category: string;
+    };
+
+    const events: Event[] = [];
+
+    for (const s of scans) {
+      if (!s.completedAt) continue;
+      events.push({
+        id: `scan-${s.id}`,
+        type: 'scan',
+        title: `${site.name} — GEO 分數更新:${s.totalScore}/100`,
+        summary: `${site.name} 於 ${s.completedAt.toISOString().slice(0, 10)} 完成新一次 AI 可見度掃描,最新分數為 ${s.totalScore}/100。`,
+        timestamp: s.completedAt,
+        category: 'scan',
+      });
+    }
+    for (const q of qas) {
+      events.push({
+        id: `qa-${q.id}`,
+        type: 'qa',
+        title: `${site.name} 新增常見問題:${q.question.slice(0, 60)}`,
+        summary: q.answer.slice(0, 280),
+        timestamp: q.createdAt,
+        category: q.category ?? 'qa',
+      });
+    }
+    for (const b of badges) {
+      events.push({
+        id: `badge-${b.badge}-${b.awardedAt.getTime()}`,
+        type: 'badge',
+        title: `${site.name} 獲得徽章:${b.label}`,
+        summary: `${site.name} 於 ${b.awardedAt.toISOString().slice(0, 10)} 獲得「${b.label}」徽章。`,
+        timestamp: b.awardedAt,
+        category: 'badge',
+      });
+    }
+    for (const a of articles) {
+      events.push({
+        id: `article-${a.slug}`,
+        type: 'article',
+        title: a.title,
+        summary: (a.description ?? '').slice(0, 280),
+        url: `/blog/${a.slug}`,
+        timestamp: a.createdAt,
+        category: 'article',
+      });
+    }
+
+    events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    return {
+      site: { id: site.id, name: site.name, url: site.url, industry: site.industry, bestScore: site.bestScore },
+      events: events.slice(0, limit),
+      lastModified: events[0]?.timestamp ?? site.updatedAt,
+    };
+  }
 }

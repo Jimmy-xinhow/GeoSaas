@@ -109,6 +109,16 @@ export class DirectoryController {
     return this.service.getSiteDetail(siteId);
   }
 
+  @Public()
+  @Get('directory/:siteId/feed-events')
+  @ApiOperation({ summary: 'Timeline of public events for a single site — powers /directory/:id/feed' })
+  feedEvents(
+    @Param('siteId') siteId: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.getSiteFeedEvents(siteId, limit ? parseInt(limit, 10) : 50);
+  }
+
   @ApiBearerAuth()
   @Patch('sites/:siteId/directory')
   @ApiOperation({ summary: 'Toggle public directory listing + set industry' })

@@ -27,6 +27,14 @@ export async function generateMetadata({
       description: `${site.name} (${site.url}) 的 AI 可見度分數為 ${site.bestScore}/100。${industryText ? `行業：${site.industry}。` : ''}查看完整的 AI 優化指標、爬蟲活動和品牌知識庫。`,
       alternates: {
         canonical: `${SITE_URL}/directory/${params.siteId}`,
+        types: {
+          'application/rss+xml': [
+            { title: `${site.name} — 品牌動態 RSS`, url: `${SITE_URL}/directory/${params.siteId}/feed` },
+          ],
+          'application/feed+json': [
+            { title: `${site.name} — 品牌動態 JSON Feed`, url: `${SITE_URL}/directory/${params.siteId}/feed.json` },
+          ],
+        },
       },
       openGraph: {
         title: `${site.name} — GEO Score: ${site.bestScore}/100`,

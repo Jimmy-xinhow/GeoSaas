@@ -58,4 +58,10 @@ export class SeedController {
     });
     return { message: 'Crawler visit seeding started' };
   }
+
+  @Post('geovault-self')
+  @ApiOperation({ summary: 'Register www.geovault.app as a scannable site and trigger initial scan' })
+  async seedGeovaultSelf() {
+    return this.service.seedGeovaultSelf();
+  }
 }

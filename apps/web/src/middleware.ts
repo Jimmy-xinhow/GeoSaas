@@ -4,22 +4,47 @@ import type { NextRequest } from 'next/server';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 
-// AI crawler User-Agent patterns
+// AI crawler User-Agent patterns. Pattern match is case-sensitive substring
+// on the UA header. Order doesn't matter — first match wins.
 const AI_BOT_PATTERNS = [
+  // OpenAI
   { name: 'GPTBot', pattern: 'GPTBot' },
   { name: 'ChatGPT-User', pattern: 'ChatGPT-User' },
+  { name: 'OAI-SearchBot', pattern: 'OAI-SearchBot' },
+  // Anthropic
   { name: 'ClaudeBot', pattern: 'ClaudeBot' },
+  { name: 'Claude-Web', pattern: 'Claude-Web' },
+  { name: 'anthropic-ai', pattern: 'anthropic-ai' },
+  // Perplexity
   { name: 'PerplexityBot', pattern: 'PerplexityBot' },
+  { name: 'Perplexity-User', pattern: 'Perplexity-User' },
+  // Google
   { name: 'Google-Extended', pattern: 'Google-Extended' },
   { name: 'Googlebot', pattern: 'Googlebot' },
+  { name: 'GoogleOther', pattern: 'GoogleOther' },
+  // Microsoft
   { name: 'Bingbot', pattern: 'bingbot' },
   { name: 'CopilotBot', pattern: 'CopilotBot' },
-  { name: 'Bytespider', pattern: 'Bytespider' },
+  // Apple
+  { name: 'Applebot', pattern: 'Applebot' },
+  { name: 'Applebot-Extended', pattern: 'Applebot-Extended' },
+  // Meta
+  { name: 'Meta-ExternalAgent', pattern: 'Meta-ExternalAgent' },
+  { name: 'Meta-ExternalFetcher', pattern: 'Meta-ExternalFetcher' },
+  { name: 'FacebookBot', pattern: 'facebookexternalhit' },
+  // Amazon
   { name: 'Amazonbot', pattern: 'Amazonbot' },
+  // ByteDance / TikTok
+  { name: 'Bytespider', pattern: 'Bytespider' },
+  { name: 'TikTokSpider', pattern: 'TikTokSpider' },
+  // Others
+  { name: 'cohere-ai', pattern: 'cohere-ai' },
   { name: 'YouBot', pattern: 'YouBot' },
   { name: 'CCBot', pattern: 'CCBot' },
-  { name: 'FacebookBot', pattern: 'facebookexternalhit' },
-  { name: 'Applebot', pattern: 'Applebot' },
+  { name: 'DuckAssistBot', pattern: 'DuckAssistBot' },
+  { name: 'MistralAI-User', pattern: 'MistralAI-User' },
+  { name: 'PanguBot', pattern: 'PanguBot' },
+  { name: 'Diffbot', pattern: 'Diffbot' },
 ];
 
 export function middleware(request: NextRequest) {
@@ -40,6 +65,11 @@ export function middleware(request: NextRequest) {
   );
 
   response.headers.set('X-Canonical-URL', `${SITE_URL}${pathname}`);
+
+  // Signal to AI crawlers that this origin publishes LLM-friendly resources
+  // (llms.txt, llms-full.txt, ai-plugin.json — already advertised via Link).
+  response.headers.set('X-LLM-Optimized', 'true');
+  response.headers.set('X-AI-Discoverable', 'geovault');
 
   // ─── Security headers ───
   response.headers.set('X-Frame-Options', 'SAMEORIGIN');

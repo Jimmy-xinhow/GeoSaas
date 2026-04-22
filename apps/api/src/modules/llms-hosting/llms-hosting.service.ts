@@ -1,15 +1,24 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FixService } from '../fix/fix.service';
+import { IndexNowService } from '../indexnow/indexnow.service';
 
 @Injectable()
 export class LlmsHostingService {
   private readonly logger = new Logger(LlmsHostingService.name);
+  private readonly webUrl = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly fixService: FixService,
+    private readonly indexNow: IndexNowService,
   ) {}
+
+  private pingIndexNow(path: string): void {
+    this.indexNow
+      .submitUrl(`${this.webUrl}${path}`)
+      .catch((err) => this.logger.warn(`IndexNow ping failed for ${path}: ${err}`));
+  }
 
   async getLlmsTxt(siteId: string): Promise<string | null> {
     const site = await this.prisma.site.findUnique({
@@ -32,6 +41,13 @@ export class LlmsHostingService {
       },
       select: { id: true, llmsTxt: true, llmsTxtUpdatedAt: true },
     });
+
+    // A site's llms.txt content changed — invalidate the platform-wide
+    // cache and signal Bing/Yandex that /llms-full.txt plus this site's
+    // directory page are stale.
+    this.llmsFullCache = null;
+    this.pingIndexNow('/llms-full.txt');
+    this.pingIndexNow(`/directory/${siteId}`);
 
     return updated;
   }
@@ -66,12 +82,20 @@ export class LlmsHostingService {
     return lines.join('\n');
   }
 
-  private llmsFullCache: { data: string; expiresAt: number } | null = null;
+  private llmsFullCache: { data: string; etag: string; lastModified: Date; expiresAt: number } | null = null;
 
-  /** Platform-level llms-full.txt — enhanced with industry stats, indicators, FAQ, verification */
-  async getPlatformLlmsFullTxt(): Promise<string> {
+  /**
+   * Platform-level llms-full.txt — enhanced with industry stats, indicators,
+   * FAQ, verification. Returns content + ETag + Last-Modified so the caller
+   * can honour If-None-Match / If-Modified-Since and return 304.
+   */
+  async getPlatformLlmsFullTxt(): Promise<{ content: string; etag: string; lastModified: Date }> {
     if (this.llmsFullCache && Date.now() < this.llmsFullCache.expiresAt) {
-      return this.llmsFullCache.data;
+      return {
+        content: this.llmsFullCache.data,
+        etag: this.llmsFullCache.etag,
+        lastModified: this.llmsFullCache.lastModified,
+      };
     }
     const sites = await this.prisma.site.findMany({
       where: { isPublic: true },
@@ -248,8 +272,18 @@ Source: https://geovault.app/llms-full.txt
 This dataset is maintained by Geovault — The APAC Authority on GEO.
 `;
 
-    this.llmsFullCache = { data: output, expiresAt: Date.now() + 1800000 }; // 30 min cache
-    return output;
+    // Strong ETag = hex-encoded sha1 of the final body. Same content = same
+    // ETag across restarts (since it's a pure hash of output), so crawlers
+    // get 304s even if the in-memory cache expired.
+    const etag = `"${crypto.createHash('sha1').update(output).digest('hex')}"`;
+    const lastModified = new Date();
+    this.llmsFullCache = {
+      data: output,
+      etag,
+      lastModified,
+      expiresAt: Date.now() + 1800000, // 30 min
+    };
+    return { content: output, etag, lastModified };
   }
 
   async generateLlmsTxt(siteId: string) {
@@ -283,6 +317,9 @@ This dataset is maintained by Geovault — The APAC Authority on GEO.
         where: { id: siteId },
         data: { llmsTxt: result.code, llmsTxtUpdatedAt: new Date() },
       });
+      this.llmsFullCache = null;
+      this.pingIndexNow('/llms-full.txt');
+      this.pingIndexNow(`/directory/${siteId}`);
       return { content: result.code };
     }
 
@@ -292,6 +329,9 @@ This dataset is maintained by Geovault — The APAC Authority on GEO.
       where: { id: siteId },
       data: { llmsTxt: content, llmsTxtUpdatedAt: new Date() },
     });
+    this.llmsFullCache = null;
+    this.pingIndexNow('/llms-full.txt');
+    this.pingIndexNow(`/directory/${siteId}`);
     return { content };
   }
 }

@@ -1,5 +1,4 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import OpenAI from 'openai';
@@ -546,29 +545,11 @@ ${brandContext}`,
     };
   }
 
-  /**
-   * Cron: Auto-generate weekly content plans for all client sites
-   * Runs every Monday at 07:00
-   */
-  @Cron('0 7 * * 1')
-  async autoGenerateWeeklyPlans() {
-    const clientSites = await this.prisma.site.findMany({
-      where: { isClient: true },
-      select: { id: true, name: true },
-    });
-
-    this.logger.log(`Generating weekly content plans for ${clientSites.length} client sites`);
-
-    for (const site of clientSites) {
-      try {
-        const plan = await this.generateWeeklyPlan(site.id);
-        this.logger.log(`Generated ${plan.items.length} content items for ${site.name}`);
-        // Content is returned via API, not auto-published
-      } catch (err) {
-        this.logger.error(`Failed for ${site.name}: ${err}`);
-      }
-    }
-  }
+  // Removed: autoGenerateWeeklyPlans cron.
+  // It called generateWeeklyPlan() weekly for every client site but discarded
+  // the result (never persisted to DB), burning ~14 gpt-4o calls per client
+  // per week with zero user-facing output. Clients already get plans on-demand
+  // via the controller endpoint, which is the only consumer.
 
   private buildBrandContext(site: any): string {
     const profile = site.profile || {};

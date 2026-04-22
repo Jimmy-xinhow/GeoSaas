@@ -3,10 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
+import { IndexNowService } from '../indexnow/indexnow.service';
 import { CreateQaDto } from './dto/create-qa.dto';
 import { UpdateQaDto } from './dto/update-qa.dto';
 
 const MAX_QA_PER_SITE = 200;
+const WEB_URL = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
 
 export interface GeneratedQa {
   question: string;
@@ -30,8 +32,27 @@ export class KnowledgeService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly planUsage: PlanUsageService,
+    private readonly indexNow: IndexNowService,
   ) {
     this.initOpenAIClient();
+  }
+
+  /**
+   * When a site's knowledge base gains new Q&As, its directory page +
+   * llms-full.txt both render different content — ping IndexNow so Bing
+   * and Yandex re-crawl within ~24h. Fire-and-forget; don't block the
+   * user-facing response.
+   */
+  private pingKnowledgeUpdate(siteId: string): void {
+    const urls = [
+      `${WEB_URL}/directory/${siteId}`,
+      `${WEB_URL}/llms-full.txt`,
+    ];
+    for (const url of urls) {
+      this.indexNow
+        .submitUrl(url)
+        .catch((err) => this.logger.warn(`IndexNow ping failed for ${url}: ${err}`));
+    }
   }
 
   private initOpenAIClient() {
@@ -78,7 +99,7 @@ export class KnowledgeService {
     });
     const nextSort = (maxSort._max.sortOrder ?? -1) + 1;
 
-    return this.prisma.siteQa.create({
+    const created = await this.prisma.siteQa.create({
       data: {
         siteId,
         question: dto.question,
@@ -87,6 +108,8 @@ export class KnowledgeService {
         sortOrder: nextSort,
       },
     });
+    this.pingKnowledgeUpdate(siteId);
+    return created;
   }
 
   async batchCreate(siteId: string, items: CreateQaDto[], userId: string) {
@@ -108,6 +131,7 @@ export class KnowledgeService {
     }));
 
     await this.prisma.siteQa.createMany({ data });
+    this.pingKnowledgeUpdate(siteId);
     return this.findAll(siteId, userId);
   }
 
@@ -131,6 +155,7 @@ export class KnowledgeService {
     }));
 
     const result = await this.prisma.siteQa.createMany({ data, skipDuplicates: true });
+    if (result.count > 0) this.pingKnowledgeUpdate(siteId);
     return { imported: result.count, total: nextSort };
   }
 

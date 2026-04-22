@@ -11,7 +11,26 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/settings', '/admin/', '/dashboard/'],
       },
       {
-        userAgent: ['GPTBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended', 'Bytespider', 'Amazonbot', 'FacebookBot', 'CopilotBot', 'bingbot'],
+        userAgent: [
+          // OpenAI
+          'GPTBot', 'ChatGPT-User', 'OAI-SearchBot',
+          // Anthropic
+          'ClaudeBot', 'Claude-Web', 'anthropic-ai',
+          // Perplexity
+          'PerplexityBot', 'Perplexity-User',
+          // Google
+          'Google-Extended', 'Googlebot', 'GoogleOther',
+          // Microsoft
+          'bingbot', 'CopilotBot',
+          // Apple
+          'Applebot', 'Applebot-Extended',
+          // Meta
+          'Meta-ExternalAgent', 'Meta-ExternalFetcher', 'FacebookBot',
+          // Amazon / ByteDance / others
+          'Amazonbot', 'Bytespider', 'TikTokSpider',
+          'cohere-ai', 'YouBot', 'CCBot',
+          'DuckAssistBot', 'MistralAI-User', 'PanguBot', 'Diffbot',
+        ],
         allow: '/',
       },
     ],

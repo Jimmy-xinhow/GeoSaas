@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { SitesService } from './sites.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService } from '../../common/guards/plan.guard';
+import { IndexNowService } from '../indexnow/indexnow.service';
 
 describe('SitesService', () => {
   let service: SitesService;
@@ -40,6 +42,8 @@ describe('SitesService', () => {
       providers: [
         SitesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: PlanUsageService, useValue: { checkAndIncrement: jest.fn().mockResolvedValue({ allowed: true }) } },
+        { provide: IndexNowService, useValue: { submitUrl: jest.fn().mockResolvedValue([]) } },
       ],
     }).compile();
 

@@ -1,11 +1,40 @@
-import { Controller, Get, Put, Post, Param, Body, Res, Header, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Put, Post, Param, Body, Req, Res, Header, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreditService } from '../billing/credit.service';
 import { LlmsHostingService } from './llms-hosting.service';
 import { UpdateLlmsTxtDto } from './dto/update-llms-txt.dto';
+
+/**
+ * Honour conditional GET: return 304 Not Modified when the client's cached
+ * copy is still current. Saves bandwidth AND lowers our API load — crawlers
+ * tend to re-poll these files many times per day.
+ */
+function sendConditional(
+  req: Request,
+  res: Response,
+  body: string,
+  etag: string,
+  lastModified: Date,
+): Response {
+  res.set('ETag', etag);
+  res.set('Last-Modified', lastModified.toUTCString());
+  res.set('Vary', 'Accept-Encoding');
+
+  const ifNoneMatch = req.headers['if-none-match'];
+  const ifModifiedSince = req.headers['if-modified-since'];
+  const etagMatches = typeof ifNoneMatch === 'string' && ifNoneMatch === etag;
+  const notModifiedSince =
+    typeof ifModifiedSince === 'string' &&
+    !Number.isNaN(Date.parse(ifModifiedSince)) &&
+    lastModified.getTime() <= Date.parse(ifModifiedSince);
+  if (etagMatches || notModifiedSince) {
+    return res.status(304).end();
+  }
+  return res.send(body);
+}
 
 @ApiTags('llms-hosting')
 @Controller()
@@ -29,14 +58,13 @@ export class LlmsHostingController {
   @Public()
   @Get('platform/llms-full.txt')
   @ApiOperation({ summary: 'Platform-level llms-full.txt — full detail of all public sites' })
-  async getPlatformLlmsFullTxt(@Res() res: Response) {
-    const content = await this.service.getPlatformLlmsFullTxt();
+  async getPlatformLlmsFullTxt(@Req() req: Request, @Res() res: Response) {
+    const { content, etag, lastModified } = await this.service.getPlatformLlmsFullTxt();
     res.set('Content-Type', 'text/plain; charset=utf-8');
     res.set('Cache-Control', 'public, max-age=3600');
     res.set('Access-Control-Allow-Origin', '*');
-    res.set('Last-Modified', new Date().toUTCString());
-    res.set('X-Content-Version', new Date().toISOString());
-    return res.send(content);
+    res.set('X-Content-Version', lastModified.toISOString());
+    return sendConditional(req, res, content, etag, lastModified);
   }
 
   @Public()
@@ -53,13 +81,12 @@ export class LlmsHostingController {
   @Public()
   @Get('llms-full.txt')
   @ApiOperation({ summary: 'Direct /api/llms-full.txt shortcut' })
-  async getLlmsFullTxtDirect(@Res() res: Response) {
-    const content = await this.service.getPlatformLlmsFullTxt();
+  async getLlmsFullTxtDirect(@Req() req: Request, @Res() res: Response) {
+    const { content, etag, lastModified } = await this.service.getPlatformLlmsFullTxt();
     res.set('Content-Type', 'text/plain; charset=utf-8');
     res.set('Cache-Control', 'public, max-age=3600');
     res.set('Access-Control-Allow-Origin', '*');
-    res.set('Last-Modified', new Date().toUTCString());
-    return res.send(content);
+    return sendConditional(req, res, content, etag, lastModified);
   }
 
   @Public()

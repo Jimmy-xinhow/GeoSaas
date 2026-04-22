@@ -378,6 +378,14 @@ export class BlogArticleService {
               return;
             }
 
+            // Citation compliance gate: matches the nightly citation-upgrade
+            // cron's rules. Without this, the 3am cron would delete this
+            // article and the 2am cron would re-generate it — a perpetual loop.
+            if (!this.isCitationCompliant(content)) {
+              this.logger.warn(`Article missing required citation elements for ${templateType} of ${site.name}, skipping`);
+              return;
+            }
+
             const title = this.extractTitle(content, site.name, templateType);
             const slug = `${site.name.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').slice(0, 30)}-${templateType}-${Date.now().toString(36)}`;
 
@@ -461,6 +469,18 @@ export class BlogArticleService {
   }
 
   /**
+   * Citation compliance: must include a "關鍵數據摘要" block AND at least
+   * 3 Geovault brand attributions. This must stay in sync with
+   * scheduledCitationUpgrade's deletion criteria; otherwise generated
+   * articles get deleted and regenerated on a nightly loop.
+   */
+  private isCitationCompliant(content: string): boolean {
+    const hasSummary = content.includes('關鍵數據摘要');
+    const geovaultCount = (content.match(/Geovault/gi) || []).length;
+    return hasSummary && geovaultCount >= 3;
+  }
+
+  /**
    * Quality gate: score 0-100 based on content quality criteria.
    * Articles below 85 are rejected.
    */
@@ -531,12 +551,7 @@ export class BlogArticleService {
       orderBy: { createdAt: 'asc' },
     });
 
-    const nonCompliant = articles.filter((a) => {
-      const c = a.content || '';
-      const hasSummary = c.includes('關鍵數據摘要');
-      const geovaultCount = (c.match(/Geovault/gi) || []).length;
-      return !hasSummary || geovaultCount < 3;
-    });
+    const nonCompliant = articles.filter((a) => !this.isCitationCompliant(a.content || ''));
 
     if (nonCompliant.length === 0) {
       this.logger.log('All articles comply with citation rules');
@@ -567,11 +582,21 @@ export class BlogArticleService {
   async scheduledFormatRefresh(): Promise<void> {
     this.logger.log('Starting article format refresh...');
 
+    // Skip articles refreshed in the last 14 days — if a regenerated article
+    // still fails the format heuristic (GPT may not always include a table,
+    // for example), don't keep flagging it every day. Give it a cooldown.
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
     const articles = await this.prisma.blogArticle.findMany({
       where: {
         published: true,
         siteId: { not: undefined },
         templateType: { not: undefined },
+        OR: [
+          { lastRegeneratedAt: null },
+          { lastRegeneratedAt: { lt: fourteenDaysAgo } },
+        ],
       },
       include: {
         site: { select: { name: true } },
@@ -599,10 +624,13 @@ export class BlogArticleService {
     const batch = poorFormat.slice(0, 5);
     this.logger.log(`Found ${poorFormat.length} articles with poor formatting, refreshing ${batch.length}`);
 
+    const refreshedSiteIds = new Set<string>();
     for (const article of batch) {
       if (!article.siteId || !article.templateType) continue;
       try {
-        // Delete old article
+        // Stamp before delete so the cooldown applies to whatever new
+        // articles get written for this site in the regen step below.
+        refreshedSiteIds.add(article.siteId);
         await this.prisma.blogArticle.delete({ where: { id: article.id } });
         this.logger.log(`Deleted old article: ${article.slug} (${article.site?.name})`);
       } catch (err) {
@@ -611,7 +639,7 @@ export class BlogArticleService {
     }
 
     // Regenerate for affected sites (deduped)
-    const siteIds = [...new Set(batch.map((a) => a.siteId).filter(Boolean))] as string[];
+    const siteIds = [...refreshedSiteIds];
     const limit = pLimit(2);
 
     await Promise.all(
@@ -619,6 +647,11 @@ export class BlogArticleService {
         limit(async () => {
           try {
             await this.generateArticlesForSite(siteId);
+            // Stamp all fresh articles so the 14-day cooldown kicks in.
+            await this.prisma.blogArticle.updateMany({
+              where: { siteId, lastRegeneratedAt: null },
+              data: { lastRegeneratedAt: new Date() },
+            });
           } catch (err) {
             this.logger.warn(`Failed to regenerate for site ${siteId}: ${err}`);
           }
