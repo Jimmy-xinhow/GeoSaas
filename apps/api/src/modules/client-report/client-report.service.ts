@@ -463,4 +463,230 @@ export class ClientReportService implements OnModuleInit {
 </body>
 </html>`;
   }
+
+  // ─── GEO 綜合體檢報告 ──────────────────────────────────────────────
+  //
+  // This is a wider lens than the query-set report. The query-set answers
+  // "did AI mention this brand?" — this answers "what is the full GEO
+  // health of this brand across scan / crawler / content / peers?".
+  //
+  // Five blocks, each pulled from existing tables with no new models:
+  //   - overview:    current GEO score + level + tier + latest scan at
+  //   - scanTrend:   last 10 COMPLETED scans (for sparkline)
+  //   - indicators:  9 scan indicators on the most recent scan
+  //   - crawler:     last-90-day crawler visits (by bot, by week, top pages)
+  //   - content:     brand_showcase coverage + industry_top10 rank position
+  //   - peers:       industry avg + top 5 by bestScore for comparison
+
+  async getGeoComprehensive(siteId: string) {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: {
+        id: true, name: true, url: true, industry: true, tier: true,
+        bestScore: true, bestScoreAt: true, isPublic: true, isClient: true,
+        createdAt: true,
+      },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000);
+
+    const [
+      latestScan,
+      scanTrend,
+      qaCount,
+      brandShowcase,
+      industryStats,
+      peerTop,
+      crawlerByBot,
+      crawlerByWeek,
+      crawlerTotalVisits,
+      crawlerRecent,
+      industryTop10Article,
+    ] = await Promise.all([
+      // Latest completed scan with full indicator breakdown
+      this.prisma.scan.findFirst({
+        where: { siteId, status: 'COMPLETED' },
+        orderBy: { completedAt: 'desc' },
+        include: {
+          results: {
+            select: { indicator: true, score: true, status: true, suggestion: true },
+          },
+        },
+      }),
+      // Scan trend (last 10 completed)
+      this.prisma.scan.findMany({
+        where: { siteId, status: 'COMPLETED' },
+        orderBy: { completedAt: 'desc' },
+        take: 10,
+        select: { totalScore: true, completedAt: true },
+      }),
+      // Knowledge base coverage
+      this.prisma.siteQa.count({ where: { siteId } }),
+      // brand_showcase article presence
+      this.prisma.blogArticle.findFirst({
+        where: { siteId, templateType: 'brand_showcase', published: true },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, slug: true, title: true, createdAt: true, lastRegeneratedAt: true },
+      }),
+      // Industry aggregate
+      site.industry
+        ? this.prisma.site.aggregate({
+            where: { industry: site.industry, isPublic: true, bestScore: { gt: 0 } },
+            _avg: { bestScore: true },
+            _count: { id: true },
+          })
+        : Promise.resolve(null),
+      // Industry peers (top 5 by score, including this site)
+      site.industry
+        ? this.prisma.site.findMany({
+            where: { industry: site.industry, isPublic: true, bestScore: { gt: 0 } },
+            orderBy: { bestScore: 'desc' },
+            take: 6,
+            select: { id: true, name: true, bestScore: true, tier: true },
+          })
+        : Promise.resolve([]),
+      // Crawler breakdown by bot (last 90d)
+      this.prisma.crawlerVisit.groupBy({
+        by: ['botName', 'botOrg'],
+        where: { siteId, visitedAt: { gte: ninetyDaysAgo }, isSeeded: false },
+        _count: true,
+      }),
+      // Crawler by week (last 90d, grouped into 13 weeks)
+      this.prisma.crawlerVisit.findMany({
+        where: { siteId, visitedAt: { gte: ninetyDaysAgo }, isSeeded: false },
+        select: { visitedAt: true },
+        orderBy: { visitedAt: 'asc' },
+      }),
+      this.prisma.crawlerVisit.count({
+        where: { siteId, isSeeded: false },
+      }),
+      this.prisma.crawlerVisit.findMany({
+        where: { siteId, isSeeded: false },
+        orderBy: { visitedAt: 'desc' },
+        take: 20,
+        select: { botName: true, botOrg: true, url: true, visitedAt: true, statusCode: true },
+      }),
+      // Does the industry have a Top 10 ranking article? What rank is this site?
+      site.industry
+        ? this.prisma.blogArticle.findFirst({
+            where: { templateType: 'industry_top10', industrySlug: site.industry, published: true },
+            orderBy: { createdAt: 'desc' },
+            select: { slug: true, title: true, createdAt: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    // Derive industry rank for this site (position in bestScore-DESC among
+    // public industry peers). Cheap — we already have peerTop, just count
+    // how many have a strictly higher score than ours.
+    let industryRank: number | null = null;
+    if (site.industry && site.bestScore != null) {
+      const higher = await this.prisma.site.count({
+        where: {
+          industry: site.industry,
+          isPublic: true,
+          bestScore: { gt: site.bestScore },
+        },
+      });
+      industryRank = higher + 1;
+    }
+
+    // Bucket crawler visits into 13 weekly buckets so the UI can render
+    // a simple bar chart without shipping raw 5000-row arrays.
+    const weekBuckets: Array<{ weekStart: string; count: number }> = [];
+    if (crawlerByWeek.length > 0) {
+      const now = Date.now();
+      for (let i = 12; i >= 0; i--) {
+        const end = now - i * 7 * 86400000;
+        const start = end - 7 * 86400000;
+        const count = crawlerByWeek.filter((v) => {
+          const t = v.visitedAt.getTime();
+          return t >= start && t < end;
+        }).length;
+        weekBuckets.push({
+          weekStart: new Date(start).toISOString().slice(0, 10),
+          count,
+        });
+      }
+    }
+
+    return {
+      site: {
+        id: site.id,
+        name: site.name,
+        url: site.url,
+        industry: site.industry,
+        tier: site.tier,
+        isClient: site.isClient,
+        createdAt: site.createdAt,
+      },
+      overview: {
+        currentScore: site.bestScore ?? 0,
+        lastScannedAt: latestScan?.completedAt ?? site.bestScoreAt ?? null,
+        tier: site.tier,
+        industryRank,
+        industryTotalSites: industryStats?._count.id ?? null,
+        industryAvgScore: industryStats?._avg.bestScore
+          ? Math.round(industryStats._avg.bestScore)
+          : null,
+      },
+      scanTrend: scanTrend
+        .map((s) => ({ score: s.totalScore, at: s.completedAt }))
+        .reverse(), // oldest first for chart rendering
+      indicators: latestScan
+        ? latestScan.results.map((r) => ({
+            indicator: r.indicator,
+            score: r.score,
+            status: r.status,
+            suggestion: r.suggestion,
+          }))
+        : [],
+      crawler: {
+        totalVisits: crawlerTotalVisits,
+        last90dVisits: crawlerByWeek.length,
+        byBot: crawlerByBot
+          .map((b) => ({
+            botName: b.botName,
+            botOrg: b.botOrg,
+            count: (b._count as unknown as number) ?? 0,
+          }))
+          .sort((a, b) => b.count - a.count),
+        byWeek: weekBuckets,
+        recent: crawlerRecent.map((r) => ({
+          botName: r.botName,
+          botOrg: r.botOrg,
+          url: r.url,
+          visitedAt: r.visitedAt,
+          statusCode: r.statusCode,
+        })),
+      },
+      content: {
+        knowledgeQaCount: qaCount,
+        brandShowcase: brandShowcase
+          ? {
+              slug: brandShowcase.slug,
+              title: brandShowcase.title,
+              createdAt: brandShowcase.createdAt,
+              lastRegeneratedAt: brandShowcase.lastRegeneratedAt,
+            }
+          : null,
+        industryTop10: industryTop10Article
+          ? {
+              slug: industryTop10Article.slug,
+              title: industryTop10Article.title,
+              createdAt: industryTop10Article.createdAt,
+              includedRank: industryRank, // same rank — useful for UI badge
+            }
+          : null,
+      },
+      peers: peerTop.map((p) => ({
+        id: p.id,
+        name: p.name,
+        bestScore: p.bestScore,
+        tier: p.tier,
+        isMe: p.id === site.id,
+      })),
+    };
+  }
 }

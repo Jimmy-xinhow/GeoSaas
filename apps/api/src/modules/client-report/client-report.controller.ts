@@ -78,4 +78,17 @@ export class ClientReportController {
     res.set('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   }
+
+  @Get('geo-comprehensive/:siteId')
+  @ApiOperation({
+    summary:
+      'GEO 綜合體檢 — aggregated scan trend, indicator breakdown, crawler activity, content-asset coverage, and industry peer comparison for one site. Powers the new "GEO 分數 / 爬蟲活動 / 內容資產 / 競品" tabs on the report page.',
+  })
+  async getGeoComprehensive(
+    @Param('siteId') siteId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    await this.service.assertSiteAccess(siteId, role);
+    return this.service.getGeoComprehensive(siteId);
+  }
 }

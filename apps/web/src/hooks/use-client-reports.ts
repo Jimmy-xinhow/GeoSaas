@@ -94,3 +94,78 @@ export function useSiteReports(siteId: string) {
     enabled: !!siteId,
   });
 }
+
+export interface GeoComprehensive {
+  site: {
+    id: string;
+    name: string;
+    url: string;
+    industry: string | null;
+    tier: string | null;
+    isClient: boolean;
+    createdAt: string;
+  };
+  overview: {
+    currentScore: number;
+    lastScannedAt: string | null;
+    tier: string | null;
+    industryRank: number | null;
+    industryTotalSites: number | null;
+    industryAvgScore: number | null;
+  };
+  scanTrend: Array<{ score: number; at: string }>;
+  indicators: Array<{
+    indicator: string;
+    score: number;
+    status: string;
+    suggestion: string | null;
+  }>;
+  crawler: {
+    totalVisits: number;
+    last90dVisits: number;
+    byBot: Array<{ botName: string; botOrg: string; count: number }>;
+    byWeek: Array<{ weekStart: string; count: number }>;
+    recent: Array<{
+      botName: string;
+      botOrg: string;
+      url: string;
+      visitedAt: string;
+      statusCode: number | null;
+    }>;
+  };
+  content: {
+    knowledgeQaCount: number;
+    brandShowcase: {
+      slug: string;
+      title: string;
+      createdAt: string;
+      lastRegeneratedAt: string | null;
+    } | null;
+    industryTop10: {
+      slug: string;
+      title: string;
+      createdAt: string;
+      includedRank: number | null;
+    } | null;
+  };
+  peers: Array<{
+    id: string;
+    name: string;
+    bestScore: number;
+    tier: string | null;
+    isMe: boolean;
+  }>;
+}
+
+export function useGeoComprehensive(siteId: string) {
+  return useQuery({
+    queryKey: ['client-reports', 'geo-comprehensive', siteId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<GeoComprehensive>(
+        `/client-reports/geo-comprehensive/${siteId}`,
+      );
+      return data;
+    },
+    enabled: !!siteId,
+  });
+}

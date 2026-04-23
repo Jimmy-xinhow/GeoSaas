@@ -11,9 +11,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSites } from '@/hooks/use-sites';
-import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport } from '@/hooks/use-client-reports';
+import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport, useGeoComprehensive } from '@/hooks/use-client-reports';
 
 const PLATFORM_LABELS: Record<string, string> = {
   CHATGPT: 'ChatGPT', CLAUDE: 'Claude', PERPLEXITY: 'Perplexity', GEMINI: 'Gemini', COPILOT: 'Copilot',
@@ -674,68 +675,303 @@ export default function ClientReportsPage() {
       </Card>
 
       {selectedSiteId && (
-        <>
-          {/* Query Sets */}
-          {qsLoading ? (
-            <Skeleton className="h-32" />
-          ) : querySets && querySets.length > 0 ? (
-            querySets.map((qs) => (
-              <Card key={qs.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{qs.name}</CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">{qs.queries.length} 題 × 5 平台 = {qs.queries.length * 5} 次查詢</Badge>
-                      <Button
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => handleRunReport(qs.id, qs.queries.length)}
-                        disabled={runReport.isPending}
-                      >
-                        {runReport.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Play className="h-4 w-4 mr-1" />}
-                        一鍵查詢 5 平台
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="max-h-[150px] overflow-y-auto space-y-1 text-sm">
-                    {qs.queries.slice(0, 8).map((q, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <span className="text-gray-400 w-6 text-right shrink-0">{i + 1}.</span>
-                        <span className="text-gray-300 truncate">{q.question}</span>
+        <Tabs defaultValue="citation" className="w-full">
+          <TabsList>
+            <TabsTrigger value="citation">📝 AI 引用驗收</TabsTrigger>
+            <TabsTrigger value="geo">📊 GEO 綜合體檢</TabsTrigger>
+          </TabsList>
+
+          {/* Tab 1: 既有的問題集驗收 */}
+          <TabsContent value="citation" className="space-y-4 mt-4">
+            {qsLoading ? (
+              <Skeleton className="h-32" />
+            ) : querySets && querySets.length > 0 ? (
+              querySets.map((qs) => (
+                <Card key={qs.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">{qs.name}</CardTitle>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{qs.queries.length} 題 × 5 平台 = {qs.queries.length * 5} 次查詢</Badge>
+                        <Button
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => handleRunReport(qs.id, qs.queries.length)}
+                          disabled={runReport.isPending}
+                        >
+                          {runReport.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Play className="h-4 w-4 mr-1" />}
+                          一鍵查詢 5 平台
+                        </Button>
                       </div>
-                    ))}
-                    {qs.queries.length > 8 && (
-                      <p className="text-xs text-muted-foreground ml-8">... 還有 {qs.queries.length - 8} 題</p>
-                    )}
-                  </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="max-h-[150px] overflow-y-auto space-y-1 text-sm">
+                      {qs.queries.slice(0, 8).map((q, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-gray-400 w-6 text-right shrink-0">{i + 1}.</span>
+                          <span className="text-gray-300 truncate">{q.question}</span>
+                        </div>
+                      ))}
+                      {qs.queries.length > 8 && (
+                        <p className="text-xs text-muted-foreground ml-8">... 還有 {qs.queries.length - 8} 題</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  此網站尚未建立問題集
                 </CardContent>
               </Card>
-            ))
+            )}
+
+            {activeReportId && (
+              <LiveReport reportId={activeReportId} totalQuestions={activeQsLength} />
+            )}
+
+            {reports && reports.length > 0 && !activeReportId && (
+              <ReportHistory
+                reports={reports}
+                selectedSiteName={(sites as any[])?.find((s: any) => s.id === selectedSiteId)?.name || ''}
+                onView={(r) => { setActiveReportId(r.id); setActiveQsLength((r.summary as any)?.totalQueries || 100); }}
+                onDownload={handleDownloadPdf}
+              />
+            )}
+          </TabsContent>
+
+          {/* Tab 2: GEO 綜合體檢 */}
+          <TabsContent value="geo" className="mt-4">
+            <GeoComprehensivePanel siteId={selectedSiteId} />
+          </TabsContent>
+        </Tabs>
+      )}
+    </div>
+  );
+}
+
+/**
+ * GEO 綜合體檢面板 — 取自 client-reports/geo-comprehensive/:siteId
+ * 分 5 個區塊:總覽 / GEO 分數趨勢 / 9 指標 / AI 爬蟲 / 內容資產 + 競品
+ */
+function GeoComprehensivePanel({ siteId }: { siteId: string }) {
+  const { data, isLoading } = useGeoComprehensive(siteId);
+
+  if (isLoading) return <Skeleton className="h-96" />;
+  if (!data) return <Card><CardContent className="p-8 text-center text-muted-foreground">無資料</CardContent></Card>;
+
+  const { overview, scanTrend, indicators, crawler, content, peers, site } = data;
+  const maxTrend = Math.max(100, ...scanTrend.map((s) => s.score));
+  const maxBucket = Math.max(1, ...crawler.byWeek.map((w) => w.count));
+
+  return (
+    <div className="space-y-4">
+      {/* Block 1: Overview cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className={`text-3xl font-bold ${
+              overview.currentScore >= 80 ? 'text-green-500'
+              : overview.currentScore >= 60 ? 'text-blue-500'
+              : overview.currentScore >= 40 ? 'text-yellow-500' : 'text-red-400'
+            }`}>{overview.currentScore}</p>
+            <p className="text-xs text-muted-foreground mt-1">目前 GEO 分數</p>
+            {overview.tier && <p className="text-xs text-gray-500 mt-0.5">{overview.tier}</p>}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-white">
+              {overview.industryRank ?? '—'}
+              {overview.industryTotalSites && (
+                <span className="text-lg text-gray-400">/{overview.industryTotalSites}</span>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">產業排名</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-white">
+              {overview.industryAvgScore ?? '—'}
+              <span className="text-lg text-gray-400 ml-1">/100</span>
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">產業平均</p>
+            {overview.industryAvgScore !== null && (
+              <p className={`text-xs mt-0.5 ${
+                overview.currentScore >= overview.industryAvgScore ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {overview.currentScore >= overview.industryAvgScore ? '▲' : '▼'}{' '}
+                {Math.abs(overview.currentScore - overview.industryAvgScore)} 分
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-green-500">{crawler.totalVisits}</p>
+            <p className="text-xs text-muted-foreground mt-1">AI 爬蟲總造訪</p>
+            <p className="text-xs text-gray-500 mt-0.5">近 90 天 {crawler.last90dVisits}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Block 2: Scan Trend sparkline */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">GEO 分數趨勢（最近 10 次掃描）</CardTitle></CardHeader>
+        <CardContent>
+          {scanTrend.length === 0 ? (
+            <p className="text-sm text-muted-foreground">尚無掃描記錄</p>
           ) : (
-            <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                此網站尚未建立問題集
-              </CardContent>
-            </Card>
+            <div className="flex items-end gap-1 h-24">
+              {scanTrend.map((s, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1" title={`${new Date(s.at).toLocaleDateString('zh-TW')} · ${s.score}`}>
+                  <div
+                    className={`w-full rounded-t ${s.score >= 80 ? 'bg-green-500' : s.score >= 60 ? 'bg-blue-500' : s.score >= 40 ? 'bg-yellow-500' : 'bg-red-400'}`}
+                    style={{ height: `${(s.score / maxTrend) * 100}%` }}
+                  />
+                  <span className="text-[10px] text-gray-500">{s.score}</span>
+                </div>
+              ))}
+            </div>
           )}
+        </CardContent>
+      </Card>
 
-          {/* Active Report — Live Progress */}
-          {activeReportId && (
-            <LiveReport reportId={activeReportId} totalQuestions={activeQsLength} />
+      {/* Block 3: 9 indicators */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">9 項 GEO 指標（最新掃描）</CardTitle></CardHeader>
+        <CardContent>
+          {indicators.length === 0 ? (
+            <p className="text-sm text-muted-foreground">尚無掃描結果</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {indicators.map((ind) => (
+                <div key={ind.indicator} className="flex items-center justify-between p-2 rounded bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {ind.status === 'pass'
+                      ? <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                      : ind.status === 'warning'
+                      ? <span className="text-yellow-500 text-sm shrink-0">⚠</span>
+                      : <XCircle className="h-4 w-4 text-red-400 shrink-0" />}
+                    <span className="text-sm text-white truncate">{ind.indicator}</span>
+                  </div>
+                  <span className={`text-sm font-bold shrink-0 ml-2 ${
+                    ind.score >= 80 ? 'text-green-400'
+                    : ind.score >= 50 ? 'text-yellow-400' : 'text-red-400'
+                  }`}>{ind.score}</span>
+                </div>
+              ))}
+            </div>
           )}
+        </CardContent>
+      </Card>
 
-          {/* Report History */}
-          {reports && reports.length > 0 && !activeReportId && (
-            <ReportHistory
-              reports={reports}
-              selectedSiteName={(sites as any[])?.find((s: any) => s.id === selectedSiteId)?.name || ''}
-              onView={(r) => { setActiveReportId(r.id); setActiveQsLength((r.summary as any)?.totalQueries || 100); }}
-              onDownload={handleDownloadPdf}
-            />
+      {/* Block 4: AI Crawler activity */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">AI 爬蟲活動（近 90 天）</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          {crawler.byBot.length === 0 ? (
+            <p className="text-sm text-muted-foreground">近期沒有真實 AI 爬蟲造訪記錄</p>
+          ) : (
+            <>
+              <div>
+                <p className="text-xs text-gray-400 mb-2">各 Bot 訪問次數</p>
+                <div className="flex flex-wrap gap-2">
+                  {crawler.byBot.map((b) => (
+                    <div key={b.botName} className="px-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-sm">
+                      <span className="text-gray-300">{b.botName}</span>
+                      <span className="text-xs text-gray-500 ml-1">({b.botOrg})</span>
+                      <span className="text-blue-400 font-semibold ml-2">{b.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-2">週訪問量(最近 13 週)</p>
+                <div className="flex items-end gap-1 h-16">
+                  {crawler.byWeek.map((w, i) => (
+                    <div key={i} className="flex-1 bg-blue-500/60 rounded-t" title={`${w.weekStart}: ${w.count} 次`} style={{ height: `${(w.count / maxBucket) * 100}%`, minHeight: w.count > 0 ? '2px' : '0' }} />
+                  ))}
+                </div>
+              </div>
+              {crawler.recent.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 mb-2">最近 20 次訪問</p>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {crawler.recent.map((r, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs py-1 border-b border-white/5">
+                        <span className="text-gray-300 w-28 shrink-0">{r.botName}</span>
+                        <span className="text-gray-500 flex-1 truncate">{r.url}</span>
+                        <span className="text-gray-500 shrink-0">{new Date(r.visitedAt).toLocaleDateString('zh-TW')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
-        </>
+        </CardContent>
+      </Card>
+
+      {/* Block 5: Content Assets */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">內容資產盤點</CardTitle></CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="p-3 rounded bg-white/5 border border-white/10">
+              <p className="text-gray-400 text-xs">知識庫 Q&A</p>
+              <p className="text-xl font-bold text-white mt-1">{content.knowledgeQaCount}</p>
+            </div>
+            <div className="p-3 rounded bg-white/5 border border-white/10">
+              <p className="text-gray-400 text-xs">品牌深度介紹</p>
+              {content.brandShowcase ? (
+                <a href={`/blog/${content.brandShowcase.slug}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-sm block mt-1 truncate">
+                  ✅ 已生成 →
+                </a>
+              ) : (
+                <p className="text-yellow-400 text-sm mt-1">⏳ 待生成</p>
+              )}
+            </div>
+            <div className="p-3 rounded bg-white/5 border border-white/10">
+              <p className="text-gray-400 text-xs">產業 Top 10 榜單</p>
+              {content.industryTop10 ? (
+                <a href={`/blog/${content.industryTop10.slug}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-sm block mt-1 truncate">
+                  ✅ 有榜單{content.industryTop10.includedRank && overview.industryRank && overview.industryRank <= 10 ? `(本站入榜 #${content.industryTop10.includedRank})` : ''}
+                </a>
+              ) : (
+                <p className="text-gray-500 text-sm mt-1">— 尚無</p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Block 6: Industry Peers */}
+      {peers.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">同業標竿(Top 5)</CardTitle></CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {peers.map((p, i) => (
+                <div key={p.id} className={`flex items-center justify-between p-2 rounded ${p.isMe ? 'bg-blue-500/10 border border-blue-500/30' : 'bg-white/5'}`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-gray-400 w-6 text-right shrink-0">#{i + 1}</span>
+                    <span className={`text-sm truncate ${p.isMe ? 'font-bold text-blue-300' : 'text-white'}`}>
+                      {p.name}{p.isMe && ' (本站)'}
+                    </span>
+                  </div>
+                  <span className={`text-sm font-bold shrink-0 ml-2 ${
+                    p.bestScore >= 80 ? 'text-green-400'
+                    : p.bestScore >= 60 ? 'text-blue-400' : 'text-yellow-400'
+                  }`}>{p.bestScore}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
