@@ -621,14 +621,14 @@ export default function ClientReportsPage() {
               <SelectTrigger className="w-[280px]">
                 <SelectValue placeholder={`下拉選擇 (共 ${(sites as any[])?.length ?? 0} 個)`} />
               </SelectTrigger>
-              <SelectContent className="max-h-[400px]">
-                {/* Previously .slice(0, 50) — the hidden limit silently dropped clients
-                    when the directory grew past 50 sites. Render all, sorted by name,
-                    and rely on the search box for long lists. */}
+              {/* Solid background so long client lists don't read through the
+                  page underneath. shadcn Select defaults to bg-popover which
+                  can be semi-transparent on dark themes — force opaque. */}
+              <SelectContent className="max-h-[400px] bg-gray-900 border-white/10">
                 {[...((sites as any[]) ?? [])]
                   .sort((a, b) => (a?.name ?? '').localeCompare(b?.name ?? '', 'zh-Hant'))
                   .map((s: any) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id} className="focus:bg-white/10">{s.name}</SelectItem>
                   ))}
               </SelectContent>
             </Select>
