@@ -160,15 +160,34 @@ export class ProfileEnrichmentService {
 
     // Merge back into Site.profile — human-entered fields (top-level) win,
     // enriched fields go under _enriched + fill gaps in top-level when empty.
+    //
+    // EXCEPT when force=true AND the existing top-level value is recognizably
+    // junk (mojibake replacement chars, unpaired surrogates, >100 chars for
+    // a "location" field, or contains navigation-menu text from an earlier
+    // bad regex scrape). In that case, overwrite — the enriched value is
+    // strictly better.
+    const isValueCorrupt = (v: unknown, maxLen: number): boolean => {
+      if (typeof v !== 'string' || !v) return false;
+      if (v.length > maxLen) return true;
+      if (/[�]/.test(v)) return true;
+      if (/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(v)) return true;
+      if (/[蝷曄黎嚗撠璆凋剖豢頛踵鈭撣賊銝蝺餈鋆燐擃瘜敺蝢]/.test(v)) return true;
+      return false;
+    };
+
     const updatedProfile: Record<string, any> = { ...existing };
     updatedProfile._enriched = enriched;
-    if (!updatedProfile.contact && (enriched.telephone || enriched.email)) {
+
+    const overwriteOk = (currentVal: unknown, maxLen: number) =>
+      !currentVal || (opts.force && isValueCorrupt(currentVal, maxLen));
+
+    if ((enriched.telephone || enriched.email) && overwriteOk(updatedProfile.contact, 120)) {
       updatedProfile.contact = [enriched.telephone, enriched.email].filter(Boolean).join(' / ');
     }
-    if (!updatedProfile.location && (enriched.address || enriched.location)) {
+    if ((enriched.address || enriched.location) && overwriteOk(updatedProfile.location, 80)) {
       updatedProfile.location = enriched.address || enriched.location;
     }
-    if (!updatedProfile.description && enriched.description) {
+    if (enriched.description && overwriteOk(updatedProfile.description, 600)) {
       updatedProfile.description = enriched.description.slice(0, 500);
     }
 
