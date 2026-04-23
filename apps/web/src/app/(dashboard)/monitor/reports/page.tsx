@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSites } from '@/hooks/use-sites';
 import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport, useGeoComprehensive, useReportQuota } from '@/hooks/use-client-reports';
+import apiClient from '@/lib/api-client';
 
 const PLATFORM_LABELS: Record<string, string> = {
   CHATGPT: 'ChatGPT', CLAUDE: 'Claude', PERPLEXITY: 'Perplexity', GEMINI: 'Gemini', COPILOT: 'Copilot',
@@ -855,8 +856,42 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
   const maxTrend = Math.max(100, ...scanTrend.map((s) => s.score));
   const maxBucket = Math.max(1, ...crawler.byWeek.map((w) => w.count));
 
+  const apiBase = process.env.NEXT_PUBLIC_API_URL;
+  const handleExportHtml = () => {
+    window.open(`${apiBase}/api/client-reports/complete/${siteId}/html`, '_blank');
+    toast.success('已開啟完整報告，使用 Ctrl+P 存為 PDF');
+  };
+  const handleExportCsv = () => {
+    // Use apiClient so auth header goes through
+    apiClient
+      .get(`/client-reports/complete/${siteId}/csv`, { responseType: 'blob' })
+      .then((res) => {
+        const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `geovault-report-${siteId}-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success('CSV 已下載');
+      })
+      .catch(() => toast.error('下載失敗'));
+  };
+
   return (
     <div className="space-y-4">
+      {/* Export toolbar */}
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={handleExportHtml}>
+          <Download className="h-4 w-4 mr-1" />
+          匯出完整報告 (HTML / PDF)
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleExportCsv}>
+          <Download className="h-4 w-4 mr-1" />
+          匯出 CSV
+        </Button>
+      </div>
+
       {/* Block 1: Overview cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>

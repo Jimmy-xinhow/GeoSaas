@@ -596,6 +596,304 @@ export class ClientReportService implements OnModuleInit {
     };
   }
 
+  // ─── 完整 GEO 報告匯出 ────────────────────────────────────────────
+  //
+  // Single HTML that renders GEO Comprehensive + latest citation report
+  // together. User prints as PDF via browser Ctrl+P (same flow as the
+  // existing single-report PDF). CSV variant returned by a sibling method.
+
+  async getCompleteReportHtml(siteId: string): Promise<string> {
+    const geo = await this.getGeoComprehensive(siteId);
+
+    // Latest completed citation report for this site (may be none)
+    const latestCitation = await this.prisma.monitorReport.findFirst({
+      where: { siteId, status: 'completed' },
+      orderBy: { createdAt: 'desc' },
+      include: { querySet: { select: { name: true } } },
+    });
+
+    const { site, overview, scanTrend, indicators, crawler, content, peers, freshness } = geo;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const scoreColor = (s: number) =>
+      s >= 80 ? '#22c55e' : s >= 60 ? '#3b82f6' : s >= 40 ? '#eab308' : '#ef4444';
+    const statusIcon = (s: string) =>
+      s === 'pass' ? '✅' : s === 'warning' ? '⚠' : '✗';
+
+    const trendHtml = scanTrend.length === 0
+      ? '<p style="color:#6b7280">尚無掃描記錄</p>'
+      : `<div style="display:flex;align-items:flex-end;gap:6px;height:80px;padding:8px 0;">
+          ${scanTrend.map((s) => {
+            const at = s.at ? new Date(s.at).toISOString().slice(0, 10) : '';
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;" title="${at} · ${s.score}">
+              <div style="width:100%;background:${scoreColor(s.score)};border-radius:3px 3px 0 0;height:${(s.score / 100) * 64}px;"></div>
+              <span style="font-size:9px;color:#6b7280">${s.score}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+
+    const indicatorsHtml = indicators.length === 0
+      ? '<p style="color:#6b7280;font-size:13px;">尚無 scan results(可能是舊版掃描或需要重新觸發掃描)</p>'
+      : `<table style="width:100%;border-collapse:collapse;margin-top:8px;">
+          <thead><tr style="background:#f3f4f6;"><th style="text-align:left;padding:6px;font-size:12px;">指標</th><th style="text-align:center;padding:6px;font-size:12px;">狀態</th><th style="text-align:right;padding:6px;font-size:12px;">分數</th></tr></thead>
+          <tbody>${indicators.map((i) => `
+            <tr><td style="padding:6px;font-size:13px;">${i.indicator}</td>
+            <td style="text-align:center;padding:6px;">${statusIcon(i.status)}</td>
+            <td style="text-align:right;padding:6px;color:${scoreColor(i.score)};font-weight:bold;">${i.score}</td></tr>`).join('')}</tbody>
+        </table>`;
+
+    const crawlerHtml = crawler.totalVisits === 0
+      ? '<p style="color:#6b7280;font-size:13px;">近 90 天無 AI 爬蟲造訪記錄</p>'
+      : `<p style="font-size:13px;color:#4b5563;">總造訪 <strong>${crawler.totalVisits}</strong> 次 / 近 90 天 <strong>${crawler.last90dVisits}</strong> 次</p>
+         ${crawler.byBot.length > 0 ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">${crawler.byBot.map((b) => `<div style="padding:6px 10px;background:#eff6ff;border-radius:4px;font-size:12px;"><strong>${b.botName}</strong> <span style="color:#6b7280">(${b.botOrg})</span>: ${b.count}</div>`).join('')}</div>` : ''}`;
+
+    const peersHtml = peers.length === 0 ? '' : `
+      <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+        <tbody>${peers.map((p, i) => `
+          <tr style="${p.isMe ? 'background:#dbeafe;' : ''}">
+            <td style="padding:6px;font-size:12px;width:40px;color:#6b7280;">#${i + 1}</td>
+            <td style="padding:6px;font-size:13px;${p.isMe ? 'font-weight:bold;color:#1e40af;' : ''}">${p.name}${p.isMe ? ' ★ 本站' : ''}</td>
+            <td style="text-align:right;padding:6px;color:${scoreColor(p.bestScore)};font-weight:bold;">${p.bestScore}</td>
+          </tr>`).join('')}</tbody></table>`;
+
+    // Citation report section (if available)
+    let citationHtml = '<p style="color:#6b7280;font-size:13px;">尚未執行過 AI 引用驗收報告</p>';
+    if (latestCitation) {
+      const cres = (latestCitation.results as any as ReportResult[]) || [];
+      const csum = latestCitation.summary as any;
+      const platforms = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'];
+      const platformLabels: Record<string, string> = {
+        CHATGPT: 'ChatGPT', CLAUDE: 'Claude', PERPLEXITY: 'Perplexity', GEMINI: 'Gemini', COPILOT: 'Copilot',
+      };
+      citationHtml = `
+        <p style="color:#6b7280;font-size:12px;margin-bottom:12px;">
+          問題集: <strong>${latestCitation.querySet?.name || '—'}</strong> ·
+          執行時間: ${new Date(latestCitation.completedAt || latestCitation.createdAt).toISOString().slice(0, 10)} ·
+          共 ${cres.length} 次查詢
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;">
+          ${platforms.map((p) => {
+            const s = csum?.byPlatform?.[p] || { total: 0, mentioned: 0, rate: 0 };
+            return `<div style="text-align:center;padding:10px;background:#f8f9fa;border-radius:6px;">
+              <div style="font-size:22px;font-weight:bold;color:${scoreColor(s.rate)}">${s.rate}%</div>
+              <div style="font-size:11px;color:#6b7280">${platformLabels[p]}</div>
+              <div style="font-size:10px;color:#9ca3af">${s.mentioned}/${s.total}</div>
+            </div>`;
+          }).join('')}
+        </div>`;
+
+      // Category breakdown
+      const byCat: Record<string, ReportResult[]> = {};
+      cres.forEach((r) => {
+        const k = r.category || '(未分類)';
+        (byCat[k] = byCat[k] || []).push(r);
+      });
+      citationHtml += `<h4 style="margin-top:16px;font-size:14px;">類別表現</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#f3f4f6;">
+            <th style="text-align:left;padding:6px;">類別</th>
+            <th style="text-align:right;padding:6px;">引用率</th>
+            <th style="text-align:right;padding:6px;">已引用</th>
+            <th style="text-align:right;padding:6px;">總數</th>
+          </tr></thead><tbody>
+          ${Object.entries(byCat).map(([cat, items]) => {
+            const total = items.filter((r) => !r.response?.startsWith('[Error]')).length;
+            const mentioned = items.filter((r) => r.mentioned).length;
+            const rate = total > 0 ? Math.round((mentioned / total) * 100) : 0;
+            return `<tr><td style="padding:6px;">${cat}</td>
+              <td style="text-align:right;padding:6px;color:${scoreColor(rate)};font-weight:bold;">${rate}%</td>
+              <td style="text-align:right;padding:6px;">${mentioned}</td>
+              <td style="text-align:right;padding:6px;">${total}</td></tr>`;
+          }).join('')}
+          </tbody></table>`;
+    }
+
+    return `<!DOCTYPE html>
+<html lang="zh-TW"><head><meta charset="utf-8">
+<title>${site.name} — Geovault 完整 GEO 報告 ${today}</title>
+<style>
+  @media print { .no-print{display:none;} body{background:white;} }
+  body { font-family: "PingFang TC", "Noto Sans TC", system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 24px; color: #111827; background: #f9fafb; }
+  h1 { font-size: 22px; border-bottom: 3px solid #3b82f6; padding-bottom: 8px; }
+  h2 { font-size: 16px; margin-top: 24px; padding-left: 8px; border-left: 4px solid #3b82f6; }
+  h3 { font-size: 14px; color: #374151; margin-top: 16px; }
+  .section { background: white; padding: 16px 20px; border-radius: 8px; margin: 12px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+  .card { text-align: center; padding: 12px; background: #f8f9fa; border-radius: 6px; }
+  .num { font-size: 26px; font-weight: bold; }
+  .cap { font-size: 11px; color: #6b7280; margin-top: 4px; }
+  .meta { color: #6b7280; font-size: 12px; margin-bottom: 24px; }
+  .freshness { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-left: 6px; }
+  .f-fresh { background: #dcfce7; color: #166534; }
+  .f-ok { background: #dbeafe; color: #1e40af; }
+  .f-stale { background: #fef3c7; color: #92400e; }
+  .f-old { background: #fee2e2; color: #991b1b; }
+</style></head><body>
+<div class="no-print" style="background:#fbbf24;color:#78350f;padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:13px;">
+  💡 使用 Ctrl+P / ⌘+P 儲存為 PDF
+</div>
+<h1>${site.name} — Geovault 完整 GEO 報告</h1>
+<p class="meta">
+  產業: ${site.industry || '—'} · 官網: <a href="${site.url}">${site.url}</a> · 報告日期: ${today}
+</p>
+
+<div class="section">
+  <h2>📊 GEO 總覽</h2>
+  <div class="grid-4">
+    <div class="card"><div class="num" style="color:${scoreColor(overview.currentScore)}">${overview.currentScore}</div><div class="cap">GEO 分數</div></div>
+    <div class="card"><div class="num">${overview.industryRank ?? '—'}${overview.industryTotalSites ? `<span style="font-size:14px;color:#6b7280">/${overview.industryTotalSites}</span>` : ''}</div><div class="cap">產業排名</div></div>
+    <div class="card"><div class="num">${overview.industryAvgScore ?? '—'}</div><div class="cap">產業平均</div></div>
+    <div class="card"><div class="num" style="color:${crawler.totalVisits > 0 ? '#22c55e' : '#9ca3af'}">${crawler.totalVisits}</div><div class="cap">AI 爬蟲造訪</div></div>
+  </div>
+  <p class="meta" style="margin-top:12px;">
+    最後掃描: ${overview.lastScannedAt ? new Date(overview.lastScannedAt).toISOString().slice(0, 10) : '—'}
+    ${freshness.scanAsOf ? `<span class="freshness ${(() => {
+      const days = Math.floor((Date.now() - new Date(freshness.scanAsOf).getTime()) / 86400000);
+      return days < 1 ? 'f-fresh' : days < 14 ? 'f-ok' : days < 30 ? 'f-stale' : 'f-old';
+    })()}">${(() => {
+      const days = Math.floor((Date.now() - new Date(freshness.scanAsOf).getTime()) / 86400000);
+      return days < 1 ? '今天' : `${days} 天前`;
+    })()}</span>` : ''}
+  </p>
+</div>
+
+<div class="section">
+  <h2>📈 GEO 分數趨勢(最近 ${scanTrend.length} 次掃描)</h2>
+  ${trendHtml}
+</div>
+
+<div class="section">
+  <h2>🎯 9 項 GEO 指標</h2>
+  ${indicatorsHtml}
+</div>
+
+<div class="section">
+  <h2>🤖 AI 爬蟲活動(近 90 天)</h2>
+  ${crawlerHtml}
+</div>
+
+<div class="section">
+  <h2>📚 內容資產</h2>
+  <table style="width:100%;font-size:13px;">
+    <tr><td style="padding:6px;width:40%;color:#6b7280;">知識庫 Q&A</td><td style="padding:6px;"><strong>${content.knowledgeQaCount}</strong> 題</td></tr>
+    <tr><td style="padding:6px;color:#6b7280;">品牌深度介紹(brand_showcase)</td><td style="padding:6px;">${content.brandShowcase ? `<a href="https://www.geovault.app/blog/${content.brandShowcase.slug}">已生成 →</a>` : '<span style="color:#eab308">⏳ 待生成</span>'}</td></tr>
+    <tr><td style="padding:6px;color:#6b7280;">產業 Top 10 榜單</td><td style="padding:6px;">${content.industryTop10 ? `<a href="https://www.geovault.app/blog/${content.industryTop10.slug}">有榜單</a>${content.industryTop10.includedRank && content.industryTop10.includedRank <= 10 ? ` · 本站入榜 #${content.industryTop10.includedRank}` : ''}` : '<span style="color:#9ca3af">— 尚無</span>'}</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>🏆 同業標竿 Top 5</h2>
+  ${peersHtml}
+</div>
+
+<div class="section">
+  <h2>📝 AI 引用驗收報告</h2>
+  ${citationHtml}
+</div>
+
+<hr style="margin:32px 0;border:none;border-top:1px solid #e5e7eb;">
+<p style="color:#6b7280;font-size:11px;text-align:center;">
+  © ${new Date().getFullYear()} Geovault · Origin Code: GEOVAULT-2026-APAC-PRIME<br/>
+  本報告由 Geovault 自動生成 · https://www.geovault.app
+</p>
+</body></html>`;
+  }
+
+  /**
+   * CSV dump of the comprehensive report — for analysts who want to
+   * pivot/chart/graph in Excel. Returns a single CSV string with
+   * multiple sections separated by blank lines.
+   */
+  async getCompleteReportCsv(siteId: string): Promise<string> {
+    const geo = await this.getGeoComprehensive(siteId);
+    const latestCitation = await this.prisma.monitorReport.findFirst({
+      where: { siteId, status: 'completed' },
+      orderBy: { createdAt: 'desc' },
+      include: { querySet: { select: { name: true } } },
+    });
+
+    const esc = (v: unknown) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      if (/[,"\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+    const row = (cells: unknown[]) => cells.map(esc).join(',') + '\n';
+
+    // UTF-8 BOM for Excel correct CJK rendering
+    let csv = '﻿';
+
+    // Section 1: site overview
+    csv += '# 網站資訊\n';
+    csv += row(['欄位', '值']);
+    csv += row(['名稱', geo.site.name]);
+    csv += row(['官網', geo.site.url]);
+    csv += row(['產業', geo.site.industry || '']);
+    csv += row(['GEO 分數', geo.overview.currentScore]);
+    csv += row(['tier', geo.overview.tier || '']);
+    csv += row(['產業排名', geo.overview.industryRank || '']);
+    csv += row(['產業總站數', geo.overview.industryTotalSites || '']);
+    csv += row(['產業平均分數', geo.overview.industryAvgScore || '']);
+    csv += row(['最後掃描時間', geo.overview.lastScannedAt || '']);
+    csv += '\n';
+
+    // Section 2: scan trend
+    csv += '# GEO 分數趨勢\n';
+    csv += row(['日期', '分數']);
+    for (const s of geo.scanTrend) {
+      const at = s.at ? new Date(s.at).toISOString().slice(0, 10) : '';
+      csv += row([at, s.score]);
+    }
+    csv += '\n';
+
+    // Section 3: indicators
+    csv += '# 9 項 GEO 指標\n';
+    csv += row(['指標', '分數', '狀態', '建議']);
+    for (const i of geo.indicators) {
+      csv += row([i.indicator, i.score, i.status, (i.suggestion || '').slice(0, 100)]);
+    }
+    csv += '\n';
+
+    // Section 4: crawler
+    csv += '# AI 爬蟲活動(近 90 天)\n';
+    csv += row(['Bot', '組織', '訪問次數']);
+    for (const b of geo.crawler.byBot) {
+      csv += row([b.botName, b.botOrg, b.count]);
+    }
+    csv += '\n';
+
+    // Section 5: peers
+    csv += '# 同業標竿\n';
+    csv += row(['排名', '品牌', '分數', '本站']);
+    geo.peers.forEach((p, i) => {
+      csv += row([i + 1, p.name, p.bestScore, p.isMe ? '★' : '']);
+    });
+    csv += '\n';
+
+    // Section 6: citation results (if any)
+    if (latestCitation) {
+      const cres = (latestCitation.results as any as ReportResult[]) || [];
+      csv += '# AI 引用驗收報告\n';
+      csv += row(['問題集', latestCitation.querySet?.name || '']);
+      csv += row(['執行日期', new Date(latestCitation.completedAt || latestCitation.createdAt).toISOString().slice(0, 10)]);
+      csv += '\n';
+      csv += row(['類別', '問題', '平台', '是否引用', '排名', 'AI 回應摘要']);
+      for (const r of cres) {
+        const resp = typeof r.response === 'string' ? r.response.replace(/\s+/g, ' ').slice(0, 300) : '';
+        csv += row([
+          r.category || '',
+          r.question,
+          r.platform,
+          r.mentioned ? '是' : '否',
+          r.position ?? '',
+          resp,
+        ]);
+      }
+    }
+
+    return csv;
+  }
+
   // ─── GEO 綜合體檢報告 ──────────────────────────────────────────────
   //
   // This is a wider lens than the query-set report. The query-set answers

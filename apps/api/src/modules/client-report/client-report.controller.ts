@@ -106,4 +106,36 @@ export class ClientReportController {
     await this.service.assertSiteAccess(siteId, role);
     return this.service.getGeoComprehensive(siteId);
   }
+
+  @Public()
+  @Get('complete/:siteId/html')
+  @ApiOperation({
+    summary:
+      '完整 GEO 報告 HTML (GEO 綜合體檢 + 最新 AI 引用驗收). 使用者用瀏覽器 Ctrl+P 可存成 PDF。Public endpoint 以便直接在新分頁開啟列印。',
+  })
+  async getCompleteHtml(
+    @Param('siteId') siteId: string,
+    @Res() res: Response,
+  ) {
+    const html = await this.service.getCompleteReportHtml(siteId);
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  }
+
+  @Get('complete/:siteId/csv')
+  @ApiOperation({
+    summary:
+      '完整 GEO 報告 CSV — 所有區塊(overview / scanTrend / indicators / crawler / peers / citation results)逐段輸出,給分析人員丟進 Excel 做樞紐分析。UTF-8 BOM 避開中文亂碼。',
+  })
+  async getCompleteCsv(
+    @Param('siteId') siteId: string,
+    @CurrentUser('role') role: string,
+    @Res() res: Response,
+  ) {
+    await this.service.assertSiteAccess(siteId, role);
+    const csv = await this.service.getCompleteReportCsv(siteId);
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="geovault-report-${siteId}-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return res.send(csv);
+  }
 }
