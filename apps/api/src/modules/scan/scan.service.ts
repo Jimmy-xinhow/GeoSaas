@@ -121,6 +121,35 @@ export class ScanService {
   }
 
   /**
+   * Admin escape hatch: force a fresh scan for a specific site, bypassing
+   * the ownership + monthly-quota checks that triggerScan() enforces.
+   * Used from the GEO Comprehensive report flow when an admin needs
+   * up-to-date scan data immediately (cron is weekly).
+   *
+   * Awaits pipeline completion so the caller knows when Scan/ScanResult
+   * rows are ready — no fire-and-forget here; callers typically want to
+   * read the updated comprehensive report right after.
+   */
+  async adminForceScan(siteId: string): Promise<{ scanId: string; totalScore: number }> {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { id: true, url: true, name: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+
+    const scan = await this.prisma.scan.create({
+      data: { siteId, status: 'PENDING' },
+    });
+    this.logger.log(`admin force-scan ${site.name} → scan ${scan.id}`);
+    await this.pipeline.executeScan(scan.id, site.url);
+    const finished = await this.prisma.scan.findUnique({
+      where: { id: scan.id },
+      select: { id: true, totalScore: true },
+    });
+    return { scanId: finished?.id ?? scan.id, totalScore: finished?.totalScore ?? 0 };
+  }
+
+  /**
    * Weekly scan refresh — keeps the Scan / ScanResult / bestScore tables
    * fresh so the GEO Comprehensive report shows up-to-date data. Without
    * this, client sites' scores stay frozen at first-scan time forever
