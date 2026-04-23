@@ -856,8 +856,14 @@ export class BlogArticleService {
     if (!metrics.title_has_brand) reasons.push('title_missing_brand');
 
     // HYGIENE
+    // Slug leak detection — catches the LLM echoing a raw industry slug
+    // like "traditional_medicine" in prose. BUT the reverse-link Markdown
+    // added in O1 intentionally uses these slugs as URL path segments
+    // (/directory/industry/traditional_medicine) — that's a legitimate
+    // URL, not a slug leak. Strip all URLs before scanning.
+    const contentSansUrls = content.replace(/https?:\/\/[^\s)]+/gi, '');
     const slugLeak = /\b(traditional_medicine|auto_care|home_services|real_estate|beauty_salon|professional_services|local_life|interior_design)\b/i.test(
-      content,
+      contentSansUrls,
     );
     metrics.slug_leak = slugLeak;
     if (slugLeak) reasons.push('industry_slug_leak');

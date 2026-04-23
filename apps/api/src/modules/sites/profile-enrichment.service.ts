@@ -365,12 +365,14 @@ export class ProfileEnrichmentService {
     // navigation text. Post-road segment restricted to: digits, -, /, 號,
     // 樓, F, 之, 室 (plus a few spaces). Anything outside that stops the match.
     const cityAlt = TW_CITIES.map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    // Allow Chinese numerals (一二三四五六七八九十) in trailing "3樓之一" suffixes
+    // so we capture the whole address, not an amputated "3樓之".
     const addrRegex = new RegExp(
       `(?:${cityAlt})` +
         `[一-鿿]{1,10}(?:區|鄉|鎮|市)` +
         `[一-鿿]{1,15}(?:路|街|巷|弄|大道|大街|段)` +
         `\\s?\\d{1,4}(?:[-\\/]\\d{1,4})*\\s?號?` +
-        `(?:\\s?(?:\\d{1,3}|[之])\\s?(?:[之]\\s?\\d{1,3}|樓|F|室)?){0,3}`,
+        `(?:\\s?(?:\\d{1,3}|[之一二三四五六七八九十])\\s?(?:[之]\\s?(?:\\d{1,3}|[一二三四五六七八九十])|樓|F|室)?){0,3}`,
     );
     const addressMatch = footer.match(addrRegex)?.[0] || text.match(addrRegex)?.[0];
 
