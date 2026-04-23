@@ -946,8 +946,14 @@ export class BlogArticleService {
     // Street-level addresses with specific 號 numbers (e.g. "民權西路 27 號")
     // If profile doesn't already contain "號", any 號 in the article is fabricated.
     const addressMatches =
-      content.match(/[一-鿿]{2,10}(?:路|街|巷|弄|大道|段)\s*\d+\s*號(?:[之\d樓F]+)?/g) || [];
-    const fakeAddresses = addressMatches.filter((a) => !refRaw.includes(a));
+      content.match(/[一-鿿]{2,10}(?:路|街|巷|弄|大道|段)\s*\d+\s*號(?:[之\d一二三四五六七八九十樓F]+)?/g) || [];
+    // Strip leading Chinese prepositions (於 / 在 / 位於 / 於於) before compare
+    // — "於台北市..." and "台北市..." should both match if profile has the
+    // bare form. Keep leading city names (台北市 / 新北市 / etc).
+    const fakeAddresses = addressMatches.filter((a) => {
+      const cleaned = a.replace(/^(?:於|在|位於)/, '');
+      return !refRaw.includes(cleaned) && !refRaw.includes(a);
+    });
     if (fakeAddresses.length > 0) {
       reasons.push(`fabricated_address:${fakeAddresses.slice(0, 2).join('|')}`);
     }
@@ -1069,6 +1075,11 @@ export class BlogArticleService {
     // Reference text used by the hallucination detector. Any phone/email/
     // address/hours in the article MUST also appear in this blob; otherwise
     // it was fabricated. Social URLs are included so article may cite them.
+    // We ALSO include the raw _enriched fields — they're the freshest
+    // scrape and can differ from the older top-level profile values when
+    // a cleanup hasn't propagated (e.g. top-level has junk suffix, enriched
+    // is cleanly truncated).
+    const enrichedRaw = (profile._enriched as Record<string, any>) || {};
     const profileRefText = [
       ctx.contact,
       ctx.location,
@@ -1080,6 +1091,10 @@ export class BlogArticleService {
       socialLinks?.instagram,
       socialLinks?.youtube,
       socialLinks?.line,
+      enrichedRaw.telephone,
+      enrichedRaw.email,
+      enrichedRaw.address,
+      enrichedRaw.location,
     ]
       .filter(Boolean)
       .join(' \n ');

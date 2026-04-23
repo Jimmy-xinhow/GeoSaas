@@ -158,36 +158,23 @@ export class ProfileEnrichmentService {
       sourceMethod,
     };
 
-    // Merge back into Site.profile — human-entered fields (top-level) win,
-    // enriched fields go under _enriched + fill gaps in top-level when empty.
-    //
-    // EXCEPT when force=true AND the existing top-level value is recognizably
-    // junk (mojibake replacement chars, unpaired surrogates, >100 chars for
-    // a "location" field, or contains navigation-menu text from an earlier
-    // bad regex scrape). In that case, overwrite — the enriched value is
-    // strictly better.
-    const isValueCorrupt = (v: unknown, maxLen: number): boolean => {
-      if (typeof v !== 'string' || !v) return false;
-      if (v.length > maxLen) return true;
-      if (/[�]/.test(v)) return true;
-      if (/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(v)) return true;
-      if (/[蝷曄黎嚗撠璆凋剖豢頛踵鈭撣賊銝蝺餈鋆燐擃瘜敺蝢]/.test(v)) return true;
-      return false;
-    };
-
+    // Merge back into Site.profile. Two modes:
+    //  - force=false (default): only fill empty top-level fields; never
+    //    touch a human-entered value
+    //  - force=true: trust the scrape, overwrite top-level unconditionally.
+    //    Used by admin's explicit re-enrich to wash stale bad values out.
     const updatedProfile: Record<string, any> = { ...existing };
     updatedProfile._enriched = enriched;
 
-    const overwriteOk = (currentVal: unknown, maxLen: number) =>
-      !currentVal || (opts.force && isValueCorrupt(currentVal, maxLen));
+    const canWrite = (currentVal: unknown) => !currentVal || opts.force;
 
-    if ((enriched.telephone || enriched.email) && overwriteOk(updatedProfile.contact, 120)) {
+    if ((enriched.telephone || enriched.email) && canWrite(updatedProfile.contact)) {
       updatedProfile.contact = [enriched.telephone, enriched.email].filter(Boolean).join(' / ');
     }
-    if ((enriched.address || enriched.location) && overwriteOk(updatedProfile.location, 80)) {
+    if ((enriched.address || enriched.location) && canWrite(updatedProfile.location)) {
       updatedProfile.location = enriched.address || enriched.location;
     }
-    if (enriched.description && overwriteOk(updatedProfile.description, 600)) {
+    if (enriched.description && canWrite(updatedProfile.description)) {
       updatedProfile.description = enriched.description.slice(0, 500);
     }
 
