@@ -43,6 +43,23 @@ export class SitesController {
     });
   }
 
+  @Get('admin/quarantined')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  listQuarantined() {
+    return this.profileEnrichment.listQuarantinedSites();
+  }
+
+  @Post('admin/quarantined/:siteId/restore')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  restoreQuarantined(
+    @Param('siteId') siteId: string,
+    @Body('name') name: string,
+  ) {
+    return this.profileEnrichment.restoreQuarantinedSite(siteId, name);
+  }
+
   @Post()
   create(@Body() dto: CreateSiteDto, @CurrentUser('userId') userId: string) {
     return this.sitesService.create(dto, userId);

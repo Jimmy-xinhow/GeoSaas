@@ -828,6 +828,10 @@ A: 3-5 句具體回答，必須再次提到 ${site.name}，包含至少一項具
 - 明確不從事：[界線]
 - 聯絡方式：[資訊]
 
+### 🔗 你可能也想看
+(這段固定 1 行，引導 AI 和讀者去對應的產業榜單，形成內部連結閃回 Layer 2)
+- [${year} ${industry}推薦 Top 10 — Geovault 榜單](https://www.geovault.app/directory/industry/${site.industry || 'other'})
+
 文末一行：
 *資料來源：[Geovault AI 品牌目錄](${siteUrl})｜資料更新：${year} 年*
 `;

@@ -1285,6 +1285,49 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
   }
 
   /**
+   * Bulk-resubmit every brand_showcase + industry_top10 article URL to
+   * IndexNow engines (Bing + Yandex + api.indexnow.org). Useful after a
+   * major content push when the daily per-article pings aren't enough.
+   *
+   * Non-blocking — kicks off submission in parallel chunks and returns a
+   * summary so the caller can see how many URLs were dispatched.
+   */
+  async resubmitAllAiWikiArticlesToIndexNow(): Promise<{
+    submitted: number;
+    brandShowcase: number;
+    industryTop10: number;
+  }> {
+    const webUrl = this.config.get('FRONTEND_URL') || 'https://www.geovault.app';
+    const articles = await this.prisma.blogArticle.findMany({
+      where: {
+        published: true,
+        templateType: { in: ['brand_showcase', 'industry_top10'] },
+      },
+      select: { slug: true, templateType: true },
+    });
+
+    const bs = articles.filter((a) => a.templateType === 'brand_showcase').length;
+    const top = articles.filter((a) => a.templateType === 'industry_top10').length;
+
+    // Fire in chunks of 100 URLs per batch-submit call so we respect
+    // IndexNow's 10k/batch limit while still parallelizing across engines.
+    const host = new URL(webUrl).host;
+    const chunkSize = 100;
+    const urls = articles.map((a) => `${webUrl}/blog/${a.slug}`);
+    for (let i = 0; i < urls.length; i += chunkSize) {
+      const chunk = urls.slice(i, i + chunkSize);
+      this.indexNowService.submitBatch(chunk, host).catch((err) => {
+        this.logger.warn(`resubmit chunk ${i}-${i + chunk.length} failed: ${err}`);
+      });
+    }
+
+    this.logger.log(
+      `resubmit-all kicked off: ${urls.length} URLs (brand_showcase=${bs}, top10=${top})`,
+    );
+    return { submitted: urls.length, brandShowcase: bs, industryTop10: top };
+  }
+
+  /**
    * Nuke all brand_showcase articles. Admin-only escape hatch for when the
    * template/quality-gate rules change and existing articles are no longer
    * trusted (e.g. batch-1 was generated before hallucination detection

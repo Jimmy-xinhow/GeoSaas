@@ -65,19 +65,84 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
     });
   }, [results]);
 
-  // Group results by question for table
+  // Group results by question for table. Keep the full AI response + position
+  // + error detail per platform so the expanded row can render them without
+  // refetching. Previous version discarded everything except mentioned/error.
   const questionResults = useMemo(() => {
-    const map = new Map<string, { question: string; category: string; platforms: Record<string, { mentioned: boolean; error: boolean }> }>();
+    type PlatformCell = {
+      mentioned: boolean;
+      error: boolean;
+      errorMessage?: string;
+      position?: number | null;
+      response?: string;
+    };
+    const map = new Map<string, {
+      question: string;
+      category: string;
+      platforms: Record<string, PlatformCell>;
+    }>();
     results.forEach((r: any) => {
       if (!map.has(r.question)) {
         map.set(r.question, { question: r.question, category: r.category, platforms: {} });
       }
+      const resp = typeof r.response === 'string' ? r.response : '';
+      const isErr = resp.startsWith('[Error]');
       map.get(r.question)!.platforms[r.platform] = {
-        mentioned: r.mentioned,
-        error: r.response?.startsWith('[Error]') || false,
+        mentioned: !!r.mentioned,
+        error: isErr,
+        errorMessage: isErr ? resp.slice(0, 200) : undefined,
+        position: typeof r.position === 'number' ? r.position : null,
+        response: isErr ? undefined : resp,
       };
     });
     return Array.from(map.values());
+  }, [results]);
+
+  // Category-level aggregation — user wanted "全面的細節"; grouping by
+  // category tells them which QUESTION CLASSES land vs miss.
+  const categoryStats = useMemo(() => {
+    const map = new Map<string, { total: number; mentioned: number; errors: number }>();
+    results.forEach((r: any) => {
+      const cat = r.category || '(未分類)';
+      if (!map.has(cat)) map.set(cat, { total: 0, mentioned: 0, errors: 0 });
+      const entry = map.get(cat)!;
+      if (typeof r.response === 'string' && r.response.startsWith('[Error]')) {
+        entry.errors++;
+        return;
+      }
+      entry.total++;
+      if (r.mentioned) entry.mentioned++;
+    });
+    return Array.from(map.entries())
+      .map(([name, v]) => ({
+        name,
+        total: v.total,
+        mentioned: v.mentioned,
+        errors: v.errors,
+        rate: v.total > 0 ? Math.round((v.mentioned / v.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [results]);
+
+  // Error-reason breakdown — classify errors so the user can tell if it's
+  // API outage, auth, rate limit, or actual detection failure.
+  const errorStats = useMemo(() => {
+    const buckets: Record<string, number> = {};
+    results.forEach((r: any) => {
+      const resp = typeof r.response === 'string' ? r.response : '';
+      if (!resp.startsWith('[Error]')) return;
+      // Try to bucket common patterns: [Error] 429 / timeout / 401 / other
+      let bucket = 'other';
+      if (/429|rate.?limit|quota/i.test(resp)) bucket = 'rate_limit';
+      else if (/timeout|timed?.?out|ETIMEDOUT/i.test(resp)) bucket = 'timeout';
+      else if (/401|403|unauthori[sz]ed|forbidden|api.?key/i.test(resp)) bucket = 'auth';
+      else if (/5\d\d|server.?error|bad.?gateway/i.test(resp)) bucket = 'server_5xx';
+      else if (/400|bad.?request/i.test(resp)) bucket = 'bad_request';
+      buckets[bucket] = (buckets[bucket] ?? 0) + 1;
+    });
+    return Object.entries(buckets)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
   }, [results]);
 
   const handleDownloadPdf = () => {
@@ -184,19 +249,71 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
         ))}
       </div>
 
-      {/* Live Question Results Table */}
+      {/* Category Breakdown — which question classes perform? */}
+      {categoryStats.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">類別表現</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              {categoryStats.map((c) => (
+                <div key={c.name} className="p-3 rounded-md bg-white/5 border border-white/10">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-gray-400 truncate" title={c.name}>
+                      {c.name.length > 12 ? c.name.slice(0, 12) + '…' : c.name}
+                    </span>
+                    <span className={`text-lg font-bold ${c.rate >= 50 ? 'text-green-500' : c.rate >= 20 ? 'text-yellow-500' : 'text-red-400'}`}>
+                      {c.rate}%
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {c.mentioned}/{c.total}{c.errors > 0 && <span className="text-red-400 ml-2">⚠ {c.errors}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error Breakdown — surfaces API failures so the user can tell detection
+          misses from infrastructure issues */}
+      {errorStats.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-red-400">失敗原因分佈</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {errorStats.map((e) => (
+                <div key={e.name} className="px-3 py-1.5 rounded-md bg-red-500/10 border border-red-500/20 text-sm">
+                  <span className="text-red-300">{e.name}</span>
+                  <span className="text-red-200 ml-2 font-semibold">{e.count}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              rate_limit=429 配額、timeout=逾時、auth=API 金鑰、server_5xx=伺服器錯誤、bad_request=請求格式問題
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Live Question Results Table — with expandable rows showing the full
+          AI response, ranking position, and error details for each platform */}
       {questionResults.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">問題明細（即時更新）</CardTitle>
+            <CardTitle className="text-base">問題明細（點擊展開查看 AI 回應）</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-gray-900">
+                <thead className="sticky top-0 bg-gray-900 z-10">
                   <tr className="border-b border-white/10">
                     <th className="text-left p-2 font-medium text-gray-400 w-8">#</th>
-                    <th className="text-left p-2 font-medium text-gray-400">問題</th>
+                    <th className="text-left p-2 font-medium text-gray-400">問題 / 類別</th>
                     {PLATFORMS.map((p) => (
                       <th key={p} className="text-center p-2 font-medium text-gray-400 w-20">{PLATFORM_LABELS[p]}</th>
                     ))}
@@ -204,29 +321,7 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
                 </thead>
                 <tbody>
                   {questionResults.map((qr, i) => (
-                    <tr key={i} className="border-b border-white/10 hover:bg-white/5">
-                      <td className="p-2 text-gray-400">{i + 1}</td>
-                      <td className="p-2">
-                        <span className="text-white">{qr.question}</span>
-                        {qr.category && (
-                          <span className="ml-2 text-xs text-gray-400">{qr.category.slice(0, 15)}</span>
-                        )}
-                      </td>
-                      {PLATFORMS.map((p) => {
-                        const pr = qr.platforms[p];
-                        if (!pr) return <td key={p} className="text-center p-2"><span className="text-gray-300">—</span></td>;
-                        if (pr.error) return <td key={p} className="text-center p-2"><span className="text-yellow-500">⚠</span></td>;
-                        return (
-                          <td key={p} className="text-center p-2">
-                            {pr.mentioned ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
-                            ) : (
-                              <XCircle className="h-4 w-4 text-red-400 mx-auto" />
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
+                    <ExpandableRow key={i} index={i} qr={qr} />
                   ))}
                 </tbody>
               </table>
@@ -235,6 +330,116 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
         </Card>
       )}
     </div>
+  );
+}
+
+/**
+ * One row per question. Clicking the row expands an inline detail panel
+ * with the full AI response, ranked position, and error messages for each
+ * of the 5 platforms — the context the flat check/cross view previously
+ * discarded.
+ */
+function ExpandableRow({
+  index,
+  qr,
+}: {
+  index: number;
+  qr: {
+    question: string;
+    category: string;
+    platforms: Record<string, {
+      mentioned: boolean;
+      error: boolean;
+      errorMessage?: string;
+      position?: number | null;
+      response?: string;
+    }>;
+  };
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasAnyDetail = PLATFORMS.some((p) => {
+    const c = qr.platforms[p];
+    return !!(c && (c.response || c.errorMessage));
+  });
+
+  return (
+    <>
+      <tr
+        className={`border-b border-white/10 hover:bg-white/5 ${hasAnyDetail ? 'cursor-pointer' : 'cursor-default'}`}
+        onClick={() => hasAnyDetail && setExpanded((v) => !v)}
+      >
+        <td className="p-2 text-gray-400">{index + 1}</td>
+        <td className="p-2">
+          <div className="flex items-center gap-2">
+            {hasAnyDetail && (
+              <span className="text-gray-500 text-xs">{expanded ? '▼' : '▶'}</span>
+            )}
+            <span className="text-white">{qr.question}</span>
+          </div>
+          {qr.category && (
+            <span className="text-xs text-gray-400 mt-0.5 block">{qr.category}</span>
+          )}
+        </td>
+        {PLATFORMS.map((p) => {
+          const pr = qr.platforms[p];
+          if (!pr) return <td key={p} className="text-center p-2"><span className="text-gray-300">—</span></td>;
+          if (pr.error) return <td key={p} className="text-center p-2"><span className="text-yellow-500" title={pr.errorMessage}>⚠</span></td>;
+          return (
+            <td key={p} className="text-center p-2">
+              {pr.mentioned ? (
+                <div className="flex flex-col items-center">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  {typeof pr.position === 'number' && pr.position > 0 && (
+                    <span className="text-xs text-green-400 mt-0.5">#{pr.position}</span>
+                  )}
+                </div>
+              ) : (
+                <XCircle className="h-4 w-4 text-red-400 mx-auto" />
+              )}
+            </td>
+          );
+        })}
+      </tr>
+      {expanded && (
+        <tr className="bg-white/[0.02]">
+          <td />
+          <td colSpan={6} className="p-3">
+            <div className="space-y-3">
+              {PLATFORMS.map((p) => {
+                const pr = qr.platforms[p];
+                if (!pr) return null;
+                return (
+                  <div key={p} className="border-l-2 border-white/10 pl-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-semibold text-gray-300">{PLATFORM_LABELS[p]}</span>
+                      {pr.error ? (
+                        <Badge variant="outline" className="text-yellow-500 border-yellow-500/30">錯誤</Badge>
+                      ) : pr.mentioned ? (
+                        <Badge variant="outline" className="text-green-500 border-green-500/30">
+                          已引用{typeof pr.position === 'number' && pr.position > 0 ? ` · 位置 #${pr.position}` : ''}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-red-400 border-red-400/30">未引用</Badge>
+                      )}
+                    </div>
+                    {pr.errorMessage && (
+                      <p className="text-xs text-yellow-400/80 whitespace-pre-wrap break-words">
+                        {pr.errorMessage}
+                      </p>
+                    )}
+                    {pr.response && (
+                      <p className="text-xs text-gray-300 whitespace-pre-wrap break-words leading-relaxed">
+                        {pr.response.length > 800 ? pr.response.slice(0, 800) + '…' : pr.response}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -404,12 +609,17 @@ export default function ClientReportsPage() {
             <span className="text-sm font-medium shrink-0">選擇客戶：</span>
             <Select value={selectedSiteId} onValueChange={(v) => { setSelectedSiteId(v); setActiveReportId(''); setSiteSearch(''); }}>
               <SelectTrigger className="w-[280px]">
-                <SelectValue placeholder="下拉選擇" />
+                <SelectValue placeholder={`下拉選擇 (共 ${(sites as any[])?.length ?? 0} 個)`} />
               </SelectTrigger>
-              <SelectContent>
-                {(sites as any[])?.slice(0, 50).map((s: any) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
+              <SelectContent className="max-h-[400px]">
+                {/* Previously .slice(0, 50) — the hidden limit silently dropped clients
+                    when the directory grew past 50 sites. Render all, sorted by name,
+                    and rely on the search box for long lists. */}
+                {[...((sites as any[]) ?? [])]
+                  .sort((a, b) => (a?.name ?? '').localeCompare(b?.name ?? '', 'zh-Hant'))
+                  .map((s: any) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
               </SelectContent>
             </Select>
             <span className="text-sm text-muted-foreground">或</span>

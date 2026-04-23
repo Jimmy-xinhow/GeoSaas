@@ -544,6 +544,70 @@ export class ProfileEnrichmentService {
     };
   }
 
+  /**
+   * List sites that were quarantined (isPublic=false) by cleanupCorruptNames
+   * — they have corrupt Site.name AND no clean candidate could be scraped.
+   * These need human review; some are dead/defunct URLs that should be
+   * deleted, others might just need a manual name entry.
+   *
+   * We match "quarantined by cleanup" heuristically: isPublic=false, name
+   * passes isNameCorrupt(), and profile._enriched exists (proves cleanup
+   * ran). This avoids listing sites that were intentionally hidden by
+   * the admin for unrelated reasons.
+   */
+  async listQuarantinedSites(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      url: string;
+      industry: string | null;
+      enrichedAt: string | null;
+      sourceMethod: string | null;
+    }>
+  > {
+    const sites = await this.prisma.site.findMany({
+      where: { isPublic: false },
+      select: { id: true, name: true, url: true, industry: true, profile: true },
+    });
+
+    return sites
+      .filter((s) => isNameCorrupt(s.name))
+      .map((s) => {
+        const enr = ((s.profile as Record<string, any>) || {})._enriched as
+          | EnrichedProfile
+          | undefined;
+        return {
+          id: s.id,
+          name: s.name,
+          url: s.url,
+          industry: s.industry,
+          enrichedAt: enr?.extractedAt ?? null,
+          sourceMethod: enr?.sourceMethod ?? null,
+        };
+      });
+  }
+
+  /**
+   * Manually set a clean Site.name and restore isPublic=true. Use after a
+   * human has reviewed a quarantined entry and decided the site is real.
+   */
+  async restoreQuarantinedSite(
+    siteId: string,
+    newName: string,
+  ): Promise<{ id: string; name: string; isPublic: boolean } | null> {
+    if (isNameCorrupt(newName)) {
+      throw new Error(
+        `Provided name "${newName}" still fails isNameCorrupt — refusing to restore`,
+      );
+    }
+    const updated = await this.prisma.site.update({
+      where: { id: siteId },
+      data: { name: newName, isPublic: true },
+      select: { id: true, name: true, isPublic: true },
+    });
+    return updated;
+  }
+
   private deriveLocation(address?: string): string | undefined {
     if (!address) return undefined;
     for (const city of TW_CITIES) {

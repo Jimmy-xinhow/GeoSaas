@@ -190,6 +190,18 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('resubmit-all/indexnow')
+  @ApiOperation({
+    summary:
+      'Bulk-resubmit every brand_showcase + industry_top10 article URL to IndexNow engines. Use after a major content push when you want Bing/Yandex to re-crawl the whole AI-Wikipedia corpus immediately.',
+  })
+  async resubmitAllToIndexNow() {
+    return this.service.resubmitAllAiWikiArticlesToIndexNow();
+  }
+
+  @ApiBearerAuth()
   @Post('insights/generate')
   @ApiOperation({ summary: 'Generate insight article for an industry' })
   generateInsight(@Body() body: { industry: string; type?: InsightType }) {
