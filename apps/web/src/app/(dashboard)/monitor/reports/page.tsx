@@ -14,7 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSites } from '@/hooks/use-sites';
-import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport, useGeoComprehensive } from '@/hooks/use-client-reports';
+import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport, useGeoComprehensive, useReportQuota } from '@/hooks/use-client-reports';
 
 const PLATFORM_LABELS: Record<string, string> = {
   CHATGPT: 'ChatGPT', CLAUDE: 'Claude', PERPLEXITY: 'Perplexity', GEMINI: 'Gemini', COPILOT: 'Copilot',
@@ -560,6 +560,7 @@ export default function ClientReportsPage() {
 
   const { data: querySets, isLoading: qsLoading } = useClientQuerySets(selectedSiteId);
   const { data: reports } = useSiteReports(selectedSiteId);
+  const { data: quota } = useReportQuota(selectedSiteId);
   const runReport = useRunReport();
 
   const handleRunReport = async (querySetId: string, queryCount: number) => {
@@ -567,9 +568,16 @@ export default function ClientReportsPage() {
       const result = await runReport.mutateAsync(querySetId);
       setActiveReportId(result.reportId);
       setActiveQsLength(queryCount);
-      toast.success('報告生成已啟動');
-    } catch {
-      toast.error('啟動失敗');
+      toast.success(result.cached ? '已載入最近 14 天內的報告(不計配額)' : '報告生成已啟動');
+    } catch (err: any) {
+      // Surface the server's reason (quota exhausted / 4h cooldown) so the
+      // user can tell WHY the button doesn't work — otherwise it just looks
+      // broken.
+      const msg =
+        err?.response?.data?.message ??
+        err?.message ??
+        '啟動失敗';
+      toast.error(msg);
     }
   };
 
@@ -683,43 +691,81 @@ export default function ClientReportsPage() {
 
           {/* Tab 1: 既有的問題集驗收 */}
           <TabsContent value="citation" className="space-y-4 mt-4">
+            {/* Quota banner — shows monthly used / limit. Hidden for staff/admin
+                who bypass quota anyway (bypassesQuota=true from API). */}
+            {quota && !quota.bypassesQuota && (
+              <div className={`p-3 rounded-lg border text-sm flex items-center justify-between ${
+                quota.monthly.remaining === 0
+                  ? 'bg-red-500/10 border-red-500/30 text-red-300'
+                  : quota.monthly.remaining === 1
+                  ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-200'
+                  : 'bg-blue-500/10 border-blue-500/30 text-blue-200'
+              }`}>
+                <span>
+                  <strong>{quota.plan}</strong> 方案 · 本月驗收報告配額:
+                  <span className="font-bold ml-1">{quota.monthly.used}/{quota.monthly.limit}</span>
+                  <span className="ml-2">（剩餘 {quota.monthly.remaining} 次）</span>
+                </span>
+                {quota.monthly.remaining === 0 && (
+                  <span className="text-xs">下月 1 日重置</span>
+                )}
+              </div>
+            )}
+
             {qsLoading ? (
               <Skeleton className="h-32" />
             ) : querySets && querySets.length > 0 ? (
-              querySets.map((qs) => (
-                <Card key={qs.id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">{qs.name}</CardTitle>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{qs.queries.length} 題 × 5 平台 = {qs.queries.length * 5} 次查詢</Badge>
-                        <Button
-                          size="sm"
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                          onClick={() => handleRunReport(qs.id, qs.queries.length)}
-                          disabled={runReport.isPending}
-                        >
-                          {runReport.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Play className="h-4 w-4 mr-1" />}
-                          一鍵查詢 5 平台
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="max-h-[150px] overflow-y-auto space-y-1 text-sm">
-                      {qs.queries.slice(0, 8).map((q, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <span className="text-gray-400 w-6 text-right shrink-0">{i + 1}.</span>
-                          <span className="text-gray-300 truncate">{q.question}</span>
+              querySets.map((qs) => {
+                const qsQuota = quota?.cooldowns.find((c) => c.querySetId === qs.id);
+                const onCooldown = qsQuota && !qsQuota.canRun;
+                const outOfQuota = quota && !quota.bypassesQuota && quota.monthly.remaining === 0;
+                const disabled = runReport.isPending || !!onCooldown || !!outOfQuota;
+                const cooldownLabel = onCooldown && qsQuota?.cooldownUntil
+                  ? (() => {
+                      const remaining = new Date(qsQuota.cooldownUntil).getTime() - Date.now();
+                      const mins = Math.max(0, Math.ceil(remaining / 60000));
+                      const hrs = Math.floor(mins / 60);
+                      const m = mins % 60;
+                      return hrs > 0 ? `${hrs}h ${m}m 後可再跑` : `${m} 分鐘後可再跑`;
+                    })()
+                  : null;
+
+                return (
+                  <Card key={qs.id}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base">{qs.name}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">{qs.queries.length} 題 × 5 平台 = {qs.queries.length * 5} 次查詢</Badge>
+                          <Button
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                            onClick={() => handleRunReport(qs.id, qs.queries.length)}
+                            disabled={disabled}
+                            title={outOfQuota ? '本月配額用罄' : cooldownLabel ?? ''}
+                          >
+                            {runReport.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Play className="h-4 w-4 mr-1" />}
+                            {outOfQuota ? '配額用罄' : cooldownLabel ?? '一鍵查詢 5 平台'}
+                          </Button>
                         </div>
-                      ))}
-                      {qs.queries.length > 8 && (
-                        <p className="text-xs text-muted-foreground ml-8">... 還有 {qs.queries.length - 8} 題</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="max-h-[150px] overflow-y-auto space-y-1 text-sm">
+                        {qs.queries.slice(0, 8).map((q, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="text-gray-400 w-6 text-right shrink-0">{i + 1}.</span>
+                            <span className="text-gray-300 truncate">{q.question}</span>
+                          </div>
+                        ))}
+                        {qs.queries.length > 8 && (
+                          <p className="text-xs text-muted-foreground ml-8">... 還有 {qs.queries.length - 8} 題</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
             ) : (
               <Card>
                 <CardContent className="p-8 text-center text-muted-foreground">

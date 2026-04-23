@@ -1,7 +1,14 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MonitorService } from '../monitor/monitor.service';
+import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
 import pLimit from 'p-limit';
+
+// 4-hour cooldown between runs of the SAME query set. Even with plan-level
+// monthly quota, a client that hits the button accidentally shouldn't burn
+// an entire slot. The cooldown is shorter than the existing 14-day cache
+// so cache-hit path (free re-view) still works normally.
+const QUERY_SET_COOLDOWN_MS = 4 * 60 * 60 * 1000;
 
 interface QueryItem {
   category: string;
@@ -24,6 +31,7 @@ export class ClientReportService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly monitorService: MonitorService,
+    private readonly planUsage: PlanUsageService,
   ) {}
 
   /** On startup, recover orphaned "running" reports */
@@ -124,7 +132,7 @@ export class ClientReportService implements OnModuleInit {
   /** Run a full report: test all questions against all 5 platforms
    *  If a completed report exists within 14 days, return it directly
    */
-  async runReport(querySetId: string, role?: string): Promise<{ reportId: string; cached?: boolean }> {
+  async runReport(querySetId: string, role?: string, userId?: string): Promise<{ reportId: string; cached?: boolean }> {
     const querySet = await this.prisma.clientQuerySet.findUnique({
       where: { id: querySetId },
       include: { site: true },
@@ -136,7 +144,8 @@ export class ClientReportService implements OnModuleInit {
       await this.assertSiteAccess(querySet.siteId, role);
     }
 
-    // Check for recent completed report (within 14 days)
+    // Check for recent completed report (within 14 days) — CACHE HIT is free
+    // and doesn't count against quota, so check this first.
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
@@ -160,6 +169,55 @@ export class ClientReportService implements OnModuleInit {
       // Incomplete cached report — delete it and re-run
       this.logger.warn(`Cached report ${recentReport.id} incomplete (${cachedResults.length}/${expectedTotal}) — deleting and re-running`);
       await this.prisma.monitorReport.delete({ where: { id: recentReport.id } });
+    }
+
+    // NO CACHE HIT — this run will burn LLM credits. Gate it.
+    // Resolve the acting user (for the plan check): prefer explicit userId
+    // arg (passed from controller via @CurrentUser), fall back to site owner
+    // when STAFF impersonates a client site.
+    const actingUserId = userId ?? querySet.site.userId;
+    const actingUser = await this.prisma.user.findUnique({
+      where: { id: actingUserId },
+      select: { id: true, plan: true, role: true },
+    });
+
+    // STAFF / ADMIN / SUPER_ADMIN bypass the quota, same pattern as PlanGuard.
+    const bypassesQuota =
+      actingUser &&
+      (actingUser.role === 'STAFF' ||
+        actingUser.role === 'ADMIN' ||
+        actingUser.role === 'SUPER_ADMIN');
+
+    if (actingUser && !bypassesQuota) {
+      // Plan-level monthly quota (FREE=0 / STARTER=2 / PRO=3)
+      const planKey = (actingUser.plan || 'FREE') as keyof typeof PLAN_LIMITS;
+      const check = await this.planUsage.checkAndIncrement(
+        actingUser.id,
+        'reportsPerMonth',
+        planKey,
+        actingUser.role,
+      );
+      if (!check.allowed) {
+        throw new ForbiddenException(
+          `已達本月驗收報告配額（${check.used}/${check.limit}）。請等到下個月或升級方案。`,
+        );
+      }
+    }
+
+    // Per-querySet cooldown: a NON-cache-hit run within the last 4h means the
+    // previous run failed or was deleted and the user is spamming. Hard stop.
+    const cooldownSince = new Date(Date.now() - QUERY_SET_COOLDOWN_MS);
+    const veryRecentRun = await this.prisma.monitorReport.findFirst({
+      where: { querySetId, createdAt: { gte: cooldownSince } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, createdAt: true, status: true },
+    });
+    if (veryRecentRun && !bypassesQuota) {
+      const msUntilOk = veryRecentRun.createdAt.getTime() + QUERY_SET_COOLDOWN_MS - Date.now();
+      const minutes = Math.ceil(msUntilOk / 60000);
+      throw new ForbiddenException(
+        `此問題集剛執行過(狀態: ${veryRecentRun.status})。請等 ${minutes} 分鐘後再試,或直接查看既有報告。`,
+      );
     }
 
     const period = new Date().toISOString().slice(0, 7);
@@ -462,6 +520,80 @@ export class ClientReportService implements OnModuleInit {
   </div>
 </body>
 </html>`;
+  }
+
+  /**
+   * Read-only quota probe for the UI — returns monthly cap / used / remaining
+   * and the per-querySet cooldown for every querySet on a site. Lets the
+   * front end disable the "一鍵查詢" button (and explain why) before the
+   * user clicks and gets a 403 back.
+   */
+  async getQuotaStatus(siteId: string, userId: string) {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { userId: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+
+    const actingUserId = userId || site.userId;
+    const user = await this.prisma.user.findUnique({
+      where: { id: actingUserId },
+      select: { id: true, plan: true, role: true },
+    });
+
+    const planKey = (user?.plan || 'FREE') as keyof typeof PLAN_LIMITS;
+    const limits = PLAN_LIMITS[planKey] ?? PLAN_LIMITS.FREE;
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const used = await this.prisma.monitorReport.count({
+      where: { site: { userId: actingUserId }, createdAt: { gte: monthStart } },
+    });
+
+    const bypassesQuota =
+      !!user &&
+      (user.role === 'STAFF' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN');
+
+    // Per-querySet cooldowns
+    const querySets = await this.prisma.clientQuerySet.findMany({
+      where: { siteId },
+      select: {
+        id: true,
+        name: true,
+        reports: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { createdAt: true, status: true },
+        },
+      },
+    });
+
+    const now = Date.now();
+    const cooldowns = querySets.map((qs) => {
+      const latest = qs.reports[0];
+      if (!latest) return { querySetId: qs.id, name: qs.name, cooldownUntil: null, canRun: true };
+      const until = latest.createdAt.getTime() + QUERY_SET_COOLDOWN_MS;
+      const canRun = bypassesQuota || now >= until;
+      return {
+        querySetId: qs.id,
+        name: qs.name,
+        cooldownUntil: canRun ? null : new Date(until).toISOString(),
+        lastStatus: latest.status,
+        canRun,
+      };
+    });
+
+    return {
+      plan: planKey,
+      bypassesQuota,
+      monthly: {
+        used,
+        limit: limits.reportsPerMonth,
+        remaining: bypassesQuota ? -1 : Math.max(0, limits.reportsPerMonth - used),
+      },
+      cooldowns,
+    };
   }
 
   // ─── GEO 綜合體檢報告 ──────────────────────────────────────────────

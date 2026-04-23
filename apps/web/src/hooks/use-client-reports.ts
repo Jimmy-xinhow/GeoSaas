@@ -50,7 +50,7 @@ export function useRunReport() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (querySetId: string) => {
-      const { data } = await apiClient.post<{ reportId: string }>(`/client-reports/run/${querySetId}`);
+      const { data } = await apiClient.post<{ reportId: string; cached?: boolean }>(`/client-reports/run/${querySetId}`);
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['client-reports'] }),
@@ -161,6 +161,33 @@ export interface GeoComprehensive {
     tier: string | null;
     isMe: boolean;
   }>;
+}
+
+export interface ReportQuotaStatus {
+  plan: string;
+  bypassesQuota: boolean;
+  monthly: { used: number; limit: number; remaining: number };
+  cooldowns: Array<{
+    querySetId: string;
+    name: string;
+    cooldownUntil: string | null;
+    lastStatus?: string;
+    canRun: boolean;
+  }>;
+}
+
+export function useReportQuota(siteId: string) {
+  return useQuery({
+    queryKey: ['client-reports', 'quota', siteId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ReportQuotaStatus>(
+        `/client-reports/quota/${siteId}`,
+      );
+      return data;
+    },
+    enabled: !!siteId,
+    refetchInterval: 60_000, // refresh every minute to tick cooldown timers
+  });
 }
 
 export function useGeoComprehensive(siteId: string) {

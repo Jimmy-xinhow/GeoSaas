@@ -36,8 +36,23 @@ export class ClientReportController {
   runReport(
     @Param('querySetId') querySetId: string,
     @CurrentUser('role') role: string,
+    @CurrentUser('userId') userId: string,
   ) {
-    return this.service.runReport(querySetId, role);
+    return this.service.runReport(querySetId, role, userId);
+  }
+
+  @Get('quota/:siteId')
+  @ApiOperation({
+    summary:
+      'Quota + cooldown status for the acceptance-report UI: monthly used/limit, per-querySet 4h cooldown, bypass flag for staff.',
+  })
+  async getQuota(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    await this.service.assertSiteAccess(siteId, role);
+    return this.service.getQuotaStatus(siteId, userId);
   }
 
   @Get('reports/:siteId')
