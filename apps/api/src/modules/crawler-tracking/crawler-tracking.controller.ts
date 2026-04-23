@@ -4,6 +4,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { Roles, RolesGuard } from '../../common/guards/roles.guard';
 import { CrawlerTrackingService } from './crawler-tracking.service';
 import { PerplexityPingService } from './perplexity-ping.service';
+import { CrawlerBoostService } from './crawler-boost.service';
 import { ReportVisitDto } from './dto/report-visit.dto';
 import { QueryVisitsDto } from './dto/query-visits.dto';
 
@@ -13,7 +14,20 @@ export class CrawlerTrackingController {
   constructor(
     private readonly service: CrawlerTrackingService,
     private readonly perplexityPing: PerplexityPingService,
+    private readonly crawlerBoost: CrawlerBoostService,
   ) {}
+
+  @Post('admin/crawler/boost')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      '手動觸發爬蟲冷啟動推送 — 掃描 isClient=true 且 14 天內 0 次真實爬蟲造訪的站,對該站 URL + Geovault directory + brand_showcase + per-brand feeds 執行 IndexNow + WebSub 推送。跟排程 cron 同邏輯,同步執行方便觀察結果。',
+  })
+  boostCrawlers() {
+    return this.crawlerBoost.boostColdClients();
+  }
 
   @Public()
   @Post('crawler/report')

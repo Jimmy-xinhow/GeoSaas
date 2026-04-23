@@ -5,8 +5,11 @@ import { RobotsParserService } from './robots-parser.service';
 import { SnippetGeneratorService } from './snippet-generator.service';
 import { CrawlerSchedulerService } from './crawler-scheduler.service';
 import { PerplexityPingService } from './perplexity-ping.service';
+import { CrawlerBoostService } from './crawler-boost.service';
+import { IndexNowModule } from '../indexnow/indexnow.module';
 
 @Module({
+  imports: [IndexNowModule],
   controllers: [CrawlerTrackingController],
   providers: [
     CrawlerTrackingService,
@@ -14,7 +17,8 @@ import { PerplexityPingService } from './perplexity-ping.service';
     SnippetGeneratorService,
     CrawlerSchedulerService,
     PerplexityPingService,
+    CrawlerBoostService,
   ],
-  exports: [CrawlerTrackingService, PerplexityPingService],
+  exports: [CrawlerTrackingService, PerplexityPingService, CrawlerBoostService],
 })
 export class CrawlerTrackingModule {}
