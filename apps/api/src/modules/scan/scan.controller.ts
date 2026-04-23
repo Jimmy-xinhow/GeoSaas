@@ -1,13 +1,30 @@
-import { Controller, Get, Post, Param } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ScanService } from './scan.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles, RolesGuard } from '../../common/guards/roles.guard';
 
 @ApiTags('Scans')
 @ApiBearerAuth()
 @Controller()
 export class ScanController {
   constructor(private scanService: ScanService) {}
+
+  @Post('admin/scan/weekly-refresh')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary:
+      'Manually trigger the weekly scan refresh. ?limit=50 default, max 200. Picks isClient sites + stale (>14d) public sites, oldest first.',
+  })
+  triggerWeeklyRefresh(@Query('limit') limit?: string) {
+    const n = Math.max(1, Math.min(200, limit ? parseInt(limit, 10) : 50));
+    // Fire-and-forget — scans are ~10s each × N, would exceed HTTP timeout.
+    this.scanService.runWeeklyRefresh(n).catch((err) => {
+      console.error('weekly-refresh crashed:', err);
+    });
+    return { message: 'weekly refresh started', limit: n };
+  }
 
   @Post('sites/:siteId/scans')
   triggerScan(@Param('siteId') siteId: string, @CurrentUser('userId') userId: string) {

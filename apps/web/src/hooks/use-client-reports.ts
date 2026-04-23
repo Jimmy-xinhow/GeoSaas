@@ -113,6 +113,12 @@ export interface GeoComprehensive {
     industryTotalSites: number | null;
     industryAvgScore: number | null;
   };
+  freshness: {
+    scanAsOf: string | null;
+    crawlerAsOf: string | null;
+    contentAsOf: string | null;
+    industryTop10AsOf: string | null;
+  };
   scanTrend: Array<{ score: number; at: string }>;
   indicators: Array<{
     indicator: string;

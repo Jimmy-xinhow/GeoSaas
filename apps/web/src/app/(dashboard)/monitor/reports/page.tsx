@@ -756,13 +756,56 @@ export default function ClientReportsPage() {
  * GEO 綜合體檢面板 — 取自 client-reports/geo-comprehensive/:siteId
  * 分 5 個區塊:總覽 / GEO 分數趨勢 / 9 指標 / AI 爬蟲 / 內容資產 + 競品
  */
+/**
+ * Turn an ISO timestamp into a human-readable "how long ago" + absolute date
+ * label. Used to flag which blocks of the report might be stale.
+ *   <1 day  → "今天"     green
+ *    <7 day → "X 天前"   blue / green
+ *   <30 day → "X 天前"   yellow (borderline)
+ *   ≥30 day → "X 天前"   red   (stale)
+ *   null    → "尚無資料"  gray
+ */
+function FreshnessLabel({ asOf, expected }: { asOf: string | null; expected: string }) {
+  if (!asOf) {
+    return (
+      <span className="text-[10px] px-2 py-0.5 rounded border border-gray-500/30 text-gray-400">
+        尚無資料 · 預期 {expected}
+      </span>
+    );
+  }
+  const ts = new Date(asOf);
+  const days = Math.floor((Date.now() - ts.getTime()) / 86400000);
+  const dateStr = ts.toLocaleDateString('zh-TW');
+
+  let color = 'border-green-500/30 text-green-400';
+  let label = '今天';
+  if (days >= 30) {
+    color = 'border-red-500/30 text-red-400';
+    label = `${days} 天前`;
+  } else if (days >= 14) {
+    color = 'border-yellow-500/30 text-yellow-400';
+    label = `${days} 天前`;
+  } else if (days >= 1) {
+    color = 'border-blue-500/30 text-blue-300';
+    label = `${days} 天前`;
+  }
+  return (
+    <span
+      className={`text-[10px] px-2 py-0.5 rounded border ${color}`}
+      title={`資料日期: ${dateStr} · 預期更新頻率: ${expected}`}
+    >
+      {label} · {dateStr}
+    </span>
+  );
+}
+
 function GeoComprehensivePanel({ siteId }: { siteId: string }) {
   const { data, isLoading } = useGeoComprehensive(siteId);
 
   if (isLoading) return <Skeleton className="h-96" />;
   if (!data) return <Card><CardContent className="p-8 text-center text-muted-foreground">無資料</CardContent></Card>;
 
-  const { overview, scanTrend, indicators, crawler, content, peers, site } = data;
+  const { overview, scanTrend, indicators, crawler, content, peers, site, freshness } = data;
   const maxTrend = Math.max(100, ...scanTrend.map((s) => s.score));
   const maxBucket = Math.max(1, ...crawler.byWeek.map((w) => w.count));
 
@@ -820,7 +863,12 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
 
       {/* Block 2: Scan Trend sparkline */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">GEO 分數趨勢（最近 10 次掃描）</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">GEO 分數趨勢（最近 10 次掃描）</CardTitle>
+            <FreshnessLabel asOf={freshness.scanAsOf} expected="每週" />
+          </div>
+        </CardHeader>
         <CardContent>
           {scanTrend.length === 0 ? (
             <p className="text-sm text-muted-foreground">尚無掃描記錄</p>
@@ -842,7 +890,12 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
 
       {/* Block 3: 9 indicators */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">9 項 GEO 指標（最新掃描）</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">9 項 GEO 指標（最新掃描）</CardTitle>
+            <FreshnessLabel asOf={freshness.scanAsOf} expected="每週" />
+          </div>
+        </CardHeader>
         <CardContent>
           {indicators.length === 0 ? (
             <p className="text-sm text-muted-foreground">尚無掃描結果</p>
@@ -871,7 +924,12 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
 
       {/* Block 4: AI Crawler activity */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">AI 爬蟲活動（近 90 天）</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">AI 爬蟲活動（近 90 天）</CardTitle>
+            <FreshnessLabel asOf={freshness.crawlerAsOf} expected="即時" />
+          </div>
+        </CardHeader>
         <CardContent className="space-y-4">
           {crawler.byBot.length === 0 ? (
             <p className="text-sm text-muted-foreground">近期沒有真實 AI 爬蟲造訪記錄</p>
@@ -918,7 +976,12 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
 
       {/* Block 5: Content Assets */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">內容資產盤點</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">內容資產盤點</CardTitle>
+            <FreshnessLabel asOf={freshness.contentAsOf} expected="每日 cron" />
+          </div>
+        </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <div className="p-3 rounded bg-white/5 border border-white/10">
@@ -952,7 +1015,12 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
       {/* Block 6: Industry Peers */}
       {peers.length > 0 && (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">同業標竿(Top 5)</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">同業標竿(Top 5)</CardTitle>
+              <FreshnessLabel asOf={freshness.scanAsOf} expected="每週" />
+            </div>
+          </CardHeader>
           <CardContent>
             <div className="space-y-1">
               {peers.map((p, i) => (

@@ -631,6 +631,17 @@ export class ClientReportService implements OnModuleInit {
           ? Math.round(industryStats._avg.bestScore)
           : null,
       },
+      freshness: {
+        // Per-block "as-of" timestamps so the UI can show when each chunk
+        // was last refreshed. Client expectations: scan blocks are weekly
+        // (via @Cron scan-weekly-refresh), crawler is real-time, content
+        // is daily (@Cron brand-showcase-daily), peers = same as scan.
+        scanAsOf: latestScan?.completedAt ?? null,
+        crawlerAsOf: crawlerRecent[0]?.visitedAt ?? null,
+        contentAsOf:
+          brandShowcase?.lastRegeneratedAt ?? brandShowcase?.createdAt ?? null,
+        industryTop10AsOf: industryTop10Article?.createdAt ?? null,
+      },
       scanTrend: scanTrend
         .map((s) => ({ score: s.totalScore, at: s.completedAt }))
         .reverse(), // oldest first for chart rendering
