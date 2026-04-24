@@ -8,9 +8,16 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
+// Public Client ID — paired with the same value baked into the web Dockerfile.
+// OAuth client IDs are not secrets; origin allow-listing is enforced by Google.
+// Env override wins when set.
+const GOOGLE_CLIENT_ID_FALLBACK =
+  '154774079870-9m0cu8ubcd9p7n4nesa1rdcbg6cm3bbs.apps.googleusercontent.com';
+
 @Injectable()
 export class AuthService {
   private googleClient: OAuth2Client;
+  private googleClientId: string;
 
   constructor(
     private prisma: PrismaService,
@@ -18,7 +25,9 @@ export class AuthService {
     private config: ConfigService,
     private notifications: NotificationsService,
   ) {
-    this.googleClient = new OAuth2Client(this.config.get('GOOGLE_CLIENT_ID'));
+    this.googleClientId =
+      this.config.get<string>('GOOGLE_CLIENT_ID') || GOOGLE_CLIENT_ID_FALLBACK;
+    this.googleClient = new OAuth2Client(this.googleClientId);
   }
 
   async register(dto: RegisterDto) {
@@ -60,14 +69,11 @@ export class AuthService {
   }
 
   async loginWithGoogle(idToken: string) {
-    const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
-    if (!clientId) throw new UnauthorizedException('Google login not configured');
-
     let payload: TokenPayload | undefined;
     try {
       const ticket = await this.googleClient.verifyIdToken({
         idToken,
-        audience: clientId,
+        audience: this.googleClientId,
       });
       payload = ticket.getPayload();
     } catch {
