@@ -16,8 +16,11 @@ export default function DashboardLayout({
   const { isAuthenticated, isHydrated, hydrate } = useAuthStore()
 
   useEffect(() => {
-    hydrate()
-  }, [hydrate])
+    // Only hydrate on cold tabs / page reloads. A fresh login() already
+    // writes the canonical user/token into the store and flips isHydrated,
+    // so hitting /auth/me again would pointlessly race the just-issued token.
+    if (!isHydrated) hydrate()
+  }, [isHydrated, hydrate])
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {

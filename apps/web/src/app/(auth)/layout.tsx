@@ -14,8 +14,8 @@ export default function AuthLayout({
   const { isAuthenticated, isHydrated, hydrate } = useAuthStore()
 
   useEffect(() => {
-    hydrate()
-  }, [hydrate])
+    if (!isHydrated) hydrate()
+  }, [isHydrated, hydrate])
 
   useEffect(() => {
     if (isHydrated && isAuthenticated) {

@@ -44,7 +44,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const { user, isAuthenticated, isHydrated, hydrate } = useAuthStore();
 
-  useEffect(() => { hydrate(); }, [hydrate]);
+  useEffect(() => {
+    // Avoid re-hydrating right after a fresh login() — the store is already canonical.
+    if (!isHydrated) hydrate();
+  }, [isHydrated, hydrate]);
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
