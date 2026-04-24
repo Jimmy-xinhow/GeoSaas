@@ -43,6 +43,22 @@ export function useLogin() {
   });
 }
 
+export function useGoogleLogin() {
+  const { login } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (idToken: string) => {
+      const { data } = await apiClient.post<AuthResponse>('/auth/google', { idToken });
+      return data;
+    },
+    onSuccess: (data) => {
+      login(data.user, data.token, data.refreshToken);
+      queryClient.invalidateQueries({ queryKey: ['user'] });
+    },
+  });
+}
+
 export function useRegister() {
   const { login } = useAuthStore();
   const queryClient = useQueryClient();

@@ -31,9 +31,15 @@ COPY apps/web/ apps/web/
 RUN pnpm --filter @geovault/shared build
 
 # Build the Next.js app with production env vars hardcoded
+# NEXT_PUBLIC_GOOGLE_CLIENT_ID must be passed at build time (e.g. Railway: docker build --build-arg)
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ENV NEXT_PUBLIC_API_URL=https://api.geovault.app
 ENV NEXT_PUBLIC_SITE_URL=https://www.geovault.app
-RUN NEXT_PUBLIC_API_URL=https://api.geovault.app NEXT_PUBLIC_SITE_URL=https://www.geovault.app pnpm --filter @geovault/web build
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+RUN NEXT_PUBLIC_API_URL=https://api.geovault.app \
+    NEXT_PUBLIC_SITE_URL=https://www.geovault.app \
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID} \
+    pnpm --filter @geovault/web build
 
 # ---------- Stage 2: Runner ----------
 FROM node:20-alpine AS runner

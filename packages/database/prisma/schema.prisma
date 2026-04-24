@@ -66,6 +66,8 @@ model User {
   name             String?
   passwordHash     String?
   avatarUrl        String?
+  googleId         String?   @unique
+  emailVerified    Boolean   @default(false)
   role             UserRole  @default(USER)
   plan             Plan      @default(FREE)
   managedBy        String?   // SUPER_ADMIN userId who manages this client
