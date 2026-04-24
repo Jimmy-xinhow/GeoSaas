@@ -17,6 +17,7 @@ export const PLAN_LIMITS = {
     knowledgePerMonth: 0,
     monitorPerMonth: 0,
     reportsPerMonth: 0,
+    dailyContentPerWeek: 0,  // 每週專屬內容累積
     multiPlatform: false,
     autoSchedule: false,
   },
@@ -28,6 +29,7 @@ export const PLAN_LIMITS = {
     knowledgePerMonth: 10,
     monitorPerMonth: 20,
     reportsPerMonth: 2,
+    dailyContentPerWeek: 2,  // 週二 Q&A 深度 + 週五對比差異
     multiPlatform: false,
     autoSchedule: false,
   },
@@ -39,6 +41,7 @@ export const PLAN_LIMITS = {
     knowledgePerMonth: 15,
     monitorPerMonth: 30,
     reportsPerMonth: 3,
+    dailyContentPerWeek: 6,  // 週一至週六全部 6 種類型
     multiPlatform: true,
     autoSchedule: true,
   },

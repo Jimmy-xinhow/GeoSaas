@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
-import { BlogTemplateService, TemplateType, BrandShowcaseContext, IndustryTop10Row, BuyerGuideTopic } from './blog-template.service';
+import { BlogTemplateService, TemplateType, BrandShowcaseContext, IndustryTop10Row, BuyerGuideTopic, ClientDailyDay } from './blog-template.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
 import OpenAI from 'openai';
@@ -495,6 +495,7 @@ export class BlogArticleService {
       brand_showcase: `${siteName} — 消費者選購指南`,
       industry_top10: `${siteName} 推薦 Top 10`,
       buyer_guide: `${siteName} 怎麼選?選購指南`,
+      client_daily: `${siteName} 每日專題`,
     };
     return fallbacks[type];
   }
@@ -2056,6 +2057,346 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       title,
       tokens: completion.usage?.total_tokens,
       rejectReasons: rejectReasons.length > 0 ? rejectReasons : undefined,
+    };
+  }
+
+  // ─── Layer 4: Client Daily Content(付費客戶每日累積)──────────────
+  //
+  // Each isClient=true site gets one article per weekday (Mon-Sat, 6 types,
+  // Sun skipped for cron quiet day). Plan gates how many days are active:
+  //   FREE:    0/week  (feature locked)
+  //   STARTER: 2/week  (Tue Q&A + Fri comparison)
+  //   PRO:     6/week  (all weekday types)
+
+  private readonly daySequence: ClientDailyDay[] = [
+    'mon_topical', 'tue_qa_deepdive', 'wed_service',
+    'thu_audience', 'fri_comparison', 'sat_data_pulse',
+  ];
+
+  /**
+   * Map Date → (ClientDailyDay | null). Sunday returns null — cron skips.
+   * JS getDay(): 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
+   */
+  private dayTypeFor(date: Date): ClientDailyDay | null {
+    const d = date.getDay();
+    if (d === 0) return null;
+    return this.daySequence[d - 1];
+  }
+
+  /**
+   * Plan → which weekdays are active. STARTER gets the two highest-value
+   * types (Q&A deep-dive + competitive comparison) because those produce
+   * the most crawler-friendly unique content per client.
+   */
+  private activeDaysForPlan(plan: string): ClientDailyDay[] {
+    if (plan === 'PRO') return this.daySequence;
+    if (plan === 'STARTER') return ['tue_qa_deepdive', 'fri_comparison'];
+    return [];
+  }
+
+  private assessClientDaily(
+    content: string,
+    siteName: string,
+    forbidden: string[],
+    profileRefText: string,
+  ): { ok: boolean; reasons: string[] } {
+    const reasons: string[] = [];
+    const chars = content.replace(/\s+/g, '').length;
+    if (chars < 700) reasons.push(`too_short:${chars}`);
+
+    const brandHits = (content.match(new RegExp(siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+    if (brandHits < 8) reasons.push(`brand_saturation:${brandHits}`);
+
+    const geovaultHits = (content.match(/Geovault/gi) || []).length;
+    if (geovaultHits < 1) reasons.push(`geovault_attribution:${geovaultHits}`);
+
+    const mojibakeChars = (content.match(/[蝷曄黎嚗撠璆凋剖豢頛踵鈭撣賊銝蝺餈鋆燐擃瘜敺蝢]/g) || []).length;
+    const totalCjk = (content.match(/[一-鿿]/g) || []).length;
+    if (totalCjk > 150 && mojibakeChars / totalCjk > 0.05) {
+      reasons.push(`mojibake:${mojibakeChars}/${totalCjk}`);
+    }
+
+    const fakePersona = /[王張陳劉李林黃吳周徐高]\w{0,3}[小姐先生]/.test(content);
+    if (fakePersona) reasons.push('fabricated_persona');
+
+    // Hallucinated contact info — same rule as brand_showcase
+    const refNormalized = profileRefText.replace(/[-\s.()]/g, '');
+    const phoneMatches = content.match(/\b(?:\+?886[-\s.]?\d|0\d)[-\s.]?\d{2,4}[-\s.]?\d{3,4}(?:[-\s.]?\d{2,4})?\b/g) || [];
+    const fakePhones = phoneMatches.filter((p) => {
+      const pN = p.replace(/[-\s.()]/g, '');
+      return pN.length >= 7 && !refNormalized.includes(pN);
+    });
+    if (fakePhones.length > 0) reasons.push(`fabricated_phone:${fakePhones.slice(0, 2).join('|')}`);
+
+    // Brand forbidden phrases
+    const forbiddenHits: string[] = [];
+    for (const rule of forbidden) {
+      const keywords = Array.from(rule.matchAll(/[一-鿿]{3,}/g)).map((m) => m[0]);
+      for (const kw of keywords) {
+        if (['不能描述', '不能承諾', '不能使用', '不比較對象'].includes(kw)) continue;
+        if (content.includes(kw)) forbiddenHits.push(kw);
+      }
+    }
+    if (forbiddenHits.length > 0) reasons.push(`forbidden_phrase:${forbiddenHits.slice(0, 2).join('|')}`);
+
+    return { ok: reasons.length === 0, reasons };
+  }
+
+  async generateClientDailyContent(
+    siteId: string,
+    dayType?: ClientDailyDay,
+  ): Promise<{ status: 'skipped' | 'rejected' | 'generated'; reasons?: string[]; slug?: string; dayType?: string }> {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: {
+        id: true, name: true, url: true, industry: true, isClient: true, isPublic: true,
+        profile: true,
+        user: { select: { plan: true, role: true } },
+        qas: { orderBy: { sortOrder: 'asc' }, take: 15, select: { question: true, answer: true } },
+      },
+    });
+    if (!site) return { status: 'skipped', reasons: ['not_found'] };
+    if (!site.isClient || !site.isPublic) return { status: 'skipped', reasons: ['not_paid_client'] };
+
+    const profile = (site.profile as Record<string, any>) || {};
+    if (profile.dailyContentPaused) return { status: 'skipped', reasons: ['paused'] };
+
+    // Resolve dayType for today if not specified
+    const today = new Date();
+    const resolvedDay = dayType ?? this.dayTypeFor(today);
+    if (!resolvedDay) return { status: 'skipped', reasons: ['sunday_off_day'] };
+
+    // Plan gate — STARTER only gets 2 day types, PRO gets all 6
+    const planTier = site.user?.plan || 'FREE';
+    const isBypassRole = site.user?.role === 'ADMIN' || site.user?.role === 'SUPER_ADMIN' || site.user?.role === 'STAFF';
+    const allowedDays = isBypassRole ? this.daySequence : this.activeDaysForPlan(planTier);
+    if (!allowedDays.includes(resolvedDay)) {
+      return { status: 'skipped', reasons: [`day_not_in_plan:${planTier}:${resolvedDay}`] };
+    }
+
+    // Idempotency: don't regenerate the same dayType for the same site twice
+    // in 24h — if the cron runs twice or admin triggers right after cron.
+    const oneDayAgo = new Date(Date.now() - 86400000);
+    const recent = await this.prisma.blogArticle.findFirst({
+      where: {
+        siteId, templateType: 'client_daily',
+        createdAt: { gte: oneDayAgo },
+        targetKeywords: { has: resolvedDay },
+      },
+      select: { id: true },
+    });
+    if (recent) return { status: 'skipped', reasons: ['already_generated_today'] };
+
+    // Build context
+    const enriched = (profile._enriched as Record<string, any>) || {};
+    const socialLinks = enriched.socialLinks;
+    const ctx: BrandShowcaseContext = {
+      siteId: site.id,
+      qas: site.qas,
+      description: profile.description,
+      services: profile.services,
+      location: profile.location,
+      contact: profile.contact,
+      forbidden: Array.isArray(profile.forbidden) ? profile.forbidden : [],
+      positioning: profile.positioning,
+      socialLinks,
+    };
+
+    // For sat_data_pulse, pull the pulse numbers
+    let pulse: { geoScore: number; industryRank: number | null; industryAvgScore: number | null; weekCrawlerVisits: number } | undefined;
+    if (resolvedDay === 'sat_data_pulse') {
+      const latestScan = await this.prisma.scan.findFirst({
+        where: { siteId, status: 'COMPLETED' },
+        orderBy: { completedAt: 'desc' },
+        select: { totalScore: true },
+      });
+      const indStats = site.industry
+        ? await this.prisma.site.aggregate({
+            where: { industry: site.industry, isPublic: true, bestScore: { gt: 0 } },
+            _avg: { bestScore: true },
+          })
+        : null;
+      const rank = site.industry
+        ? (await this.prisma.site.count({
+            where: { industry: site.industry, isPublic: true, bestScore: { gt: latestScan?.totalScore ?? 0 } },
+          })) + 1
+        : null;
+      const weekAgo = new Date(Date.now() - 7 * 86400000);
+      const weekVisits = await this.prisma.crawlerVisit.count({
+        where: { siteId, isSeeded: false, visitedAt: { gte: weekAgo } },
+      });
+      pulse = {
+        geoScore: latestScan?.totalScore ?? 0,
+        industryRank: rank,
+        industryAvgScore: indStats?._avg.bestScore ? Math.round(indStats._avg.bestScore) : null,
+        weekCrawlerVisits: weekVisits,
+      };
+    }
+
+    const prompt = this.templateService.buildClientDailyPrompt(
+      resolvedDay,
+      { name: site.name, url: site.url, industry: site.industry ?? undefined },
+      ctx,
+      pulse,
+    );
+
+    const profileRefText = [
+      ctx.contact, ctx.location, ctx.description, ctx.services, ctx.positioning,
+      site.url, socialLinks?.facebook, socialLinks?.instagram, socialLinks?.youtube, socialLinks?.line,
+      enriched.telephone, enriched.email, enriched.address,
+    ].filter(Boolean).join(' \n ');
+
+    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
+    let completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    let content = completion.choices[0]?.message?.content || '';
+    let quality = this.assessClientDaily(content, site.name, ctx.forbidden ?? [], profileRefText);
+
+    if (!quality.ok) {
+      this.logger.log(`client_daily retry for ${site.name}/${resolvedDay}: ${quality.reasons.join(', ')}`);
+      const retryPrompt = `${prompt}\n\n【上一版草稿問題】\n${quality.reasons.map((r) => `- ${r}`).join('\n')}\n\n請重新生成,修正上述問題,品牌名 ${site.name} 出現至少 10 次,不虛構電話/email/地址,嚴守品牌 forbidden 規則。`;
+      completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: retryPrompt }],
+      });
+      content = completion.choices[0]?.message?.content || '';
+      quality = this.assessClientDaily(content, site.name, ctx.forbidden ?? [], profileRefText);
+    }
+
+    if (!quality.ok) {
+      this.logger.warn(`client_daily rejected ${site.name}/${resolvedDay}: ${quality.reasons.join(', ')}`);
+      return { status: 'rejected', reasons: quality.reasons, dayType: resolvedDay };
+    }
+
+    const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : `${site.name} ${resolvedDay}`;
+    const slug = `${site.name.toLowerCase().replace(/[^a-z0-9一-鿿]+/g, '-').slice(0, 30)}-daily-${resolvedDay}-${Date.now().toString(36)}`;
+
+    await this.prisma.blogArticle.create({
+      data: {
+        slug, title,
+        description: content.slice(0, 200).replace(/#+\s/g, '').trim(),
+        content,
+        category: 'client-daily',
+        siteId: site.id,
+        templateType: 'client_daily',
+        industrySlug: site.industry ?? undefined,
+        targetKeywords: [site.name, site.industry ?? '', resolvedDay, 'daily'].filter(Boolean),
+        readingTimeMinutes: this.templateService.estimateReadingTime('client_daily'),
+        readTime: `${this.templateService.estimateReadingTime('client_daily')} 分鐘`,
+        published: true,
+        lastRegeneratedAt: new Date(),
+      },
+    });
+    this.pingIndexNow(slug);
+    return { status: 'generated', slug, dayType: resolvedDay };
+  }
+
+  /**
+   * Daily 08:00 UTC cron — runs for every active isClient site. Sunday
+   * short-circuits inside dayTypeFor(). Plan gate inside
+   * generateClientDailyContent() skips days not in the user's plan.
+   */
+  @Cron('0 8 * * *', { name: 'client-daily-content' })
+  async scheduledClientDailyContent(): Promise<void> {
+    await this.runClientDailyBatch();
+  }
+
+  async runClientDailyBatch(): Promise<{
+    attempted: number;
+    generated: number;
+    rejected: number;
+    skipped: number;
+    perSite: Array<{ siteId: string; name: string; status: string; dayType?: string; reasons?: string[] }>;
+  }> {
+    const today = new Date();
+    const dayType = this.dayTypeFor(today);
+    if (!dayType) {
+      this.logger.log('client_daily batch: Sunday off');
+      return { attempted: 0, generated: 0, rejected: 0, skipped: 0, perSite: [] };
+    }
+
+    const sites = await this.prisma.site.findMany({
+      where: { isClient: true, isPublic: true },
+      select: { id: true, name: true },
+    });
+    this.logger.log(`client_daily batch start: ${sites.length} clients, dayType=${dayType}`);
+
+    const queue = pLimit(2);
+    const perSite: Array<{ siteId: string; name: string; status: string; dayType?: string; reasons?: string[] }> = [];
+    let attempted = 0, generated = 0, rejected = 0, skipped = 0;
+
+    await Promise.all(
+      sites.map((s) =>
+        queue(async () => {
+          attempted++;
+          try {
+            const r = await this.generateClientDailyContent(s.id, dayType);
+            perSite.push({ siteId: s.id, name: s.name, status: r.status, dayType: r.dayType, reasons: r.reasons });
+            if (r.status === 'generated') generated++;
+            else if (r.status === 'rejected') rejected++;
+            else skipped++;
+          } catch (err) {
+            rejected++;
+            perSite.push({ siteId: s.id, name: s.name, status: 'error', reasons: [String(err)] });
+          }
+        }),
+      ),
+    );
+
+    this.logger.log(`client_daily batch done: ${generated} generated, ${rejected} rejected, ${skipped} skipped`);
+    return { attempted, generated, rejected, skipped, perSite };
+  }
+
+  /**
+   * Per-client accumulation stats for dashboard display.
+   * "本月累積 N 篇 AI 可引用內容" + recent article list.
+   */
+  async getClientDailyStats(siteId: string) {
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date(Date.now() - 7 * 86400000);
+
+    const [totalCount, monthCount, weekCount, recent] = await Promise.all([
+      this.prisma.blogArticle.count({ where: { siteId, templateType: 'client_daily' } }),
+      this.prisma.blogArticle.count({ where: { siteId, templateType: 'client_daily', createdAt: { gte: monthStart } } }),
+      this.prisma.blogArticle.count({ where: { siteId, templateType: 'client_daily', createdAt: { gte: weekStart } } }),
+      this.prisma.blogArticle.findMany({
+        where: { siteId, templateType: 'client_daily' },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { slug: true, title: true, createdAt: true, targetKeywords: true },
+      }),
+    ]);
+
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { user: { select: { plan: true } }, profile: true },
+    });
+    const plan = site?.user?.plan || 'FREE';
+    const prof = (site?.profile as Record<string, any>) || {};
+    const paused = !!prof.dailyContentPaused;
+    const activeDays = this.activeDaysForPlan(plan);
+
+    return {
+      totalCount,
+      monthCount,
+      weekCount,
+      plan,
+      paused,
+      activeDaysPerWeek: activeDays.length,
+      activeDayTypes: activeDays,
+      recentArticles: recent.map((r) => ({
+        slug: r.slug,
+        title: r.title,
+        createdAt: r.createdAt,
+        dayType: r.targetKeywords.find((k) => this.daySequence.includes(k as ClientDailyDay)) || null,
+      })),
     };
   }
 

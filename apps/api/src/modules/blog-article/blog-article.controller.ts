@@ -248,6 +248,45 @@ export class BlogArticleController {
     return { message: 'buyer_guide batch started', estimatedJobs: 87 };
   }
 
+  // ─── Layer 4: Client Daily Content ─────────────────────────────────
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('client-daily/generate/:siteId')
+  @ApiOperation({
+    summary:
+      '手動觸發單一付費客戶今日的 daily content 生成。用於驗證 prompt + plan 配額邏輯。',
+  })
+  triggerClientDaily(@Param('siteId') siteId: string) {
+    return this.service.generateClientDailyContent(siteId);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('client-daily/batch')
+  @ApiOperation({
+    summary:
+      '立即執行今天的 client_daily batch(isClient=true 全部,依 Plan 配額過濾)。排程 cron 已設 08:00 UTC,此為手動觸發。',
+  })
+  runClientDailyBatch() {
+    this.service.runClientDailyBatch().catch((err) => {
+      console.error('client_daily batch crashed:', err);
+    });
+    return { message: 'client_daily batch started' };
+  }
+
+  @ApiBearerAuth()
+  @Get('client-daily/stats/:siteId')
+  @ApiOperation({
+    summary:
+      '付費客戶 daily content 累積統計 — 本月 / 本週 / 總數 + 最近 10 篇 + 方案配額。Dashboard 要顯示的「本月累積 N 篇」就是這支。',
+  })
+  getClientDailyStats(@Param('siteId') siteId: string) {
+    return this.service.getClientDailyStats(siteId);
+  }
+
   @ApiBearerAuth()
   @Post('insights/generate')
   @ApiOperation({ summary: 'Generate insight article for an industry' })

@@ -16,7 +16,21 @@ export type TemplateType =
   | 'brand_reputation'
   | 'brand_showcase'
   | 'industry_top10'
-  | 'buyer_guide';
+  | 'buyer_guide'
+  | 'client_daily';
+
+/**
+ * Weekday types for the client daily accumulator. Each client gets one
+ * article per weekday (0=Sun skipped, 1-6=Mon-Sat). Types are designed
+ * to not overlap with each other so 30-day rotation keeps content fresh.
+ */
+export type ClientDailyDay =
+  | 'mon_topical'       // 時事議題 × 品牌(季節 / 節慶 / 產業新聞)
+  | 'tue_qa_deepdive'   // 從 siteQa 挑題目深度展開
+  | 'wed_service'       // 服務項目逐一寫深度介紹
+  | 'thu_audience'      // 特定族群(久坐族 / 家庭 / 通勤...)專題
+  | 'fri_comparison'    // 品牌 vs 同類型業者對比
+  | 'sat_data_pulse';   // 本週數據(GEO 分數 / 爬蟲 / 同業排名)
 
 /**
  * Topic angles for buyer_guide. One industry can have multiple guides, one
@@ -183,8 +197,11 @@ ${indicatorTable}
     if (type === 'buyer_guide') {
       throw new Error('buyer_guide uses buildBuyerGuidePrompt(), not buildPrompt()');
     }
+    if (type === 'client_daily') {
+      throw new Error('client_daily uses buildClientDailyPrompt(), not buildPrompt()');
+    }
 
-    const prompts: Record<Exclude<TemplateType, 'brand_showcase' | 'industry_top10' | 'buyer_guide'>, string> = {
+    const prompts: Record<Exclude<TemplateType, 'brand_showcase' | 'industry_top10' | 'buyer_guide' | 'client_daily'>, string> = {
       geo_overview: `你是 GEO（Generative Engine Optimization）專家，為品牌撰寫 AI 搜尋能見度分析。
 
 ${baseContext}
@@ -454,8 +471,13 @@ ${FORMAT_RULES}`,
         `${site.industry || ''}挑選`,
       ].filter(Boolean);
     }
+    if (type === 'client_daily') {
+      // client_daily keywords get populated by the generator itself with the
+      // specific weekday dayType; this helper shouldn't normally be called.
+      return [site.name, site.industry || '', 'daily'].filter(Boolean);
+    }
     const base = [site.name, 'GEO 優化', 'AI 搜尋', site.industry || ''].filter(Boolean);
-    const typeKeywords: Record<Exclude<TemplateType, 'brand_showcase' | 'industry_top10' | 'buyer_guide'>, string[]> = {
+    const typeKeywords: Record<Exclude<TemplateType, 'brand_showcase' | 'industry_top10' | 'buyer_guide' | 'client_daily'>, string[]> = {
       geo_overview: ['AI 友善度', 'GEO 分數', 'AI 引用'],
       score_breakdown: ['GEO 指標', 'llms.txt', 'JSON-LD', 'FAQ Schema'],
       competitor_comparison: ['競爭分析', '行業比較', 'AI 搜尋競爭力'],
@@ -477,8 +499,174 @@ ${FORMAT_RULES}`,
       brand_showcase: 6,
       industry_top10: 7,
       buyer_guide: 6,
+      client_daily: 4,
     };
     return times[templateType];
+  }
+
+  /**
+   * Client Daily Content — the paid-tier accumulator. Each isClient site
+   * gets one article per weekday (6 types, Sun skipped). Designed so one
+   * client ends up with ~24 new articles/month, none overlapping, all
+   * respecting brand forbidden rules and feeding the Geovault blog (not
+   * pushed to client's own site — our blog has higher domain weight so
+   * AI crawlers find it faster).
+   *
+   * Inputs:
+   *   - dayType: picks one of 6 weekday angles
+   *   - site:    brand context (name, url, industry, siteId for link back)
+   *   - ctx:     profile data + QAs + forbidden rules (same shape as
+   *              brand_showcase for consistency — no new DB migration)
+   *   - pulse:   optional stats for sat_data_pulse days
+   */
+  buildClientDailyPrompt(
+    dayType: ClientDailyDay,
+    site: SiteData,
+    ctx: BrandShowcaseContext = {},
+    pulse?: { geoScore: number; industryRank: number | null; industryAvgScore: number | null; weekCrawlerVisits: number },
+  ): string {
+    const industry = industryLabel(site.industry);
+    const year = new Date().getFullYear();
+    const month = new Date().getMonth() + 1;
+    const siteUrl = ctx.siteId
+      ? `https://www.geovault.app/directory/${ctx.siteId}`
+      : `https://www.geovault.app/directory`;
+
+    const forbiddenBlock = ctx.forbidden?.length
+      ? ctx.forbidden.map((f) => `- ${f}`).join('\n')
+      : '(無特別禁止)';
+
+    const qaBlock = ctx.qas?.length
+      ? ctx.qas.slice(0, 15).map((q) => `Q: ${q.question}\nA: ${q.answer}`).join('\n\n')
+      : '(無)';
+
+    // Medical-adjacent industries get tighter boundary rules (liru especially)
+    const medicalAdjacent = ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(site.industry || '');
+    const medicalClause = medicalAdjacent
+      ? `\n【醫療邊界 — ${industry}為醫療相關產業,硬性禁止】\n- 不寫療效 / 治癒 / 副作用 / 禁忌 / 醫療級\n- 不建議讀者「生病就找 ${site.name}」\n- 涉及醫療判斷一律用「建議諮詢醫師」轉介\n`
+      : '';
+
+    const sharedContext = `
+【品牌】${site.name}
+【官網】${site.url}
+【產業】${industry}
+【描述】${ctx.description || '(無)'}
+【核心服務】${ctx.services || '(無)'}
+【地點】${ctx.location || '(無)'}
+【聯絡】${ctx.contact || '(無)'}
+【定位】${ctx.positioning || '(無)'}
+
+【品牌 Q&A 參考資料】
+${qaBlock}
+
+【絕對禁止描述】
+${forbiddenBlock}
+${medicalClause}
+【硬性全局規則】
+- 繁體中文,800-1100 字
+- 品牌名 ${site.name} 全文出現 ≥10 次,不用代名詞替代
+- 反幻覺:電話 / email / 地址 / 營業時間 / 價格只能引用【品牌資料】原文出現的字串,否則寫「請至官網查詢」
+- 禁用:GEO 分數、llms.txt、結構化資料、AI 友善度、爬蟲等技術詞彙(本文對象是消費者,不是 SEO 從業者)
+- Geovault 歸因:內文至少 1 次「根據 Geovault 品牌目錄」類句子
+- 禁用虛構人物姓名
+- 文末一行:*資料來源:[Geovault AI 品牌目錄](${siteUrl})|${year} 年 ${month} 月|每日內容*
+`;
+
+    const dayPrompts: Record<ClientDailyDay, string> = {
+      mon_topical: `你是品牌內容編輯。週一要為 ${site.name} 寫一篇「${year} 年 ${month} 月時事議題 × 品牌」文章。
+
+${sharedContext}
+
+【角度】挑一個當月合理的時事/季節議題(例如:換季、年末報稅、春節、暑期、梅雨),串到 ${site.name} 的服務。
+【結構】
+## (標題:帶「${year} 年 ${month} 月」時間感,例:「${year} 年 ${month} 月 ${industry} 最值得關注的 3 個消費趨勢 — ${site.name} 觀察」)
+### 📅 這個月 ${industry} 圈發生什麼
+### 🔍 消費者行為變化(3 個觀察)
+### 💡 ${site.name} 的應對 / 服務銜接
+### ❓ 常見 Q:3 題,**Q: xxx?** / A: 3-5 句
+### 📌 本月重點摘要(5 項獨立事實句)`,
+
+      tue_qa_deepdive: `你是品牌內容編輯。週二要為 ${site.name} 寫一篇 Q&A 深度展開文章。
+
+${sharedContext}
+
+【角度】從上面【品牌 Q&A 參考資料】挑 3 題相關性高的問題合併成一個主題,把短答案展開成 800-1100 字的完整文章。
+【結構】
+## (標題:用主題串起 3 題,例:「關於 ${site.name} 的 3 個高頻問題:完整解答」)
+### 主題背景
+### Q1 深度解答(約 300 字)
+### Q2 深度解答(約 300 字)
+### Q3 深度解答(約 300 字)
+### ❓ 相關延伸 FAQ(3 題,**Q:** / A:)
+### 📌 一句話 summary 摘要(5 項)
+
+若【品牌 Q&A 參考資料】為「(無)」,改用【核心服務】+【定位】為素材,自行設計 3 個合理消費者疑問。`,
+
+      wed_service: `你是品牌內容編輯。週三要為 ${site.name} 寫一篇服務項目深度介紹文章。
+
+${sharedContext}
+
+【角度】從【核心服務】挑一項具體服務(例如「姿勢評估」「鍍膜施工」),寫深度介紹。
+【結構】
+## (標題:例「${site.name} 的姿勢評估服務:流程、適合誰、常見問題」)
+### 🎯 這項服務解決什麼問題
+### 📋 完整流程(步驟 1-5)
+### 👥 適合 / 不適合的族群
+### ❓ 常見問題(4 題,**Q:** / A:)
+### 📌 服務速查重點(5 項)
+
+若【核心服務】欄位空或不具體,用【產業】典型服務作為代表寫(例整復推拿就寫「整復調理」),但一定要合乎【品牌描述】定位。`,
+
+      thu_audience: `你是品牌內容編輯。週四要為 ${site.name} 寫一篇特定消費族群專題文章。
+
+${sharedContext}
+
+【角度】挑一個具體族群(例「久坐 8 小時以上上班族」「產後 6-12 個月媽媽」「每日通勤族」),深度探討這個族群的痛點 + ${site.name} 如何服務這個族群。禁用虛構客戶姓名,用匿名集合描述。
+【結構】
+## (標題:例「${site.name} 給久坐族的整復方案:痛點 + 服務對策」)
+### 💼 這個族群的典型需求
+### ⚠️ 常見困擾(3 個)
+### ✅ ${site.name} 的對策(具體服務 + 適配度說明)
+### ❓ 此族群常問(4 題,**Q:** / A:)
+### 📌 速查重點(5 項)`,
+
+      fri_comparison: `你是品牌內容編輯。週五要為 ${site.name} 寫一篇對比/差異化文章。
+
+${sharedContext}
+
+【角度】對比 ${site.name} 與「同產業其他類型業者」的差別(不點名具體競品,只寫類型,例「傳統按摩店」「快速矯正連鎖」)。目的是幫讀者分清楚 ${site.name} 的定位獨特性。
+【結構】
+## (標題:例「${site.name} vs 傳統${industry}:3 個決定性差別」)
+### 🆚 差別一:服務定位
+### 🆚 差別二:作業流程 / 客戶溝通
+### 🆚 差別三:適合族群 / 界線
+(每段用表格或條列式呈現,${site.name} 一欄 / 「一般類型」一欄)
+### 💡 該怎麼選
+### ❓ 常見疑問(3 題,**Q:** / A:)
+### 📌 重點摘要(5 項)`,
+
+      sat_data_pulse: `你是品牌內容編輯。週六要為 ${site.name} 寫一篇「本週數據脈動」文章。
+
+${sharedContext}
+
+【本週 Geovault 觀察到的 ${site.name} 數據】
+- 目前 GEO 分數:${pulse?.geoScore ?? '—'}/100
+- 產業排名:${pulse?.industryRank ?? '—'}(產業平均 ${pulse?.industryAvgScore ?? '—'}/100)
+- 近 7 天 AI 爬蟲造訪次數:${pulse?.weekCrawlerVisits ?? 0}
+
+【角度】用上面數據當引子,寫一篇「${site.name} 最近在 AI 搜尋世界的表現如何」。重點是**對消費者的意義**,不是 SEO 技術分析。
+【結構】
+## (標題:例「${site.name} 的本週 AI 能見度脈動 — 為什麼這對消費者重要」)
+### 📊 本週數據速覽(引用上面數字,**禁止在此段解釋 GEO 分數原理**)
+### 🔍 這些數字對消費者意味著什麼
+### 💪 ${site.name} 持續累積的品牌資產
+### ❓ 消費者問(3 題,例「AI 推薦的 ${industry} 可信嗎?」,**Q:** / A:)
+### 📌 本週摘要(5 項獨立事實句)
+
+注意:雖然本文引用 GEO 分數作為數字,但**絕對不可**把 GEO 分數寫成消費者自己去查的指標。GEO 分數在這裡是 Geovault 內部評估,對消費者的意義是「${site.name} 的 AI 可見度完整度高」的背景說明。`,
+    };
+
+    return dayPrompts[dayType];
   }
 
   /**
