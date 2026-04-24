@@ -1152,7 +1152,9 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : `${site.name} — 消費者選購指南`;
-    const slug = `${site.name.toLowerCase().replace(/[^a-z0-9一-鿿]+/g, '-').slice(0, 30)}-brand-showcase-${Date.now().toString(36)}`;
+    // ASCII-only slug — percent-encoded CJK is opaque to AI crawlers and SEO.
+    // site.id (cuid) guarantees uniqueness; keep the intent tag 'brand-showcase'.
+    const slug = `${site.id.slice(0, 10)}-brand-showcase-${Date.now().toString(36)}`;
 
     // If an older brand_showcase exists for this site, replace it rather
     // than accumulate. 90-day cooldown above already prevents churn; this
@@ -2274,7 +2276,8 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : `${site.name} ${resolvedDay}`;
-    const slug = `${site.name.toLowerCase().replace(/[^a-z0-9一-鿿]+/g, '-').slice(0, 30)}-daily-${resolvedDay}-${Date.now().toString(36)}`;
+    // ASCII-only slug — CJK percent-encoding defeats AI crawlers and SEO.
+    const slug = `${site.id.slice(0, 10)}-daily-${resolvedDay}-${Date.now().toString(36)}`;
 
     await this.prisma.blogArticle.create({
       data: {

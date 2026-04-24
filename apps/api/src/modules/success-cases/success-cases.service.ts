@@ -322,7 +322,18 @@ Q: 需要多少技術能力才能做到？`;
     });
 
     const content = completion.choices[0]?.message?.content || '';
-    const slug = `case-${caseData.title.slice(0, 20).replace(/[^a-z0-9\u4e00-\u9fff]+/gi, '-').toLowerCase()}-${Date.now().toString(36)}`;
+    // ASCII-only slug: AI crawlers (GPTBot / ClaudeBot) and search engines
+    // cannot key off percent-encoded CJK characters. Keep platform / industry
+    // as readable tags, trail with the case id prefix for uniqueness.
+    const slugParts = ['case', caseData.aiPlatform];
+    if (caseData.industry) slugParts.push(caseData.industry);
+    slugParts.push(caseData.id.slice(0, 10));
+    const slug = slugParts
+      .join('-')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
 
     const article = await this.prisma.blogArticle.create({
       data: {
