@@ -55,6 +55,7 @@ const navGroups: NavGroup[] = [
       { href: '/brand-spread', icon: Zap, label: '品牌擴散' },
       { href: '/publish', icon: Share2, label: '多平台發佈' },
       { href: '/directory', icon: Trophy, label: '公開目錄' },
+      { href: '/dashboard/submit-case', icon: Trophy, label: '提交成功案例' },
     ],
   },
 ]

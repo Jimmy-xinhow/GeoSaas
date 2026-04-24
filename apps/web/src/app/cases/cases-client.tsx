@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useSuccessCases, useFeaturedCases } from '@/hooks/use-cases';
+import useAuthStore from '@/stores/auth-store';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
@@ -126,6 +127,11 @@ export default function CasesClient() {
   const [platform, setPlatform] = useState<string | undefined>();
   const { data: featured } = useFeaturedCases();
   const { data: cases, isLoading } = useSuccessCases({ page, aiPlatform: platform });
+  const { isAuthenticated } = useAuthStore();
+  const submitHref = isAuthenticated
+    ? '/dashboard/submit-case'
+    : '/login?redirect=/dashboard/submit-case';
+  const submitLabel = isAuthenticated ? '提交你的成功案例' : '免費註冊並提交案例';
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -182,9 +188,9 @@ export default function CasesClient() {
               <p className="text-yellow-200/40 mt-2 text-sm">
                 經審核通過後，我們會為你的品牌生成一篇 AI 分析文章，增加更多曝光機會。
               </p>
-              <Link href="/register">
+              <Link href={submitHref}>
                 <button className="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors">
-                  免費註冊並提交案例
+                  {submitLabel}
                 </button>
               </Link>
               <p className="text-xs text-yellow-200/40 mt-4">
@@ -235,6 +241,23 @@ export default function CasesClient() {
             </Button>
           </div>
         )}
+      </section>
+
+      {/* Persistent submit CTA */}
+      <section className="max-w-4xl mx-auto px-6 pb-16">
+        <div className="bg-gradient-to-br from-blue-950/60 to-purple-950/40 border border-white/10 rounded-2xl p-8 text-center">
+          <Award className="h-10 w-10 text-yellow-400 mx-auto mb-3" />
+          <h3 className="text-xl font-bold text-white">你的品牌也被 AI 引用過嗎？</h3>
+          <p className="text-sm text-gray-300 mt-2 max-w-xl mx-auto">
+            分享一筆真實案例，通過審核後 Geovault 會為你免費生成一篇 AI 分析文章，
+            曝光給 ChatGPT、Claude、Perplexity 等 AI 平台爬蟲。
+          </p>
+          <Link href={submitHref}>
+            <button className="mt-5 bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors inline-flex items-center gap-2">
+              {submitLabel} <ArrowRight className="h-4 w-4" />
+            </button>
+          </Link>
+        </div>
       </section>
     </div>
   );

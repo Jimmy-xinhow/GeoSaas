@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -30,6 +30,12 @@ type LoginForm = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const rawRedirect = searchParams?.get('redirect') || '/dashboard'
+  // Only allow same-origin relative redirects to avoid open-redirect abuse.
+  const redirectTo = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')
+    ? rawRedirect
+    : '/dashboard'
   const loginMutation = useLogin()
 
   const {
@@ -44,7 +50,7 @@ export default function LoginPage() {
     loginMutation.mutate(data, {
       onSuccess: () => {
         toast.success('登入成功')
-        router.push('/dashboard')
+        router.push(redirectTo)
       },
       onError: (error: any) => {
         const message =
@@ -116,7 +122,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <GoogleSignInButton text="signin_with" redirectTo="/dashboard" />
+        <GoogleSignInButton text="signin_with" redirectTo={redirectTo} />
       </CardContent>
       <CardFooter className="justify-center">
         <p className="text-sm text-muted-foreground">
