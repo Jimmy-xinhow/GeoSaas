@@ -1723,12 +1723,238 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     return { attempted, generated, rejected, skipped, rejectedReasons, perIndustry };
   }
 
-  // ─── Layer 3: Buyer Guide (PREVIEW ONLY — no cron yet) ──────────────
+  // ─── Layer 3: Buyer Guide (production) ──────────────────────────────
   //
-  // Per Step 4 plan B: generate samples on demand, eyeball the angle,
-  // defer production cron until user approves. Preview method mirrors the
-  // brand_showcase preview API (no DB write) so we can validate without
-  // polluting the article pool.
+  // Quarterly @Cron + admin batch + per-industry/topic generator. Uses
+  // the same hardened prompt + preview gate rules as previewBuyerGuide,
+  // but persists to BlogArticle and handles retry-once on gate failures.
+
+  private async resolveIndustryStats(industrySlug: string) {
+    const stats = await this.prisma.site.aggregate({
+      where: { isPublic: true, industry: industrySlug, bestScore: { gt: 0 } },
+      _avg: { bestScore: true },
+      _count: { id: true },
+    });
+    const topSites = await this.prisma.site.findMany({
+      where: { isPublic: true, industry: industrySlug, bestScore: { gt: 0 } },
+      orderBy: { bestScore: 'desc' },
+      take: 3,
+      select: { bestScore: true },
+    });
+    const topAvg = topSites.length > 0
+      ? Math.round(topSites.reduce((s, x) => s + (x.bestScore ?? 0), 0) / topSites.length)
+      : 0;
+    return {
+      totalSites: stats._count.id,
+      avgScore: Math.round(stats._avg.bestScore ?? 0),
+      topAvgScore: topAvg,
+    };
+  }
+
+  private assessBuyerGuide(
+    content: string,
+    industrySlug: string,
+    brandLeakCandidates: string[],
+  ): { ok: boolean; reasons: string[] } {
+    const reasons: string[] = [];
+    const chars = content.replace(/\s+/g, '').length;
+    if (chars < 1800) reasons.push(`too_short:${chars}`);
+    const geovaultHits = (content.match(/Geovault/gi) || []).length;
+    if (geovaultHits < 3) reasons.push(`geovault_attribution:${geovaultHits}`);
+    const faqCount = (content.match(/\*\*Q:/g) || []).length;
+    if (faqCount < 5) reasons.push(`faq_count:${faqCount}`);
+
+    const mojibakeChars = (content.match(/[蝷曄黎嚗撠璆凋剖豢頛踵鈭撣賊銝蝺餈鋆燐擃瘜敺蝢]/g) || []).length;
+    const totalCjk = (content.match(/[一-鿿]/g) || []).length;
+    if (totalCjk > 200 && mojibakeChars / totalCjk > 0.05) {
+      reasons.push(`mojibake:${mojibakeChars}/${totalCjk}`);
+    }
+
+    const leaked = brandLeakCandidates.filter((n) => n.length >= 3 && content.includes(n));
+    if (leaked.length > 0) reasons.push(`brand_name_leak:${leaked.slice(0, 3).join('|')}`);
+
+    const expectedLink = `/directory/industry/${industrySlug}`;
+    if (!content.includes(expectedLink)) reasons.push('missing_top10_link');
+
+    if (/GEO\s?分數[^.。]{0,30}(?:指標|依據|標準|挑選|參考|可見度)/.test(content) ||
+        /參考.{0,10}GEO\s?分數/.test(content) ||
+        /(?:^|\n)[0-9]+\.\s?[^\n]*GEO\s?分數/.test(content)) {
+      reasons.push('geo_score_as_consumer_metric');
+    }
+
+    const medicalAdjacent = ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'];
+    if (medicalAdjacent.includes(industrySlug)) {
+      if (/副作用|禁忌|不適合接受|療效|保證治癒|醫療級/.test(content)) {
+        reasons.push('medical_boundary_violation');
+      }
+    }
+
+    return { ok: reasons.length === 0, reasons };
+  }
+
+  /**
+   * Generate + persist one buyer_guide for a (industry, topic) pair.
+   * Replaces any prior buyer_guide of the same (industrySlug, topic) so
+   * we don't accumulate stale copies. Runs retry-once on gate failure.
+   */
+  async generateBuyerGuide(
+    industrySlug: string,
+    topic: BuyerGuideTopic = 'how_to_choose',
+  ): Promise<{ status: 'skipped' | 'rejected' | 'generated'; reasons?: string[]; slug?: string }> {
+    const { INDUSTRIES } = await import('@geovault/shared');
+    const labelRec = INDUSTRIES.find((i) => i.value === industrySlug);
+    if (!labelRec) return { status: 'skipped', reasons: ['unknown_industry'] };
+    const industryLabel = labelRec.label;
+
+    const industryStats = await this.resolveIndustryStats(industrySlug);
+    const brandLeakCandidates = (await this.prisma.site.findMany({
+      where: { industry: industrySlug, isPublic: true, bestScore: { gt: 60 } },
+      select: { name: true },
+      take: 30,
+    })).map((s) => s.name);
+
+    const buildPrompt = () =>
+      this.templateService.buildBuyerGuidePrompt(industrySlug, topic, industryStats);
+
+    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
+
+    // First attempt
+    let completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 3200,
+      messages: [{ role: 'user', content: buildPrompt() }],
+    });
+    let content = completion.choices[0]?.message?.content || '';
+    let quality = this.assessBuyerGuide(content, industrySlug, brandLeakCandidates);
+
+    if (!quality.ok) {
+      this.logger.log(
+        `buyer_guide retry ${industrySlug}/${topic}: ${quality.reasons.join(', ')}`,
+      );
+      const retryPrompt = `${buildPrompt()}
+
+【上一版草稿未通過品質檢查,具體問題】
+${quality.reasons.map((r) => `- ${r}`).join('\n')}
+
+請重新生成完整文章,務必修正上述所有問題。特別注意:
+- 不要把 GEO 分數寫成消費者自己的挑選指標
+- 不能出現具體品牌名,只能寫類別描述
+- 必須連結 /directory/industry/${industrySlug} 到 Top 10 榜單
+- Geovault 歸因必須帶具體數字(收錄 ${industryStats.totalSites} 個品牌 / 均分 ${industryStats.avgScore}/100 / Top 3 均分 ${industryStats.topAvgScore}/100)`;
+      completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 3200,
+        messages: [{ role: 'user', content: retryPrompt }],
+      });
+      content = completion.choices[0]?.message?.content || '';
+      quality = this.assessBuyerGuide(content, industrySlug, brandLeakCandidates);
+    }
+
+    if (!quality.ok) {
+      this.logger.warn(`buyer_guide rejected ${industrySlug}/${topic} after retry: ${quality.reasons.join(', ')}`);
+      return { status: 'rejected', reasons: quality.reasons };
+    }
+
+    const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : `${industryLabel}選購指南(${topic})`;
+    const slug = `${industrySlug}-buyer-guide-${topic}-${Date.now().toString(36)}`;
+
+    await this.prisma.blogArticle.deleteMany({
+      where: { templateType: 'buyer_guide', industrySlug, title: { contains: title.slice(0, 20) } },
+    });
+
+    await this.prisma.blogArticle.create({
+      data: {
+        slug,
+        title,
+        description: content.slice(0, 200).replace(/#+\s/g, '').trim(),
+        content,
+        category: 'buyer-guide',
+        templateType: 'buyer_guide',
+        industrySlug,
+        targetKeywords: [
+          industryLabel,
+          `${industryLabel}怎麼選`,
+          `${industryLabel}挑選`,
+          `${industryLabel}注意事項`,
+          topic === 'red_flags' ? `${industryLabel}避雷` : '',
+          topic === 'beginner_primer' ? `${industryLabel}新手` : '',
+        ].filter(Boolean),
+        readingTimeMinutes: this.templateService.estimateReadingTime('buyer_guide'),
+        readTime: `${this.templateService.estimateReadingTime('buyer_guide')} 分鐘`,
+        published: true,
+        lastRegeneratedAt: new Date(),
+      },
+    });
+    this.pingIndexNow(slug);
+    return { status: 'generated', slug };
+  }
+
+  /**
+   * Quarterly cron (Jan/Apr/Jul/Oct 1st @ 04:00) — regenerate all
+   * 29 industries × 3 topics = 87 buyer_guide articles. buyer_guide
+   * content changes slowly (methodology) so quarterly is sufficient.
+   */
+  @Cron('0 4 1 1,4,7,10 *', { name: 'buyer-guide-quarterly' })
+  async scheduledBuyerGuideGeneration(): Promise<void> {
+    await this.runBuyerGuideBatch();
+  }
+
+  async runBuyerGuideBatch(): Promise<{
+    attempted: number;
+    generated: number;
+    rejected: number;
+    skipped: number;
+    rejectedReasons: Record<string, number>;
+    perJob: Array<{ industry: string; topic: string; status: string; reasons?: string[] }>;
+  }> {
+    const { INDUSTRIES } = await import('@geovault/shared');
+    const industries = INDUSTRIES.filter((i) => i.value !== 'other').map((i) => i.value);
+    const topics: BuyerGuideTopic[] = ['how_to_choose', 'red_flags', 'beginner_primer'];
+    const jobs: Array<{ industry: string; topic: BuyerGuideTopic }> = [];
+    for (const ind of industries) for (const t of topics) jobs.push({ industry: ind, topic: t });
+
+    this.logger.log(`buyer_guide batch: ${jobs.length} jobs (${industries.length} industries × ${topics.length} topics)`);
+
+    const queue = pLimit(3);
+    const rejectedReasons: Record<string, number> = {};
+    const perJob: Array<{ industry: string; topic: string; status: string; reasons?: string[] }> = [];
+    let attempted = 0;
+    let generated = 0;
+    let rejected = 0;
+    let skipped = 0;
+
+    await Promise.all(
+      jobs.map((job) =>
+        queue(async () => {
+          attempted++;
+          try {
+            const result = await this.generateBuyerGuide(job.industry, job.topic);
+            perJob.push({ industry: job.industry, topic: job.topic, status: result.status, reasons: result.reasons });
+            if (result.status === 'generated') generated++;
+            else if (result.status === 'rejected') {
+              rejected++;
+              for (const r of result.reasons ?? []) {
+                const bucket = r.includes(':') ? r.split(':')[0] : r;
+                rejectedReasons[bucket] = (rejectedReasons[bucket] ?? 0) + 1;
+              }
+            } else skipped++;
+          } catch (err) {
+            rejected++;
+            rejectedReasons['exception'] = (rejectedReasons['exception'] ?? 0) + 1;
+            perJob.push({ industry: job.industry, topic: job.topic, status: 'error', reasons: [String(err)] });
+          }
+        }),
+      ),
+    );
+
+    this.logger.log(`buyer_guide batch done: ${generated} generated, ${rejected} rejected, ${skipped} skipped`);
+    return { attempted, generated, rejected, skipped, rejectedReasons, perJob };
+  }
+
+  // ─── Layer 3: Buyer Guide (PREVIEW) ─────────────────────────────────
+  //
+  // Preview-only path kept for ad-hoc experimentation.
 
   async previewBuyerGuide(
     industrySlug: string,

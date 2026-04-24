@@ -218,6 +218,37 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('buyer-guide/generate/:industry')
+  @ApiOperation({
+    summary:
+      '產出一篇 Layer 3 buyer_guide 並存到 DB(replaces 同 industry + topic 的舊版)。?topic=how_to_choose|red_flags|beginner_primer。',
+  })
+  generateBuyerGuide(
+    @Param('industry') industry: string,
+    @Query('topic') topic?: string,
+  ) {
+    const t = (topic === 'red_flags' || topic === 'beginner_primer') ? topic : 'how_to_choose';
+    return this.service.generateBuyerGuide(industry, t);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('buyer-guide/batch')
+  @ApiOperation({
+    summary:
+      'Fire-and-forget 全量 buyer_guide batch — 29 產業 × 3 topic = 87 篇。季度 cron 會自動跑,手動用於 prompt 改版後立即重產。',
+  })
+  runBuyerGuideBatch() {
+    this.service.runBuyerGuideBatch().catch((err) => {
+      console.error('buyer_guide batch crashed:', err);
+    });
+    return { message: 'buyer_guide batch started', estimatedJobs: 87 };
+  }
+
+  @ApiBearerAuth()
   @Post('insights/generate')
   @ApiOperation({ summary: 'Generate insight article for an industry' })
   generateInsight(@Body() body: { industry: string; type?: InsightType }) {
