@@ -26,8 +26,8 @@ import { Badge } from '@/components/ui/badge'
 
 const PLAN_LIMITS: Record<string, { scans: number; sites: number; label: string; description: string }> = {
   FREE: { scans: 2, sites: 1, label: 'Free 方案', description: '每站 2 次掃描/月 | 1 個網站 | 1 次修復體驗' },
-  STARTER: { scans: 6, sites: 1, label: 'Starter 方案 NT$390/月', description: '每站 6 次掃描/月 | 1 個網站 | AI 修復 30 次 | AI 內容 30 次 | 引用監控 20 題' },
-  PRO: { scans: 10, sites: 3, label: 'Pro 方案 NT$690/月', description: '每站 10 次掃描/月 | 3 個網站 | AI 修復 50 次 | AI 內容 50 次 | 引用監控 30 題 | 多平台 | 自動排程' },
+  STARTER: { scans: 6, sites: 1, label: 'Starter 方案 NT$390/月', description: '每站 6 次掃描/月 | 1 個網站 | AI 修復 30 次 | AI 內容 30 次 | 引用監控 20 題 | 每週 2 篇 Geovault 專屬內容' },
+  PRO: { scans: 10, sites: 3, label: 'Pro 方案 NT$690/月', description: '每站 10 次掃描/月 | 3 個網站 | AI 修復 50 次 | AI 內容 50 次 | 引用監控 30 題 | 多平台 | 自動排程 | 每週 6 篇 Geovault 專屬內容' },
 }
 
 export default function SettingsPage() {

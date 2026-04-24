@@ -202,3 +202,40 @@ export function useGeoComprehensive(siteId: string) {
     enabled: !!siteId,
   });
 }
+
+export type ClientDailyDayType =
+  | 'mon_topical'
+  | 'tue_qa_deepdive'
+  | 'wed_service'
+  | 'thu_audience'
+  | 'fri_comparison'
+  | 'sat_data_pulse';
+
+export interface ClientDailyStats {
+  totalCount: number;
+  monthCount: number;
+  weekCount: number;
+  plan: string;
+  paused: boolean;
+  activeDaysPerWeek: number;
+  activeDayTypes: ClientDailyDayType[];
+  recentArticles: Array<{
+    slug: string;
+    title: string;
+    createdAt: string;
+    dayType: ClientDailyDayType | null;
+  }>;
+}
+
+export function useClientDailyStats(siteId: string) {
+  return useQuery({
+    queryKey: ['client-reports', 'client-daily-stats', siteId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ClientDailyStats>(
+        `/blog/client-daily/stats/${siteId}`,
+      );
+      return data;
+    },
+    enabled: !!siteId,
+  });
+}

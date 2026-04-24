@@ -14,7 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSites } from '@/hooks/use-sites';
-import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport, useGeoComprehensive, useReportQuota } from '@/hooks/use-client-reports';
+import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport, useGeoComprehensive, useReportQuota, useClientDailyStats, type ClientDailyDayType } from '@/hooks/use-client-reports';
 import apiClient from '@/lib/api-client';
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -1093,6 +1093,11 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
         </CardContent>
       </Card>
 
+      {/* Block 5.5: Client Daily Content accumulator — shows the running total
+          of AI-citable daily pieces published on Geovault for paid clients.
+          Component decides whether to render itself based on plan quota. */}
+      <ClientDailyAccumulatorCard siteId={siteId} />
+
       {/* Block 6: Industry Peers */}
       {peers.length > 0 && (
         <Card>
@@ -1123,5 +1128,140 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
         </Card>
       )}
     </div>
+  );
+}
+
+const DAY_LABELS: Record<ClientDailyDayType, string> = {
+  mon_topical: '週一 · 話題解析',
+  tue_qa_deepdive: '週二 · Q&A 深度',
+  wed_service: '週三 · 服務剖析',
+  thu_audience: '週四 · 受眾指引',
+  fri_comparison: '週五 · 對比差異',
+  sat_data_pulse: '週六 · 數據脈動',
+};
+
+/**
+ * Shows the running total of AI-citable daily content that Geovault has
+ * published on the client's behalf. Silent on FREE plans with zero articles —
+ * only renders when there's either plan quota OR existing content to display.
+ *
+ * This is the "transparent accumulator" the product promised: paid clients can
+ * see exactly how many posts went live this month / week and click through to
+ * the latest piece on Geovault.
+ */
+function ClientDailyAccumulatorCard({ siteId }: { siteId: string }) {
+  const { data, isLoading } = useClientDailyStats(siteId);
+
+  if (isLoading || !data) return null;
+  // Hide entirely when there's no plan entitlement AND no history.
+  if (data.activeDaysPerWeek === 0 && data.totalCount === 0) return null;
+
+  const weeklyQuota = data.activeDaysPerWeek;
+  const weeklyProgress =
+    weeklyQuota > 0 ? Math.min(100, Math.round((data.weekCount / weeklyQuota) * 100)) : 0;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            每日 AI 可引用內容累積
+            {data.paused && (
+              <Badge variant="outline" className="text-yellow-400 border-yellow-500/30">
+                已暫停
+              </Badge>
+            )}
+          </CardTitle>
+          <Badge variant="outline" className="text-blue-300 border-blue-500/30">
+            {data.plan} · 每週 {weeklyQuota} 篇
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="p-3 rounded bg-white/5 border border-white/10 text-center">
+            <p className="text-3xl font-bold text-green-400">{data.monthCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">本月累積</p>
+          </div>
+          <div className="p-3 rounded bg-white/5 border border-white/10 text-center">
+            <p className="text-3xl font-bold text-blue-300">{data.weekCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">本週 / {weeklyQuota || '—'}</p>
+          </div>
+          <div className="p-3 rounded bg-white/5 border border-white/10 text-center">
+            <p className="text-3xl font-bold text-white">{data.totalCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">歷史總數</p>
+          </div>
+        </div>
+
+        {weeklyQuota > 0 && (
+          <div>
+            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all"
+                style={{ width: `${weeklyProgress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-xs text-gray-400 mt-1">
+              <span>本週進度</span>
+              <span>{data.weekCount} / {weeklyQuota}</span>
+            </div>
+          </div>
+        )}
+
+        {data.activeDayTypes.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-400 mb-2">本方案含以下固定題材</p>
+            <div className="flex flex-wrap gap-1.5">
+              {data.activeDayTypes.map((d) => (
+                <span
+                  key={d}
+                  className="text-xs px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-200"
+                >
+                  {DAY_LABELS[d]}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data.recentArticles.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-400 mb-2">最近發布（Geovault 發布）</p>
+            <div className="space-y-1">
+              {data.recentArticles.slice(0, 5).map((a) => (
+                <a
+                  key={a.slug}
+                  href={`/blog/${a.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between gap-2 p-2 rounded bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-white truncate">{a.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {a.dayType && (
+                        <span className="text-[10px] text-blue-300">
+                          {DAY_LABELS[a.dayType]}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-gray-500">
+                        {new Date(a.createdAt).toLocaleDateString('zh-TW')}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-xs text-blue-400 shrink-0">開啟 →</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data.activeDaysPerWeek === 0 && data.totalCount > 0 && (
+          <p className="text-xs text-yellow-400/80">
+            目前方案未含每日內容累積（歷史 {data.totalCount} 篇保留可閱讀）。升級 Starter / Pro 即可恢復自動累積。
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
