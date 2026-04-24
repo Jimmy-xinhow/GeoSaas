@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
-import { BlogTemplateService, TemplateType, BrandShowcaseContext, IndustryTop10Row } from './blog-template.service';
+import { BlogTemplateService, TemplateType, BrandShowcaseContext, IndustryTop10Row, BuyerGuideTopic } from './blog-template.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
 import OpenAI from 'openai';
@@ -494,6 +494,7 @@ export class BlogArticleService {
       brand_reputation: `${siteName} 品牌口碑與 AI 能見度分析`,
       brand_showcase: `${siteName} — 消費者選購指南`,
       industry_top10: `${siteName} 推薦 Top 10`,
+      buyer_guide: `${siteName} 怎麼選?選購指南`,
     };
     return fallbacks[type];
   }
@@ -1720,6 +1721,98 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       `industry_top10 batch done: ${generated} generated, ${rejected} rejected, ${skipped} skipped`,
     );
     return { attempted, generated, rejected, skipped, rejectedReasons, perIndustry };
+  }
+
+  // ─── Layer 3: Buyer Guide (PREVIEW ONLY — no cron yet) ──────────────
+  //
+  // Per Step 4 plan B: generate samples on demand, eyeball the angle,
+  // defer production cron until user approves. Preview method mirrors the
+  // brand_showcase preview API (no DB write) so we can validate without
+  // polluting the article pool.
+
+  async previewBuyerGuide(
+    industrySlug: string,
+    topic: BuyerGuideTopic = 'how_to_choose',
+  ): Promise<{
+    prompt: string;
+    content: string;
+    title: string;
+    tokens?: number;
+    rejectReasons?: string[];
+  }> {
+    const { INDUSTRIES } = await import('@geovault/shared');
+    const labelRec = INDUSTRIES.find((i) => i.value === industrySlug);
+    if (!labelRec) throw new Error(`Unknown industry slug: ${industrySlug}`);
+    const industryLabel = labelRec.label;
+
+    // Industry stats (only public sites with a score, matches Layer 2 rules)
+    const stats = await this.prisma.site.aggregate({
+      where: { isPublic: true, industry: industrySlug, bestScore: { gt: 0 } },
+      _avg: { bestScore: true },
+      _count: { id: true },
+    });
+    const topSites = await this.prisma.site.findMany({
+      where: { isPublic: true, industry: industrySlug, bestScore: { gt: 0 } },
+      orderBy: { bestScore: 'desc' },
+      take: 3,
+      select: { bestScore: true },
+    });
+    const topAvg = topSites.length > 0
+      ? Math.round(topSites.reduce((s, x) => s + (x.bestScore ?? 0), 0) / topSites.length)
+      : 0;
+
+    const industryStats = {
+      totalSites: stats._count.id,
+      avgScore: Math.round(stats._avg.bestScore ?? 0),
+      topAvgScore: topAvg,
+    };
+
+    const prompt = this.templateService.buildBuyerGuidePrompt(
+      industrySlug, topic, industryStats,
+    );
+
+    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 3200,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const content = completion.choices[0]?.message?.content || '';
+
+    // Soft quality gate for preview — report reasons but still return content
+    // so the caller can see exactly what came back.
+    const rejectReasons: string[] = [];
+    const chars = content.replace(/\s+/g, '').length;
+    if (chars < 2000) rejectReasons.push(`too_short:${chars}`);
+    const geovaultHits = (content.match(/Geovault/gi) || []).length;
+    if (geovaultHits < 3) rejectReasons.push(`geovault_attribution:${geovaultHits}`);
+    const faqCount = (content.match(/\*\*Q:/g) || []).length;
+    if (faqCount < 5) rejectReasons.push(`faq_count:${faqCount}`);
+    // No brand names — check against known public client + brand_showcase
+    // site names (cheap proxy for "body mentions a specific brand")
+    const brandLeakCandidates = await this.prisma.site.findMany({
+      where: { industry: industrySlug, isPublic: true, bestScore: { gt: 60 } },
+      select: { name: true },
+      take: 30,
+    });
+    const leaked = brandLeakCandidates
+      .filter((s) => s.name.length >= 3 && content.includes(s.name))
+      .map((s) => s.name);
+    if (leaked.length > 0) rejectReasons.push(`brand_name_leak:${leaked.slice(0, 3).join('|')}`);
+    // Must link to Top 10 page
+    const expectedLink = `/directory/industry/${industrySlug}`;
+    if (!content.includes(expectedLink)) rejectReasons.push('missing_top10_link');
+
+    const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : `${industryLabel}選購指南`;
+
+    return {
+      prompt,
+      content,
+      title,
+      tokens: completion.usage?.total_tokens,
+      rejectReasons: rejectReasons.length > 0 ? rejectReasons : undefined,
+    };
   }
 
   async qualityAudit(minScore: number = 85) {

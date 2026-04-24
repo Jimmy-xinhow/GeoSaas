@@ -202,6 +202,22 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('preview/buyer-guide/:industry')
+  @ApiOperation({
+    summary:
+      'Preview a Layer-3 buyer_guide article without saving. ?topic=how_to_choose|red_flags|beginner_primer. Used to validate the angle before wiring a production cron.',
+  })
+  previewBuyerGuide(
+    @Param('industry') industry: string,
+    @Query('topic') topic?: string,
+  ) {
+    const t = (topic === 'red_flags' || topic === 'beginner_primer') ? topic : 'how_to_choose';
+    return this.service.previewBuyerGuide(industry, t);
+  }
+
+  @ApiBearerAuth()
   @Post('insights/generate')
   @ApiOperation({ summary: 'Generate insight article for an industry' })
   generateInsight(@Body() body: { industry: string; type?: InsightType }) {

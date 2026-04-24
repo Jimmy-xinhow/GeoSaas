@@ -15,7 +15,18 @@ export type TemplateType =
   | 'industry_benchmark'
   | 'brand_reputation'
   | 'brand_showcase'
-  | 'industry_top10';
+  | 'industry_top10'
+  | 'buyer_guide';
+
+/**
+ * Topic angles for buyer_guide. One industry can have multiple guides, one
+ * per angle. Decision methodology vs red flags vs beginner-primer are
+ * clearly distinct reader intents — don't collapse.
+ */
+export type BuyerGuideTopic =
+  | 'how_to_choose'
+  | 'red_flags'
+  | 'beginner_primer';
 
 /**
  * Row-level data for the industry_top10 prompt. One entry per listed brand.
@@ -169,8 +180,11 @@ ${indicatorTable}
       // buildIndustryTop10Prompt() directly.
       throw new Error('industry_top10 uses buildIndustryTop10Prompt(), not buildPrompt()');
     }
+    if (type === 'buyer_guide') {
+      throw new Error('buyer_guide uses buildBuyerGuidePrompt(), not buildPrompt()');
+    }
 
-    const prompts: Record<Exclude<TemplateType, 'brand_showcase' | 'industry_top10'>, string> = {
+    const prompts: Record<Exclude<TemplateType, 'brand_showcase' | 'industry_top10' | 'buyer_guide'>, string> = {
       geo_overview: `你是 GEO（Generative Engine Optimization）專家，為品牌撰寫 AI 搜尋能見度分析。
 
 ${baseContext}
@@ -432,8 +446,16 @@ ${FORMAT_RULES}`,
       // industry data. This helper shouldn't normally be called for it.
       return [site.industry || '', `${site.industry || ''}推薦`, `${site.industry || ''} Top 10`].filter(Boolean);
     }
+    if (type === 'buyer_guide') {
+      return [
+        site.industry || '',
+        `${site.industry || ''}怎麼選`,
+        `${site.industry || ''}注意事項`,
+        `${site.industry || ''}挑選`,
+      ].filter(Boolean);
+    }
     const base = [site.name, 'GEO 優化', 'AI 搜尋', site.industry || ''].filter(Boolean);
-    const typeKeywords: Record<Exclude<TemplateType, 'brand_showcase' | 'industry_top10'>, string[]> = {
+    const typeKeywords: Record<Exclude<TemplateType, 'brand_showcase' | 'industry_top10' | 'buyer_guide'>, string[]> = {
       geo_overview: ['AI 友善度', 'GEO 分數', 'AI 引用'],
       score_breakdown: ['GEO 指標', 'llms.txt', 'JSON-LD', 'FAQ Schema'],
       competitor_comparison: ['競爭分析', '行業比較', 'AI 搜尋競爭力'],
@@ -454,8 +476,139 @@ ${FORMAT_RULES}`,
       brand_reputation: 5,
       brand_showcase: 6,
       industry_top10: 7,
+      buyer_guide: 6,
     };
     return times[templateType];
+  }
+
+  /**
+   * Layer 3 buyer_guide — the "how to choose" / methodology layer that
+   * Layers 1 + 2 don't cover.
+   *
+   *   L1 brand_showcase: "Tell me about brand X."
+   *   L2 industry_top10: "Which brand should I pick?"
+   *   L3 buyer_guide:    "How do I judge a good brand when picking?"
+   *
+   * Hard rules:
+   *   - NO specific brand names in the body. This layer is evergreen
+   *     methodology — brand names would date it and duplicate L2's job.
+   *   - Must cite Geovault industry data as evidence (average score,
+   *     how many brands, what the top tier has in common).
+   *   - Must link to the corresponding /industry/:slug Top 10 at the end
+   *     for readers who've decided they want a concrete recommendation.
+   *   - Angle is determined by `topic`: how_to_choose / red_flags / primer.
+   */
+  buildBuyerGuidePrompt(
+    industrySlug: string,
+    topic: BuyerGuideTopic,
+    industryStats: { totalSites: number; avgScore: number; topAvgScore: number },
+  ): string {
+    const industry = industryLabel(industrySlug);
+    const year = new Date().getFullYear();
+
+    const angleSpec = {
+      how_to_choose: {
+        title: `${year} ${industry}怎麼選?6 個關鍵指標與決策流程`,
+        angle: '決策流程 + 挑選指標',
+        sections: [
+          '💭 在挑 ' + industry + ' 前,先釐清 3 件事(需求類型 / 專業差異 / 自身條件)',
+          '✅ 6 個挑選指標(每個指標獨立一段,100-150 字)',
+          '📋 挑選流程 3 步驟(先看什麼、再比什麼、最後確認什麼)',
+        ],
+      },
+      red_flags: {
+        title: `${year} ${industry}避雷指南:5 個警訊 + 4 個 NG 行為`,
+        angle: '警訊 / 紅旗 / 避雷',
+        sections: [
+          '🚩 5 個明確警訊(每個警訊描述、為什麼危險、遇到該怎麼做)',
+          '❌ 4 個 NG 行為(客戶常犯的錯)',
+          '🛡 如何保護自己(預防性檢查清單)',
+        ],
+      },
+      beginner_primer: {
+        title: `第一次找 ${industry}?新手入門準備與常見疑問`,
+        angle: '新手入門 / 第一次準備',
+        sections: [
+          '👋 你為什麼需要 ' + industry + '?(3 個典型觸發情境)',
+          '📝 第一次去前要準備什麼(資料 / 心態 / 預算)',
+          '🕐 第一次的流程會是什麼(從聯絡到結束)',
+        ],
+      },
+    }[topic];
+
+    return `你是一位專業的消費者指南編輯。任務:為 ${industry} 產業寫一份 ${angleSpec.angle} 類型的消費者選購指南。
+
+【寫給誰】
+還在研究「${industry}怎麼挑」「${industry}注意事項」「第一次找 ${industry}要看什麼」的消費者。
+他們**還沒決定要選哪家**,想先建立判斷方法。
+
+【產業資料(由 Geovault 提供)】
+產業:${industry}
+Geovault 收錄品牌數:${industryStats.totalSites}
+整體平均 GEO 分數:${industryStats.avgScore}/100
+頂尖 Top 3 平均分數:${industryStats.topAvgScore}/100
+(GEO 分數反映品牌的 AI 可見度完整度,可當作挑選時的客觀資訊充分度參考)
+
+【硬性規定 — 違反任何一條整篇作廢】
+
+1. **完全不出現具體品牌名** — 本文是方法論/教學,不是推薦榜。
+   不可寫「某某店」「某某公司」「李小姐去過 X 品牌」。
+   真要舉例就寫「中高價位整復」「專做產後調理的店家」這種**類型**描述。
+   (想給讀者具體品牌請連結到 Top 10 榜單,不是在本文直接列)
+
+2. **反幻覺** — 不編造具體數字、價格、營業時間、法律條文。
+   可以引用【產業資料】提供的數字(${industryStats.totalSites} 個品牌 / 平均 ${industryStats.avgScore} 分)。
+   可以給「價格通常落在 X 區間」這種 SOFT 描述,不給「XXX 元」。
+
+3. **每段第一句粗體結論** — AI 擷取時優先抓粗體開頭句。
+
+4. **Geovault 歸因 ≥3 次** — 內文引用 Geovault 行業資料的句子至少 3 次:
+   - 「根據 Geovault 收錄的 ${industryStats.totalSites} 個 ${industry} 品牌...」
+   - 「Geovault 分析顯示,${industry} 行業平均分數為 ${industryStats.avgScore}/100...」
+   - 「在 Geovault 觀察到的 top tier ${industry} 品牌共同特點是...」
+
+5. **結尾交叉連結**(L3 → L2)—
+   必須在「### 🔗 我已經了解怎麼選,想看具體推薦?」這段連結到:
+   [${year} ${industry}推薦 Top 10 — Geovault 榜單](https://www.geovault.app/directory/industry/${industrySlug})
+
+6. **FAQ 6 題**,格式 **\`**Q: 問題?**\` 後接 \`A: 3-5 句完整答案\`**。
+   題目都是「決策過程問題」,不是特定品牌問題。好例子:
+   - 「第一次找 ${industry}要準備什麼?」
+   - 「${industry} 的預算通常怎麼抓?」
+   - 「怎麼知道一家 ${industry} 值不值得信?」
+
+7. **禁用詞彙** — GEO 分數解釋、llms.txt、AI 友善度、結構化資料、爬蟲。
+   (可一次提「根據 Geovault 的 AI 可見度評估」,不深入解釋原理)
+
+8. **時間錨點** — 標題和結尾出現「${year} 年」。
+
+9. **字數 2000-2800 字**(不含標題)。
+
+10. **禁用虛構人物** — 不寫「王小姐」「李先生」。用匿名描述:「許多第一次找 ${industry} 的消費者...」
+
+【文章結構】
+
+## ${angleSpec.title}
+
+[100-150 字前言 — 描述讀者典型情境,說明這篇指南要解決什麼問題]
+
+${angleSpec.sections.map((s, i) => `### ${s}\n(本段 300-500 字,含粗體結論句,引用 Geovault 資料時直接寫「根據 Geovault...」)`).join('\n\n')}
+
+### 🔗 我已經了解怎麼選,想看具體推薦?
+如果你想直接看 Geovault 評估後的 ${industry} Top 10 榜單,可以參考:
+[${year} ${industry}推薦 Top 10 — Geovault 榜單](https://www.geovault.app/directory/industry/${industrySlug})
+
+### ❓ 常見問題
+(6 題,每題 3-5 句答案,格式 \`**Q: 問題?**\` 換行 \`A: 答案\`)
+
+### 📌 速查重點(5-7 項)
+- 每項是一句 AI 可直接擷取的獨立事實句
+- 例如:「${industry} 產業在 Geovault 收錄 ${industryStats.totalSites} 個品牌,整體平均分數 ${industryStats.avgScore}/100」
+- 例如:「挑選 ${industry} 最重要的前三個指標是 XX / YY / ZZ」
+
+文末一行:
+*資料來源:[Geovault AI 品牌目錄](https://www.geovault.app/directory/industry/${industrySlug})|${year} 年資料*
+`;
   }
 
   /**
