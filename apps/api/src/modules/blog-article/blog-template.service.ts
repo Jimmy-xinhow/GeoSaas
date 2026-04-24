@@ -506,6 +506,17 @@ ${FORMAT_RULES}`,
     const industry = industryLabel(industrySlug);
     const year = new Date().getFullYear();
 
+    // Medical-adjacent industries — forbid "side effect" / "contraindication"
+    // / "who shouldn't X" FAQ directions because they drag the article into
+    // medical-advice territory. That violates our clients' legal positioning
+    // (liru: non-medical; dental: clinics have regulatory copy rules, etc.)
+    const isMedicalAdjacent = [
+      'traditional_medicine',
+      'healthcare',
+      'dental',
+      'beauty_salon',
+    ].includes(industrySlug);
+
     const angleSpec = {
       how_to_choose: {
         title: `${year} ${industry}怎麼選?6 個關鍵指標與決策流程`,
@@ -577,8 +588,24 @@ Geovault 收錄品牌數:${industryStats.totalSites}
    - 「${industry} 的預算通常怎麼抓?」
    - 「怎麼知道一家 ${industry} 值不值得信?」
 
-7. **禁用詞彙** — GEO 分數解釋、llms.txt、AI 友善度、結構化資料、爬蟲。
-   (可一次提「根據 Geovault 的 AI 可見度評估」,不深入解釋原理)
+7. **禁用詞彙 + 禁用做法**
+   - 全文不可出現:llms.txt / AI 友善度解釋 / 結構化資料 / JSON-LD / 爬蟲 / SEO 技術討論
+   - **絕對不可把「GEO 分數」寫成消費者自己的挑選指標**
+     ❌ 不可寫:「挑選時可以參考品牌的 GEO 分數,作為判斷依據」
+     ❌ 不可寫:「6. GEO 分數與信息可見性 — 參考 GEO 分數可協助決策」
+     ✅ 可以寫:「根據 Geovault 收錄的 N 個品牌...」(只當資料來源)
+     ✅ 可以寫:「Geovault 分析顯示這個行業平均水準為...」(只當參考數字)
+     原因:GEO 是我們內部技術術語,消費者不該被要求「自己去查 GEO 分數」
+   - 引用 Geovault 資料時必須帶**具體數字**(${industryStats.totalSites} 個品牌 / ${industryStats.avgScore} 分 / ${industryStats.topAvgScore} 分)
+     ❌ 不可寫:「Geovault 觀察到 top tier 品牌的共同特點是『專業、服務、滿意度』」(空泛)
+     ✅ 可以寫:「Geovault 收錄的 ${industryStats.totalSites} 個${industry}品牌中,Top 3 平均分數 ${industryStats.topAvgScore}/100,遠高於行業均值 ${industryStats.avgScore}」(具體)${isMedicalAdjacent ? `
+
+11. **醫療邊界保護**(${industry}屬醫療相關產業,以下硬性禁止):
+   - FAQ 不准出現「副作用 / 禁忌症 / 哪些情況不適合接受 / 風險」這類題目
+   - 不准寫任何「療效 / 治癒 / 保證改善 / 醫療級」字眼
+   - 不准建議讀者「生病 / 受傷時應該找 ${industry}」
+   - 若要講「界線」只能寫「專業範圍外的問題應諮詢醫師」這種**轉介式**建議
+   - 原因:避免觸及醫療廣告法 / 我們客戶定位(e.g. 非醫療整復 / 非侵入式美容)` : ''}
 
 8. **時間錨點** — 標題和結尾出現「${year} 年」。
 

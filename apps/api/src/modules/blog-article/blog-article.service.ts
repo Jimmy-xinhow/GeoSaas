@@ -1803,6 +1803,24 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     const expectedLink = `/directory/industry/${industrySlug}`;
     if (!content.includes(expectedLink)) rejectReasons.push('missing_top10_link');
 
+    // GEO-as-consumer-metric check: catch the "挑選時參考 GEO 分數" failure
+    // mode where the LLM recycles our internal technical concept as a
+    // consumer-facing decision criterion. Flag if "GEO 分數" appears as a
+    // listed指標 / 依據 / 標準.
+    if (/GEO\s?分數[^.。]{0,30}(?:指標|依據|標準|挑選|參考|可見度)/.test(content) ||
+        /參考.{0,10}GEO\s?分數/.test(content) ||
+        /(?:^|\n)[0-9]+\.\s?[^\n]*GEO\s?分數/.test(content)) {
+      rejectReasons.push('geo_score_as_consumer_metric');
+    }
+
+    // Medical-adjacent guard rail — must not contain risk/side-effect FAQs
+    const medicalAdjacent = ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'];
+    if (medicalAdjacent.includes(industrySlug)) {
+      if (/副作用|禁忌|不適合接受|療效|保證治癒|醫療級/.test(content)) {
+        rejectReasons.push('medical_boundary_violation');
+      }
+    }
+
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : `${industryLabel}選購指南`;
 
