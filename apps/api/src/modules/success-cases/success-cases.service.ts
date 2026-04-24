@@ -68,6 +68,88 @@ export class SuccessCasesService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
+  async adminFindAll(filters: {
+    status?: string;
+    aiPlatform?: string;
+    industry?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { status, aiPlatform, industry, page = 1, limit = 20 } = filters;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (status) where.status = status;
+    if (aiPlatform) where.aiPlatform = aiPlatform;
+    if (industry) where.industry = industry;
+
+    const [items, total, counts] = await Promise.all([
+      this.prisma.geoSuccessCase.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          aiPlatform: true,
+          queryUsed: true,
+          beforeGeoScore: true,
+          afterGeoScore: true,
+          improvementDays: true,
+          industry: true,
+          tags: true,
+          status: true,
+          rejectionReason: true,
+          featuredAt: true,
+          screenshotUrl: true,
+          viewCount: true,
+          createdAt: true,
+          updatedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+          site: { select: { id: true, name: true, url: true } },
+          generatedArticle: { select: { id: true, slug: true, title: true } },
+        },
+      }),
+      this.prisma.geoSuccessCase.count({ where }),
+      this.prisma.geoSuccessCase.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      }),
+    ]);
+
+    const statusCounts = {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+    } as Record<string, number>;
+    counts.forEach((c) => {
+      statusCounts[c.status] = c._count._all;
+    });
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      statusCounts,
+    };
+  }
+
+  async adminFindById(id: string) {
+    const item = await this.prisma.geoSuccessCase.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        site: { select: { id: true, name: true, url: true, bestScore: true } },
+        generatedArticle: { select: { id: true, slug: true, title: true, content: true } },
+      },
+    });
+    if (!item) throw new NotFoundException('Case not found');
+    return item;
+  }
+
   async findFeatured() {
     return this.prisma.geoSuccessCase.findMany({
       where: { status: 'approved', featuredAt: { not: null } },
@@ -132,12 +214,16 @@ export class SuccessCasesService {
   }
 
   async approve(caseId: string) {
+    const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
+    if (!existing) throw new NotFoundException('Case not found');
+
     const updated = await this.prisma.geoSuccessCase.update({
       where: { id: caseId },
-      data: { status: 'approved', featuredAt: new Date() },
+      // Approve only flips status + clears any prior rejection reason.
+      // Featured is a separate curated action via toggleFeatured.
+      data: { status: 'approved', rejectionReason: null },
     });
 
-    // Notify user
     this.notifications.create(
       updated.userId,
       'case_approved',
@@ -145,21 +231,25 @@ export class SuccessCasesService {
       `您提交的案例「${updated.title}」已通過審核，將出現在成功案例頁面。`,
     ).catch(() => {});
 
-    // Generate article in background
-    this.generateCaseArticle(caseId).catch((err) => {
-      this.logger.warn(`Failed to generate article for case ${caseId}: ${err}`);
-    });
+    // Only generate an article the first time a case is approved.
+    if (!existing.generatedArticleId) {
+      this.generateCaseArticle(caseId).catch((err) => {
+        this.logger.warn(`Failed to generate article for case ${caseId}: ${err}`);
+      });
+    }
 
     return updated;
   }
 
   async reject(caseId: string, reason: string) {
+    const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
+    if (!existing) throw new NotFoundException('Case not found');
+
     const updated = await this.prisma.geoSuccessCase.update({
       where: { id: caseId },
-      data: { status: 'rejected', rejectionReason: reason },
+      data: { status: 'rejected', rejectionReason: reason, featuredAt: null },
     });
 
-    // Notify user
     this.notifications.create(
       updated.userId,
       'case_rejected',
@@ -168,6 +258,29 @@ export class SuccessCasesService {
     ).catch(() => {});
 
     return updated;
+  }
+
+  async resetToPending(caseId: string) {
+    const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
+    if (!existing) throw new NotFoundException('Case not found');
+
+    return this.prisma.geoSuccessCase.update({
+      where: { id: caseId },
+      data: { status: 'pending', rejectionReason: null, featuredAt: null },
+    });
+  }
+
+  async toggleFeatured(caseId: string) {
+    const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
+    if (!existing) throw new NotFoundException('Case not found');
+    if (existing.status !== 'approved') {
+      throw new ForbiddenException('只有已通過的案例才能設為精選');
+    }
+
+    return this.prisma.geoSuccessCase.update({
+      where: { id: caseId },
+      data: { featuredAt: existing.featuredAt ? null : new Date() },
+    });
   }
 
   async generateCaseArticle(caseId: string) {

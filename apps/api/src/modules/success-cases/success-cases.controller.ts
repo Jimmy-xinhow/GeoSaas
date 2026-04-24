@@ -5,6 +5,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { SuccessCasesService } from './success-cases.service';
 import { CreateSuccessCaseDto } from './dto/create-success-case.dto';
+import { RejectSuccessCaseDto } from './dto/reject-success-case.dto';
 
 @ApiTags('Success Cases')
 @Controller()
@@ -77,6 +78,36 @@ export class SuccessCasesController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
+  @Get('admin/success-cases')
+  @ApiOperation({ summary: 'List all success cases (admin, filterable by status)' })
+  adminFindAll(
+    @Query('status') status?: string,
+    @Query('aiPlatform') aiPlatform?: string,
+    @Query('industry') industry?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.adminFindAll({
+      status: status || undefined,
+      aiPlatform: aiPlatform || undefined,
+      industry: industry || undefined,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    });
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @Get('admin/success-cases/:id')
+  @ApiOperation({ summary: 'Get success case detail (admin, no view increment)' })
+  adminFindById(@Param('id') id: string) {
+    return this.service.adminFindById(id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Patch('admin/success-cases/:id/approve')
   @ApiOperation({ summary: 'Approve a success case (admin)' })
   approve(@Param('id') id: string) {
@@ -88,7 +119,25 @@ export class SuccessCasesController {
   @Roles('ADMIN')
   @Patch('admin/success-cases/:id/reject')
   @ApiOperation({ summary: 'Reject a success case (admin)' })
-  reject(@Param('id') id: string, @Body() body: { reason: string }) {
-    return this.service.reject(id, body.reason);
+  reject(@Param('id') id: string, @Body() dto: RejectSuccessCaseDto) {
+    return this.service.reject(id, dto.reason);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @Patch('admin/success-cases/:id/reset')
+  @ApiOperation({ summary: 'Reset case back to pending (admin)' })
+  reset(@Param('id') id: string) {
+    return this.service.resetToPending(id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @Patch('admin/success-cases/:id/feature')
+  @ApiOperation({ summary: 'Toggle featured flag for an approved case (admin)' })
+  toggleFeatured(@Param('id') id: string) {
+    return this.service.toggleFeatured(id);
   }
 }
