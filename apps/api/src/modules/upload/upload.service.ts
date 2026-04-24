@@ -35,11 +35,18 @@ export class UploadService {
     const bucket = this.config.get<string>('AWS_S3_BUCKET');
     const accessKeyId = this.config.get<string>('AWS_ACCESS_KEY_ID');
     const secretAccessKey = this.config.get<string>('AWS_SECRET_ACCESS_KEY');
+    // Optional — set for S3-compatible providers (Cloudflare R2, Backblaze B2,
+    // Wasabi, DigitalOcean Spaces, MinIO). Leave empty to target AWS S3.
+    const endpoint = this.config.get<string>('AWS_S3_ENDPOINT') || undefined;
+    const forcePathStyle =
+      this.config.get<string>('AWS_S3_FORCE_PATH_STYLE') === 'true';
 
     if (region && bucket && accessKeyId && secretAccessKey) {
       this.s3 = new S3Client({
         region,
         credentials: { accessKeyId, secretAccessKey },
+        endpoint,
+        forcePathStyle,
       });
       this.bucket = bucket;
       this.region = region;
