@@ -31,8 +31,9 @@ COPY apps/web/ apps/web/
 RUN pnpm --filter @geovault/shared build
 
 # Build the Next.js app with production env vars hardcoded
-# NEXT_PUBLIC_GOOGLE_CLIENT_ID must be passed at build time (e.g. Railway: docker build --build-arg)
-ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
+# Google Client ID is public by design (origins are enforced at Google's end).
+# Override via --build-arg if rotating; otherwise the default below is used.
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=154774079870-9m0cu8ubcd9p7n4nesa1rdcbg6cm3bbs.apps.googleusercontent.com
 ENV NEXT_PUBLIC_API_URL=https://api.geovault.app
 ENV NEXT_PUBLIC_SITE_URL=https://www.geovault.app
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
