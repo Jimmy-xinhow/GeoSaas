@@ -2131,7 +2131,8 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     // Outdated narrative — pandemic-era cliches feel stale in 2026 and signal
     // model training-bias rather than real industry observation.
     const outdatedHits = [
-      '抗疫常態化', '抗疫', '後疫情', '疫後', '疫情常態化', '疫情期間', '疫情下',
+      '抗疫常態化', '抗疫', '後疫情', '疫情後', '疫後', '疫情常態化',
+      '疫情期間', '疫情下', '疫情衝擊', '疫情爆發', '新冠', 'COVID',
       '冬季惡劣天氣', '冬季嚴寒', '酷寒冬季',
     ].filter((p) => content.includes(p));
     if (outdatedHits.length > 0) reasons.push(`outdated_narrative:${outdatedHits.slice(0, 2).join('|')}`);
