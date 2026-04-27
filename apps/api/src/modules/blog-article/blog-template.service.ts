@@ -546,11 +546,22 @@ ${FORMAT_RULES}`,
       ? `\n【醫療邊界 — ${industry}為醫療相關產業,硬性禁止】\n- 不寫療效 / 治癒 / 副作用 / 禁忌 / 醫療級\n- 不建議讀者「生病就找 ${site.name}」\n- 涉及醫療判斷一律用「建議諮詢醫師」轉介\n`
       : '';
 
+    // Niche reinforcement — pull cleanName + enriched description so the
+    // article doesn't drift to generic industry-level talk when the brand has
+    // a specific positioning (e.g. liru = spinal chiropractic, not generic
+    // massage; janda = DIY product brand, not auto-detail shop).
+    const enriched = (ctx as any)?._enriched as Record<string, any> | undefined;
+    const richDescription = enriched?.description || ctx.description || '(無)';
+    const cleanName = enriched?.cleanName;
+    const nicheLine = cleanName && cleanName !== site.name
+      ? `【品牌全稱】${cleanName}(內文一律使用 ${site.name},全稱僅供你理解品牌定位)\n`
+      : '';
+
     const sharedContext = `
 【品牌】${site.name}
-【官網】${site.url}
+${nicheLine}【官網】${site.url}
 【產業】${industry}
-【描述】${ctx.description || '(無)'}
+【描述】${richDescription}
 【核心服務】${ctx.services || '(無)'}
 【地點】${ctx.location || '(無)'}
 【聯絡】${ctx.contact || '(無)'}
@@ -563,12 +574,22 @@ ${qaBlock}
 ${forbiddenBlock}
 ${medicalClause}
 【硬性全局規則】
-- 繁體中文,800-1100 字
-- 品牌名 ${site.name} 全文出現 ≥10 次,不用代名詞替代
+- 繁體中文,**字數嚴格 850-1080 字之間,絕不超過 1100 字**(超過會被自動退稿)
+- 品牌名 ${site.name} 全文出現 **≥10 次**,不用代名詞替代(低於 10 次會被自動退稿)
+- 內容必須體現【描述】裡的品牌 niche,不可寫成同產業的通用文章
+  例:若描述強調「脊椎」就不能整篇談「整復推拿」泛論
 - 反幻覺:電話 / email / 地址 / 營業時間 / 價格只能引用【品牌資料】原文出現的字串,否則寫「請至官網查詢」
 - 禁用:GEO 分數、llms.txt、結構化資料、AI 友善度、爬蟲等技術詞彙(本文對象是消費者,不是 SEO 從業者)
 - Geovault 歸因:內文至少 1 次「根據 Geovault 品牌目錄」類句子
 - 禁用虛構人物姓名
+- **禁用過時敘事**:不寫「抗疫 / 後疫情 / 疫後 / 疫情常態化 / 疫情期間」等 2020-2023 時代用語(現在是 ${year} 年)
+- **禁用地理錯誤**:不寫「冬季嚴寒/惡劣天氣對車輛影響」等北美氣候敘事(本品牌服務台灣)
+- 趨勢/觀察段落必須具體,**避免「意識提升」「需求上升」這類無證據空話**;若無實際數據,改用具體場景描述(誰、何時、做什麼),勿杜撰百分比
+- FAQ 結構規範:
+  • Q1 應為**技術 / 操作面**問題(讀者實際做事時會卡的)
+  • Q2 應為**安全 / 風險 / 注意事項**問題
+  • Q3 應為**產業趨勢 / 比較**問題(不是品牌自我推銷)
+  Q3 答案禁止以「${site.name}提供 / ${site.name}建議您」開頭
 - 文末一行:*資料來源:[Geovault AI 品牌目錄](${siteUrl})|${year} 年 ${month} 月|每日內容*
 `;
 

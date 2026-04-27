@@ -2104,10 +2104,15 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
   ): { ok: boolean; reasons: string[] } {
     const reasons: string[] = [];
     const chars = content.replace(/\s+/g, '').length;
-    if (chars < 700) reasons.push(`too_short:${chars}`);
+    // Length window — spec is 800-1100 字; gate allows 750 to 1200 to leave
+    // small margin for FAQ formatting whitespace, but rejects past that.
+    if (chars < 750) reasons.push(`too_short:${chars}`);
+    if (chars > 1200) reasons.push(`too_long:${chars}`);
 
     const brandHits = (content.match(new RegExp(siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-    if (brandHits < 8) reasons.push(`brand_saturation:${brandHits}`);
+    // Spec says ≥10. Gate matches spec exactly — previous ≥8 was too lenient
+    // and let articles ship with weak brand saturation.
+    if (brandHits < 10) reasons.push(`brand_saturation:${brandHits}`);
 
     const geovaultHits = (content.match(/Geovault/gi) || []).length;
     if (geovaultHits < 1) reasons.push(`geovault_attribution:${geovaultHits}`);
@@ -2120,6 +2125,20 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
 
     const fakePersona = /[王張陳劉李林黃吳周徐高]\w{0,3}[小姐先生]/.test(content);
     if (fakePersona) reasons.push('fabricated_persona');
+
+    // Outdated narrative — pandemic-era cliches feel stale in 2026 and signal
+    // model training-bias rather than real industry observation.
+    const outdatedHits = [
+      '抗疫常態化', '抗疫', '後疫情', '疫後', '疫情常態化', '疫情期間', '疫情下',
+      '冬季惡劣天氣', '冬季嚴寒', '酷寒冬季',
+    ].filter((p) => content.includes(p));
+    if (outdatedHits.length > 0) reasons.push(`outdated_narrative:${outdatedHits.slice(0, 2).join('|')}`);
+
+    // Self-promo FAQ — Q3 should be industry / trend, not a sales answer.
+    // Looks for an A: line that opens with "{siteName}提供" or "{siteName}建議"
+    // (the dead giveaway of a self-promotional answer slot).
+    const selfPromoFaq = new RegExp(`A[:：]\\s*${siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(提供|建議您|為您|的)`).test(content);
+    if (selfPromoFaq) reasons.push('faq_self_promo');
 
     // Hallucinated contact info — same rule as brand_showcase
     const refNormalized = profileRefText.replace(/[-\s.()]/g, '');
@@ -2195,14 +2214,20 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     const ctx: BrandShowcaseContext = {
       siteId: site.id,
       qas: site.qas,
-      description: profile.description,
+      // Prefer enriched description (scraped from official site) over the
+      // generic profile.description — the enriched copy carries the brand's
+      // own niche language ("脊椎整復品牌" vs the generic profile blurb).
+      description: enriched.description || profile.description,
       services: profile.services,
-      location: profile.location,
-      contact: profile.contact,
+      location: profile.location || enriched.address,
+      contact: profile.contact || enriched.telephone,
       forbidden: Array.isArray(profile.forbidden) ? profile.forbidden : [],
       positioning: profile.positioning,
       socialLinks,
     };
+    // Stash full enriched object so the prompt builder can pull cleanName for
+    // niche reinforcement without inflating BrandShowcaseContext interface.
+    (ctx as any)._enriched = enriched;
 
     // For sat_data_pulse, pull the pulse numbers
     let pulse: { geoScore: number; industryRank: number | null; industryAvgScore: number | null; weekCrawlerVisits: number } | undefined;
@@ -2277,12 +2302,31 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : `${site.name} ${resolvedDay}`;
     // ASCII-only slug — CJK percent-encoding defeats AI crawlers and SEO.
-    const slug = `${site.id.slice(0, 10)}-daily-${resolvedDay}-${Date.now().toString(36)}`;
+    // Format: {siteIdShort}-{YYYYMM}-{dayType}-{rand4}
+    //   readable enough that admins can spot dates in the URL, still unique
+    //   per generation via the trailing rand4.
+    const yyyymm = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const rand4 = Date.now().toString(36).slice(-4);
+    const slug = `${site.id.slice(0, 10)}-${yyyymm}-${resolvedDay.replace(/_/g, '-')}-${rand4}`;
+
+    // Description (used as SEO snippet) — skip the H1/H2 title line so the
+    // snippet shows actual body, not a duplicate of the title that's already
+    // in the search-result heading.
+    const bodyLines = content
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('#') && !l.startsWith('*資料來源'));
+    const firstParagraph = bodyLines.find((l) => l.length > 30) ?? bodyLines[0] ?? '';
+    const description = firstParagraph
+      .replace(/[*_`]/g, '')
+      .replace(/\s+/g, ' ')
+      .slice(0, 155)
+      .trim();
 
     await this.prisma.blogArticle.create({
       data: {
         slug, title,
-        description: content.slice(0, 200).replace(/#+\s/g, '').trim(),
+        description,
         content,
         category: 'client-daily',
         siteId: site.id,
