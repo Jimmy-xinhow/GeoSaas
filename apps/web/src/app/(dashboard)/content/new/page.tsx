@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Sparkles, Loader2, ArrowLeft, Copy, RefreshCw } from 'lucide-react'
+import { Sparkles, Loader2, ArrowLeft, Copy, RefreshCw, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -117,6 +117,13 @@ export default function ContentNewPage() {
     }
   }
 
+  const resultDescription =
+    contentType === 'faq'
+      ? 'FAQ JSON-LD 結構化資料'
+      : contentType === 'article'
+        ? 'Markdown 權威文章'
+        : '品牌知識庫內容'
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -127,168 +134,174 @@ export default function ContentNewPage() {
         </p>
       </div>
 
-      {/* Step 1: Content type selector */}
-      <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">
-          步驟 1：選擇內容類型
-        </h3>
-        <ContentTypeSelector value={contentType} onChange={setContentType} />
-      </div>
+      {/* Two-column layout: form on the left, live preview on the right */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Left column — Steps 1 & 2 */}
+        <div className="space-y-6 min-w-0">
+          {/* Step 1: Content type selector */}
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">
+              步驟 1：選擇內容類型
+            </h3>
+            <ContentTypeSelector value={contentType} onChange={setContentType} />
+          </div>
 
-      {/* Step 2: Form */}
-      <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">
-          步驟 2：填寫品牌資訊
-        </h3>
-        <Card className="bg-white/5 border-white/10">
-          <CardHeader>
-            <CardTitle>品牌資訊</CardTitle>
-            <CardDescription>
-              提供品牌相關資訊，AI 將根據這些資訊生成優化內容
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="brand">品牌名稱</Label>
-                <Input
-                  id="brand"
-                  placeholder="例如：TechFlow"
-                  value={brandName}
-                  onChange={(e) => setBrandName(e.target.value)}
-                  disabled={generateContent.isPending}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="industry">行業</Label>
-                <Input
-                  id="industry"
-                  placeholder="例如：科技 / SaaS"
-                  value={industry}
-                  onChange={(e) => setIndustry(e.target.value)}
-                  disabled={generateContent.isPending}
-                />
-              </div>
-            </div>
+          {/* Step 2: Form */}
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">
+              步驟 2：填寫品牌資訊
+            </h3>
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader>
+                <CardTitle>品牌資訊</CardTitle>
+                <CardDescription>
+                  提供品牌相關資訊，AI 將根據這些資訊生成優化內容
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="brand">品牌名稱</Label>
+                    <Input
+                      id="brand"
+                      placeholder="例如：TechFlow"
+                      value={brandName}
+                      onChange={(e) => setBrandName(e.target.value)}
+                      disabled={generateContent.isPending}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="industry">行業</Label>
+                    <Input
+                      id="industry"
+                      placeholder="例如：科技 / SaaS"
+                      value={industry}
+                      onChange={(e) => setIndustry(e.target.value)}
+                      disabled={generateContent.isPending}
+                    />
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="keywords">關鍵字（逗號分隔）</Label>
-              <Input
-                id="keywords"
-                placeholder="例如：AI, 數位轉型, 雲端服務, SaaS"
-                value={keywords}
-                onChange={(e) => setKeywords(e.target.value)}
-                disabled={generateContent.isPending}
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="keywords">關鍵字（逗號分隔）</Label>
+                  <Input
+                    id="keywords"
+                    placeholder="例如：AI, 數位轉型, 雲端服務, SaaS"
+                    value={keywords}
+                    onChange={(e) => setKeywords(e.target.value)}
+                    disabled={generateContent.isPending}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label>語言</Label>
-              <Select
-                value={language}
-                onValueChange={setLanguage}
-                disabled={generateContent.isPending}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="選擇語言" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="zh-TW">中文（繁體）</SelectItem>
-                  <SelectItem value="zh-CN">中文（簡體）</SelectItem>
-                  <SelectItem value="en">英文</SelectItem>
-                  <SelectItem value="ja">日文</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label>語言</Label>
+                  <Select
+                    value={language}
+                    onValueChange={setLanguage}
+                    disabled={generateContent.isPending}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="選擇語言" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="zh-TW">中文（繁體）</SelectItem>
+                      <SelectItem value="zh-CN">中文（簡體）</SelectItem>
+                      <SelectItem value="en">英文</SelectItem>
+                      <SelectItem value="ja">日文</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <Button
-              onClick={handleGenerate}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
-              disabled={generateContent.isPending}
-            >
-              {generateContent.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  AI 正在生成內容...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  開始生成
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Loading indicator for long generation */}
-      {generateContent.isPending && (
-        <Card className="border-blue-500/30 bg-blue-500/20">
-          <CardContent className="flex items-center gap-4 py-6">
-            <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
-            <div>
-              <p className="font-medium text-blue-300">AI 正在生成內容...</p>
-              <p className="text-sm text-blue-400 mt-1">
-                AI 內容生成可能需要 10-30 秒，請耐心等待
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Preview area */}
-      {generatedResult && (
-        <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-3">
-            生成結果預覽
-          </h3>
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-purple-600" />
-                AI 生成結果
-              </CardTitle>
-              <CardDescription>
-                {contentType === 'faq'
-                  ? 'FAQ JSON-LD 結構化資料'
-                  : contentType === 'article'
-                  ? 'Markdown 權威文章'
-                  : '品牌知識庫內容'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-2 text-sm text-muted-foreground">
-                標題：{generatedResult.title}
-              </div>
-              <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm leading-relaxed max-h-[500px] overflow-y-auto">
-                <code>{generatedResult.body}</code>
-              </pre>
-              <div className="flex gap-3 mt-4">
                 <Button
-                  onClick={handleNavigateToDetail}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  返回內容列表
-                </Button>
-                <Button variant="outline" onClick={handleCopyToClipboard}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  複製到剪貼簿
-                </Button>
-                <Button
-                  variant="outline"
                   onClick={handleGenerate}
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
                   disabled={generateContent.isPending}
                 >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  重新生成
+                  {generateContent.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      AI 正在生成內容...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      開始生成
+                    </>
+                  )}
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      )}
+
+        {/* Right column — preview / loading / empty state */}
+        <div className="lg:sticky lg:top-6 min-w-0">
+          {generatedResult ? (
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-purple-400" />
+                  AI 生成結果
+                </CardTitle>
+                <CardDescription>{resultDescription}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-2 text-sm text-muted-foreground">
+                  標題：{generatedResult.title}
+                </div>
+                <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm leading-relaxed max-h-[60vh] overflow-y-auto">
+                  <code>{generatedResult.body}</code>
+                </pre>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <Button
+                    onClick={handleNavigateToDetail}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    返回內容列表
+                  </Button>
+                  <Button variant="outline" onClick={handleCopyToClipboard}>
+                    <Copy className="h-4 w-4 mr-2" />
+                    複製
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleGenerate}
+                    disabled={generateContent.isPending}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    重新生成
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : generateContent.isPending ? (
+            <Card className="border-blue-500/30 bg-blue-500/10">
+              <CardContent className="flex flex-col items-center justify-center text-center gap-4 min-h-[60vh] py-10">
+                <Loader2 className="h-12 w-12 text-blue-400 animate-spin" />
+                <div>
+                  <p className="font-medium text-blue-300">AI 正在生成內容…</p>
+                  <p className="text-sm text-blue-400 mt-1">
+                    通常需要 10–30 秒，請稍候
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-dashed border-white/10 bg-white/[0.02]">
+              <CardContent className="flex flex-col items-center justify-center text-center gap-3 min-h-[60vh] py-10 text-gray-400">
+                <FileText className="h-12 w-12 text-gray-600" />
+                <div>
+                  <p className="font-medium">生成結果會出現在這裡</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    在左側填寫品牌資訊後按「開始生成」
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
