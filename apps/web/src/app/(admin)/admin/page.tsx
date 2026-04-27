@@ -6,6 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import apiClient from '@/lib/api-client';
 import { Globe, FileText, Users, Database, RefreshCw, Zap, BarChart3, Activity, Bot, Eye, EyeOff, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
+import { INDUSTRIES } from '@geovault/shared';
+
+const INDUSTRY_LABEL: Record<string, string> = Object.fromEntries(
+  INDUSTRIES.map((i) => [i.value, i.label]),
+);
 
 interface BotCount { bot: string; count: number; }
 interface RealVisit {
@@ -462,8 +467,14 @@ export default function AdminDashboard() {
             {stats?.industries
               .sort((a, b) => b.count - a.count)
               .map((ind) => (
-                <div key={ind.industry} className="flex items-center justify-between p-2 bg-white/5 rounded text-sm">
-                  <span className="text-gray-300 truncate">{ind.industry}</span>
+                <div
+                  key={ind.industry}
+                  className="flex items-center justify-between p-2 bg-white/5 rounded text-sm"
+                  title={ind.industry}
+                >
+                  <span className="text-gray-300 truncate">
+                    {INDUSTRY_LABEL[ind.industry] ?? ind.industry}
+                  </span>
                   <span className="font-mono font-bold text-white ml-2">{ind.count}</span>
                 </div>
               ))}
