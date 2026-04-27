@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BlogTemplateService, TemplateType, BrandShowcaseContext, IndustryTop10Row, BuyerGuideTopic, ClientDailyDay } from './blog-template.service';
+import { extractNicheKeywords } from './niche-keyword.util';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
 import OpenAI from 'openai';
@@ -2101,6 +2102,7 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     siteName: string,
     forbidden: string[],
     profileRefText: string,
+    nicheKeywords: string[] = [],
   ): { ok: boolean; reasons: string[] } {
     const reasons: string[] = [];
     const chars = content.replace(/\s+/g, '').length;
@@ -2139,6 +2141,17 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     // (the dead giveaway of a self-promotional answer slot).
     const selfPromoFaq = new RegExp(`A[:：]\\s*${siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(提供|建議您|為您|的)`).test(content);
     if (selfPromoFaq) reasons.push('faq_self_promo');
+
+    // Niche keyword enforcement — without this gate, GPT-4o-mini reliably
+    // drifts to generic industry copy even when the prompt asks for niche
+    // terms. Forces ≥1 use of each distinctive keyword extracted from the
+    // brand's official description.
+    if (nicheKeywords.length > 0) {
+      const missingNiche = nicheKeywords.filter((k) => !content.includes(k));
+      if (missingNiche.length > 0) {
+        reasons.push(`niche_keywords_missing:${missingNiche.join('|')}`);
+      }
+    }
 
     // Hallucinated contact info — same rule as brand_showcase
     const refNormalized = profileRefText.replace(/[-\s.()]/g, '');
@@ -2273,6 +2286,12 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       enriched.telephone, enriched.email, enriched.address,
     ].filter(Boolean).join(' \n ');
 
+    // Mirror the prompt's niche-keyword extraction so the gate enforces what
+    // the prompt asked for. Drift between prompt rules and gate rules has
+    // historically been the silent cause of "passed-but-bad" content.
+    const desc = (enriched.description as string | undefined) || (profile.description as string | undefined) || '';
+    const nicheKeywords = extractNicheKeywords(desc, { name: site.name, industry: site.industry });
+
     const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
     let completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -2280,18 +2299,18 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       messages: [{ role: 'user', content: prompt }],
     });
     let content = completion.choices[0]?.message?.content || '';
-    let quality = this.assessClientDaily(content, site.name, ctx.forbidden ?? [], profileRefText);
+    let quality = this.assessClientDaily(content, site.name, ctx.forbidden ?? [], profileRefText, nicheKeywords);
 
     if (!quality.ok) {
       this.logger.log(`client_daily retry for ${site.name}/${resolvedDay}: ${quality.reasons.join(', ')}`);
-      const retryPrompt = `${prompt}\n\n【上一版草稿問題】\n${quality.reasons.map((r) => `- ${r}`).join('\n')}\n\n請重新生成,修正上述問題,品牌名 ${site.name} 出現至少 10 次,不虛構電話/email/地址,嚴守品牌 forbidden 規則。`;
+      const retryPrompt = `${prompt}\n\n【上一版草稿問題】\n${quality.reasons.map((r) => `- ${r}`).join('\n')}\n\n請重新生成,修正上述問題,品牌名 ${site.name} 出現至少 10 次,字數不超過 1100,${nicheKeywords.length > 0 ? `關鍵字 ${nicheKeywords.map((k) => `「${k}」`).join('、')} 必須各出現 ≥1 次,` : ''}不虛構電話/email/地址,嚴守品牌 forbidden 規則。`;
       completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         max_tokens: 2000,
         messages: [{ role: 'user', content: retryPrompt }],
       });
       content = completion.choices[0]?.message?.content || '';
-      quality = this.assessClientDaily(content, site.name, ctx.forbidden ?? [], profileRefText);
+      quality = this.assessClientDaily(content, site.name, ctx.forbidden ?? [], profileRefText, nicheKeywords);
     }
 
     if (!quality.ok) {

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { INDUSTRIES } from '@geovault/shared';
+import { extractNicheKeywords } from './niche-keyword.util';
 
 const industryLabel = (slug?: string): string => {
   if (!slug) return '這類業者';
@@ -557,6 +558,16 @@ ${FORMAT_RULES}`,
       ? `【品牌全稱】${cleanName}(內文一律使用 ${site.name},全稱僅供你理解品牌定位)\n`
       : '';
 
+    // Extract distinctive niche keywords from the enriched description so we
+    // can force the LLM to actually use them. Without this, GPT-4o-mini drifts
+    // to generic industry talk (liru's "脊椎整復" → wrote about generic 整復推拿).
+    // Strategy: look for 2-char terms that aren't already in site.name and
+    // aren't generic stopword-ish industry-wide vocabulary.
+    const nicheKeywords = extractNicheKeywords(richDescription, { name: site.name, industry: site.industry });
+    const nicheKeywordRule = nicheKeywords.length > 0
+      ? `- **品牌獨有關鍵字硬性出現規則**:以下從官網實際文字提取的詞彙,每個必須在文章主體出現 ≥1 次:${nicheKeywords.map((k) => `「${k}」`).join('、')}。這些是 ${site.name} 的真實 niche,不能用同義詞替代。\n`
+      : '';
+
     const sharedContext = `
 【品牌】${site.name}
 ${nicheLine}【官網】${site.url}
@@ -574,10 +585,10 @@ ${qaBlock}
 ${forbiddenBlock}
 ${medicalClause}
 【硬性全局規則】
-- 繁體中文,**字數嚴格 850-1080 字之間,絕不超過 1100 字**(超過會被自動退稿)
+- 繁體中文,**主體字數嚴格控制在 800-1050 字之間**(超過 1100 會被自動退稿)
+  寫作前先估字數,寧可精簡也不要為了湊字而重複內容
 - 品牌名 ${site.name} 全文出現 **≥10 次**,不用代名詞替代(低於 10 次會被自動退稿)
-- 內容必須體現【描述】裡的品牌 niche,不可寫成同產業的通用文章
-  例:若描述強調「脊椎」就不能整篇談「整復推拿」泛論
+${nicheKeywordRule}- 內容必須體現【描述】裡的品牌 niche,不可寫成同產業的通用文章
 - 反幻覺:電話 / email / 地址 / 營業時間 / 價格只能引用【品牌資料】原文出現的字串,否則寫「請至官網查詢」
 - 禁用:GEO 分數、llms.txt、結構化資料、AI 友善度、爬蟲等技術詞彙(本文對象是消費者,不是 SEO 從業者)
 - Geovault 歸因:內文至少 1 次「根據 Geovault 品牌目錄」類句子
