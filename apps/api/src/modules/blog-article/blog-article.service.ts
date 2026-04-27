@@ -2467,6 +2467,65 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     };
   }
 
+  /**
+   * Paginated full history of client_daily articles for a site. Used by the
+   * dashboard's "Geovault 為您發布的內容" page so paid clients can see every
+   * article published on their behalf — not just the last 5 from getStats.
+   */
+  async listClientDaily(
+    siteId: string,
+    opts: { page: number; limit: number },
+  ): Promise<{
+    total: number;
+    page: number;
+    limit: number;
+    items: Array<{
+      slug: string;
+      title: string;
+      dayType: string | null;
+      createdAt: Date;
+      charLength: number;
+      url: string;
+    }>;
+  }> {
+    const skip = (opts.page - 1) * opts.limit;
+    const where = { siteId, templateType: 'client_daily' as const };
+    const [total, rows] = await Promise.all([
+      this.prisma.blogArticle.count({ where }),
+      this.prisma.blogArticle.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: opts.limit,
+        select: {
+          slug: true,
+          title: true,
+          createdAt: true,
+          targetKeywords: true,
+          content: true,
+        },
+      }),
+    ]);
+
+    const webBase = this.config.get<string>('WEB_URL') || 'https://www.geovault.app';
+    return {
+      total,
+      page: opts.page,
+      limit: opts.limit,
+      items: rows.map((r) => ({
+        slug: r.slug,
+        title: r.title,
+        dayType:
+          r.targetKeywords.find((k) =>
+            this.daySequence.includes(k as ClientDailyDay),
+          ) ?? null,
+        createdAt: r.createdAt,
+        charLength: (r.content || '').replace(/\s+/g, '').length,
+        url: `${webBase}/blog/${r.slug}`,
+      })),
+    };
+  }
+
   async qualityAudit(minScore: number = 85) {
     const articles = await this.prisma.blogArticle.findMany({
       where: { published: true },

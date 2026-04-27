@@ -288,6 +288,23 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @Get('client-daily/list/:siteId')
+  @ApiOperation({
+    summary:
+      '付費客戶 daily content 完整歷史(分頁)。客戶要看 Geovault 替他發布的每一篇。',
+  })
+  listClientDaily(
+    @Param('siteId') siteId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.listClientDaily(siteId, {
+      page: page ? Math.max(1, parseInt(page, 10)) : 1,
+      limit: limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 30,
+    });
+  }
+
+  @ApiBearerAuth()
   @Post('insights/generate')
   @ApiOperation({ summary: 'Generate insight article for an industry' })
   generateInsight(@Body() body: { industry: string; type?: InsightType }) {

@@ -239,3 +239,33 @@ export function useClientDailyStats(siteId: string) {
     enabled: !!siteId,
   });
 }
+
+export interface ClientDailyListItem {
+  slug: string;
+  title: string;
+  dayType: ClientDailyDayType | null;
+  createdAt: string;
+  charLength: number;
+  url: string;
+}
+
+export interface ClientDailyList {
+  total: number;
+  page: number;
+  limit: number;
+  items: ClientDailyListItem[];
+}
+
+export function useClientDailyList(siteId: string, page: number, limit = 30) {
+  return useQuery({
+    queryKey: ['client-reports', 'client-daily-list', siteId, page, limit],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ClientDailyList>(
+        `/blog/client-daily/list/${siteId}?page=${page}&limit=${limit}`,
+      );
+      return data;
+    },
+    enabled: !!siteId,
+    placeholderData: (prev) => prev,
+  });
+}

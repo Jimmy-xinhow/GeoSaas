@@ -33,6 +33,7 @@ import { useSites, useCreateSite } from '@/hooks/use-sites'
 import { useTriggerScan, useScoreTrend } from '@/hooks/use-scan'
 import { useContents } from '@/hooks/use-content'
 import { useMonitorDashboard } from '@/hooks/use-monitor'
+import { useClientDailyStats } from '@/hooks/use-client-reports'
 
 function getScoreStatus(score: number): string {
   if (score >= 80) return '優秀'
@@ -215,6 +216,11 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-white">總覽</h1>
         <p className="text-muted-foreground mt-1">歡迎回來，以下是您的 GEO 概況</p>
       </div>
+
+      {/* Geovault 為您發布的內容 — transparency banner. Picks the first
+          isClient site so paid users immediately see what their subscription
+          delivered this month, without having to dig into a sub-page. */}
+      <PublishedContentBanner sites={sites as any[]} />
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -411,5 +417,67 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/**
+ * Compact summary card on the Dashboard home that surfaces the count of
+ * client_daily articles Geovault has published on the user's behalf this
+ * month / week, with a CTA into the full /published-content listing.
+ *
+ * Self-hides when the user has neither plan entitlement nor history — keeps
+ * Dashboard clean for FREE users while making the value visible to paid
+ * subscribers from the first screen.
+ */
+function PublishedContentBanner({ sites }: { sites: any[] | undefined }) {
+  const firstClientSite = useMemo(() => {
+    if (!sites || sites.length === 0) return null
+    return sites.find((s) => s.isClient) ?? null
+  }, [sites])
+
+  const { data: stats } = useClientDailyStats(firstClientSite?.id ?? '')
+
+  if (!firstClientSite || !stats) return null
+  // Hide when user has no entitlement AND no history.
+  if (stats.activeDaysPerWeek === 0 && stats.totalCount === 0) return null
+
+  return (
+    <a
+      href="/published-content"
+      className="block group"
+    >
+      <Card className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border-blue-500/20 hover:border-blue-400/40 transition-colors">
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="p-3 rounded-lg bg-blue-500/20 shrink-0">
+                <FileText className="h-6 w-6 text-blue-300" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm text-blue-200 font-medium">Geovault 為您發布的 AI 可引用內容</p>
+                <p className="text-xs text-gray-400 mt-0.5 truncate">
+                  {firstClientSite.name} · {stats.plan} 方案 · 每週自動 {stats.activeDaysPerWeek} 篇
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6 shrink-0">
+              <div className="text-right">
+                <p className="text-2xl font-bold text-green-400">{stats.monthCount}</p>
+                <p className="text-[10px] text-gray-400">本月</p>
+              </div>
+              <div className="text-right hidden sm:block">
+                <p className="text-2xl font-bold text-blue-300">{stats.weekCount}</p>
+                <p className="text-[10px] text-gray-400">本週</p>
+              </div>
+              <div className="text-right hidden md:block">
+                <p className="text-2xl font-bold text-white">{stats.totalCount}</p>
+                <p className="text-[10px] text-gray-400">總數</p>
+              </div>
+              <span className="text-blue-300 text-sm group-hover:translate-x-0.5 transition-transform">查看全部 →</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </a>
   )
 }
