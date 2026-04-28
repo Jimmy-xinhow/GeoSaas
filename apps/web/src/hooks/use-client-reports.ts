@@ -161,6 +161,28 @@ export interface GeoComprehensive {
     tier: string | null;
     isMe: boolean;
   }>;
+  geovaultCoverage: {
+    articleCount: number;
+    totalVisits: number;
+    last24h: number;
+    last7d: number;
+    last30d: number;
+    byBot: Array<{ botName: string; botOrg: string; count: number }>;
+    perArticle: Array<{
+      slug: string;
+      title: string;
+      templateType: string;
+      createdAt: string;
+      visits: number;
+    }>;
+    recent: Array<{
+      botName: string;
+      botOrg: string;
+      url: string;
+      visitedAt: string;
+      statusCode: number | null;
+    }>;
+  };
 }
 
 export interface ReportQuotaStatus {

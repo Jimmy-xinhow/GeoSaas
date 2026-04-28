@@ -1022,6 +1022,51 @@ export class ClientReportService implements OnModuleInit {
       industryRank = higher + 1;
     }
 
+    // ─── Geovault coverage — visits to articles WE published on the
+    // client's behalf at /blog/<slug>. These visits are recorded with
+    // siteId=Geovault (not the client's siteId), so the client's own
+    // crawler block above shows 0 even when bots are actively crawling
+    // their content. This block makes the value visible.
+    const clientArticles = await this.prisma.blogArticle.findMany({
+      where: { siteId, published: true },
+      select: { slug: true, title: true, templateType: true, createdAt: true },
+    });
+    const slugList = clientArticles.map((a) => a.slug);
+    const coverageVisits = slugList.length > 0
+      ? await this.prisma.crawlerVisit.findMany({
+          where: {
+            isSeeded: false,
+            OR: slugList.map((s) => ({ url: { contains: s } })),
+          },
+          select: { botName: true, botOrg: true, url: true, visitedAt: true, statusCode: true },
+          orderBy: { visitedAt: 'desc' },
+        })
+      : [];
+
+    const now = Date.now();
+    const visitsLast24h = coverageVisits.filter((v) => v.visitedAt.getTime() > now - 86400000).length;
+    const visitsLast7d  = coverageVisits.filter((v) => v.visitedAt.getTime() > now - 7 * 86400000).length;
+    const visitsLast30d = coverageVisits.filter((v) => v.visitedAt.getTime() > now - 30 * 86400000).length;
+
+    const coverageByBot: Record<string, { count: number; org: string }> = {};
+    coverageVisits.forEach((v) => {
+      if (!coverageByBot[v.botName]) coverageByBot[v.botName] = { count: 0, org: v.botOrg };
+      coverageByBot[v.botName].count++;
+    });
+
+    // Per-article hit count, joined back with article metadata so the UI can
+    // show "this brand_showcase post got 5 hits, this client_daily got 2".
+    const coveragePerArticle = clientArticles.map((a) => {
+      const hits = coverageVisits.filter((v) => v.url.includes(a.slug)).length;
+      return {
+        slug: a.slug,
+        title: a.title,
+        templateType: a.templateType,
+        createdAt: a.createdAt,
+        visits: hits,
+      };
+    }).sort((a, b) => b.visits - a.visits);
+
     // Bucket crawler visits into 13 weekly buckets so the UI can render
     // a simple bar chart without shipping raw 5000-row arrays.
     const weekBuckets: Array<{ weekStart: string; count: number }> = [];
@@ -1128,6 +1173,27 @@ export class ClientReportService implements OnModuleInit {
         tier: p.tier,
         isMe: p.id === site.id,
       })),
+      // Coverage = real AI-bot visits to articles Geovault published for
+      // this client at /blog/<slug>. Distinct from crawler.* above which
+      // tracks visits to the client's OWN site.
+      geovaultCoverage: {
+        articleCount: clientArticles.length,
+        totalVisits: coverageVisits.length,
+        last24h: visitsLast24h,
+        last7d: visitsLast7d,
+        last30d: visitsLast30d,
+        byBot: Object.entries(coverageByBot)
+          .map(([botName, v]) => ({ botName, botOrg: v.org, count: v.count }))
+          .sort((a, b) => b.count - a.count),
+        perArticle: coveragePerArticle,
+        recent: coverageVisits.slice(0, 20).map((v) => ({
+          botName: v.botName,
+          botOrg: v.botOrg,
+          url: v.url,
+          visitedAt: v.visitedAt,
+          statusCode: v.statusCode,
+        })),
+      },
     };
   }
 }

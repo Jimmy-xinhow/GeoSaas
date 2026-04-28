@@ -99,10 +99,21 @@ export class BlogArticleService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  /** Get a single article by slug */
+  /** Get a single article by slug.
+   *
+   * Falls back to aliasSlugs lookup so URLs from before the CJK→ASCII slug
+   * migration keep resolving (and the frontend can 301 to the canonical
+   * slug). Returns the canonical record either way; caller is responsible
+   * for issuing the redirect when `slug !== article.slug`.
+   */
   async getBySlug(slug: string) {
-    return this.prisma.blogArticle.findUnique({
+    const direct = await this.prisma.blogArticle.findUnique({
       where: { slug },
+      include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
+    });
+    if (direct) return direct;
+    return this.prisma.blogArticle.findFirst({
+      where: { aliasSlugs: { has: slug } },
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
   }
@@ -1351,6 +1362,30 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       `resubmit-all kicked off: ${urls.length} URLs (brand_showcase=${bs}, top10=${top})`,
     );
     return { submitted: urls.length, brandShowcase: bs, industryTop10: top };
+  }
+
+  /**
+   * Push every migrated (aliasSlugs not empty) article to IndexNow so search
+   * engines pick up the new ASCII slugs after the CJK→ASCII slug rewrite.
+   * One-time bulk action; no need to schedule it.
+   */
+  async resubmitMigratedArticlesToIndexNow(): Promise<{ submitted: number }> {
+    const webUrl = this.config.get('FRONTEND_URL') || 'https://www.geovault.app';
+    const articles = await this.prisma.blogArticle.findMany({
+      where: { published: true, aliasSlugs: { isEmpty: false } },
+      select: { slug: true },
+    });
+    const host = new URL(webUrl).host;
+    const chunkSize = 100;
+    const urls = articles.map((a) => `${webUrl}/blog/${a.slug}`);
+    for (let i = 0; i < urls.length; i += chunkSize) {
+      const chunk = urls.slice(i, i + chunkSize);
+      this.indexNowService.submitBatch(chunk, host).catch((err) => {
+        this.logger.warn(`migrated-resubmit chunk ${i} failed: ${err}`);
+      });
+    }
+    this.logger.log(`migrated-resubmit kicked off: ${urls.length} URLs`);
+    return { submitted: urls.length };
   }
 
   /**

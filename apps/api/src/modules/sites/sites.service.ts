@@ -124,9 +124,26 @@ export class SitesService {
   // ─── Client Tagging (SUPER_ADMIN only) ───
 
   async toggleClient(siteId: string, isClient: boolean) {
+    // When promoting a site to paid client, ensure it has a crawler tracking
+    // token so the client can install the snippet immediately. Without this,
+    // newly-promoted clients have crawlerToken=null until they (or admin)
+    // manually visit the snippet page (lazy generation in
+    // crawler-tracking.service#getSnippet). That gap caused 立如 to silently
+    // miss tracking for 2.5 months.
+    const data: { isClient: boolean; crawlerToken?: string } = { isClient };
+    if (isClient) {
+      const existing = await this.prisma.site.findUnique({
+        where: { id: siteId },
+        select: { crawlerToken: true },
+      });
+      if (!existing?.crawlerToken) {
+        const { randomBytes } = await import('crypto');
+        data.crawlerToken = randomBytes(24).toString('hex');
+      }
+    }
     return this.prisma.site.update({
       where: { id: siteId },
-      data: { isClient },
+      data,
     });
   }
 

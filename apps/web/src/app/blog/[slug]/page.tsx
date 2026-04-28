@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getPost, getAllPosts } from '@/content/blog/posts';
 import ArticleClient from './article-client';
 import PublicNavbar from '@/components/layout/public-navbar';
@@ -87,7 +87,10 @@ function extractFaqJsonLd(content: string) {
 export default async function BlogPostPage({ params }: Props) {
   const staticPost = getPost(params.slug);
 
-  // If not a static post, check API
+  // If not a static post, check API. The API now resolves both canonical
+  // slugs and aliasSlugs (legacy CJK slugs that were rewritten to ASCII).
+  // If the requested slug !== article's canonical slug, 301 to canonical
+  // so search engines consolidate index signals.
   if (!staticPost) {
     try {
       const res = await fetch(`${API_URL}/api/blog/articles/${params.slug}`, { next: { revalidate: 3600 } });
@@ -95,7 +98,13 @@ export default async function BlogPostPage({ params }: Props) {
       const data = await res.json();
       const article = data?.data || data;
       if (!article) notFound();
-    } catch {
+      if (article.slug && article.slug !== params.slug) {
+        redirect(`/blog/${article.slug}`);
+      }
+    } catch (err) {
+      // redirect() throws NEXT_REDIRECT — let it propagate, only catch
+      // genuine fetch failures.
+      if ((err as any)?.digest?.startsWith?.('NEXT_REDIRECT')) throw err;
       notFound();
     }
   }

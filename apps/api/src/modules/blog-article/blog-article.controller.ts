@@ -192,6 +192,18 @@ export class BlogArticleController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('resubmit-migrated/indexnow')
+  @ApiOperation({
+    summary:
+      'One-shot: push every article whose slug was rewritten (aliasSlugs not empty) to IndexNow. Use after the CJK→ASCII migration so engines re-crawl the new URLs.',
+  })
+  async resubmitMigratedToIndexNow() {
+    return this.service.resubmitMigratedArticlesToIndexNow();
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Post('resubmit-all/indexnow')
   @ApiOperation({
     summary:

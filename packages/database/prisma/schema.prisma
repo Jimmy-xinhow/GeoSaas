@@ -341,6 +341,11 @@ model BlogArticle {
   readingTimeMinutes  Int       @default(5)
   lastRegeneratedAt   DateTime?
 
+  // Legacy slug history — when we rewrite a slug (e.g. CJK → ASCII for AI
+  // crawler-friendliness), the old slug goes here so /blog/[oldSlug] keeps
+  // working via 301 redirect to the canonical slug.
+  aliasSlugs          String[]  @default([])
+
   // Success case relation
   successCase         GeoSuccessCase?
 

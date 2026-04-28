@@ -852,7 +852,7 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
   if (isLoading) return <Skeleton className="h-96" />;
   if (!data) return <Card><CardContent className="p-8 text-center text-muted-foreground">無資料</CardContent></Card>;
 
-  const { overview, scanTrend, indicators, crawler, content, peers, site, freshness } = data;
+  const { overview, scanTrend, indicators, crawler, content, peers, site, freshness, geovaultCoverage } = data;
   const maxTrend = Math.max(100, ...scanTrend.map((s) => s.score));
   const maxBucket = Math.max(1, ...crawler.byWeek.map((w) => w.count));
 
@@ -1046,6 +1046,93 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
                         <span className="text-gray-500 flex-1 truncate">{r.url}</span>
                         <span className="text-gray-500 shrink-0">{new Date(r.visitedAt).toLocaleDateString('zh-TW')}</span>
                       </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Block 4.5: Geovault Coverage — visits to articles WE published for this
+          client at /blog/<slug>. Critical disambiguation: the block above tracks
+          visits to the client's OWN site (which is often 0 for sites that can't
+          install our tracking snippet, e.g. GitHub Pages). This block tracks
+          visits to the AI-citable content WE produced on their behalf —
+          arguably the more meaningful number for paid clients. */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">
+              Geovault 代發內容 AI 爬蟲覆蓋
+              <span className="text-xs text-gray-400 font-normal ml-2">
+                ({geovaultCoverage.articleCount} 篇文章發布在 geovault.app/blog/...)
+              </span>
+            </CardTitle>
+            <Badge variant="outline" className="text-blue-300 border-blue-500/30 text-xs">
+              真實 AI bot
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-3 rounded bg-white/5 border border-white/10 text-center">
+              <p className="text-2xl font-bold text-green-400">{geovaultCoverage.last24h}</p>
+              <p className="text-[10px] text-gray-400 mt-1">過去 24 小時</p>
+            </div>
+            <div className="p-3 rounded bg-white/5 border border-white/10 text-center">
+              <p className="text-2xl font-bold text-blue-300">{geovaultCoverage.last7d}</p>
+              <p className="text-[10px] text-gray-400 mt-1">過去 7 天</p>
+            </div>
+            <div className="p-3 rounded bg-white/5 border border-white/10 text-center">
+              <p className="text-2xl font-bold text-purple-300">{geovaultCoverage.last30d}</p>
+              <p className="text-[10px] text-gray-400 mt-1">過去 30 天</p>
+            </div>
+            <div className="p-3 rounded bg-white/5 border border-white/10 text-center">
+              <p className="text-2xl font-bold text-white">{geovaultCoverage.totalVisits}</p>
+              <p className="text-[10px] text-gray-400 mt-1">歷史總訪問</p>
+            </div>
+          </div>
+
+          {geovaultCoverage.totalVisits === 0 ? (
+            <p className="text-xs text-yellow-400/80 mt-2">
+              文章已發布,但尚未被 AI 爬蟲抓到。新文章通常 24-72 小時後 Bingbot/Googlebot 先到,ChatGPT/ClaudeBot 約 3-14 天後跟上。
+            </p>
+          ) : (
+            <>
+              <div>
+                <p className="text-xs text-gray-400 mb-2">各 AI Bot 訪問次數</p>
+                <div className="flex flex-wrap gap-2">
+                  {geovaultCoverage.byBot.map((b) => (
+                    <div key={b.botName} className="px-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-sm">
+                      <span className="text-gray-300">{b.botName}</span>
+                      <span className="text-xs text-gray-500 ml-1">({b.botOrg})</span>
+                      <span className="text-blue-400 font-semibold ml-2">{b.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {geovaultCoverage.perArticle.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 mb-2">各文章被爬次數</p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {geovaultCoverage.perArticle.map((a) => (
+                      <a
+                        key={a.slug}
+                        href={`/blog/${a.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between gap-2 p-2 rounded bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-white truncate">{a.title}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">{a.templateType}</p>
+                        </div>
+                        <span className={`text-sm font-bold shrink-0 ${a.visits > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                          {a.visits}
+                        </span>
+                      </a>
                     ))}
                   </div>
                 </div>
