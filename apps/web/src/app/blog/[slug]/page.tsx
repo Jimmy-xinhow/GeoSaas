@@ -84,36 +84,35 @@ function extractFaqJsonLd(content: string) {
   };
 }
 
+// Deploy fingerprint: alias-301-2026-04-28
+// (Look for this in the rendered comment block to confirm latest build.)
+
 export default async function BlogPostPage({ params }: Props) {
   const staticPost = getPost(params.slug);
 
-  // If not a static post, resolve via API. The API now returns the canonical
-  // article when called with either the current slug OR a legacy aliasSlug
-  // (from the CJK→ASCII migration). We separate fetch errors from
-  // redirect/notFound semantics: only swallow genuine network failures, never
-  // the NEXT_REDIRECT / NEXT_NOT_FOUND control-flow exceptions thrown by
-  // next/navigation.
   let resolvedArticle: any = null;
   if (!staticPost) {
+    // Fetch outside try/catch so redirect()/notFound() exceptions cannot be
+    // accidentally swallowed. Network errors are caught explicitly.
     let res: Response | null = null;
     try {
-      res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(params.slug)}`, {
+      res = await fetch(`${API_URL}/api/blog/articles/${params.slug}`, {
         next: { revalidate: 3600 },
       });
     } catch {
-      notFound();
+      // network / DNS failure
     }
-    if (!res || !res.ok) notFound();
-    let data: any = null;
-    try { data = await res.json(); } catch { notFound(); }
+    if (!res) notFound();
+    if (!res.ok) notFound();
+    const data = await res.json().catch(() => null);
     resolvedArticle = data?.data || data;
     if (!resolvedArticle) notFound();
+  }
 
-    // 301 legacy slugs to canonical. redirect() throws — must run OUTSIDE
-    // any catch block so the NEXT_REDIRECT exception propagates cleanly.
-    if (resolvedArticle.slug && resolvedArticle.slug !== params.slug) {
-      redirect(`/blog/${resolvedArticle.slug}`);
-    }
+  // 301 legacy slugs to canonical. redirect() throws NEXT_REDIRECT — placed
+  // OUTSIDE any try/catch so the exception bubbles to Next's router.
+  if (resolvedArticle && resolvedArticle.slug && resolvedArticle.slug !== params.slug) {
+    redirect(`/blog/${resolvedArticle.slug}`);
   }
 
   let articleJsonLd: any = null;
@@ -169,7 +168,7 @@ export default async function BlogPostPage({ params }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gray-900 text-white" data-build="alias-301-2026-04-28">
       {articleJsonLd && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
       )}
