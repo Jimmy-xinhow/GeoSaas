@@ -87,6 +87,12 @@ function extractFaqJsonLd(content: string) {
 // Deploy fingerprint: alias-301-2026-04-28
 // (Look for this in the rendered comment block to confirm latest build.)
 
+// Force per-request rendering. Without this, Next.js's App Router caches
+// dynamic page responses keyed by URL — so when an article's slug changed
+// during the CJK→ASCII migration, requests to the legacy slug were still
+// served pre-migration HTML (no redirect) from cache.
+export const dynamic = 'force-dynamic';
+
 export default async function BlogPostPage({ params }: Props) {
   const staticPost = getPost(params.slug);
 
