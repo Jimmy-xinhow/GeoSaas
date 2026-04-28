@@ -87,25 +87,32 @@ function extractFaqJsonLd(content: string) {
 export default async function BlogPostPage({ params }: Props) {
   const staticPost = getPost(params.slug);
 
-  // If not a static post, check API. The API now resolves both canonical
-  // slugs and aliasSlugs (legacy CJK slugs that were rewritten to ASCII).
-  // If the requested slug !== article's canonical slug, 301 to canonical
-  // so search engines consolidate index signals.
+  // If not a static post, resolve via API. The API now returns the canonical
+  // article when called with either the current slug OR a legacy aliasSlug
+  // (from the CJK→ASCII migration). We separate fetch errors from
+  // redirect/notFound semantics: only swallow genuine network failures, never
+  // the NEXT_REDIRECT / NEXT_NOT_FOUND control-flow exceptions thrown by
+  // next/navigation.
+  let resolvedArticle: any = null;
   if (!staticPost) {
+    let res: Response | null = null;
     try {
-      const res = await fetch(`${API_URL}/api/blog/articles/${params.slug}`, { next: { revalidate: 3600 } });
-      if (!res.ok) notFound();
-      const data = await res.json();
-      const article = data?.data || data;
-      if (!article) notFound();
-      if (article.slug && article.slug !== params.slug) {
-        redirect(`/blog/${article.slug}`);
-      }
-    } catch (err) {
-      // redirect() throws NEXT_REDIRECT — let it propagate, only catch
-      // genuine fetch failures.
-      if ((err as any)?.digest?.startsWith?.('NEXT_REDIRECT')) throw err;
+      res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(params.slug)}`, {
+        next: { revalidate: 3600 },
+      });
+    } catch {
       notFound();
+    }
+    if (!res || !res.ok) notFound();
+    let data: any = null;
+    try { data = await res.json(); } catch { notFound(); }
+    resolvedArticle = data?.data || data;
+    if (!resolvedArticle) notFound();
+
+    // 301 legacy slugs to canonical. redirect() throws — must run OUTSIDE
+    // any catch block so the NEXT_REDIRECT exception propagates cleanly.
+    if (resolvedArticle.slug && resolvedArticle.slug !== params.slug) {
+      redirect(`/blog/${resolvedArticle.slug}`);
     }
   }
 
