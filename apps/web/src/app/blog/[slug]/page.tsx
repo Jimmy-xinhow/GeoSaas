@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   try {
-    const res = await fetch(`${API_URL}/api/blog/articles/${params.slug}`, { next: { revalidate: 3600 } });
+    const res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(params.slug)}`, { next: { revalidate: 3600 } });
     if (res.ok) {
       const data = await res.json();
       const article = data?.data || data;
@@ -98,11 +98,13 @@ export default async function BlogPostPage({ params }: Props) {
 
   let resolvedArticle: any = null;
   if (!staticPost) {
-    // Fetch outside try/catch so redirect()/notFound() exceptions cannot be
-    // accidentally swallowed. Network errors are caught explicitly.
+    // encodeURIComponent is required: NestJS rejects raw CJK in path segments
+    // with 400 "Failed to decode param" because the upstream pipeline expects
+    // strict percent-encoding. Without it, the legacy CJK slug → 400 → notFound
+    // → user sees the 404 page instead of the redirect.
     let res: Response | null = null;
     try {
-      res = await fetch(`${API_URL}/api/blog/articles/${params.slug}`, {
+      res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(params.slug)}`, {
         next: { revalidate: 3600 },
       });
     } catch {
@@ -139,7 +141,7 @@ export default async function BlogPostPage({ params }: Props) {
     faqJsonLd = extractFaqJsonLd(staticPost.content);
   } else {
     try {
-      const res = await fetch(`${API_URL}/api/blog/articles/${params.slug}`, { next: { revalidate: 3600 } });
+      const res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(params.slug)}`, { next: { revalidate: 3600 } });
       if (res.ok) {
         const data = await res.json();
         const article = data?.data || data;
