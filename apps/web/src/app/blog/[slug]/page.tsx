@@ -175,8 +175,12 @@ export default async function BlogPostPage({ params }: Props) {
     ],
   };
 
+  // Diagnostic — visible in HTML so we can check production values without
+  // needing log access. Remove once 301 redirect is confirmed working.
+  const diagnosticBuild = `alias-301-paramsSlug=${(params.slug || '').slice(0, 60)}::articleSlug=${(resolvedArticle?.slug || '').slice(0, 60)}::shouldRedirect=${!!(resolvedArticle && resolvedArticle.slug && resolvedArticle.slug !== params.slug)}`;
+
   return (
-    <div className="min-h-screen bg-gray-900 text-white" data-build="alias-301-2026-04-28">
+    <div className="min-h-screen bg-gray-900 text-white" data-build={diagnosticBuild}>
       {articleJsonLd && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
       )}
