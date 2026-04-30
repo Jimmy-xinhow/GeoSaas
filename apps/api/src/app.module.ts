@@ -36,6 +36,7 @@ import { ClientReportModule } from './modules/client-report/client-report.module
 import { IndustryAiModule } from './modules/industry-ai/industry-ai.module';
 import { BrandSpreadModule } from './modules/brand-spread/brand-spread.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { ContentQualityModule } from './modules/content-quality/content-quality.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { UploadModule } from './modules/upload/upload.module';
     IndustryAiModule,
     BrandSpreadModule,
     UploadModule,
+    ContentQualityModule,
   ],
   controllers: [HealthController],
   providers: [

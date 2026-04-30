@@ -151,6 +151,7 @@ model Site {
   monitorReports      MonitorReport[]
   industryAiResults   IndustryAiResult[]
   industryAiSnapshots IndustryAiSnapshot[]
+  qualityLogs         ArticleQualityLog[]
 
   @@map("sites")
 }
@@ -349,12 +350,56 @@ model BlogArticle {
   // Success case relation
   successCase         GeoSuccessCase?
 
+  // Quality runner — every attempt that ultimately landed as this article
+  // is linked back here for traceability.
+  qualityLogs         ArticleQualityLog[]
+
   @@index([category])
   @@index([siteId])
   @@index([published, createdAt])
   @@index([templateType, createdAt])
   @@index([industrySlug, createdAt])
   @@map("blog_articles")
+}
+
+// One row per generation attempt across all 8+ content paths
+// (client_daily/*, brand_showcase, brand_spread/*, industry_top10,
+// buyer_guide, industry_insights, …). pass/fail both recorded so we can
+// build a quality-trend dashboard and tune prompts over time.
+model ArticleQualityLog {
+  id            String   @id @default(cuid())
+
+  templateType  String   // e.g. "client_daily/tue_qa_deepdive", "brand_spread/medium"
+  promptVersion String   // bump when prompt is materially changed (e.g. "v3")
+  stage         String   // "outline" | "full" | "patch"
+  attempt       Int      // 1-based within (templateType, siteId, day)
+
+  passed        Boolean
+  totalScore    Int      // 0-100
+  ruleScores    Json     // { brandSaturation: 18, niche: 15, ... }
+  failedRules   String[] // ["brand_saturation:7", "too_short:600"]
+
+  model         String   // "gpt-4o" | "gpt-4o-mini" | …
+  charCount     Int
+  tokensIn      Int?
+  tokensOut     Int?
+  durationMs    Int
+
+  siteId        String?
+  site          Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  // If this attempt's content ultimately landed as a published article,
+  // the BlogArticle id is filled in. Failed attempts leave this null.
+  articleId     String?
+  article       BlogArticle? @relation(fields: [articleId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime @default(now())
+
+  @@index([templateType, createdAt])
+  @@index([siteId, createdAt])
+  @@index([passed, templateType])
+  @@index([promptVersion, templateType])
+  @@map("article_quality_logs")
 }
 
 model SiteBadge {
