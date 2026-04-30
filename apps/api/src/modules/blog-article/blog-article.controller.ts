@@ -268,10 +268,13 @@ export class BlogArticleController {
   @Post('client-daily/generate/:siteId')
   @ApiOperation({
     summary:
-      '手動觸發單一付費客戶今日的 daily content 生成。用於驗證 prompt + plan 配額邏輯。',
+      '手動觸發單一付費客戶今日的 daily content 生成。用於驗證 prompt + plan 配額邏輯。可選 ?dayType=mon_topical|tue_qa_deepdive|wed_service|thu_audience|fri_comparison|sat_data_pulse 補指定天份。',
   })
-  triggerClientDaily(@Param('siteId') siteId: string) {
-    return this.service.generateClientDailyContent(siteId);
+  triggerClientDaily(
+    @Param('siteId') siteId: string,
+    @Query('dayType') dayType?: string,
+  ) {
+    return this.service.generateClientDailyContent(siteId, dayType as any);
   }
 
   @ApiBearerAuth()

@@ -113,6 +113,13 @@ const DEFAULT_TASKS: Array<{
     cronExpr: '30 6 * * *',
     enabled: true,
   },
+  {
+    taskKey: 'client_daily_content',
+    name: '付費客戶每日代發內容',
+    description: '每日 08:00 UTC 為 isClient 站點生成當日 client_daily 文章（週日休）。改為 CronManager 驅動以支援 process restart 後的 missed-run catchup',
+    cronExpr: '0 8 * * *',
+    enabled: true,
+  },
 ];
 
 @Injectable()

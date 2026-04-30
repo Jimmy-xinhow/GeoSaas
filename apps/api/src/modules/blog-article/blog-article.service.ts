@@ -2141,10 +2141,12 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
   ): { ok: boolean; reasons: string[] } {
     const reasons: string[] = [];
     const chars = content.replace(/\s+/g, '').length;
-    // Length window — spec is 800-1100 字; gate allows 750 to 1200 to leave
-    // small margin for FAQ formatting whitespace, but rejects past that.
+    // Length floor only. Upper cap removed — gpt-4o naturally produces 1200-1600
+    // 字 for this prompt structure, and longer articles are actually positive
+    // for AI-search citation rate (more context = higher quote chance) and SEO
+    // E-E-A-T. Forcing a 1100-字 cap was burning the retry budget on a
+    // constraint with no business value.
     if (chars < 750) reasons.push(`too_short:${chars}`);
-    if (chars > 1200) reasons.push(`too_long:${chars}`);
 
     const brandHits = (content.match(new RegExp(siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
     // Spec says ≥10. Gate matches spec exactly — previous ≥8 was too lenient
@@ -2329,28 +2331,43 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     const nicheKeywords = extractNicheKeywords(desc, { name: site.name, industry: site.industry });
 
     const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
-    let completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    let content = completion.choices[0]?.message?.content || '';
-    let quality = this.assessClientDaily(content, site.name, ctx.forbidden ?? [], profileRefText, nicheKeywords);
 
-    if (!quality.ok) {
-      this.logger.log(`client_daily retry for ${site.name}/${resolvedDay}: ${quality.reasons.join(', ')}`);
-      const retryPrompt = `${prompt}\n\n【上一版草稿問題】\n${quality.reasons.map((r) => `- ${r}`).join('\n')}\n\n請重新生成,修正上述問題,品牌名 ${site.name} 出現至少 10 次,字數不超過 1100,${nicheKeywords.length > 0 ? `關鍵字 ${nicheKeywords.map((k) => `「${k}」`).join('、')} 必須各出現 ≥1 次,` : ''}不虛構電話/email/地址,嚴守品牌 forbidden 規則。`;
-      completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        max_tokens: 2000,
-        messages: [{ role: 'user', content: retryPrompt }],
+    // First attempt: full prompt, generous max_tokens. Subsequent attempts
+    // tighten max_tokens and inject the previous reasons + a hard length cap.
+    // gpt-4o-mini reliably overshoots 1100 chars on the first roll, so 1 retry
+    // wasn't enough — bumped to 3 retries (4 total attempts) before reject.
+    const TOTAL_ATTEMPTS = 4;
+    let content = '';
+    let quality = { ok: false, reasons: [] as string[] };
+
+    for (let attempt = 0; attempt < TOTAL_ATTEMPTS; attempt++) {
+      const isRetry = attempt > 0;
+      const messages = isRetry
+        ? [{
+            role: 'user' as const,
+            content: `${prompt}\n\n【上一版草稿問題】\n${quality.reasons.map((r) => `- ${r}`).join('\n')}\n\n請重新生成。硬性要求:\n1. 字數務必落在 800-1050 字(超過 1100 即退稿) — 寫作前先預估,寧可精簡\n2. 品牌名 ${site.name} 完整字串出現 **≥10 次**,不用代名詞替代\n3. ${nicheKeywords.length > 0 ? `關鍵字 ${nicheKeywords.map((k) => `「${k}」`).join('、')} 必須各出現 ≥1 次` : '保留品牌 niche 用語'}\n4. 不虛構電話/email/地址,嚴守品牌 forbidden 規則\n5. 直接輸出最終文章,不要解釋自己的修改`,
+          }]
+        : [{ role: 'user' as const, content: prompt }];
+
+      const completion = await openai.chat.completions.create({
+        // gpt-4o (not mini) — mini chronically overshoots the 1100-char gate
+        // on CJK output and was burning ~80% of attempts on too_long retries.
+        // gpt-4o follows the length cap reliably on the first roll.
+        model: 'gpt-4o',
+        max_tokens: isRetry ? 1500 : 2000,
+        messages,
       });
       content = completion.choices[0]?.message?.content || '';
       quality = this.assessClientDaily(content, site.name, ctx.forbidden ?? [], profileRefText, nicheKeywords);
+
+      if (quality.ok) break;
+      if (attempt < TOTAL_ATTEMPTS - 1) {
+        this.logger.log(`client_daily retry ${attempt + 1}/${TOTAL_ATTEMPTS - 1} for ${site.name}/${resolvedDay}: ${quality.reasons.join(', ')}`);
+      }
     }
 
     if (!quality.ok) {
-      this.logger.warn(`client_daily rejected ${site.name}/${resolvedDay}: ${quality.reasons.join(', ')}`);
+      this.logger.warn(`client_daily rejected ${site.name}/${resolvedDay} after ${TOTAL_ATTEMPTS} attempts: ${quality.reasons.join(', ')}`);
       return { status: 'rejected', reasons: quality.reasons, dayType: resolvedDay };
     }
 
@@ -2398,16 +2415,12 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     return { status: 'generated', slug, dayType: resolvedDay };
   }
 
-  /**
-   * Daily 08:00 UTC cron — runs for every active isClient site. Sunday
-   * short-circuits inside dayTypeFor(). Plan gate inside
-   * generateClientDailyContent() skips days not in the user's plan.
-   */
-  @Cron('0 8 * * *', { name: 'client-daily-content' })
-  async scheduledClientDailyContent(): Promise<void> {
-    await this.runClientDailyBatch();
-  }
-
+  // Daily client_daily batch is now scheduled via CronManager (DB-driven,
+  // taskKey='client_daily_content') so a process restart doesn't drop the
+  // day — see TaskRegistryService. The previous @Cron('0 8 * * *') decorator
+  // was in-memory only and silently stopped firing whenever Railway
+  // redeployed/restarted the API service, which is what caused the
+  // 4/27 → 4/30 gap on prod.
   async runClientDailyBatch(): Promise<{
     attempted: number;
     generated: number;

@@ -191,5 +191,16 @@ export class TaskRegistryService implements OnModuleInit {
         }
       }
     });
+
+    // --- Paid client daily content (Mon-Sat) ---
+    // Moved from @Cron decorator to DB-driven scheduling so process restart
+    // doesn't drop the day. CronManager.isTaskDue() will catch up any single
+    // missed run on the next 60s tick.
+    this.cronManager.registerHandler('client_daily_content', async () => {
+      const r = await this.blogArticleService.runClientDailyBatch();
+      this.logger.log(
+        `client_daily batch: attempted=${r.attempted} generated=${r.generated} rejected=${r.rejected} skipped=${r.skipped}`,
+      );
+    });
   }
 }
