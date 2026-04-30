@@ -6,6 +6,11 @@ import { BlogTemplateService, TemplateType, BrandShowcaseContext, IndustryTop10R
 import { extractNicheKeywords } from './niche-keyword.util';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
+import { ContentQualityRunner } from '../content-quality/content-quality.runner';
+import {
+  ClientDailyData,
+  createClientDailySpec,
+} from '../content-quality/specs/client-daily.spec';
 import OpenAI from 'openai';
 import pLimit from 'p-limit';
 
@@ -43,6 +48,7 @@ export class BlogArticleService {
     private readonly templateService: BlogTemplateService,
     private readonly indexNowService: IndexNowService,
     private readonly profileEnrichment: ProfileEnrichmentService,
+    private readonly qualityRunner: ContentQualityRunner,
   ) {}
 
   /**
@@ -2330,46 +2336,37 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     const desc = (enriched.description as string | undefined) || (profile.description as string | undefined) || '';
     const nicheKeywords = extractNicheKeywords(desc, { name: site.name, industry: site.industry });
 
-    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
+    // Quality runner replaces the previous 4-attempt loop + inline
+    // assessClientDaily. Each day-type has its own ContentSpec (rules +
+    // passThreshold) and the runner executes the full→patch retry pipeline
+    // while logging every attempt to ArticleQualityLog for the
+    // prompt-tuning dashboard.
+    const spec = createClientDailySpec(resolvedDay);
+    const runStartedAt = new Date();
+    const result = await this.qualityRunner.run<ClientDailyData>(
+      spec,
+      { basePrompt: prompt },
+      {
+        siteName: site.name,
+        industry: site.industry ?? undefined,
+        extras: {
+          nicheKeywords,
+          forbidden: ctx.forbidden ?? [],
+          profileRefText,
+          siteUrl: site.url,
+        },
+      },
+      site.id,
+    );
 
-    // First attempt: full prompt, generous max_tokens. Subsequent attempts
-    // tighten max_tokens and inject the previous reasons + a hard length cap.
-    // gpt-4o-mini reliably overshoots 1100 chars on the first roll, so 1 retry
-    // wasn't enough — bumped to 3 retries (4 total attempts) before reject.
-    const TOTAL_ATTEMPTS = 4;
-    let content = '';
-    let quality = { ok: false, reasons: [] as string[] };
-
-    for (let attempt = 0; attempt < TOTAL_ATTEMPTS; attempt++) {
-      const isRetry = attempt > 0;
-      const messages = isRetry
-        ? [{
-            role: 'user' as const,
-            content: `${prompt}\n\n【上一版草稿問題】\n${quality.reasons.map((r) => `- ${r}`).join('\n')}\n\n請重新生成。硬性要求:\n1. 字數務必落在 800-1050 字(超過 1100 即退稿) — 寫作前先預估,寧可精簡\n2. 品牌名 ${site.name} 完整字串出現 **≥10 次**,不用代名詞替代\n3. ${nicheKeywords.length > 0 ? `關鍵字 ${nicheKeywords.map((k) => `「${k}」`).join('、')} 必須各出現 ≥1 次` : '保留品牌 niche 用語'}\n4. 不虛構電話/email/地址,嚴守品牌 forbidden 規則\n5. 直接輸出最終文章,不要解釋自己的修改`,
-          }]
-        : [{ role: 'user' as const, content: prompt }];
-
-      const completion = await openai.chat.completions.create({
-        // gpt-4o (not mini) — mini chronically overshoots the 1100-char gate
-        // on CJK output and was burning ~80% of attempts on too_long retries.
-        // gpt-4o follows the length cap reliably on the first roll.
-        model: 'gpt-4o',
-        max_tokens: isRetry ? 1500 : 2000,
-        messages,
-      });
-      content = completion.choices[0]?.message?.content || '';
-      quality = this.assessClientDaily(content, site.name, ctx.forbidden ?? [], profileRefText, nicheKeywords);
-
-      if (quality.ok) break;
-      if (attempt < TOTAL_ATTEMPTS - 1) {
-        this.logger.log(`client_daily retry ${attempt + 1}/${TOTAL_ATTEMPTS - 1} for ${site.name}/${resolvedDay}: ${quality.reasons.join(', ')}`);
-      }
+    if (result.status !== 'generated' || !result.content) {
+      this.logger.warn(
+        `client_daily rejected ${site.name}/${resolvedDay} after ${result.attempts.length} attempts: ${(result.failedRules || []).join(', ')}`,
+      );
+      return { status: 'rejected', reasons: result.failedRules || ['quality_runner_rejected'], dayType: resolvedDay };
     }
 
-    if (!quality.ok) {
-      this.logger.warn(`client_daily rejected ${site.name}/${resolvedDay} after ${TOTAL_ATTEMPTS} attempts: ${quality.reasons.join(', ')}`);
-      return { status: 'rejected', reasons: quality.reasons, dayType: resolvedDay };
-    }
+    const content = result.content;
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : `${site.name} ${resolvedDay}`;
@@ -2395,7 +2392,7 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       .slice(0, 155)
       .trim();
 
-    await this.prisma.blogArticle.create({
+    const article = await this.prisma.blogArticle.create({
       data: {
         slug, title,
         description,
@@ -2411,6 +2408,14 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
         lastRegeneratedAt: new Date(),
       },
     });
+    // Back-fill articleId on every quality-log row from this run so the
+    // dashboard can join attempts to the article that ultimately landed.
+    await this.qualityRunner.attachArticleId(
+      `client_daily/${resolvedDay}`,
+      site.id,
+      article.id,
+      runStartedAt,
+    );
     this.pingIndexNow(slug);
     return { status: 'generated', slug, dayType: resolvedDay };
   }

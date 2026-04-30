@@ -5,9 +5,10 @@ import { BlogTemplateService } from './blog-template.service';
 import { IndustryInsightService } from './industry-insight.service';
 import { IndexNowModule } from '../indexnow/indexnow.module';
 import { SitesModule } from '../sites/sites.module';
+import { ContentQualityModule } from '../content-quality/content-quality.module';
 
 @Module({
-  imports: [IndexNowModule, SitesModule],
+  imports: [IndexNowModule, SitesModule, ContentQualityModule],
   controllers: [BlogArticleController],
   providers: [BlogArticleService, BlogTemplateService, IndustryInsightService],
   exports: [BlogArticleService, IndustryInsightService],
