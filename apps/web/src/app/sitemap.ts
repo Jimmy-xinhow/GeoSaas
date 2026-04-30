@@ -5,6 +5,11 @@ import { INDUSTRIES } from '@geovault/shared';
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 
+// Skip build-time prerender. Build container couldn't reach api.geovault.app
+// during the previous deploy, baking a 106-URL empty sitemap into the cache
+// for the full revalidate window. Forcing dynamic = render at request time,
+// where the API is always reachable.
+export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
 
 // One aggregate fetch instead of ~14 parallel fetches. Web→API goes through
