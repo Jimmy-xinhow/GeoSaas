@@ -525,10 +525,15 @@ ${FORMAT_RULES}`,
     site: SiteData,
     ctx: BrandShowcaseContext = {},
     pulse?: { geoScore: number; industryRank: number | null; industryAvgScore: number | null; weekCrawlerVisits: number },
+    // referenceDate lets backfill scripts generate articles for past dates
+    // with correctly anchored "${year}年${month}月" copy. Defaults to today
+    // so the cron path is unchanged.
+    referenceDate?: Date,
   ): string {
     const industry = industryLabel(site.industry);
-    const year = new Date().getFullYear();
-    const month = new Date().getMonth() + 1;
+    const ref = referenceDate ?? new Date();
+    const year = ref.getFullYear();
+    const month = ref.getMonth() + 1;
     const siteUrl = ctx.siteId
       ? `https://www.geovault.app/directory/${ctx.siteId}`
       : `https://www.geovault.app/directory`;
