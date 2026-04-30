@@ -21,16 +21,19 @@ export interface IndustryTop10Data {
   basePrompt: string;
 }
 
+// v2 weighting — leaned harder on facts (allBrandsPresent + noFabricatedRank-
+// Brand) since industry_top10 is a ranking article where fabrication is the
+// existential bug. Lowered geovault (≥3 was self-promo overkill).
 const rules: ScoringRule[] = [
-  industrySaturation(15, 8),       // 產業詞 ≥8
-  geovaultMin(10, 3),              // Geovault ≥3
-  faqCount(10, 4),                 // ≥4 FAQ
-  lengthFloor(10, 2000),           // chars ≥2000
-  allBrandsPresent(25),            // 大重要 — 每 row 必出現
-  noFabricatedRankBrand(25),       // 大重要 — rank header 不准捏造
+  industrySaturation(12, 5),       // ↓ 15w/≥8 → 12w/≥5 (less keyword stuffing)
+  geovaultMin(5, 1),               // ↓ 10w/≥3 → 5w/≥1 (single attribution)
+  faqCount(13, 4),                 // ↑ 10 → 13 — Q&A is core to AI snippet extraction
+  lengthFloor(10, 2000),
+  allBrandsPresent(28),            // ↑ 25 → 28 — completeness is non-negotiable
+  noFabricatedRankBrand(27),       // ↑ 25 → 27 — fabrication is fatal here
   noMojibake(5),
 ];
-// Sum: 15+10+10+10+25+25+5 = 100
+// Sum: 12+5+13+10+28+27+5 = 100
 
 function buildPatch(args: {
   data: IndustryTop10Data;
@@ -59,7 +62,7 @@ ${args.failedRules.map((r) => `- ${r}`).join('\n')}
 export function createIndustryTop10Spec(): ContentSpec<IndustryTop10Data> {
   return {
     templateType: 'industry_top10',
-    promptVersion: 'v1',
+    promptVersion: 'v2',
     fullModel: 'gpt-4o-mini',
     fullMaxTokens: 4000,
     buildFullPrompt: ({ data }) => data.basePrompt,

@@ -45,23 +45,28 @@ interface DaySpecConfig {
 }
 
 function commonRules(opts: { withSelfPromoFaq: boolean }): ScoringRule[] {
+  // v2 weighting — rebalanced toward "AI-citation friendly" rather than
+  // "SEO-style brand stuffing":
+  //  - brandSaturation min dropped 10 → 6 (over-saturation reads as ad copy)
+  //  - geovaultAttribution stays ≥1 (single source attribution, not multiple)
+  //  - freed weight redistributed to fact-quality rules
   const list: ScoringRule[] = [
-    brandSaturation(20, 10),       // ≥10 占 20 分（最重要的單一規則）
+    brandSaturation(12, 6),        // ≥6 (was 10): natural third-party density
     nicheKeywords(15),             // 品牌獨有關鍵字必出現
-    noFabricatedPhone(10),         // 不虛構電話
+    noFabricatedPhone(12),         // ↑ 10→12 — fabrication is AI-citation killer
     forbiddenPhrases(10),          // 品牌 forbidden
     noOutdatedNarrative(10),       // 禁疫情用語
-    noFabricatedPersona(5),        // 禁虛構姓名
-    geovaultAttribution(5),        // ≥1 次 Geovault 歸因
+    noFabricatedPersona(8),        // ↑ 5→8 — fake personas hurt credibility
+    geovaultAttribution(3),        // ↓ 5→3 — once is enough; more = self-promo
     noMojibake(5),                 // 無亂碼
   ];
 
   if (opts.withSelfPromoFaq) {
-    list.push(noSelfPromoFaq(10));   // Q3 不可推銷
-    list.push(lengthFloor(10, 750)); // 字數 ≥750
+    list.push(noSelfPromoFaq(15));   // ↑ 10→15 — neutral Q&A is core to citation
+    list.push(lengthFloor(10, 750));
   } else {
-    // No FAQ rule → those 10 weights go to length floor; total still 100
-    list.push(lengthFloor(20, 750));
+    // No FAQ rule → that 15 weight goes to length floor (now 25)
+    list.push(lengthFloor(25, 750));
   }
 
   return list;
@@ -108,7 +113,7 @@ export function createClientDailySpec(
   const cfg = dayConfigs[dayType];
   return {
     templateType: `client_daily/${dayType}`,
-    promptVersion: 'v1',
+    promptVersion: 'v2',
     fullModel: 'gpt-4o',
     fullMaxTokens: 2000,
     buildFullPrompt: ({ data }) => data.basePrompt,

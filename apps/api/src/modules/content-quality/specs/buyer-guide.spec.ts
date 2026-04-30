@@ -20,17 +20,20 @@ export interface BuyerGuideData {
   basePrompt: string;
 }
 
+// v2 weighting — already the most neutral spec (no brand names allowed) so
+// only one major adjustment: geovault attribution dropped from ≥3 to ≥1
+// (single attribution is enough; more reads as platform self-promotion).
 const rules: ScoringRule[] = [
   lengthFloor(15, 1800),
-  geovaultMin(10, 3),
-  faqCount(10, 5),
-  noBrandNameLeak(20),                  // 重要:這層必須 brand-name-free
-  mustContainLink(15, 'expectedLink'),  // 必含 /directory/industry/{slug}
-  noGeoScoreAsConsumerMetric(15),       // 重要:GEO 分數不能寫成消費指標
-  medicalBoundary(10),                  // 醫療相關產業才生效
-  noMojibake(5),
+  geovaultMin(4, 1),                    // ↓ 10w/≥3 → 4w/≥1
+  faqCount(13, 5),                      // ↑ 10 → 13 — Q&A is the AI-snippet target
+  noBrandNameLeak(22),                  // ↑ 20 → 22 — neutral layer must stay neutral
+  mustContainLink(15, 'expectedLink'),
+  noGeoScoreAsConsumerMetric(15),
+  medicalBoundary(10),
+  noMojibake(6),                        // ↑ 5 → 6
 ];
-// Sum: 15+10+10+20+15+15+10+5 = 100
+// Sum: 15+4+13+22+15+15+10+6 = 100
 
 function buildPatch(args: {
   data: BuyerGuideData;
@@ -60,7 +63,7 @@ ${args.failedRules.map((r) => `- ${r}`).join('\n')}
 export function createBuyerGuideSpec(): ContentSpec<BuyerGuideData> {
   return {
     templateType: 'buyer_guide',
-    promptVersion: 'v1',
+    promptVersion: 'v2',
     fullModel: 'gpt-4o-mini',
     fullMaxTokens: 3200,
     buildFullPrompt: ({ data }) => data.basePrompt,

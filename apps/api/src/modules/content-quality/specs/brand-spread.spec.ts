@@ -34,18 +34,21 @@ export interface BrandSpreadData {
   userPrompt: string;      // platform + brand context block
 }
 
+// v2 weighting — kept brandSaturation high here (social posts genuinely need
+// brand mentions to be useful) but trimmed hashtag weight (not an AI-citation
+// signal) and pushed up no-spam + natural-tone (AI demotes hyperbolic copy).
 function ruleSet(minBrandHits: number, minLen: number, maxLen: number): ScoringRule[] {
   return [
-    brandSaturation(20, minBrandHits),
+    brandSaturation(15, minBrandHits),    // ↓ 20 → 15
     lengthInRange(15, minLen, maxLen),
     hasUrl(10),
     forbiddenPhrases(15),
-    noSpamPhrases(15),
-    naturalTone(10),
-    hasHashtags(5, 3),
-    paragraphStructure(10, 3),
+    noSpamPhrases(20),                    // ↑ 15 → 20 — spam phrases hurt citations the most
+    naturalTone(15),                      // ↑ 10 → 15 — exclamation density signals advertorial
+    hasHashtags(2, 3),                    // ↓ 5 → 2 — hashtags don't affect AI citation
+    paragraphStructure(8, 3),             // ↓ 10 → 8
   ];
-  // Sum: 20+15+10+15+15+10+5+10 = 100
+  // Sum: 15+15+10+15+20+15+2+8 = 100
 }
 
 function buildPatch(args: {
@@ -92,7 +95,7 @@ export function createBrandSpreadSpec(
   const cfg = platformConfig[platformKey] ?? { minBrand: 3, minLen: 200, maxLen: 800 };
   return {
     templateType: `brand_spread/${platformKey}`,
-    promptVersion: 'v1',
+    promptVersion: 'v2',
     fullModel: 'gpt-4o',
     fullMaxTokens: 2500,
     fullResponseFormat: 'json_object',

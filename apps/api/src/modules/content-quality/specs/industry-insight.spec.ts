@@ -12,6 +12,7 @@ import {
   industrySaturation,
   lengthFloor,
   noFabricatedPersona,
+  noFabricatedPhone,
   noMojibake,
 } from '../rules';
 
@@ -19,14 +20,18 @@ export interface IndustryInsightData {
   basePrompt: string;
 }
 
+// v2 — relaxed industry-keyword stuffing (≥5 → ≥3) and dropped geovault from
+// ≥2 to ≥1 (this article cites Geovault data, but doesn't need to mention the
+// brand multiple times to be useful). Freed weight goes to fabrication checks.
 const rules: ScoringRule[] = [
-  lengthFloor(20, 1200),       // chars ≥1200
-  industrySaturation(30, 5),   // 產業詞 ≥5 (this article is about the industry)
-  geovaultMin(20, 2),          // Geovault data attribution ≥2
-  noFabricatedPersona(15),     // no invented customer names
+  lengthFloor(20, 1200),
+  industrySaturation(20, 3),   // ↓ 30w/≥5 → 20w/≥3
+  geovaultMin(10, 1),          // ↓ 20w/≥2 → 10w/≥1
+  noFabricatedPersona(25),     // ↑ 15 → 25 — interpretive prose tempts model to invent
   noMojibake(15),
+  noFabricatedPhone(10),       // new — even insight articles can leak fake numbers
 ];
-// Sum: 20+30+20+15+15 = 100
+// Sum: 20+20+10+25+15+10 = 100
 
 function buildPatch(args: {
   data: IndustryInsightData;
@@ -53,7 +58,7 @@ ${args.failedRules.map((r) => `- ${r}`).join('\n')}
 export function createIndustryInsightSpec(): ContentSpec<IndustryInsightData> {
   return {
     templateType: 'industry_insight',
-    promptVersion: 'v1',
+    promptVersion: 'v2',
     fullModel: 'gpt-4o-mini',
     fullMaxTokens: 2000,
     buildFullPrompt: ({ data }) => data.basePrompt,
