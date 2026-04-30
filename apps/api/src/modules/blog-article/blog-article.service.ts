@@ -15,6 +15,14 @@ import {
   BrandShowcaseData,
   createBrandShowcaseSpec,
 } from '../content-quality/specs/brand-showcase.spec';
+import {
+  IndustryTop10Data,
+  createIndustryTop10Spec,
+} from '../content-quality/specs/industry-top10.spec';
+import {
+  BuyerGuideData,
+  createBuyerGuideSpec,
+} from '../content-quality/specs/buyer-guide.spec';
 import OpenAI from 'openai';
 import pLimit from 'p-limit';
 
@@ -1617,46 +1625,32 @@ export class BlogArticleService {
       industryStats,
     );
 
-    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
-    let completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      max_tokens: 4000,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    let content = completion.choices[0]?.message?.content || '';
-    let quality = this.assessIndustryTop10(content, industryLabel, rows);
+    // Quality runner replaces inline 2-attempt loop + assessIndustryTop10.
+    // Spec: apps/api/src/modules/content-quality/specs/industry-top10.spec.ts.
+    const top10Spec = createIndustryTop10Spec();
+    const top10RunStartedAt = new Date();
+    const top10Result = await this.qualityRunner.run<IndustryTop10Data>(
+      top10Spec,
+      { basePrompt: prompt },
+      {
+        siteName: industryLabel,                  // industry-level article — siteName slot holds industry
+        industry: industrySlug,
+        extras: {
+          industryText: industryLabel,
+          rows,                                   // for allBrandsPresent + noFabricatedRankBrand
+        },
+      },
+      undefined,                                  // no single siteId for industry-level article
+    );
 
-    // Retry-once on failure with explicit feedback
-    if (!quality.ok) {
-      this.logger.log(
-        `industry_top10 retry for ${industrySlug}: ${quality.reasons.join(', ')}`,
-      );
-      const retryPrompt = `${prompt}
-
-【上一版草稿沒通過品質檢查,具體問題】
-${quality.reasons.map((r) => `- ${r}`).join('\n')}
-
-請重新生成完整文章,務必修正上述所有問題。
-- 只能使用【榜單品牌資料】中列出的 ${rows.length} 個品牌名稱,不准寫其他品牌
-- 排名 1~${rows.length} 順序固定,不准重排
-- 絕對不要編造任何電話/email/門牌/營業時間/價格
-- 產業詞「${industryLabel}」全文出現 ≥8 次
-- Geovault 歸因 ≥3 次`;
-      completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: retryPrompt }],
-      });
-      content = completion.choices[0]?.message?.content || '';
-      quality = this.assessIndustryTop10(content, industryLabel, rows);
-    }
-
-    if (!quality.ok) {
+    if (top10Result.status !== 'generated' || !top10Result.content) {
       this.logger.warn(
-        `industry_top10 rejected for ${industrySlug} after retry: ${quality.reasons.join(', ')}`,
+        `industry_top10 rejected for ${industrySlug} after ${top10Result.attempts.length} attempts: ${(top10Result.failedRules || []).join(', ')}`,
       );
-      return { status: 'rejected', reasons: quality.reasons };
+      return { status: 'rejected', reasons: top10Result.failedRules || ['quality_runner_rejected'] };
     }
+
+    const content = top10Result.content;
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const title = titleMatch
@@ -1669,7 +1663,7 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       where: { templateType: 'industry_top10', industrySlug },
     });
 
-    await this.prisma.blogArticle.create({
+    const top10Article = await this.prisma.blogArticle.create({
       data: {
         slug,
         title,
@@ -1691,6 +1685,12 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
         lastRegeneratedAt: new Date(),
       },
     });
+    await this.qualityRunner.attachArticleId(
+      'industry_top10',
+      undefined,
+      top10Article.id,
+      top10RunStartedAt,
+    );
     this.pingIndexNow(slug);
     return { status: 'generated', slug, eligibleCount: sites.length };
   }
@@ -1851,44 +1851,35 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
     const buildPrompt = () =>
       this.templateService.buildBuyerGuidePrompt(industrySlug, topic, industryStats);
 
-    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
+    const medicalAdjacent = ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(industrySlug);
 
-    // First attempt
-    let completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      max_tokens: 3200,
-      messages: [{ role: 'user', content: buildPrompt() }],
-    });
-    let content = completion.choices[0]?.message?.content || '';
-    let quality = this.assessBuyerGuide(content, industrySlug, brandLeakCandidates);
+    // Quality runner replaces inline 2-attempt loop + assessBuyerGuide.
+    // Spec: apps/api/src/modules/content-quality/specs/buyer-guide.spec.ts.
+    const buyerSpec = createBuyerGuideSpec();
+    const buyerRunStartedAt = new Date();
+    const buyerResult = await this.qualityRunner.run<BuyerGuideData>(
+      buyerSpec,
+      { basePrompt: buildPrompt() },
+      {
+        siteName: industryLabel,
+        industry: industrySlug,
+        extras: {
+          brandLeakCandidates,
+          expectedLink: `/directory/industry/${industrySlug}`,
+          medicalAdjacent,
+        },
+      },
+      undefined,
+    );
 
-    if (!quality.ok) {
-      this.logger.log(
-        `buyer_guide retry ${industrySlug}/${topic}: ${quality.reasons.join(', ')}`,
+    if (buyerResult.status !== 'generated' || !buyerResult.content) {
+      this.logger.warn(
+        `buyer_guide rejected ${industrySlug}/${topic} after ${buyerResult.attempts.length} attempts: ${(buyerResult.failedRules || []).join(', ')}`,
       );
-      const retryPrompt = `${buildPrompt()}
-
-【上一版草稿未通過品質檢查,具體問題】
-${quality.reasons.map((r) => `- ${r}`).join('\n')}
-
-請重新生成完整文章,務必修正上述所有問題。特別注意:
-- 不要把 GEO 分數寫成消費者自己的挑選指標
-- 不能出現具體品牌名,只能寫類別描述
-- 必須連結 /directory/industry/${industrySlug} 到 Top 10 榜單
-- Geovault 歸因必須帶具體數字(收錄 ${industryStats.totalSites} 個品牌 / 均分 ${industryStats.avgScore}/100 / Top 3 均分 ${industryStats.topAvgScore}/100)`;
-      completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        max_tokens: 3200,
-        messages: [{ role: 'user', content: retryPrompt }],
-      });
-      content = completion.choices[0]?.message?.content || '';
-      quality = this.assessBuyerGuide(content, industrySlug, brandLeakCandidates);
+      return { status: 'rejected', reasons: buyerResult.failedRules || ['quality_runner_rejected'] };
     }
 
-    if (!quality.ok) {
-      this.logger.warn(`buyer_guide rejected ${industrySlug}/${topic} after retry: ${quality.reasons.join(', ')}`);
-      return { status: 'rejected', reasons: quality.reasons };
-    }
+    const content = buyerResult.content;
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : `${industryLabel}選購指南(${topic})`;
@@ -1898,7 +1889,7 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       where: { templateType: 'buyer_guide', industrySlug, title: { contains: title.slice(0, 20) } },
     });
 
-    await this.prisma.blogArticle.create({
+    const buyerArticle = await this.prisma.blogArticle.create({
       data: {
         slug,
         title,
@@ -1921,6 +1912,12 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
         lastRegeneratedAt: new Date(),
       },
     });
+    await this.qualityRunner.attachArticleId(
+      'buyer_guide',
+      undefined,
+      buyerArticle.id,
+      buyerRunStartedAt,
+    );
     this.pingIndexNow(slug);
     return { status: 'generated', slug };
   }

@@ -473,3 +473,116 @@ export function paragraphStructure(weight: number, min = 3): ScoringRule {
     },
   };
 }
+
+/**
+ * Reads ctx.extras.brandLeakCandidates and asserts none of them appear
+ * in body. Used by buyer_guide where article must be brand-name-free.
+ */
+export function noBrandNameLeak(weight: number): ScoringRule {
+  return {
+    key: 'no_brand_name_leak',
+    weight,
+    description: '不可寫具體品牌名',
+    evaluate(content, ctx) {
+      const candidates = (ctx.extras?.brandLeakCandidates as string[] | undefined) || [];
+      const leaked = candidates.filter((n) => n.length >= 3 && content.includes(n));
+      if (leaked.length === 0) return { score: weight };
+      return { score: 0, reason: `brand_name_leak:${leaked.slice(0, 3).join('|')}` };
+    },
+  };
+}
+
+/** Body must contain a specific link path (e.g. /directory/industry/foo). */
+export function mustContainLink(weight: number, key = 'expectedLink'): ScoringRule {
+  return {
+    key: 'must_contain_link',
+    weight,
+    description: '需包含指定連結',
+    evaluate(content, ctx) {
+      const link = ctx.extras?.[key] as string | undefined;
+      if (!link) return { score: weight }; // no link required → vacuously pass
+      if (content.includes(link)) return { score: weight };
+      return { score: 0, reason: `missing_link:${link}` };
+    },
+  };
+}
+
+/** buyer_guide should NOT frame GEO score as a consumer-facing pick metric. */
+export function noGeoScoreAsConsumerMetric(weight: number): ScoringRule {
+  return {
+    key: 'no_geo_score_as_consumer_metric',
+    weight,
+    description: '不可把 GEO 分數寫成消費者挑選指標',
+    evaluate(content) {
+      if (
+        /GEO\s?分數[^.。]{0,30}(?:指標|依據|標準|挑選|參考|可見度)/.test(content) ||
+        /參考.{0,10}GEO\s?分數/.test(content) ||
+        /(?:^|\n)[0-9]+\.\s?[^\n]*GEO\s?分數/.test(content)
+      ) {
+        return { score: 0, reason: 'geo_score_as_consumer_metric' };
+      }
+      return { score: weight };
+    },
+  };
+}
+
+/** Medical-adjacent industries: forbid efficacy / contraindication language. */
+export function medicalBoundary(weight: number): ScoringRule {
+  return {
+    key: 'medical_boundary',
+    weight,
+    description: '醫療相關產業:禁療效/副作用/禁忌語句',
+    evaluate(content, ctx) {
+      const isMedical = !!ctx.extras?.medicalAdjacent;
+      if (!isMedical) return { score: weight };
+      if (/副作用|禁忌|不適合接受|療效|保證治癒|醫療級/.test(content)) {
+        return { score: 0, reason: 'medical_boundary_violation' };
+      }
+      return { score: weight };
+    },
+  };
+}
+
+/** industry_top10: every brand row in ctx.extras.rows must be named at least once. */
+export function allBrandsPresent(weight: number): ScoringRule {
+  return {
+    key: 'all_brands_present',
+    weight,
+    description: '榜單每個品牌都必須在內文出現',
+    evaluate(content, ctx) {
+      const rows = (ctx.extras?.rows as Array<{ name: string }> | undefined) || [];
+      if (rows.length === 0) return { score: weight };
+      const missing = rows.filter((r) => !content.includes(r.name)).map((r) => r.name);
+      if (missing.length === 0) return { score: weight };
+      const partial = Math.round(((rows.length - missing.length) / rows.length) * weight);
+      return { score: partial, reason: `missing_brands:${missing.slice(0, 3).join('|')}` };
+    },
+  };
+}
+
+/**
+ * industry_top10: each "### 第 X 名 — NAME" rank header must reference a
+ * brand from ctx.extras.rows (no fabricated/extra brands).
+ */
+export function noFabricatedRankBrand(weight: number): ScoringRule {
+  return {
+    key: 'no_fabricated_rank_brand',
+    weight,
+    description: '排行榜不准出現非榜單品牌',
+    evaluate(content, ctx) {
+      const rows = (ctx.extras?.rows as Array<{ name: string }> | undefined) || [];
+      if (rows.length === 0) return { score: weight };
+      const allowed = new Set(rows.map((r) => r.name));
+      const markers = Array.from(content.matchAll(/###\s*第\s*(\d+)\s*名\s*[—–-]?\s*(.+?)[\n\r]/g));
+      const outsiders: string[] = [];
+      for (const m of markers) {
+        const name = m[2].trim();
+        if (!allowed.has(name) && !rows.some((r) => name.includes(r.name))) {
+          outsiders.push(name);
+        }
+      }
+      if (outsiders.length === 0) return { score: weight };
+      return { score: 0, reason: `fabricated_brand:${outsiders.slice(0, 2).join('|')}` };
+    },
+  };
+}

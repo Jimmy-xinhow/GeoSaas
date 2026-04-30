@@ -4,6 +4,11 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import OpenAI from 'openai';
 import { INDUSTRIES } from '@geovault/shared';
+import { ContentQualityRunner } from '../content-quality/content-quality.runner';
+import {
+  IndustryInsightData,
+  createIndustryInsightSpec,
+} from '../content-quality/specs/industry-insight.spec';
 
 export type InsightType =
   | 'industry_current_state'
@@ -29,6 +34,7 @@ export class IndustryInsightService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly qualityRunner: ContentQualityRunner,
   ) {}
 
   async generateInsightArticle(industrySlug: string, insightType: InsightType): Promise<{ slug: string } | null> {
@@ -46,14 +52,30 @@ export class IndustryInsightService {
     const industryName = this.getIndustryName(industrySlug);
     const prompt = this.buildInsightPrompt(insightType, industryName, data);
 
-    const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    // PR4 — first time this path has a quality gate. Spec is lenient
+    // (threshold 70/100) because insight prose is interpretive.
+    const spec = createIndustryInsightSpec();
+    const runStartedAt = new Date();
+    const result = await this.qualityRunner.run<IndustryInsightData>(
+      spec,
+      { basePrompt: prompt },
+      {
+        siteName: industryName,
+        industry: industrySlug,
+        extras: {
+          industryText: industryName,
+        },
+      },
+      undefined,
+    );
 
-    const content = completion.choices[0]?.message?.content || '';
+    if (result.status !== 'generated' || !result.content) {
+      this.logger.warn(
+        `industry_insight rejected for ${industrySlug}/${insightType} after ${result.attempts.length} attempts: ${(result.failedRules || []).join(', ')}`,
+      );
+      return null;
+    }
+    const content = result.content;
     const titleMap: Record<InsightType, string> = {
       industry_current_state: `${industryName} 行業 AI 搜尋優化現況報告 ${new Date().getFullYear()}`,
       missing_indicator_focus: `為什麼 ${100 - data.weakestIndicators[0].passRate}% 的 ${industryName} 品牌被 AI 忽略`,
@@ -61,6 +83,10 @@ export class IndustryInsightService {
       improvement_opportunity: `${industryName}品牌的 AI 搜尋優化機會：數據告訴你什麼`,
     };
 
+    // industry_insight uses one of 4 InsightType values as templateType in
+    // BlogArticle, but ContentQualityRunner logs against the unified
+    // 'industry_insight' label so the dashboard can aggregate across the
+    // 4 variants.
     const slug = `${industrySlug}-${insightType}-${Date.now().toString(36)}`;
     const article = await this.prisma.blogArticle.create({
       data: {
@@ -78,6 +104,12 @@ export class IndustryInsightService {
       },
     });
 
+    await this.qualityRunner.attachArticleId(
+      'industry_insight',
+      undefined,
+      article.id,
+      runStartedAt,
+    );
     this.logger.log(`Generated ${insightType} for ${industryName}: ${slug}`);
     return { slug: article.slug };
   }
