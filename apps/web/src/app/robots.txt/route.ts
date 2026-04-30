@@ -35,6 +35,7 @@ export async function GET() {
     'Disallow: /settings',
     'Disallow: /admin/',
     'Disallow: /dashboard/',
+    'Disallow: /cdn-cgi/',
     'Crawl-delay: 5',
     '',
   ];
@@ -44,6 +45,7 @@ export async function GET() {
   for (const bot of AI_BOTS) {
     lines.push(`User-agent: ${bot}`);
     lines.push('Allow: /');
+    lines.push('Disallow: /cdn-cgi/');
     // Shorter delay for AI bots — we actively want them to index fresher.
     lines.push('Crawl-delay: 1');
     lines.push('');
