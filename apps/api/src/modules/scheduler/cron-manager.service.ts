@@ -120,6 +120,13 @@ const DEFAULT_TASKS: Array<{
     cronExpr: '0 8 * * *',
     enabled: true,
   },
+  {
+    taskKey: 'client_daily_sentinel',
+    name: '付費客戶內容生成監控哨兵',
+    description: '每日 09:00 UTC（client_daily 跑完後一小時）檢查當天該有的 client_daily 文章是否都已產出；少於預期就 logger.error 留下警告。週日休',
+    cronExpr: '0 9 * * 1-6',
+    enabled: true,
+  },
 ];
 
 @Injectable()

@@ -202,5 +202,63 @@ export class TaskRegistryService implements OnModuleInit {
         `client_daily batch: attempted=${r.attempted} generated=${r.generated} rejected=${r.rejected} skipped=${r.skipped}`,
       );
     });
+
+    // --- Sentinel: verify today's client_daily articles actually landed ---
+    // Runs 1h after the batch (09:00 UTC). Loud ERROR log when expected articles
+    // are missing — gives us a signal in Railway log when prod silently breaks
+    // (which is exactly what happened 4/28-4/30 with the @Cron version).
+    this.cronManager.registerHandler('client_daily_sentinel', async () => {
+      const dayMap = ['', 'mon_topical', 'tue_qa_deepdive', 'wed_service', 'thu_audience', 'fri_comparison', 'sat_data_pulse'];
+      const today = new Date();
+      const dow = today.getUTCDay(); // 0=Sun
+      if (dow === 0) return; // Sunday off
+      const dayType = dayMap[dow];
+
+      const planActiveDays: Record<string, string[]> = {
+        PRO: ['mon_topical', 'tue_qa_deepdive', 'wed_service', 'thu_audience', 'fri_comparison', 'sat_data_pulse'],
+        STARTER: ['tue_qa_deepdive', 'fri_comparison'],
+      };
+
+      const clients = await this.prisma.site.findMany({
+        where: { isClient: true, isPublic: true },
+        select: { id: true, name: true, profile: true, user: { select: { plan: true, role: true } } },
+      });
+
+      const expected: Array<{ id: string; name: string }> = [];
+      for (const s of clients) {
+        const profile = (s.profile as Record<string, any>) || {};
+        if (profile.dailyContentPaused) continue;
+        const role = s.user?.role;
+        const isBypass = role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'STAFF';
+        const allowedDays = isBypass
+          ? planActiveDays.PRO
+          : planActiveDays[s.user?.plan || 'FREE'] || [];
+        if (allowedDays.includes(dayType)) {
+          expected.push({ id: s.id, name: s.name });
+        }
+      }
+
+      const todayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0));
+      const articles = await this.prisma.blogArticle.findMany({
+        where: {
+          siteId: { in: expected.map((e) => e.id) },
+          templateType: 'client_daily',
+          createdAt: { gte: todayStart },
+          targetKeywords: { has: dayType },
+        },
+        select: { siteId: true },
+      });
+      const got = new Set(articles.map((a) => a.siteId));
+      const missing = expected.filter((e) => !got.has(e.id));
+
+      if (missing.length === 0) {
+        this.logger.log(`client_daily sentinel OK: ${expected.length}/${expected.length} ${dayType}`);
+        return;
+      }
+
+      this.logger.error(
+        `client_daily sentinel ALERT: ${missing.length}/${expected.length} ${dayType} 篇遺漏 — sites: ${missing.map((m) => m.name).join(', ')}`,
+      );
+    });
   }
 }
