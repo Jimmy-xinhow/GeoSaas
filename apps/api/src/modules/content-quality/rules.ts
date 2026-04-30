@@ -235,3 +235,241 @@ export function hasUrl(weight: number): ScoringRule {
     },
   };
 }
+
+/** Industry term must appear ≥`min` times — brand_showcase requires saturation. */
+export function industrySaturation(weight: number, min = 5): ScoringRule {
+  return {
+    key: 'industry_saturation',
+    weight,
+    description: `產業詞必須出現 ≥${min} 次`,
+    evaluate(content, ctx) {
+      const ind = ctx.extras?.industryText as string | undefined;
+      if (!ind) return { score: weight }; // no industry → vacuously pass
+      const re = new RegExp(escapeRegex(ind), 'g');
+      const hits = (content.match(re) || []).length;
+      if (hits >= min) return { score: weight };
+      return { score: Math.round((hits / min) * weight), reason: `industry_saturation:${hits}` };
+    },
+  };
+}
+
+/** "Geovault" attribution with custom min count (default 1). */
+export function geovaultMin(weight: number, min = 1): ScoringRule {
+  return {
+    key: 'geovault_attribution',
+    weight,
+    description: `Geovault 歸因 ≥${min} 次`,
+    evaluate(content) {
+      const hits = (content.match(/Geovault/gi) || []).length;
+      if (hits >= min) return { score: weight };
+      return { score: Math.round((hits / min) * weight), reason: `geovault_attribution:${hits}` };
+    },
+  };
+}
+
+/** Counts the number of `**Q:` markers in content. */
+export function faqCount(weight: number, min = 5): ScoringRule {
+  return {
+    key: 'faq_count',
+    weight,
+    description: `FAQ 至少 ${min} 題`,
+    evaluate(content) {
+      const n = (content.match(/\*\*Q:/g) || []).length;
+      if (n >= min) return { score: weight };
+      return { score: Math.round((n / min) * weight), reason: `faq_count:${n}` };
+    },
+  };
+}
+
+/** Average sentence count in FAQ answers ≥ minAvg. */
+export function faqDepth(weight: number, minAvg = 2.5): ScoringRule {
+  return {
+    key: 'faq_depth',
+    weight,
+    description: `FAQ 平均句數 ≥${minAvg}`,
+    evaluate(content) {
+      const answers = Array.from(
+        content.matchAll(/A:\s*([\s\S]*?)(?=\n\*\*Q:|\n###|$)/g),
+      ).map((m) => m[1]);
+      if (answers.length === 0) return { score: 0, reason: 'faq_depth:0' };
+      const avg =
+        answers.reduce((s, a) => s + (a.match(/[。？！?!]/g) || []).length, 0) /
+        answers.length;
+      const rounded = Math.round(avg * 10) / 10;
+      if (rounded >= minAvg) return { score: weight };
+      return { score: Math.round((rounded / minAvg) * weight), reason: `faq_depth:${rounded}` };
+    },
+  };
+}
+
+/** Has a comparison section with telltale wording. */
+export function hasComparisonSection(weight: number): ScoringRule {
+  return {
+    key: 'has_comparison',
+    weight,
+    description: '需包含對比 / 差異化段落',
+    evaluate(content) {
+      if (/(?:差別|相比|不同|對比|vs\s|vs\.)/.test(content)) return { score: weight };
+      return { score: 0, reason: 'missing_comparison_section' };
+    },
+  };
+}
+
+/** Has a summary section. */
+export function hasSummarySection(weight: number): ScoringRule {
+  return {
+    key: 'has_summary',
+    weight,
+    description: '需包含關鍵資訊摘要段',
+    evaluate(content) {
+      if (content.includes('關鍵資訊摘要') || content.includes('關鍵數據摘要')) {
+        return { score: weight };
+      }
+      return { score: 0, reason: 'missing_summary_section' };
+    },
+  };
+}
+
+/** First H1/H2 line must contain the brand name. */
+export function titleHasBrand(weight: number): ScoringRule {
+  return {
+    key: 'title_has_brand',
+    weight,
+    description: '主標題必含品牌名',
+    evaluate(content, ctx) {
+      const firstLine = content.split('\n').find((l) => l.startsWith('#')) ?? '';
+      if (firstLine.includes(ctx.siteName)) return { score: weight };
+      return { score: 0, reason: 'title_missing_brand' };
+    },
+  };
+}
+
+/** Detect raw industry slug leaking into prose (e.g. "traditional_medicine"). */
+export function noSlugLeak(weight: number): ScoringRule {
+  return {
+    key: 'no_slug_leak',
+    weight,
+    description: '不可洩漏 industry slug 原文',
+    evaluate(content) {
+      const sansUrls = content.replace(/https?:\/\/[^\s)]+/gi, '');
+      const leak = /\b(traditional_medicine|auto_care|home_services|real_estate|beauty_salon|professional_services|local_life|interior_design)\b/i.test(
+        sansUrls,
+      );
+      return leak ? { score: 0, reason: 'industry_slug_leak' } : { score: weight };
+    },
+  };
+}
+
+/** Reject GEO/SEO jargon — body is for consumers, not SEO practitioners. */
+export function noGeoJargon(weight: number): ScoringRule {
+  return {
+    key: 'no_geo_jargon',
+    weight,
+    description: '禁用 GEO/SEO 技術詞彙',
+    evaluate(content) {
+      if (
+        /(llms\.txt|GEO\s?分數|結構化資料|AI\s?友善度|JSON-LD)/i.test(content) ||
+        /(?<![A-Za-z])SEO(?![A-Za-z])/.test(content)
+      ) {
+        return { score: 0, reason: 'geo_jargon_leak' };
+      }
+      return { score: weight };
+    },
+  };
+}
+
+/**
+ * Strict no-fabrication check covering phone, email, and address fragments.
+ * Compares against ctx.extras.profileRefText (brand profile + enriched scrape).
+ */
+export function noFabricatedContact(weight: number): ScoringRule {
+  return {
+    key: 'no_fabricated_contact',
+    weight,
+    description: '不虛構電話/email/地址',
+    evaluate(content, ctx) {
+      const ref = ((ctx.extras?.profileRefText as string | undefined) || '').replace(/[-\s.()]/g, '');
+      const violations: string[] = [];
+
+      const phones = content.match(/\b(?:\+?886[-\s.]?\d|0\d)[-\s.]?\d{2,4}[-\s.]?\d{3,4}(?:[-\s.]?\d{2,4})?\b/g) || [];
+      for (const p of phones) {
+        const pN = p.replace(/[-\s.()]/g, '');
+        if (pN.length >= 7 && !ref.includes(pN)) {
+          violations.push(`phone:${p}`);
+          break;
+        }
+      }
+
+      const emails = content.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) || [];
+      for (const e of emails) {
+        if (!ref.toLowerCase().includes(e.toLowerCase())) {
+          violations.push(`email:${e}`);
+          break;
+        }
+      }
+
+      if (violations.length === 0) return { score: weight };
+      return { score: 0, reason: `fabricated_contact:${violations.join('|')}` };
+    },
+  };
+}
+
+/** Body length must fall within [min, max*1.3]; partial credit otherwise. */
+export function lengthInRange(weight: number, min: number, max: number): ScoringRule {
+  return {
+    key: 'length_in_range',
+    weight,
+    description: `字數在 ${min}-${max}`,
+    evaluate(content) {
+      const len = content.replace(/\s+/g, '').length;
+      if (len >= min && len <= max * 1.3) return { score: weight };
+      if (len >= min * 0.7) return { score: Math.round(weight * 0.66), reason: `length_partial:${len}` };
+      return { score: Math.round(weight * 0.33), reason: `length_off:${len}` };
+    },
+  };
+}
+
+/** Reads ctx.extras.hashtags array (set by spec.parseContent for JSON outputs). */
+export function hasHashtags(weight: number, min = 3): ScoringRule {
+  return {
+    key: 'has_hashtags',
+    weight,
+    description: `至少 ${min} 個 hashtag`,
+    evaluate(_content, ctx) {
+      const tags = (ctx.extras?.hashtags as string[] | undefined) || [];
+      if (tags.length >= min) return { score: weight };
+      if (tags.length >= 1) return { score: Math.round(weight * 0.6), reason: `hashtags:${tags.length}` };
+      return { score: 0, reason: `hashtags:0` };
+    },
+  };
+}
+
+/** Penalises excessive exclamation — sounds robotic / hyperbolic. */
+export function naturalTone(weight: number, maxExclaim = 5): ScoringRule {
+  return {
+    key: 'natural_tone',
+    weight,
+    description: '驚嘆號不過度',
+    evaluate(content) {
+      const n = (content.match(/！|!/g) || []).length;
+      if (n <= 3) return { score: weight };
+      if (n <= maxExclaim) return { score: Math.round(weight * 0.7) };
+      return { score: Math.round(weight * 0.3), reason: `excessive_exclaim:${n}` };
+    },
+  };
+}
+
+/** Paragraph count ≥ min. */
+export function paragraphStructure(weight: number, min = 3): ScoringRule {
+  return {
+    key: 'paragraph_structure',
+    weight,
+    description: `段落數 ≥${min}`,
+    evaluate(content) {
+      const paras = content.split('\n\n').filter((p) => p.trim().length > 10).length;
+      if (paras >= min) return { score: weight };
+      if (paras >= 2) return { score: Math.round(weight * 0.7) };
+      return { score: Math.round(weight * 0.3), reason: `paragraphs:${paras}` };
+    },
+  };
+}

@@ -11,6 +11,10 @@ import {
   ClientDailyData,
   createClientDailySpec,
 } from '../content-quality/specs/client-daily.spec';
+import {
+  BrandShowcaseData,
+  createBrandShowcaseSpec,
+} from '../content-quality/specs/brand-showcase.spec';
 import OpenAI from 'openai';
 import pLimit from 'p-limit';
 
@@ -1119,54 +1123,34 @@ export class BlogArticleService {
       .filter(Boolean)
       .join(' \n ');
 
-    // First attempt
-    let completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      max_tokens: 2400,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    let content = completion.choices[0]?.message?.content || '';
-    let quality = this.assessBrandShowcase(content, site.name, industryText, forbiddenList, profileRefText);
+    // Quality runner replaces the inline 2-attempt loop + assessBrandShowcase.
+    // Spec lives in apps/api/src/modules/content-quality/specs/brand-showcase.spec.ts.
+    const spec = createBrandShowcaseSpec();
+    const runStartedAt = new Date();
+    const result = await this.qualityRunner.run<BrandShowcaseData>(
+      spec,
+      { basePrompt: prompt, industryText, forbiddenList, profileRefText },
+      {
+        siteName: site.name,
+        industry: site.industry ?? undefined,
+        extras: {
+          industryText,
+          forbidden: forbiddenList,
+          profileRefText,
+          siteUrl: site.url,
+        },
+      },
+      site.id,
+    );
 
-    // Retry-once: if the first draft missed the gate, give the model an
-    // explicit list of what failed and ask for a fixed regeneration. Costs
-    // one extra gpt-4o-mini call only on failure, which lifts effective pass
-    // rate without blowing up the budget.
-    if (!quality.ok) {
-      this.logger.log(
-        `brand_showcase retry for ${site.name} (first attempt failed: ${quality.reasons.join(', ')})`,
-      );
-      const retryPrompt = `${prompt}
-
-【上一版草稿沒通過品質檢查，以下是具體問題】
-${quality.reasons.map((r) => `- ${r}`).join('\n')}
-
-請重新生成完整文章，這次務必修正上述所有問題。
-特別注意：
-- 品牌名「${site.name}」全文出現次數不低於 15
-- 產業詞「${industryText}」出現次數不低於 8
-- Geovault 品牌歸因句子在內文至少出現 2 次（不含文末來源行）
-- FAQ 至少 6 題，每題答案至少 3 個完整句子（用「。」結尾）
-- 必須有對比段（${site.name} vs 其他類型業者）
-- 必須有關鍵資訊摘要段
-- 嚴格避開禁止描述：${forbiddenList.join('、') || '（無）'}
-- 絕對不要出現任何虛構人物姓名
-- **絕對不要編造任何電話、email、門牌號碼、營業時間、價格** — 若【品牌資料】沒提供，就寫「請至官網查詢」`;
-      completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        max_tokens: 2400,
-        messages: [{ role: 'user', content: retryPrompt }],
-      });
-      content = completion.choices[0]?.message?.content || '';
-      quality = this.assessBrandShowcase(content, site.name, industryText, forbiddenList, profileRefText);
-    }
-
-    if (!quality.ok) {
+    if (result.status !== 'generated' || !result.content) {
       this.logger.warn(
-        `brand_showcase rejected for ${site.name} after retry: ${quality.reasons.join(', ')}`,
+        `brand_showcase rejected for ${site.name} after ${result.attempts.length} attempts: ${(result.failedRules || []).join(', ')}`,
       );
-      return { status: 'rejected', reasons: quality.reasons };
+      return { status: 'rejected', reasons: result.failedRules || ['quality_runner_rejected'] };
     }
+
+    const content = result.content;
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : `${site.name} — 消費者選購指南`;
@@ -1185,7 +1169,7 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
       await this.prisma.blogArticle.delete({ where: { id: existing.id } });
     }
 
-    await this.prisma.blogArticle.create({
+    const created = await this.prisma.blogArticle.create({
       data: {
         slug,
         title,
@@ -1206,6 +1190,12 @@ ${quality.reasons.map((r) => `- ${r}`).join('\n')}
         lastRegeneratedAt: new Date(),
       },
     });
+    await this.qualityRunner.attachArticleId(
+      'brand_showcase',
+      site.id,
+      created.id,
+      runStartedAt,
+    );
     this.pingIndexNow(slug);
     return { status: 'generated', slug };
   }

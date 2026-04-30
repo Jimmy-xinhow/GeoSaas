@@ -70,6 +70,14 @@ export interface ContentSpec<T = unknown> {
   fullModel: string;              // e.g. gpt-4o
   buildFullPrompt(args: BuildPromptArgs<T> & { outline?: string }): string;
   fullMaxTokens?: number;         // default: 2000
+  // OpenAI response_format hint (json_object | text). Default: text.
+  fullResponseFormat?: 'text' | 'json_object';
+
+  // For JSON-output paths (e.g. brand_spread): given the raw model output,
+  // return the body text the rules should score against, and optionally
+  // mutate ctx.extras with parsed fields (e.g. hashtags). When omitted, the
+  // raw output is passed straight to rules.
+  parseContent?(raw: string, ctx: RuleContext): string;
 
   // ─── Stage 3 ─────────────────────────────────────────────────
   rules: ScoringRule[];

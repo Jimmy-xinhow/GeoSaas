@@ -107,11 +107,13 @@ export class ContentQualityRunner {
 
     for (let i = 0; i < maxFullRetries + 1; i++) {
       const prompt = spec.buildFullPrompt({ ctx, data, outline });
-      const { content, tokensIn, tokensOut, durationMs } = await this.callOpenAI(
+      const { content: rawContent, tokensIn, tokensOut, durationMs } = await this.callOpenAI(
         fullModel,
         prompt,
         fullMaxTokens,
+        spec.fullResponseFormat,
       );
+      const content = spec.parseContent ? spec.parseContent(rawContent, ctx) : rawContent;
       const { totalScore, ruleScores, failedRules } = this.evaluate(
         content,
         spec.rules,
@@ -159,11 +161,13 @@ export class ContentQualityRunner {
           failedRules: bestFailed,
         };
         const prompt = spec.buildPatchPrompt(args);
-        const { content, tokensIn, tokensOut, durationMs } = await this.callOpenAI(
+        const { content: rawContent, tokensIn, tokensOut, durationMs } = await this.callOpenAI(
           fullModel,
           prompt,
           patchMaxTokens,
+          spec.fullResponseFormat,
         );
+        const content = spec.parseContent ? spec.parseContent(rawContent, ctx) : rawContent;
         const { totalScore, ruleScores, failedRules } = this.evaluate(
           content,
           spec.rules,
@@ -238,12 +242,14 @@ export class ContentQualityRunner {
     model: string,
     prompt: string,
     maxTokens: number,
+    responseFormat?: 'text' | 'json_object',
   ): Promise<{ content: string; tokensIn?: number; tokensOut?: number; durationMs: number }> {
     const t0 = Date.now();
     const response = await this.openai!.chat.completions.create({
       model,
       max_tokens: maxTokens,
       messages: [{ role: 'user', content: prompt }],
+      ...(responseFormat === 'json_object' ? { response_format: { type: 'json_object' as const } } : {}),
     });
     const content = response.choices[0]?.message?.content || '';
     return {

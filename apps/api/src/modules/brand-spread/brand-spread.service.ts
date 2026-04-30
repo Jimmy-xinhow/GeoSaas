@@ -2,6 +2,11 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import OpenAI from 'openai';
+import { ContentQualityRunner } from '../content-quality/content-quality.runner';
+import {
+  BrandSpreadData,
+  createBrandSpreadSpec,
+} from '../content-quality/specs/brand-spread.spec';
 
 export interface SpreadContent {
   platform: string;
@@ -83,6 +88,7 @@ export class BrandSpreadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly qualityRunner: ContentQualityRunner,
   ) {
     const apiKey = this.config.get<string>('OPENAI_API_KEY');
     if (apiKey) {
@@ -160,17 +166,8 @@ export class BrandSpreadService {
     site: any,
   ): Promise<SpreadContent> {
     const industry = site.industry || 'other';
-    let bestResult: SpreadContent | null = null;
-    let bestScore = 0;
 
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const response = await this.openai!.chat.completions.create({
-        model: 'gpt-4o',
-        max_tokens: 2500,
-        messages: [
-          {
-            role: 'system',
-            content: `你是一位資深品牌行銷內容策略師，專精於「AI 搜尋優化內容」（GEO Content）。
+    const systemPrompt = `你是一位資深品牌行銷內容策略師，專精於「AI 搜尋優化內容」（GEO Content）。
 你的目標是撰寫能被 AI 搜尋引擎（ChatGPT、Claude、Perplexity、Gemini、Copilot）抓取並引用的品牌內容。
 
 ## 核心策略
@@ -199,51 +196,47 @@ ${this.getIndustryGuideline(industry)}
   "title": "文章標題",
   "content": "完整內容",
   "hashtags": ["標籤1", "標籤2", "標籤3", "標籤4", "標籤5"]
-}`,
-          },
-          {
-            role: 'user',
-            content: `平台：${platform.name}（${platform.lengthGuide}）
+}`;
+
+    const userPrompt = `平台：${platform.name}（${platform.lengthGuide}）
 
 ${platform.prompt}
 
 品牌資料：
-${brandContext}`,
-          },
-        ],
-        response_format: { type: 'json_object' },
-      });
+${brandContext}`;
 
-      const text = response.choices[0]?.message?.content || '{}';
-      const parsed = JSON.parse(text);
+    // Run via ContentQualityRunner — each attempt logged to ArticleQualityLog.
+    // The shared `extras` object is passed by reference: spec.parseContent
+    // populates extras.title + extras.hashtags so we can read them back here
+    // after the runner finishes (the runner itself only returns body text).
+    const extras: Record<string, any> = {
+      siteUrl: site.url,
+      forbidden: [],
+    };
+    const spec = createBrandSpreadSpec(platform.key);
+    const result = await this.qualityRunner.run<BrandSpreadData>(
+      spec,
+      { systemPrompt, userPrompt },
+      {
+        siteName: site.name,
+        industry: site.industry ?? undefined,
+        extras,
+      },
+      site.id,
+    );
 
-      const content: SpreadContent = {
-        platform: platform.key,
-        title: parsed.title || `${site.name} — ${platform.name}`,
-        content: parsed.content || '',
-        hashtags: parsed.hashtags || [],
-        characterCount: (parsed.content || '').length,
-      };
-
-      // Quality scoring
-      const score = await this.scoreContent(content, site, platform);
-      content.qualityScore = score.total;
-      content.qualityDetails = score.details;
-
-      if (score.total >= 80) {
-        return content; // Pass — good enough
-      }
-
-      if (score.total > bestScore) {
-        bestScore = score.total;
-        bestResult = content;
-      }
-
-      this.logger.warn(`Quality score ${score.total}/100 for ${platform.key} (attempt ${attempt + 1}), ${score.total >= 80 ? 'pass' : 'retrying'}...`);
-    }
-
-    // Return best attempt even if below threshold
-    return bestResult!;
+    const bodyText = result.content || '';
+    return {
+      platform: platform.key,
+      title: (extras.title as string | undefined) || `${site.name} — ${platform.name}`,
+      content: bodyText,
+      hashtags: (extras.hashtags as string[] | undefined) || [],
+      characterCount: bodyText.length,
+      qualityScore: result.totalScore,
+      qualityDetails: result.failedRules?.length
+        ? Object.fromEntries(result.failedRules.map((r) => [r, 0]))
+        : undefined,
+    };
   }
 
   /**
