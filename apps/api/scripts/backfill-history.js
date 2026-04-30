@@ -36,6 +36,7 @@ const { extractNicheKeywords } = require('../dist/modules/blog-article/niche-key
 const SITES = [
   { id: 'cmn9128eo00pl8mq3391820gm', name: '詹大汽車精品' },
   { id: 'cmn908gxe008j8mq3mdkh0emk', name: '立如整復' },
+  { id: 'cmnfmk94z000d3ux9yqoeseyt', name: 'Geovault Platform' },
 ];
 
 const DAY_SEQ = [
