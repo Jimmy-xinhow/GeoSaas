@@ -12,6 +12,13 @@ export class DirectoryController {
   constructor(private readonly service: DirectoryService) {}
 
   @Public()
+  @Get('directory/sitemap-data')
+  @ApiOperation({ summary: 'Aggregate URL list for /sitemap.xml (single round-trip)' })
+  sitemapData() {
+    return this.service.getSitemapData();
+  }
+
+  @Public()
   @Get('directory')
   @ApiOperation({ summary: 'List public directory (paginated)' })
   list(@Query() query: QueryDirectoryDto) {

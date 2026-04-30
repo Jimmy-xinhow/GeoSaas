@@ -32,6 +32,61 @@ export class DirectoryService {
     @Optional() private readonly indexNowService?: IndexNowService,
   ) {}
 
+  /**
+   * One-shot aggregate query for /sitemap.xml. Replaces ~14 sequential HTTP
+   * calls from the web container — those were timing out at the 3s deadline
+   * (web→api goes via Cloudflare, not Railway internal networking, so 14
+   * parallel requests get queued/throttled at the edge). This single endpoint
+   * runs all four queries in parallel inside the API container, where the
+   * DB connection is local and reliable.
+   *
+   * Returns:
+   *   sites[]          — public site ids for /directory/{id}, /feed, /feed.json
+   *   blogArticles[]   — DB-backed published articles for /blog/{slug}
+   *   cases[]          — approved success cases for /cases/{id}
+   *   industrySites{}  — { [industry]: [siteId, ...] } for /industry/{ind}/{id}
+   */
+  async getSitemapData() {
+    const [sites, blogArticles, cases, industrySitesRaw] = await Promise.all([
+      this.prisma.site.findMany({
+        where: { isPublic: true },
+        select: { id: true, bestScoreAt: true, industry: true },
+        orderBy: { bestScore: 'desc' },
+        take: 2000,
+      }),
+      this.prisma.blogArticle.findMany({
+        where: { published: true },
+        select: { slug: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 2000,
+      }),
+      this.prisma.geoSuccessCase.findMany({
+        where: { status: 'approved' },
+        select: { id: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+      this.prisma.site.findMany({
+        where: { isPublic: true, bestScore: { gt: 0 }, industry: { not: null } },
+        select: { id: true, industry: true },
+        orderBy: { bestScore: 'desc' },
+      }),
+    ]);
+
+    const industrySites: Record<string, string[]> = {};
+    for (const s of industrySitesRaw) {
+      if (!s.industry) continue;
+      (industrySites[s.industry] ||= []).push(s.id);
+    }
+
+    return {
+      sites: sites.map((s) => ({ id: s.id, bestScoreAt: s.bestScoreAt })),
+      blogArticles,
+      cases,
+      industrySites,
+    };
+  }
+
   async listDirectory(query: QueryDirectoryDto) {
     const { search, industry, tier, minScore, page = 1, limit = 12 } = query;
     const skip = (page - 1) * limit;

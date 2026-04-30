@@ -7,22 +7,32 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 
 export const revalidate = 3600;
 
-// Tight per-fetch timeout. Sitemap must always respond — any hung API call
-// gets aborted and that section is silently dropped. Static URLs always go
-// out regardless of API health.
-const FETCH_TIMEOUT_MS = 3000;
+// One aggregate fetch instead of ~14 parallel fetches. Web→API goes through
+// Cloudflare (not Railway internal networking), so 14 concurrent calls were
+// getting queued/throttled at the edge and timing out at 3s — which is why
+// the sitemap kept emitting only the static URLs (~106). With a single call
+// the API does its 4 queries in parallel internally where Prisma is cheap.
+const FETCH_TIMEOUT_MS = 15000;
 
-async function fetchJson<T = any>(url: string): Promise<T | null> {
+interface SitemapData {
+  sites: Array<{ id: string; bestScoreAt: string | null }>;
+  blogArticles: Array<{ slug: string; createdAt: string }>;
+  cases: Array<{ id: string; createdAt: string }>;
+  industrySites: Record<string, string[]>;
+}
+
+async function fetchSitemapData(): Promise<SitemapData | null> {
   try {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
-    const res = await fetch(url, {
+    const res = await fetch(`${API_URL}/api/directory/sitemap-data`, {
       next: { revalidate: 3600 },
       signal: ctl.signal,
     });
     clearTimeout(timer);
     if (!res.ok) return null;
-    return (await res.json()) as T;
+    const json = await res.json();
+    return (json?.data ?? json) as SitemapData;
   } catch {
     return null;
   }
@@ -30,6 +40,7 @@ async function fetchJson<T = any>(url: string): Promise<T | null> {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [];
+  const now = new Date();
 
   // ─── Static pages ───
   const staticPages = [
@@ -47,17 +58,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: '/llms.txt', priority: 0.5, changeFrequency: 'daily' as const },
     { url: '/llms-full.txt', priority: 0.5, changeFrequency: 'daily' as const },
   ];
-
   for (const page of staticPages) {
     entries.push({
       url: `${BASE_URL}${page.url}`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: page.changeFrequency,
       priority: page.priority,
     });
   }
 
-  // ─── Static blog posts ───
+  // ─── Static markdown blog posts ───
   for (const post of getAllPosts()) {
     entries.push({
       url: `${BASE_URL}/blog/${post.slug}`,
@@ -67,116 +77,87 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // ─── Industry index pages ───
+  // ─── Industry directory index pages ───
   for (const ind of INDUSTRIES) {
     entries.push({
       url: `${BASE_URL}/directory/industry/${ind.value}`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.7,
     });
   }
 
-  // ─── All dynamic data fetched in parallel with hard timeouts ───
-  const PAGE_SIZE = 50;
-  const MAX_PAGES = 10;
-  const directoryUrls = Array.from(
-    { length: MAX_PAGES },
-    (_, i) => `${API_URL}/api/directory?limit=${PAGE_SIZE}&page=${i + 1}`,
-  );
-  const industryAiUrls = INDUSTRIES
-    .filter((ind) => ind.value !== 'other')
-    .map((ind) => ({
-      industry: ind.value,
-      url: `${API_URL}/api/industry-ai/${ind.value}/sites`,
-    }));
-
-  const [directoryResults, blogData, casesData, industryAiResults] = await Promise.all([
-    Promise.all(directoryUrls.map((u) => fetchJson(u))),
-    fetchJson(`${API_URL}/api/blog/articles?limit=500`),
-    fetchJson(`${API_URL}/api/success-cases?limit=100`),
-    Promise.all(
-      industryAiUrls.map(async (e) => ({
-        industry: e.industry,
-        data: await fetchJson(e.url),
-      })),
-    ),
-  ]);
-
-  // ─── Directory sites + per-brand feeds ───
-  for (const data of directoryResults) {
-    if (!data) continue;
-    const items = data?.data?.items || data?.items || [];
-    for (const site of items) {
-      const lastModified = site.bestScoreAt ? new Date(site.bestScoreAt) : new Date();
-      entries.push({
-        url: `${BASE_URL}/directory/${site.id}`,
-        lastModified,
-        changeFrequency: 'weekly',
-        priority: 0.6,
-      });
-      entries.push({
-        url: `${BASE_URL}/directory/${site.id}/feed`,
-        lastModified,
-        changeFrequency: 'daily',
-        priority: 0.4,
-      });
-      entries.push({
-        url: `${BASE_URL}/directory/${site.id}/feed.json`,
-        lastModified,
-        changeFrequency: 'daily',
-        priority: 0.4,
-      });
-    }
-  }
-
-  // ─── Blog articles from DB ───
-  if (blogData) {
-    const items = blogData?.data?.items || blogData?.items || [];
-    for (const article of items) {
-      entries.push({
-        url: `${BASE_URL}/blog/${article.slug}`,
-        lastModified: article.createdAt ? new Date(article.createdAt) : new Date(),
-        changeFrequency: 'weekly',
-        priority: 0.6,
-      });
-    }
-  }
-
-  // ─── Success cases ───
-  if (casesData) {
-    const items = casesData?.data?.items || casesData?.items || [];
-    for (const c of items) {
-      entries.push({
-        url: `${BASE_URL}/cases/${c.id}`,
-        lastModified: c.createdAt ? new Date(c.createdAt) : new Date(),
-        changeFrequency: 'monthly',
-        priority: 0.5,
-      });
-    }
-  }
-
-  // ─── Industry AI recommendation pages ───
-  for (const { industry, data } of industryAiResults) {
+  // ─── Industry AI index/compare pages (always emit, regardless of API) ───
+  for (const ind of INDUSTRIES) {
+    if (ind.value === 'other') continue;
     entries.push({
-      url: `${BASE_URL}/industry/${industry}`,
-      lastModified: new Date(),
+      url: `${BASE_URL}/industry/${ind.value}`,
+      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.8,
     });
     entries.push({
-      url: `${BASE_URL}/industry/${industry}/compare`,
-      lastModified: new Date(),
+      url: `${BASE_URL}/industry/${ind.value}/compare`,
+      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.6,
     });
-    if (!data) continue;
-    const items = data?.data || data || [];
-    if (!Array.isArray(items)) continue;
-    for (const site of items) {
+  }
+
+  // ─── Single aggregate API call ───
+  const data = await fetchSitemapData();
+  if (!data) return entries;
+
+  // Directory sites + per-brand feeds
+  for (const s of data.sites) {
+    const lastModified = s.bestScoreAt ? new Date(s.bestScoreAt) : now;
+    entries.push({
+      url: `${BASE_URL}/directory/${s.id}`,
+      lastModified,
+      changeFrequency: 'weekly',
+      priority: 0.6,
+    });
+    entries.push({
+      url: `${BASE_URL}/directory/${s.id}/feed`,
+      lastModified,
+      changeFrequency: 'daily',
+      priority: 0.4,
+    });
+    entries.push({
+      url: `${BASE_URL}/directory/${s.id}/feed.json`,
+      lastModified,
+      changeFrequency: 'daily',
+      priority: 0.4,
+    });
+  }
+
+  // DB-backed blog articles
+  for (const article of data.blogArticles) {
+    entries.push({
+      url: `${BASE_URL}/blog/${article.slug}`,
+      lastModified: new Date(article.createdAt),
+      changeFrequency: 'weekly',
+      priority: 0.6,
+    });
+  }
+
+  // Approved success cases
+  for (const c of data.cases) {
+    entries.push({
+      url: `${BASE_URL}/cases/${c.id}`,
+      lastModified: new Date(c.createdAt),
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    });
+  }
+
+  // Per-industry brand pages
+  for (const [industry, siteIds] of Object.entries(data.industrySites)) {
+    if (industry === 'other') continue;
+    for (const siteId of siteIds) {
       entries.push({
-        url: `${BASE_URL}/industry/${industry}/${site.id}`,
-        lastModified: new Date(),
+        url: `${BASE_URL}/industry/${industry}/${siteId}`,
+        lastModified: now,
         changeFrequency: 'weekly',
         priority: 0.7,
       });
