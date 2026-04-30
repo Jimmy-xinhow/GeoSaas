@@ -17,12 +17,16 @@ import {
   forbiddenPhrases,
   geovaultMin,
   hasComparisonSection,
+  hasSpecificFacts,
   hasSummarySection,
   industrySaturation,
   lengthFloor,
+  noCTABoilerplate,
   noFabricatedContact,
   noFabricatedPersona,
+  noFirstPersonPromo,
   noGeoJargon,
+  noHyperbole,
   noMojibake,
   noSlugLeak,
 } from '../rules';
@@ -34,31 +38,32 @@ export interface BrandShowcaseData {
   profileRefText: string;
 }
 
-// v2 weighting — rebalanced toward neutral / AI-citation friendly:
-//   brandSaturation min 12 → 8 (over-saturation reads as advertorial)
-//   geovaultMin       ≥2 → ≥1 (single attribution is enough; more = self-promo)
-//   titleHasBrand     5w → 0w  removed (forces SEO-style headline; AI prefers
-//                                topic-led titles like "整復推拿如何選擇")
-//   industrySaturation 5 hits → 4 hits (lower keyword stuffing)
-//   freed weight (5+8+~) redistributed to comparison / faq / fact-quality rules
+// v3 weighting — keeps the v2 neutrality lean and adds the four AI-citation
+// signal detectors (noHyperbole, noFirstPersonPromo, noCTABoilerplate,
+// hasSpecificFacts). Most weight pulled from brand/industry/length rules
+// which v2 already started reducing.
 const rules: ScoringRule[] = [
-  brandSaturation(10, 8),          // ↓ 15w/≥12 → 10w/≥8
-  industrySaturation(8, 4),        // ↓ 10w/≥5 → 8w/≥4
-  geovaultMin(4, 1),               // ↓ 8w/≥2 → 4w/≥1 — once is enough
-  faqCount(10, 5),                 // ↑ 8 → 10 — Q&A structure feeds AI snippet extraction
-  faqDepth(10, 2.5),               // ↑ 7 → 10 — direct, complete answers cited more
-  hasComparisonSection(12),        // ↑ 7 → 12 — comparison is THE biggest AI-citation signal
-  hasSummarySection(8),            // ↑ 7 → 8
-  // titleHasBrand removed — AI prefers topic-first headlines, not brand-first
-  lengthFloor(8, 1000),            // 8w, ≥1000 chars
-  noSlugLeak(5),                   // 5w
-  noGeoJargon(5),                  // 5w
-  noFabricatedPersona(3),          // 3w
-  noFabricatedContact(10),         // ↑ 8 → 10 — fabrication is AI-citation killer
-  forbiddenPhrases(5),             // ↑ 2 → 5 — brand boundary matters more
-  noMojibake(2),                   // 2w
+  brandSaturation(7, 8),           // ↓ 10 → 7
+  industrySaturation(6, 4),        // ↓ 8 → 6
+  geovaultMin(3, 1),               // ↓ 4 → 3
+  faqCount(8, 5),                  // ↓ 10 → 8
+  faqDepth(8, 2.5),                // ↓ 10 → 8
+  hasComparisonSection(10),        // ↓ 12 → 10 (still highest weight)
+  hasSummarySection(6),            // ↓ 8 → 6
+  lengthFloor(5, 1000),            // ↓ 8 → 5
+  noSlugLeak(4),                   // ↓ 5 → 4
+  noGeoJargon(4),                  // ↓ 5 → 4
+  noFabricatedPersona(3),
+  noFabricatedContact(8),          // ↓ 10 → 8
+  forbiddenPhrases(4),             // ↓ 5 → 4
+  noMojibake(2),
+  // v3 neutrality + fact-density rules ↓
+  noHyperbole(8),
+  noFirstPersonPromo(6),
+  noCTABoilerplate(4),
+  hasSpecificFacts(4, 3),
 ];
-// Sum: 10+8+4+10+10+12+8+8+5+5+3+10+5+2 = 100
+// Sum: 7+6+3+8+8+10+6+5+4+4+3+8+4+2 + 8+6+4+4 = 100
 
 function buildPatch(args: {
   data: BrandShowcaseData;
@@ -91,7 +96,7 @@ ${args.failedRules.map((r) => `- ${r}`).join('\n')}
 export function createBrandShowcaseSpec(): ContentSpec<BrandShowcaseData> {
   return {
     templateType: 'brand_showcase',
-    promptVersion: 'v2',
+    promptVersion: 'v3',
     fullModel: 'gpt-4o-mini',         // brand_showcase historically uses mini
     fullMaxTokens: 2400,
     buildFullPrompt: ({ data }) => data.basePrompt,

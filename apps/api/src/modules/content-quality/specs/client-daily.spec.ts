@@ -18,10 +18,14 @@ import {
   brandSaturation,
   forbiddenPhrases,
   geovaultAttribution,
+  hasSpecificFacts,
   lengthFloor,
   nicheKeywords,
+  noCTABoilerplate,
   noFabricatedPersona,
   noFabricatedPhone,
+  noFirstPersonPromo,
+  noHyperbole,
   noMojibake,
   noOutdatedNarrative,
   noSelfPromoFaq,
@@ -45,28 +49,33 @@ interface DaySpecConfig {
 }
 
 function commonRules(opts: { withSelfPromoFaq: boolean }): ScoringRule[] {
-  // v2 weighting — rebalanced toward "AI-citation friendly" rather than
-  // "SEO-style brand stuffing":
-  //  - brandSaturation min dropped 10 → 6 (over-saturation reads as ad copy)
-  //  - geovaultAttribution stays ≥1 (single source attribution, not multiple)
-  //  - freed weight redistributed to fact-quality rules
+  // v3 weighting — adds neutrality detectors (noHyperbole, noFirstPersonPromo,
+  // noCTABoilerplate) + a positive specific-facts incentive. These four
+  // directly target what AI search engines demote (advertorial tone) and
+  // what they reward (concrete fact density). Pulled weight from
+  // brand/keyword/geovault saturation rules, which v2 already started
+  // reducing.
   const list: ScoringRule[] = [
-    brandSaturation(12, 6),        // ≥6 (was 10): natural third-party density
-    nicheKeywords(15),             // 品牌獨有關鍵字必出現
-    noFabricatedPhone(12),         // ↑ 10→12 — fabrication is AI-citation killer
-    forbiddenPhrases(10),          // 品牌 forbidden
-    noOutdatedNarrative(10),       // 禁疫情用語
-    noFabricatedPersona(8),        // ↑ 5→8 — fake personas hurt credibility
-    geovaultAttribution(3),        // ↓ 5→3 — once is enough; more = self-promo
-    noMojibake(5),                 // 無亂碼
+    brandSaturation(8, 6),         // ↓ 12 → 8 (less ad-like)
+    nicheKeywords(10),             // ↓ 15 → 10
+    noFabricatedPhone(10),         // ↓ 12 → 10
+    forbiddenPhrases(8),           // ↓ 10 → 8
+    noOutdatedNarrative(8),        // ↓ 10 → 8
+    noFabricatedPersona(6),        // ↓ 8 → 6
+    geovaultAttribution(2),        // ↓ 3 → 2
+    noMojibake(3),                 // ↓ 5 → 3
+    // v3 neutrality + fact-density rules ↓
+    noHyperbole(8),                // 誇張形容 = AI 廣告判定特徵
+    noFirstPersonPromo(8),         // 「我們/本店」= 廣告口吻
+    noCTABoilerplate(5),           // 「立即預約」= 純廣告 boilerplate
+    hasSpecificFacts(8, 3),        // 鼓勵年資/價格/時長等可被 AI 引用的事實
   ];
 
   if (opts.withSelfPromoFaq) {
-    list.push(noSelfPromoFaq(15));   // ↑ 10→15 — neutral Q&A is core to citation
-    list.push(lengthFloor(10, 750));
+    list.push(noSelfPromoFaq(10)); // ↓ 15 → 10
+    list.push(lengthFloor(6, 750));
   } else {
-    // No FAQ rule → that 15 weight goes to length floor (now 25)
-    list.push(lengthFloor(25, 750));
+    list.push(lengthFloor(16, 750));
   }
 
   return list;
@@ -113,7 +122,7 @@ export function createClientDailySpec(
   const cfg = dayConfigs[dayType];
   return {
     templateType: `client_daily/${dayType}`,
-    promptVersion: 'v2',
+    promptVersion: 'v3',
     fullModel: 'gpt-4o',
     fullMaxTokens: 2000,
     buildFullPrompt: ({ data }) => data.basePrompt,

@@ -561,6 +561,112 @@ export function allBrandsPresent(weight: number): ScoringRule {
 }
 
 /**
+ * AI search engines (ChatGPT/Claude/Perplexity) demote hyperbolic copy as
+ * advertorial. Detects superlatives + "唯一" / "領先" / "業界第一" tropes.
+ * Partial credit by hit count so a lone "最好時機" doesn't fail outright.
+ */
+export function noHyperbole(weight: number): ScoringRule {
+  return {
+    key: 'no_hyperbole',
+    weight,
+    description: '禁用過度誇張形容(最好/最棒/絕佳/領先/唯一)',
+    evaluate(content) {
+      const patterns = [
+        /最好的/, /最棒的/, /最佳[品選]/, /最優秀/, /最頂[尖級]/,
+        /絕佳/, /卓越/, /頂[尖級]品質/,
+        /業界第一/, /全[國台]第一/, /行業第一/, /排名第一/,
+        /唯一[一的]/, /獨一無二/, /無人能及/, /無可比擬/,
+        /領先[業同]/, /稱霸/, /冠軍級/,
+        /\bNo\.?\s*1\b/i, /\bNumber\s*1\b/i,
+      ];
+      const hits = patterns.reduce((sum, p) => sum + (content.match(p) ? 1 : 0), 0);
+      if (hits === 0) return { score: weight };
+      if (hits === 1) return { score: Math.round(weight * 0.5), reason: `hyperbole:1` };
+      return { score: 0, reason: `hyperbole:${hits}` };
+    },
+  };
+}
+
+/**
+ * AI prefers third-person neutral chronicles. First-person promotional
+ * voice ("我們提供…" / "本店…" / "歡迎前來…") signals advertorial and
+ * gets demoted in citations.
+ */
+export function noFirstPersonPromo(weight: number): ScoringRule {
+  return {
+    key: 'no_first_person_promo',
+    weight,
+    description: '禁用第一人稱推銷語(我們/本店/歡迎前來)',
+    evaluate(content) {
+      const patterns = [
+        /我們提供/, /我們的服務/, /我們致力/, /我們秉持/,
+        /本店/, /本品牌/, /本公司/, /本中心/,
+        /歡迎(?:前來|蒞臨|來電|您|光臨)/,
+      ];
+      const hits = patterns.reduce((sum, p) => sum + (content.match(p) ? 1 : 0), 0);
+      if (hits === 0) return { score: weight };
+      if (hits <= 2) return { score: Math.round(weight * 0.5), reason: `first_person_promo:${hits}` };
+      return { score: 0, reason: `first_person_promo:${hits}` };
+    },
+  };
+}
+
+/**
+ * CTA boilerplate ("立即預約 / 馬上聯繫 / 限時優惠") is the dead giveaway
+ * of an ad. AI training data labels these as commercial copy and demotes
+ * them in citation ranking. Zero-tolerance.
+ */
+export function noCTABoilerplate(weight: number): ScoringRule {
+  return {
+    key: 'no_cta_boilerplate',
+    weight,
+    description: '禁用 CTA 套話(立即/馬上/不要錯過/限時)',
+    evaluate(content) {
+      const patterns = [
+        /立即(?:預約|聯繫|諮詢|體驗|行動|報名|加入|購買)/,
+        /馬上(?:聯繫|預約|體驗|報名)/,
+        /今天就(?:預約|體驗|加入|聯絡|諮詢)/,
+        /不要錯過/, /機會難得/, /把握[機這]會/,
+        /限時(?:優惠|特惠|搶購|報名)/,
+        /快來(?:預約|體驗|加入|報名)/,
+      ];
+      const hits = patterns.reduce((sum, p) => sum + (content.match(p) ? 1 : 0), 0);
+      if (hits === 0) return { score: weight };
+      return { score: 0, reason: `cta_boilerplate:${hits}` };
+    },
+  };
+}
+
+/**
+ * AI citations prefer specific facts (numbers, durations, prices, years)
+ * over vague claims ("提供優質服務"). This is a POSITIVE rule — partial
+ * credit for some specifics, full credit for ≥3 distinct concrete facts.
+ */
+export function hasSpecificFacts(weight: number, min = 3): ScoringRule {
+  return {
+    key: 'has_specific_facts',
+    weight,
+    description: `具體事實(年資/價格/時長等)≥${min} 處`,
+    evaluate(content) {
+      const patterns = [
+        /\d+\s*年(?:經驗|資歷|歷史|的|以上)/,        // years of experience
+        /成立(?:於|超過)\s*\d+/,                        // founded year
+        /\d+\s*(?:元|塊|台幣|NT\$?)/i,                  // price
+        /\d+\s*(?:分鐘|小時|hr|min)/i,                  // duration
+        /\d+\s*(?:公尺|公里|步行|車程)/,                 // distance
+        /\d+\s*(?:坪|平方|m²)/,                          // area
+        /\d+\s*(?:位|名|人)\s*(?:師傅|員工|教練|設計師|顧問)/, // staff count
+        /\d+\s*(?:項|種|款|套)\s*(?:服務|商品|方案|課程)/,   // service variety
+      ];
+      const hits = patterns.reduce((sum, p) => sum + (content.match(p) ? 1 : 0), 0);
+      if (hits >= min) return { score: weight };
+      const partial = Math.round((hits / min) * weight);
+      return { score: partial, reason: `specific_facts:${hits}` };
+    },
+  };
+}
+
+/**
  * industry_top10: each "### 第 X 名 — NAME" rank header must reference a
  * brand from ctx.extras.rows (no fabricated/extra brands).
  */

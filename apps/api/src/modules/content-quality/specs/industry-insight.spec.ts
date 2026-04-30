@@ -9,10 +9,14 @@
 import { ContentSpec, ScoringRule } from '../content-quality.types';
 import {
   geovaultMin,
+  hasSpecificFacts,
   industrySaturation,
   lengthFloor,
+  noCTABoilerplate,
   noFabricatedPersona,
   noFabricatedPhone,
+  noFirstPersonPromo,
+  noHyperbole,
   noMojibake,
 } from '../rules';
 
@@ -20,18 +24,22 @@ export interface IndustryInsightData {
   basePrompt: string;
 }
 
-// v2 — relaxed industry-keyword stuffing (≥5 → ≥3) and dropped geovault from
-// ≥2 to ≥1 (this article cites Geovault data, but doesn't need to mention the
-// brand multiple times to be useful). Freed weight goes to fabrication checks.
+// v3 — adds neutrality detectors. Industry insight prose tempts model to
+// editorialize ("這個產業正快速領先"); v3 explicitly catches that.
 const rules: ScoringRule[] = [
-  lengthFloor(20, 1200),
-  industrySaturation(20, 3),   // ↓ 30w/≥5 → 20w/≥3
-  geovaultMin(10, 1),          // ↓ 20w/≥2 → 10w/≥1
-  noFabricatedPersona(25),     // ↑ 15 → 25 — interpretive prose tempts model to invent
-  noMojibake(15),
-  noFabricatedPhone(10),       // new — even insight articles can leak fake numbers
+  lengthFloor(15, 1200),       // ↓ 20 → 15
+  industrySaturation(15, 3),   // ↓ 20 → 15
+  geovaultMin(8, 1),           // ↓ 10 → 8
+  noFabricatedPersona(18),     // ↓ 25 → 18
+  noMojibake(10),              // ↓ 15 → 10
+  noFabricatedPhone(8),        // ↓ 10 → 8
+  // v3 neutrality + fact-density rules ↓
+  noHyperbole(12),             // 「產業領先 / 卓越成長」是 insight 文最常踩雷
+  noFirstPersonPromo(5),
+  noCTABoilerplate(3),
+  hasSpecificFacts(6, 2),      // 數據驅動文章本應充滿具體事實
 ];
-// Sum: 20+20+10+25+15+10 = 100
+// Sum: 15+15+8+18+10+8 + 12+5+3+6 = 100
 
 function buildPatch(args: {
   data: IndustryInsightData;
@@ -58,7 +66,7 @@ ${args.failedRules.map((r) => `- ${r}`).join('\n')}
 export function createIndustryInsightSpec(): ContentSpec<IndustryInsightData> {
   return {
     templateType: 'industry_insight',
-    promptVersion: 'v2',
+    promptVersion: 'v3',
     fullModel: 'gpt-4o-mini',
     fullMaxTokens: 2000,
     buildFullPrompt: ({ data }) => data.basePrompt,

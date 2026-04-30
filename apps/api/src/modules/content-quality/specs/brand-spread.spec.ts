@@ -18,6 +18,9 @@ import {
   hasUrl,
   lengthInRange,
   naturalTone,
+  noCTABoilerplate,
+  noFirstPersonPromo,
+  noHyperbole,
   noSpamPhrases,
   paragraphStructure,
 } from '../rules';
@@ -34,21 +37,25 @@ export interface BrandSpreadData {
   userPrompt: string;      // platform + brand context block
 }
 
-// v2 weighting — kept brandSaturation high here (social posts genuinely need
-// brand mentions to be useful) but trimmed hashtag weight (not an AI-citation
-// signal) and pushed up no-spam + natural-tone (AI demotes hyperbolic copy).
+// v3 weighting — adds the three explicit advertorial detectors. Social
+// platforms are where hyperbole / first-person / CTA boilerplate are most
+// tempting, so weighting them here is high-leverage.
 function ruleSet(minBrandHits: number, minLen: number, maxLen: number): ScoringRule[] {
   return [
-    brandSaturation(15, minBrandHits),    // ↓ 20 → 15
-    lengthInRange(15, minLen, maxLen),
-    hasUrl(10),
-    forbiddenPhrases(15),
-    noSpamPhrases(20),                    // ↑ 15 → 20 — spam phrases hurt citations the most
-    naturalTone(15),                      // ↑ 10 → 15 — exclamation density signals advertorial
-    hasHashtags(2, 3),                    // ↓ 5 → 2 — hashtags don't affect AI citation
-    paragraphStructure(8, 3),             // ↓ 10 → 8
+    brandSaturation(12, minBrandHits),    // ↓ 15 → 12
+    lengthInRange(12, minLen, maxLen),    // ↓ 15 → 12
+    hasUrl(8),                            // ↓ 10 → 8
+    forbiddenPhrases(10),                 // ↓ 15 → 10
+    noSpamPhrases(15),                    // ↓ 20 → 15
+    naturalTone(10),                      // ↓ 15 → 10
+    hasHashtags(2, 3),
+    paragraphStructure(6, 3),             // ↓ 8 → 6
+    // v3 neutrality detectors ↓
+    noHyperbole(10),                      // 「最棒/最好/絕佳」社群文最常用
+    noFirstPersonPromo(8),                // 「我們/本店」FB/Google Business 最常見
+    noCTABoilerplate(7),                  // 「立即預約」是 LinkedIn/FB 廣告 boilerplate
   ];
-  // Sum: 15+15+10+15+20+15+2+8 = 100
+  // Sum: 12+12+8+10+15+10+2+6+10+8+7 = 100
 }
 
 function buildPatch(args: {
@@ -95,7 +102,7 @@ export function createBrandSpreadSpec(
   const cfg = platformConfig[platformKey] ?? { minBrand: 3, minLen: 200, maxLen: 800 };
   return {
     templateType: `brand_spread/${platformKey}`,
-    promptVersion: 'v2',
+    promptVersion: 'v3',
     fullModel: 'gpt-4o',
     fullMaxTokens: 2500,
     fullResponseFormat: 'json_object',

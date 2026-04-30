@@ -8,11 +8,15 @@ import { ContentSpec, ScoringRule } from '../content-quality.types';
 import {
   faqCount,
   geovaultMin,
+  hasSpecificFacts,
   lengthFloor,
   medicalBoundary,
   mustContainLink,
   noBrandNameLeak,
+  noCTABoilerplate,
+  noFirstPersonPromo,
   noGeoScoreAsConsumerMetric,
+  noHyperbole,
   noMojibake,
 } from '../rules';
 
@@ -20,20 +24,26 @@ export interface BuyerGuideData {
   basePrompt: string;
 }
 
-// v2 weighting — already the most neutral spec (no brand names allowed) so
-// only one major adjustment: geovault attribution dropped from ≥3 to ≥1
-// (single attribution is enough; more reads as platform self-promotion).
+// v3 — buyer_guide already has the strictest neutrality rules (no brand
+// names allowed); v3 layers in noHyperbole + noFirstPersonPromo + noCTA-
+// Boilerplate + hasSpecificFacts to also catch advertorial *tone* even
+// when no brand is named.
 const rules: ScoringRule[] = [
-  lengthFloor(15, 1800),
-  geovaultMin(4, 1),                    // ↓ 10w/≥3 → 4w/≥1
-  faqCount(13, 5),                      // ↑ 10 → 13 — Q&A is the AI-snippet target
-  noBrandNameLeak(22),                  // ↑ 20 → 22 — neutral layer must stay neutral
-  mustContainLink(15, 'expectedLink'),
-  noGeoScoreAsConsumerMetric(15),
-  medicalBoundary(10),
-  noMojibake(6),                        // ↑ 5 → 6
+  lengthFloor(10, 1800),                // ↓ 15 → 10
+  geovaultMin(3, 1),                    // ↓ 4 → 3
+  faqCount(10, 5),                      // ↓ 13 → 10
+  noBrandNameLeak(18),                  // ↓ 22 → 18 (still highest weight)
+  mustContainLink(12, 'expectedLink'),  // ↓ 15 → 12
+  noGeoScoreAsConsumerMetric(12),       // ↓ 15 → 12
+  medicalBoundary(8),                   // ↓ 10 → 8
+  noMojibake(4),                        // ↓ 6 → 4
+  // v3 neutrality + fact-density rules ↓
+  noHyperbole(10),                      // 選購指南最容易踩「最佳挑選原則」
+  noFirstPersonPromo(5),
+  noCTABoilerplate(3),
+  hasSpecificFacts(5, 3),
 ];
-// Sum: 15+4+13+22+15+15+10+6 = 100
+// Sum: 10+3+10+18+12+12+8+4 + 10+5+3+5 = 100
 
 function buildPatch(args: {
   data: BuyerGuideData;
@@ -63,7 +73,7 @@ ${args.failedRules.map((r) => `- ${r}`).join('\n')}
 export function createBuyerGuideSpec(): ContentSpec<BuyerGuideData> {
   return {
     templateType: 'buyer_guide',
-    promptVersion: 'v2',
+    promptVersion: 'v3',
     fullModel: 'gpt-4o-mini',
     fullMaxTokens: 3200,
     buildFullPrompt: ({ data }) => data.basePrompt,
