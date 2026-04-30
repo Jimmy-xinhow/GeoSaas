@@ -5,11 +5,8 @@ import { INDUSTRIES } from '@geovault/shared';
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 
-export const revalidate = 3600; // regenerate sitemap every hour
+export const revalidate = 3600;
 
-// Per-fetch timeout. Without this, a single hung API request can stall the
-// entire sitemap response and cause Google Search Console to report
-// "couldn't fetch" — that was the symptom this rewrite addresses.
 const FETCH_TIMEOUT_MS = 5000;
 
 async function fetchJson<T = any>(url: string): Promise<T | null> {
@@ -28,10 +25,47 @@ async function fetchJson<T = any>(url: string): Promise<T | null> {
   }
 }
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+// ─── Sitemap index ─────────────────────────────────────────────────────────
+// Next.js 14 requires `id` to be a *number* — string IDs silently produce 404
+// for the resulting /sitemap/{id}.xml routes (this bit us once already).
+//
+// Shard plan (id → contents):
+//   0 — static    fully static, never touches the API
+//   1 — directory public brand pages + per-brand feeds
+//   2 — blog      DB-backed blog articles
+//   3 — cases     approved success cases
+//   4 — industry  industry AI recommendation pages
+const SHARDS = ['static', 'directory', 'blog', 'cases', 'industry'] as const;
+
+export async function generateSitemaps() {
+  return SHARDS.map((_, id) => ({ id }));
+}
+
+export default async function sitemap({
+  id,
+}: {
+  id: number;
+}): Promise<MetadataRoute.Sitemap> {
+  switch (id) {
+    case 0:
+      return staticShard();
+    case 1:
+      return directoryShard();
+    case 2:
+      return blogShard();
+    case 3:
+      return casesShard();
+    case 4:
+      return industryShard();
+    default:
+      return [];
+  }
+}
+
+// ─── Shard 0: static ───────────────────────────────────────────────────────
+function staticShard(): MetadataRoute.Sitemap {
   const entries: MetadataRoute.Sitemap = [];
 
-  // ─── Static pages ───
   const staticPages = [
     { url: '/', priority: 1.0, changeFrequency: 'daily' as const },
     { url: '/directory', priority: 0.9, changeFrequency: 'daily' as const },
@@ -57,9 +91,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // ─── Static blog posts ───
-  const posts = getAllPosts();
-  for (const post of posts) {
+  for (const post of getAllPosts()) {
     entries.push({
       url: `${BASE_URL}/blog/${post.slug}`,
       lastModified: new Date(post.date),
@@ -68,7 +100,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // ─── Industry index pages (static) ───
   for (const ind of INDUSTRIES) {
     entries.push({
       url: `${BASE_URL}/directory/industry/${ind.value}`,
@@ -78,33 +109,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // ─── Dynamic fetches: run all in parallel with bounded concurrency ───
-  // We previously did these sequentially (~64 round-trips), which routinely
-  // timed out the sitemap and caused GSC "couldn't fetch". Now we issue them
-  // in parallel and cap directory pagination at 10 pages (500 sites).
+  return entries;
+}
+
+// ─── Shard 1: directory ────────────────────────────────────────────────────
+async function directoryShard(): Promise<MetadataRoute.Sitemap> {
   const PAGE_SIZE = 50;
   const MAX_PAGES = 10;
-  const directoryUrls = Array.from(
+  const urls = Array.from(
     { length: MAX_PAGES },
     (_, i) => `${API_URL}/api/directory?limit=${PAGE_SIZE}&page=${i + 1}`,
   );
+  const results = await Promise.all(urls.map((u) => fetchJson(u)));
 
-  const industryAiUrls = INDUSTRIES
-    .filter((ind) => ind.value !== 'other')
-    .map((ind) => ({
-      industry: ind.value,
-      url: `${API_URL}/api/industry-ai/${ind.value}/sites`,
-    }));
-
-  const [directoryResults, blogData, casesData, industryAiResults] = await Promise.all([
-    Promise.all(directoryUrls.map((u) => fetchJson(u))),
-    fetchJson(`${API_URL}/api/blog/articles?limit=500`),
-    fetchJson(`${API_URL}/api/success-cases?limit=100`),
-    Promise.all(industryAiUrls.map(async (e) => ({ industry: e.industry, data: await fetchJson(e.url) }))),
-  ]);
-
-  // ─── Directory sites + per-brand feeds ───
-  for (const data of directoryResults) {
+  const entries: MetadataRoute.Sitemap = [];
+  for (const data of results) {
     if (!data) continue;
     const items = data?.data?.items || data?.items || [];
     for (const site of items) {
@@ -129,35 +148,47 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       });
     }
   }
+  return entries;
+}
 
-  // ─── Blog articles from DB ───
-  if (blogData) {
-    const items = blogData?.data?.items || blogData?.items || [];
-    for (const article of items) {
-      entries.push({
-        url: `${BASE_URL}/blog/${article.slug}`,
-        lastModified: article.createdAt ? new Date(article.createdAt) : new Date(),
-        changeFrequency: 'weekly',
-        priority: 0.6,
-      });
-    }
-  }
+// ─── Shard 2: blog ─────────────────────────────────────────────────────────
+async function blogShard(): Promise<MetadataRoute.Sitemap> {
+  const data = await fetchJson(`${API_URL}/api/blog/articles?limit=500`);
+  if (!data) return [];
+  const items = data?.data?.items || data?.items || [];
+  return items.map((article: any) => ({
+    url: `${BASE_URL}/blog/${article.slug}`,
+    lastModified: article.createdAt ? new Date(article.createdAt) : new Date(),
+    changeFrequency: 'weekly' as const,
+    priority: 0.6,
+  }));
+}
 
-  // ─── Success cases ───
-  if (casesData) {
-    const items = casesData?.data?.items || casesData?.items || [];
-    for (const c of items) {
-      entries.push({
-        url: `${BASE_URL}/cases/${c.id}`,
-        lastModified: c.createdAt ? new Date(c.createdAt) : new Date(),
-        changeFrequency: 'monthly',
-        priority: 0.5,
-      });
-    }
-  }
+// ─── Shard 3: cases ────────────────────────────────────────────────────────
+async function casesShard(): Promise<MetadataRoute.Sitemap> {
+  const data = await fetchJson(`${API_URL}/api/success-cases?limit=100`);
+  if (!data) return [];
+  const items = data?.data?.items || data?.items || [];
+  return items.map((c: any) => ({
+    url: `${BASE_URL}/cases/${c.id}`,
+    lastModified: c.createdAt ? new Date(c.createdAt) : new Date(),
+    changeFrequency: 'monthly' as const,
+    priority: 0.5,
+  }));
+}
 
-  // ─── Industry AI recommendation pages ───
-  for (const { industry, data } of industryAiResults) {
+// ─── Shard 4: industry ─────────────────────────────────────────────────────
+async function industryShard(): Promise<MetadataRoute.Sitemap> {
+  const targets = INDUSTRIES.filter((ind) => ind.value !== 'other');
+  const fetched = await Promise.all(
+    targets.map(async (ind) => ({
+      industry: ind.value,
+      data: await fetchJson(`${API_URL}/api/industry-ai/${ind.value}/sites`),
+    })),
+  );
+
+  const entries: MetadataRoute.Sitemap = [];
+  for (const { industry, data } of fetched) {
     entries.push({
       url: `${BASE_URL}/industry/${industry}`,
       lastModified: new Date(),
@@ -182,6 +213,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       });
     }
   }
-
   return entries;
 }
