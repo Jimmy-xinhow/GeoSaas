@@ -626,9 +626,22 @@ export default function ClientReportsPage() {
                   can be semi-transparent on dark themes — force opaque. */}
               <SelectContent className="max-h-[400px] bg-gray-900 border-white/10">
                 {[...((sites as any[]) ?? [])]
-                  .sort((a, b) => (a?.name ?? '').localeCompare(b?.name ?? '', 'zh-Hant'))
+                  // Paid clients first (isClient=true), then alphabetical within
+                  // each group. The acceptance-report page is mostly used to
+                  // pull paying clients' progress, so keeping them up top saves
+                  // scrolling on long lists.
+                  .sort((a, b) => {
+                    const aClient = a?.isClient ? 1 : 0;
+                    const bClient = b?.isClient ? 1 : 0;
+                    if (aClient !== bClient) return bClient - aClient;
+                    return (a?.name ?? '').localeCompare(b?.name ?? '', 'zh-Hant');
+                  })
                   .map((s: any) => (
-                    <SelectItem key={s.id} value={s.id} className="focus:bg-white/10">{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id} className="focus:bg-white/10">
+                      {s.isClient && <span className="mr-1.5 text-amber-400">⭐</span>}
+                      <span className={s.isClient ? 'text-white font-medium' : 'text-gray-300'}>{s.name}</span>
+                      {s.isClient && <span className="ml-2 text-[10px] text-amber-400/80 font-mono uppercase tracking-wider">付費</span>}
+                    </SelectItem>
                   ))}
               </SelectContent>
             </Select>
@@ -650,6 +663,13 @@ export default function ClientReportsPage() {
                   const q = siteSearch.toLowerCase();
                   return s.name?.toLowerCase().includes(q) || s.url?.toLowerCase().includes(q);
                 })
+                // Same paid-client-first ordering as the dropdown for consistency.
+                .sort((a: any, b: any) => {
+                  const aClient = a?.isClient ? 1 : 0;
+                  const bClient = b?.isClient ? 1 : 0;
+                  if (aClient !== bClient) return bClient - aClient;
+                  return (a?.name ?? '').localeCompare(b?.name ?? '', 'zh-Hant');
+                })
                 .slice(0, 20)
                 .map((s: any) => (
                   <button
@@ -657,7 +677,11 @@ export default function ClientReportsPage() {
                     onClick={() => { setSelectedSiteId(s.id); setSiteSearch(''); setActiveReportId(''); }}
                     className="w-full text-left px-3 py-2 hover:bg-white/5 transition-colors"
                   >
-                    <p className="text-sm font-medium text-white">{s.name}</p>
+                    <p className="text-sm font-medium text-white flex items-center gap-1.5">
+                      {s.isClient && <span className="text-amber-400">⭐</span>}
+                      {s.name}
+                      {s.isClient && <span className="text-[10px] text-amber-400/80 font-mono uppercase tracking-wider">付費</span>}
+                    </p>
                     <p className="text-xs text-gray-400 truncate">{s.url}</p>
                   </button>
                 ))}
