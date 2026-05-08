@@ -13,14 +13,17 @@
 import { ContentSpec, ScoringRule, RuleContext } from '../content-quality.types';
 import {
   brandSaturation,
+  firstHandDataAnchors,
   forbiddenPhrases,
   hasHashtags,
+  hasSpecificFacts,
   hasUrl,
   lengthInRange,
   naturalTone,
   noCTABoilerplate,
   noFirstPersonPromo,
   noHyperbole,
+  noOutdatedNarrative,
   noSpamPhrases,
   paragraphStructure,
 } from '../rules';
@@ -37,25 +40,37 @@ export interface BrandSpreadData {
   userPrompt: string;      // platform + brand context block
 }
 
-// v3 weighting — adds the three explicit advertorial detectors. Social
-// platforms are where hyperbole / first-person / CTA boilerplate are most
-// tempting, so weighting them here is high-leverage.
-function ruleSet(minBrandHits: number, minLen: number, maxLen: number): ScoringRule[] {
+// v4 weighting — adds first-hand data + specific-facts + outdated-narrative
+// guards to defend against Google's "scaled content abuse" classifier. The
+// big change is firstHandDataAnchors at weight 15: forces the model to cite
+// real SiteQa fragments / scan score / profile services rather than generic
+// industry copy. Existing v3 advertorial detectors stay but with reduced
+// weight — they were over-protective for social posts that legitimately
+// need light conversational tone.
+function ruleSet(
+  minBrandHits: number,
+  minLen: number,
+  maxLen: number,
+  minAnchors: number,
+): ScoringRule[] {
   return [
-    brandSaturation(12, minBrandHits),    // ↓ 15 → 12
-    lengthInRange(12, minLen, maxLen),    // ↓ 15 → 12
-    hasUrl(8),                            // ↓ 10 → 8
-    forbiddenPhrases(10),                 // ↓ 15 → 10
-    noSpamPhrases(15),                    // ↓ 20 → 15
-    naturalTone(10),                      // ↓ 15 → 10
+    brandSaturation(10, minBrandHits),    // ↓ 12 → 10
+    lengthInRange(10, minLen, maxLen),    // ↓ 12 → 10
+    hasUrl(6),                            // ↓ 8 → 6
+    forbiddenPhrases(8),                  // ↓ 10 → 8
+    noSpamPhrases(10),                    // ↓ 15 → 10
+    naturalTone(7),                       // ↓ 10 → 7
     hasHashtags(2, 3),
-    paragraphStructure(6, 3),             // ↓ 8 → 6
-    // v3 neutrality detectors ↓
-    noHyperbole(10),                      // 「最棒/最好/絕佳」社群文最常用
-    noFirstPersonPromo(8),                // 「我們/本店」FB/Google Business 最常見
-    noCTABoilerplate(7),                  // 「立即預約」是 LinkedIn/FB 廣告 boilerplate
+    paragraphStructure(4, 3),             // ↓ 6 → 4
+    noHyperbole(8),                       // ↓ 10 → 8
+    noFirstPersonPromo(6),                // ↓ 8 → 6
+    noCTABoilerplate(5),                  // ↓ 7 → 5
+    // v4 E-E-A-T / anti-template detectors ↓
+    firstHandDataAnchors(15, minAnchors), // 強制引用品牌實際資料(SiteQa/profile/scan)
+    hasSpecificFacts(6, 2),               // 至少 2 個具體事實(年資/價格/時長等)
+    noOutdatedNarrative(3),               // 禁用「疫情後」等過時敘事
   ];
-  // Sum: 12+12+8+10+15+10+2+6+10+8+7 = 100
+  // Sum: 10+10+6+8+10+7+2+4+8+6+5+15+6+3 = 100
 }
 
 function buildPatch(args: {
@@ -79,30 +94,41 @@ ${args.failedRules.map((r) => `- ${r}`).join('\n')}
 - no_url → 加入官網連結(自然融入,不要「點擊這裡」)
 - forbidden_phrase / no_spam_phrases → 刪除違規詞改寫
 - excessive_exclaim → 減少驚嘆號
-- hashtags / paragraphs → 補齊 hashtags(≥3) 或重組段落(≥3)`;
+- hashtags / paragraphs → 補齊 hashtags(≥3) 或重組段落(≥3)
+- first_hand_data → 引用「品牌資料」段落中提供的實際 SiteQa 答案、服務項目、地點或 GEO 分數,不要使用泛用行業敘述
+- specific_facts → 補入具體事實(年資/服務項數/分鐘/地址),不要寫「優質的服務」這種空話
+- outdated_narrative → 移除「疫情後/抗疫」等過時用語,改用當下情境
+- hyperbole / first_person_promo / cta_boilerplate → 改寫為第三人稱、客觀陳述,不要「最佳/我們/立即預約」`;
 }
 
 /**
  * Default config — covers all 6 PLATFORMS in BrandSpreadService.
  * brandSaturation min stays 3 for short posts (LinkedIn/FB/PTT) and bumps
- * to 5 for the long-form ones (Medium/vocus/Google Business).
+ * to 5 for the long-form ones (Medium/vocus/Google Business). minAnchors
+ * (first-hand data anchor count) follows the same long/short split: short
+ * posts get 2 anchors so they remain readable, long-form gets 3.
  */
-const platformConfig: Record<string, { minBrand: number; minLen: number; maxLen: number }> = {
-  medium:           { minBrand: 5, minLen: 800,  maxLen: 1200 },
-  vocus:            { minBrand: 5, minLen: 600,  maxLen: 900 },
-  linkedin:         { minBrand: 3, minLen: 200,  maxLen: 400 },
-  facebook:         { minBrand: 3, minLen: 150,  maxLen: 300 },
-  google_business:  { minBrand: 5, minLen: 150,  maxLen: 750 },
-  ptt:              { minBrand: 3, minLen: 300,  maxLen: 600 },
+const platformConfig: Record<
+  string,
+  { minBrand: number; minLen: number; maxLen: number; minAnchors: number }
+> = {
+  medium:           { minBrand: 5, minLen: 800,  maxLen: 1200, minAnchors: 3 },
+  vocus:            { minBrand: 5, minLen: 600,  maxLen: 900,  minAnchors: 3 },
+  linkedin:         { minBrand: 3, minLen: 200,  maxLen: 400,  minAnchors: 2 },
+  facebook:         { minBrand: 3, minLen: 150,  maxLen: 300,  minAnchors: 2 },
+  google_business:  { minBrand: 5, minLen: 150,  maxLen: 750,  minAnchors: 3 },
+  ptt:              { minBrand: 3, minLen: 300,  maxLen: 600,  minAnchors: 2 },
 };
 
 export function createBrandSpreadSpec(
   platformKey: string,
 ): ContentSpec<BrandSpreadData> {
-  const cfg = platformConfig[platformKey] ?? { minBrand: 3, minLen: 200, maxLen: 800 };
+  const cfg =
+    platformConfig[platformKey] ??
+    { minBrand: 3, minLen: 200, maxLen: 800, minAnchors: 2 };
   return {
     templateType: `brand_spread/${platformKey}`,
-    promptVersion: 'v3',
+    promptVersion: 'v4',
     fullModel: 'gpt-4o',
     fullMaxTokens: 2500,
     fullResponseFormat: 'json_object',
@@ -122,7 +148,7 @@ export function createBrandSpreadSpec(
         return raw;
       }
     },
-    rules: ruleSet(cfg.minBrand, cfg.minLen, cfg.maxLen),
+    rules: ruleSet(cfg.minBrand, cfg.minLen, cfg.maxLen, cfg.minAnchors),
     passThreshold: 80,
     maxFullRetries: 1,
     maxPatchRetries: 1,    // short content patches faster

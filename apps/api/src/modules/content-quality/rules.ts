@@ -667,6 +667,43 @@ export function hasSpecificFacts(weight: number, min = 3): ScoringRule {
 }
 
 /**
+ * Forces the model to ground content in brand-owned facts, not generic
+ * industry copy. Reads ctx.extras.requiredAnchors — strings extracted from
+ * SiteQa answers, profile services/location, scan score, etc. — and gives
+ * partial credit by how many appear. Anti-template-fingerprint signal:
+ * Google's scaled-content-abuse detection penalises copy with no first-hand
+ * data; this rule directly addresses that.
+ *
+ * Anchors are matched as substrings (case-insensitive for ASCII only) so
+ * short fragments like "12 年" or "中山區" hit reliably.
+ */
+export function firstHandDataAnchors(weight: number, min = 3): ScoringRule {
+  return {
+    key: 'first_hand_data',
+    weight,
+    description: `第一手資料錨點 ≥${min}`,
+    evaluate(content, ctx) {
+      const anchors = (ctx.extras?.requiredAnchors as string[] | undefined) || [];
+      if (anchors.length === 0) return { score: weight }; // no anchors → vacuously pass
+      const lower = content.toLowerCase();
+      const hits = anchors.filter((a) => {
+        if (!a) return false;
+        if (/^[\x00-\x7F]+$/.test(a)) return lower.includes(a.toLowerCase());
+        return content.includes(a);
+      });
+      const need = Math.min(min, anchors.length);
+      if (hits.length >= need) return { score: weight };
+      const partial = Math.round((hits.length / need) * weight);
+      const missing = anchors.filter((a) => !hits.includes(a));
+      return {
+        score: partial,
+        reason: `first_hand_data:${hits.length}/${need}|miss:${missing.slice(0, 2).join('|')}`,
+      };
+    },
+  };
+}
+
+/**
  * industry_top10: each "### 第 X 名 — NAME" rank header must reference a
  * brand from ctx.extras.rows (no fabricated/extra brands).
  */

@@ -116,11 +116,12 @@ export class BrandSpreadService {
       : PLATFORMS;
 
     const brandContext = this.buildBrandContext(site);
+    const requiredAnchors = this.buildRequiredAnchors(site);
     const results: SpreadContent[] = [];
 
     for (const platform of targetPlatforms) {
       try {
-        const content = await this.generateForPlatform(platform, brandContext, site);
+        const content = await this.generateForPlatform(platform, brandContext, site, requiredAnchors);
         results.push(content);
         // Rate limit
         await new Promise((r) => setTimeout(r, 1500));
@@ -164,39 +165,11 @@ export class BrandSpreadService {
     platform: typeof PLATFORMS[number],
     brandContext: string,
     site: any,
+    requiredAnchors?: string[],
   ): Promise<SpreadContent> {
     const industry = site.industry || 'other';
-
-    const systemPrompt = `你是一位資深品牌行銷內容策略師，專精於「AI 搜尋優化內容」（GEO Content）。
-你的目標是撰寫能被 AI 搜尋引擎（ChatGPT、Claude、Perplexity、Gemini、Copilot）抓取並引用的品牌內容。
-
-## 核心策略
-AI 搜尋引擎在判斷是否推薦一個品牌時，會看以下信號：
-1. **多平台一致性** — 不同平台的資訊是否一致（名稱、服務、地點）
-2. **專業深度** — 內容是否展現行業專業知識
-3. **真實感** — 內容是否像真人寫的，有觀點和體驗
-4. **結構化資訊** — 品牌名、地址、服務項目、特色是否清楚
-5. **用戶價值** — 內容對消費者是否有幫助
-
-## 寫作規則
-1. 品牌全名至少出現 3-5 次，且在開頭和結尾各出現一次
-2. 明確提到品牌的「地區」和「核心服務」
-3. 加入 1-2 個具體細節（價格帶、特色服務、營業時間等），增加真實感
-4. 官網連結自然融入（不要「點擊這裡」，而是「更多資訊可參考 品牌名 官網」）
-5. 用消費者的語言寫，不用行銷術語
-6. 繁體中文
-7. 不要出現「業配」「推薦碼」「折扣碼」等字眼
-8. 不要用過度正面的形容詞堆砌（最好的、最棒的、第一名）
-
-## 產業特化指引（${industry}）
-${this.getIndustryGuideline(industry)}
-
-回覆格式（JSON）：
-{
-  "title": "文章標題",
-  "content": "完整內容",
-  "hashtags": ["標籤1", "標籤2", "標籤3", "標籤4", "標籤5"]
-}`;
+    const anchors = requiredAnchors ?? this.buildRequiredAnchors(site);
+    const systemPrompt = this.buildSystemPrompt(industry, anchors);
 
     const userPrompt = `平台：${platform.name}（${platform.lengthGuide}）
 
@@ -212,6 +185,7 @@ ${brandContext}`;
     const extras: Record<string, any> = {
       siteUrl: site.url,
       forbidden: [],
+      requiredAnchors: anchors,
     };
     const spec = createBrandSpreadSpec(platform.key);
     const result = await this.qualityRunner.run<BrandSpreadData>(
@@ -237,67 +211,6 @@ ${brandContext}`;
         ? Object.fromEntries(result.failedRules.map((r) => [r, 0]))
         : undefined,
     };
-  }
-
-  /**
-   * Score content quality (0-100)
-   */
-  private async scoreContent(
-    content: SpreadContent,
-    site: any,
-    platform: typeof PLATFORMS[number],
-  ): Promise<{ total: number; details: Record<string, number> }> {
-    const text = content.content;
-    const brandName = site.name;
-
-    // Rule-based scoring (fast, no API call)
-    const details: Record<string, number> = {};
-
-    // 1. Brand mention count (0-20)
-    const brandMentions = (text.match(new RegExp(brandName, 'g')) || []).length;
-    details.brandMention = Math.min(brandMentions >= 3 ? 20 : brandMentions >= 2 ? 15 : brandMentions >= 1 ? 8 : 0, 20);
-
-    // 2. Length appropriate (0-15)
-    const len = text.length;
-    const [minLen, maxLen] = platform.lengthGuide.match(/\d+/g)?.map(Number) || [200, 800];
-    if (len >= minLen && len <= maxLen * 1.3) {
-      details.length = 15;
-    } else if (len >= minLen * 0.7) {
-      details.length = 10;
-    } else {
-      details.length = 5;
-    }
-
-    // 3. Contains URL (0-10)
-    details.hasUrl = text.includes(site.url) || text.includes('http') ? 10 : 0;
-
-    // 4. Contains location/service info (0-15)
-    const profile = site.profile || {};
-    let infoScore = 0;
-    if (profile.location && text.includes(profile.location.split(' ')[0])) infoScore += 5;
-    if (site.industry && text.length > 100) infoScore += 5;
-    if (profile.services && text.length > 200) infoScore += 5;
-    details.brandInfo = Math.min(infoScore, 15);
-
-    // 5. No spam signals (0-15)
-    const spamWords = ['業配', '折扣碼', '推薦碼', '限時優惠', '最低價', '免費送'];
-    const hasSpam = spamWords.some((w) => text.includes(w));
-    details.noSpam = hasSpam ? 0 : 15;
-
-    // 6. Natural language (0-10) — check for excessive exclamation marks and emoji
-    const exclamations = (text.match(/！|!/g) || []).length;
-    details.naturalTone = exclamations > 5 ? 3 : exclamations > 3 ? 7 : 10;
-
-    // 7. Has hashtags (0-5)
-    details.hashtags = content.hashtags.length >= 3 ? 5 : content.hashtags.length >= 1 ? 3 : 0;
-
-    // 8. Structure — has paragraphs (0-10)
-    const paragraphs = text.split('\n\n').filter((p) => p.trim().length > 10).length;
-    details.structure = paragraphs >= 3 ? 10 : paragraphs >= 2 ? 7 : 3;
-
-    const total = Object.values(details).reduce((sum, v) => sum + v, 0);
-
-    return { total, details };
   }
 
   /**
@@ -465,6 +378,8 @@ ${brandContext}`;
     if (!this.openai) throw new Error('OpenAI not configured');
 
     const brandContext = this.buildBrandContext(site);
+    const requiredAnchors = this.buildRequiredAnchors(site);
+    const industry = site.industry || 'other';
     const weekStart = new Date();
     const items: any[] = [];
 
@@ -483,44 +398,47 @@ ${brandContext}`;
         if (!platform) continue;
 
         try {
-          const response = await this.openai.chat.completions.create({
-            model: 'gpt-4o',
-            max_tokens: 2000,
-            messages: [
-              {
-                role: 'system',
-                content: `你是一位品牌社群經營專家。你要幫品牌撰寫定期更新的社群內容。
-內容目標：保持品牌在各平台的活躍度，讓 AI 爬蟲持續看到品牌的新內容。
-原則：自然、有價值、不像業配、品牌名至少出現 2 次、繁體中文。
-
-回覆格式（JSON）：
-{ "title": "標題", "content": "完整內容", "hashtags": ["標籤1", "標籤2"] }`,
-              },
-              {
-                role: 'user',
-                content: `內容類型：${contentType.name}
-平台：${platform.name}（${platform.lengthGuide}）
-${contentType.prompt}
+          // Route weekly content through the same quality runner as ad-hoc
+          // spread — same v4 E-E-A-T rules, same anchor enforcement, same
+          // ArticleQualityLog audit trail. Pre-runner this path bypassed all
+          // quality checks and produced template-fingerprint copy that
+          // Google's scaled-abuse classifier flags.
+          const systemPrompt = this.buildSystemPrompt(
+            industry,
+            requiredAnchors,
+            `${contentType.name}：${contentType.prompt}`,
+          );
+          const userPrompt = `平台：${platform.name}（${platform.lengthGuide}）
 
 ${platform.prompt}
 
 品牌資料：
-${brandContext}`,
-              },
-            ],
-            response_format: { type: 'json_object' },
-          });
+${brandContext}`;
 
-          const text = response.choices[0]?.message?.content || '{}';
-          const parsed = JSON.parse(text);
+          const extras: Record<string, any> = {
+            siteUrl: site.url,
+            forbidden: [],
+            requiredAnchors,
+          };
+          const spec = createBrandSpreadSpec(platform.key);
+          const result = await this.qualityRunner.run<BrandSpreadData>(
+            spec,
+            { systemPrompt, userPrompt },
+            {
+              siteName: site.name,
+              industry: site.industry ?? undefined,
+              extras,
+            },
+            site.id,
+          );
 
           items.push({
             type: contentType.type,
             name: contentType.name,
             platform: platformKey,
-            title: parsed.title || '',
-            content: parsed.content || '',
-            hashtags: parsed.hashtags || [],
+            title: (extras.title as string | undefined) || '',
+            content: result.content || '',
+            hashtags: (extras.hashtags as string[] | undefined) || [],
           });
 
           await new Promise((r) => setTimeout(r, 1500));
@@ -543,6 +461,122 @@ ${brandContext}`,
   // the result (never persisted to DB), burning ~14 gpt-4o calls per client
   // per week with zero user-facing output. Clients already get plans on-demand
   // via the controller endpoint, which is the only consumer.
+
+  /**
+   * Shared system prompt for both ad-hoc spread (generateForPlatform) and
+   * weekly plan (generateWeeklyPlan). Contains the v4 E-E-A-T guardrails
+   * the brand-spread spec rules expect — keep these aligned with rules.ts
+   * weights or quality scores will diverge from prompt intent.
+   *
+   * extraGuidance is for content-type-specific instructions (e.g. weekly
+   * plan's "industry_tips" or "behind_scenes" block).
+   */
+  private buildSystemPrompt(
+    industry: string,
+    anchors: string[],
+    extraGuidance?: string,
+  ): string {
+    const anchorBlock =
+      anchors.length > 0
+        ? `\n## 強制引用清單（至少從中選 ${Math.min(3, anchors.length)} 項自然融入內文，不能改寫）\n${anchors.map((a) => `- ${a}`).join('\n')}`
+        : '';
+    const extraBlock = extraGuidance ? `\n## 內容類型指引\n${extraGuidance}` : '';
+
+    return `你是一位資深品牌行銷內容策略師，專精於「AI 搜尋優化內容」（GEO Content）。
+你的目標是撰寫能被 AI 搜尋引擎（ChatGPT、Claude、Perplexity、Gemini、Copilot）抓取並引用的品牌內容。
+
+## 核心策略
+Google 2025 年「scaled content abuse」政策會把模板化、無第一手資料的 AI 內容判定為垃圾並排除收錄。
+AI 搜尋引擎判斷是否推薦一個品牌時，會看以下信號：
+1. **第一手資料** — 文章是否包含這個品牌實際擁有的具體事實（不是泛用行業敘述）
+2. **多平台一致性** — 不同平台的資訊是否一致（名稱、服務、地點）
+3. **專業深度** — 內容是否展現行業專業知識
+4. **真實感** — 內容是否像真人寫的，有觀點和體驗
+5. **結構化資訊** — 品牌名、地址、服務項目、特色是否清楚
+6. **用戶價值** — 內容對消費者是否有幫助
+
+## 寫作規則（硬性）
+1. 品牌全名至少出現 3-5 次，且在開頭和結尾各出現一次
+2. 必須包含至少 2 個具體事實（年資、分鐘數、坪數、品項數、地區名、價格帶等實際數字/名詞），不能只寫「優質的服務」這種空話
+3. 若品牌資料中含有 Q&A，必須引用其中至少 1 個具體答案的關鍵字進文章
+4. 若品牌資料中含有 GEO 分數，必須在文章中以「{score}/100」或「{score} 分」形式提及
+5. 官網連結自然融入（不要「點擊這裡」，而是「更多資訊可參考 品牌名 官網」）
+6. 用消費者的語言寫，不用行銷術語
+7. 繁體中文
+8. 嚴禁：「業配」「推薦碼」「折扣碼」「最低價」等促銷詞
+9. 嚴禁：「最棒的」「最好的」「第一名」「業界第一」「絕佳」等誇張形容
+10. 嚴禁：第一人稱推銷（「我們提供」「本店」「歡迎前來」），改用第三人稱客觀陳述
+11. 嚴禁：CTA 套話（「立即預約」「馬上聯繫」「不要錯過」）
+12. 嚴禁：「疫情後」「抗疫」「後疫情」等過時敘事
+
+## 產業特化指引（${industry}）
+${this.getIndustryGuideline(industry)}
+${anchorBlock}${extraBlock}
+
+回覆格式（JSON）：
+{
+  "title": "文章標題",
+  "content": "完整內容",
+  "hashtags": ["標籤1", "標籤2", "標籤3", "標籤4", "標籤5"]
+}`;
+  }
+
+  /**
+   * Extract first-hand data anchors from the site profile / SiteQa / scan
+   * results. Passed via ctx.extras.requiredAnchors so firstHandDataAnchors
+   * rule can verify they appear in generated content. Anti-template-fingerprint
+   * defence: forces the model to ground copy in brand-specific facts instead
+   * of producing generic industry boilerplate that Google's spam classifier
+   * will flag.
+   *
+   * Strategy: pull short, distinctive substrings (services, location, scan
+   * score, number+unit facts from QA answers, unique-value phrase). Cap at 8
+   * so the rule's `min` threshold remains satisfiable.
+   */
+  private buildRequiredAnchors(site: any): string[] {
+    const anchors: string[] = [];
+    const profile = site.profile || {};
+    const qas = site.qas || [];
+    const scan = site.scans?.[0];
+
+    // 1. Concrete service names from profile.services
+    if (typeof profile.services === 'string' && profile.services.trim()) {
+      const services = profile.services
+        .split(/[、,，;；/／\n]+/)
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length >= 2 && s.length <= 20);
+      anchors.push(...services.slice(0, 2));
+    }
+
+    // 2. Location fragment (區/市/縣/鄉/鎮)
+    if (typeof profile.location === 'string') {
+      const m = profile.location.match(/[一-鿿]{2,4}[區市縣鄉鎮]/);
+      if (m) anchors.push(m[0]);
+    }
+
+    // 3. Number+unit facts from top QA answers — these are highly distinctive
+    const factPattern =
+      /\d+(?:\.\d+)?\s*(?:年|分鐘|小時|個月|週|位|名|坪|元|塊|台幣|步|公尺|公里|項|種|款|套|次)/g;
+    for (const qa of qas.slice(0, 3)) {
+      if (anchors.length >= 6) break;
+      if (typeof qa?.answer !== 'string') continue;
+      const matches = qa.answer.match(factPattern);
+      if (matches?.[0]) anchors.push(matches[0].trim());
+    }
+
+    // 4. Real GEO score — forces "X/100" or "X 分" mention in body
+    if (scan?.totalScore) {
+      anchors.push(`${scan.totalScore}`);
+    }
+
+    // 5. uniqueValue distinctive phrase
+    if (typeof profile.uniqueValue === 'string') {
+      const m = profile.uniqueValue.match(/[一-鿿]{4,8}/);
+      if (m) anchors.push(m[0]);
+    }
+
+    return [...new Set(anchors)].filter(Boolean).slice(0, 8);
+  }
 
   private buildBrandContext(site: any): string {
     const profile = site.profile || {};
