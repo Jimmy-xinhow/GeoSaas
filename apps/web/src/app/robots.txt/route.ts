@@ -36,6 +36,13 @@ export async function GET() {
     'Disallow: /admin/',
     'Disallow: /dashboard/',
     'Disallow: /cdn-cgi/',
+    // Auth pages have no AI-citable content. Real-world telemetry showed
+    // ~30% of crawl budget being spent on /login + /register; reclaim it
+    // for directory + blog pages where citations actually compound.
+    'Disallow: /login',
+    'Disallow: /register',
+    'Disallow: /forgot-password',
+    'Disallow: /reset-password',
     'Crawl-delay: 5',
     '',
   ];
@@ -46,6 +53,10 @@ export async function GET() {
     lines.push(`User-agent: ${bot}`);
     lines.push('Allow: /');
     lines.push('Disallow: /cdn-cgi/');
+    lines.push('Disallow: /login');
+    lines.push('Disallow: /register');
+    lines.push('Disallow: /forgot-password');
+    lines.push('Disallow: /reset-password');
     // Shorter delay for AI bots — we actively want them to index fresher.
     lines.push('Crawl-delay: 1');
     lines.push('');
