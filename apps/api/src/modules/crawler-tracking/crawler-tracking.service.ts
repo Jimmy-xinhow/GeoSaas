@@ -4,7 +4,7 @@ import { RobotsParserService } from './robots-parser.service';
 import { SnippetGeneratorService } from './snippet-generator.service';
 import { ReportVisitDto } from './dto/report-visit.dto';
 import { QueryVisitsDto } from './dto/query-visits.dto';
-import { AI_BOTS, AiBotDefinition } from '@geovault/shared';
+import { AI_BOTS, AiBotDefinition, matchAiBot } from '@geovault/shared';
 import { randomBytes } from 'crypto';
 
 @Injectable()
@@ -50,6 +50,53 @@ export class CrawlerTrackingService {
     });
 
     return { ok: true };
+  }
+
+  /**
+   * Server-side pixel-tracking entry point. Customer sites that can't run
+   * server-side middleware (e.g. GitHub Pages, plain static hosts) embed an
+   * <img> tag pointing at /api/crawler/pixel/:token.gif. The crawler fetches
+   * the image while parsing the HTML, the request hits this method with the
+   * bot's User-Agent, and we detect + record server-side.
+   *
+   * This catches AI bots that don't execute JavaScript — most current
+   * GPTBot / ClaudeBot / PerplexityBot agents — which the JS XHR snippet
+   * misses entirely. Silent drop on every failure path: unknown token,
+   * non-bot UA (real user), or rate-limit. Pixel must always return 200
+   * regardless so the image loads and the bot doesn't flag broken assets.
+   */
+  async reportPixelVisit(data: {
+    token: string;
+    url: string;
+    userAgent: string;
+  }): Promise<void> {
+    const site = await this.prisma.site.findUnique({
+      where: { crawlerToken: data.token },
+      select: { id: true },
+    });
+    if (!site) return;
+
+    const botDef = matchAiBot(data.userAgent || '');
+    if (!botDef) return; // not a bot — don't pollute the table with real users
+
+    const oneHourAgo = new Date(Date.now() - 3600000);
+    const count = await this.prisma.crawlerVisit.count({
+      where: { siteId: site.id, visitedAt: { gte: oneHourAgo } },
+    });
+    if (count >= 1000) return;
+
+    await this.prisma.crawlerVisit.create({
+      data: {
+        siteId: site.id,
+        botName: botDef.name,
+        botOrg: botDef.org,
+        url: data.url || '',
+        statusCode: 200,
+        userAgent: data.userAgent.slice(0, 500),
+        isSeeded: false,
+      },
+    });
+    this.logger.log(`🤖 Pixel: ${botDef.name} → ${data.url || '(no url)'}`);
   }
 
   /**

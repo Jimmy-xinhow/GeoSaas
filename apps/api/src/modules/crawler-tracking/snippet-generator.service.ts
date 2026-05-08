@@ -8,7 +8,17 @@ export class SnippetGeneratorService {
   generate(siteId: string, token: string): string {
     const apiUrl = this.config.get<string>('API_PUBLIC_URL') || 'https://api.geovault.app';
 
-    return `<!-- GEO-SaaS AI Crawler Tracker -->
+    // Two-layer tracking:
+    //   1. <script> XHR — fires when a JS-rendering bot (Googlebot 2nd pass)
+    //      hits the page. Captures bot identity from navigator.userAgent.
+    //   2. <img> pixel — fires for HTML-only crawlers (current GPTBot,
+    //      ClaudeBot, PerplexityBot don't execute JS at all). The image
+    //      request hits the server with the bot's User-Agent header, so
+    //      detection happens server-side via matchAiBot(). Without this
+    //      layer, customer sites on plain static hosts (GitHub Pages,
+    //      Cloudflare Pages without Workers, S3 + CloudFront) miss every
+    //      non-JS AI bot and report 0 visits even when bots are scraping.
+    return `<!-- Geovault AI Crawler Tracker -->
 <script>
 (function() {
   var AI_BOTS = [
@@ -39,6 +49,7 @@ export class SnippetGeneratorService {
     }
   }
 })();
-</script>`;
+</script>
+<img src="${apiUrl}/api/crawler/pixel/${token}.gif" alt="" width="1" height="1" style="position:absolute;left:-9999px;top:-9999px" referrerpolicy="no-referrer-when-downgrade" />`;
   }
 }
