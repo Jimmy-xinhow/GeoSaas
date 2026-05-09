@@ -74,7 +74,14 @@ export class CrawlerTrackingService {
       where: { crawlerToken: data.token },
       select: { id: true },
     });
-    if (!site) return;
+    if (!site) {
+      // Surfaces token-capture bugs (e.g. `.gif` accidentally included) and
+      // legitimate "wrong token" probes. Keep at debug to avoid log noise.
+      this.logger.debug(
+        `Pixel: unknown token "${data.token.slice(0, 12)}..." (UA: ${(data.userAgent || '').slice(0, 40)})`,
+      );
+      return;
+    }
 
     const botDef = matchAiBot(data.userAgent || '');
     if (!botDef) return; // not a bot — don't pollute the table with real users
@@ -83,7 +90,10 @@ export class CrawlerTrackingService {
     const count = await this.prisma.crawlerVisit.count({
       where: { siteId: site.id, visitedAt: { gte: oneHourAgo } },
     });
-    if (count >= 1000) return;
+    if (count >= 1000) {
+      this.logger.warn(`Pixel rate-limited for site ${site.id} (${count}/hr)`);
+      return;
+    }
 
     await this.prisma.crawlerVisit.create({
       data: {

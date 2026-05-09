@@ -54,15 +54,24 @@ export class CrawlerTrackingController {
    * UA + Referer server-side. Always returns 200 with the GIF so a malformed
    * token / non-bot UA never produces a broken image on the customer's page.
    */
+  /**
+   * Route uses `:filename` (not `:token.gif`) because Express's path-to-regexp
+   * v0.1 matches `:param.literal` inconsistently across NestJS versions —
+   * sometimes `.gif` was being captured into the param, breaking token lookup.
+   * Strip the extension in the handler instead. Accepts both `/pixel/abc` and
+   * `/pixel/abc.gif`; customer sites use `.gif` so primitive image fetchers
+   * still recognise the resource as an image.
+   */
   @Public()
-  @Get('crawler/pixel/:token.gif')
+  @Get('crawler/pixel/:filename')
   @ApiOperation({ summary: 'Server-side pixel tracker — returns 1×1 GIF, records bot UA' })
   async pixel(
-    @Param('token') token: string,
+    @Param('filename') filename: string,
     @Query('u') urlQuery: string | undefined,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
+    const token = (filename || '').replace(/\.gif$/i, '');
     const ua = (req.headers['user-agent'] as string | undefined) || '';
     const referer = (req.headers['referer'] as string | undefined) || '';
     const url = urlQuery || referer;
@@ -76,6 +85,11 @@ export class CrawlerTrackingController {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    // CORP same-origin (set by Helmet globally) blocks cross-origin <img>
+    // rendering in browsers, but the request still hits this handler so
+    // tracking works. Override CORP to cross-origin so the pixel actually
+    // displays in browsers too — keeps customer page consoles clean.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(200).send(TRANSPARENT_GIF);
   }
