@@ -1,9 +1,9 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateSuccessCaseDto } from './dto/create-success-case.dto';
-import OpenAI from 'openai';
 
 @Injectable()
 export class SuccessCasesService {
@@ -14,6 +14,10 @@ export class SuccessCasesService {
     private readonly config: ConfigService,
     private readonly notifications: NotificationsService,
   ) {}
+
+  private isAdminRole(role: string) {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN';
+  }
 
   private async assertOwnsSite(userId: string, siteId?: string): Promise<void> {
     if (!siteId) return;
@@ -130,13 +134,13 @@ export class SuccessCasesService {
       }),
     ]);
 
-    const statusCounts = {
+    const statusCounts: Record<string, number> = {
       pending: 0,
       approved: 0,
       rejected: 0,
-    } as Record<string, number>;
-    counts.forEach((c) => {
-      statusCounts[c.status] = c._count._all;
+    };
+    counts.forEach((count) => {
+      statusCounts[count.status] = count._count._all;
     });
 
     return {
@@ -193,7 +197,6 @@ export class SuccessCasesService {
 
     if (!item || item.status !== 'approved') throw new NotFoundException('Case not found');
 
-    // Increment view count
     await this.prisma.geoSuccessCase.update({
       where: { id },
       data: { viewCount: { increment: 1 } },
@@ -205,8 +208,8 @@ export class SuccessCasesService {
   async update(caseId: string, userId: string, dto: Partial<CreateSuccessCaseDto>) {
     const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
     if (!existing) throw new NotFoundException('Case not found');
-    if (existing.userId !== userId) throw new ForbiddenException('只能編輯自己的案例');
-    if (existing.status !== 'pending') throw new ForbiddenException('只能編輯審核中的案例');
+    if (existing.userId !== userId) throw new ForbiddenException('You cannot edit this case');
+    if (existing.status !== 'pending') throw new ForbiddenException('Only pending cases can be edited');
     await this.assertOwnsSite(userId, dto.siteId);
 
     return this.prisma.geoSuccessCase.update({
@@ -218,8 +221,8 @@ export class SuccessCasesService {
   async delete(caseId: string, userId: string, role: string) {
     const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
     if (!existing) throw new NotFoundException('Case not found');
-    if (existing.userId !== userId && role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('無權刪除此案例');
+    if (existing.userId !== userId && !this.isAdminRole(role)) {
+      throw new ForbiddenException('You cannot delete this case');
     }
 
     await this.prisma.geoSuccessCase.delete({ where: { id: caseId } });
@@ -232,21 +235,20 @@ export class SuccessCasesService {
 
     const updated = await this.prisma.geoSuccessCase.update({
       where: { id: caseId },
-      // Approve only flips status + clears any prior rejection reason.
-      // Featured is a separate curated action via toggleFeatured.
       data: { status: 'approved', rejectionReason: null },
     });
 
-    this.notifications.create(
-      updated.userId,
-      'case_approved',
-      '案例審核通過',
-      `您提交的案例「${updated.title}」已通過審核，將出現在成功案例頁面。`,
-    ).catch(() => {});
+    this.notifications
+      .create(
+        updated.userId,
+        'case_approved',
+        '成功案例已通過',
+        `你的成功案例「${updated.title}」已通過審核並公開。`,
+      )
+      .catch(() => {});
 
-    // Only generate an article the first time a case is approved.
     if (!existing.generatedArticleId) {
-      this.generateCaseArticle(caseId).catch((err) => {
+      await this.generateCaseArticle(caseId).catch((err) => {
         this.logger.warn(`Failed to generate article for case ${caseId}: ${err}`);
       });
     }
@@ -263,12 +265,14 @@ export class SuccessCasesService {
       data: { status: 'rejected', rejectionReason: reason, featuredAt: null },
     });
 
-    this.notifications.create(
-      updated.userId,
-      'case_rejected',
-      '案例審核未通過',
-      `您提交的案例「${updated.title}」未通過審核。原因：${reason}`,
-    ).catch(() => {});
+    this.notifications
+      .create(
+        updated.userId,
+        'case_rejected',
+        '成功案例未通過',
+        `你的成功案例「${updated.title}」未通過審核。原因：${reason}`,
+      )
+      .catch(() => {});
 
     return updated;
   }
@@ -287,7 +291,7 @@ export class SuccessCasesService {
     const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
     if (!existing) throw new NotFoundException('Case not found');
     if (existing.status !== 'approved') {
-      throw new ForbiddenException('只有已通過的案例才能設為精選');
+      throw new ForbiddenException('Only approved cases can be featured');
     }
 
     return this.prisma.geoSuccessCase.update({
@@ -296,63 +300,152 @@ export class SuccessCasesService {
     });
   }
 
+  private buildCaseArticlePrompt(caseData: {
+    title: string;
+    queryUsed: string;
+    aiPlatform: string;
+    aiResponse: string;
+    beforeGeoScore: number | null;
+    afterGeoScore: number | null;
+    improvementDays: number | null;
+    tags: string[];
+  }) {
+    return `根據以下 GEO 成功案例，撰寫一篇 700-900 字的繁體中文案例故事文章。
+
+案例標題：${caseData.title}
+提問者問 AI：「${caseData.queryUsed}」
+AI 平台：${caseData.aiPlatform}
+AI 回應摘要：${caseData.aiResponse.slice(0, 500)}
+優化前分數：${caseData.beforeGeoScore ?? '未知'} -> 優化後：${caseData.afterGeoScore ?? '未知'}
+花費天數：${caseData.improvementDays ?? '未知'}
+使用的技術：${caseData.tags.join(', ') || '未提供'}
+
+文章結構：
+## ${caseData.title}
+
+### 背景
+### 他們做了什麼
+### AI 真的引用了
+### 關鍵技術要點
+### 給你的建議
+### 常見問題
+Q: 這個成功案例可以複製嗎？
+A: （回答）
+Q: 需要多少技術能力才能做到？
+A: （回答）`;
+  }
+
+  private buildFallbackCaseArticle(caseData: {
+    title: string;
+    queryUsed: string;
+    aiPlatform: string;
+    aiResponse: string;
+    beforeGeoScore: number | null;
+    afterGeoScore: number | null;
+    improvementDays: number | null;
+    tags: string[];
+  }) {
+    const scoreLine =
+      caseData.beforeGeoScore != null && caseData.afterGeoScore != null
+        ? `${caseData.beforeGeoScore} 分提升到 ${caseData.afterGeoScore} 分`
+        : '完成了一輪 GEO 優化';
+    const daysLine = caseData.improvementDays ? `，約 ${caseData.improvementDays} 天內完成` : '';
+    const tagLine = caseData.tags.length > 0 ? caseData.tags.join('、') : '結構化資料、內容完整性與 AI 可讀性';
+
+    return `## ${caseData.title}
+
+### 背景
+這是一則由使用者提交並通過審核的 GEO 成功案例。案例中的品牌透過 Geovault 追蹤 AI 搜尋能見度，並觀察到 ${caseData.aiPlatform} 在特定提問情境中提及品牌。
+
+使用者測試的問題是：「${caseData.queryUsed}」。這類問題通常代表潛在客戶正在請 AI 協助比較、推薦或理解服務，因此能否被 AI 正確引用，會直接影響品牌在新搜尋入口中的曝光。
+
+### 他們做了什麼
+這個案例的核心改善方向是提高網站與品牌資料的機器可讀性。根據提交資料，主要使用的技術包含：${tagLine}。這些項目可以幫助 AI 更穩定地理解品牌名稱、服務內容、網站可信度與常見問題。
+
+在分數表現上，該案例從 ${scoreLine}${daysLine}。分數提升本身不是唯一目標，但它代表網站在結構化、可讀性與引用線索上更完整，能降低 AI 抓不到重點或引用競品的風險。
+
+### AI 真的引用了
+使用者提供的 AI 回應摘要如下：
+
+${caseData.aiResponse}
+
+這段回應顯示，AI 已能在相關問題中辨識並提到該品牌。對品牌而言，這不是傳統 SEO 的排名結果，而是進入 AI 回答內容的一次可觀察訊號。
+
+### 關鍵技術要點
+首先，結構化資料能讓 AI 與搜尋系統更容易理解網站的主體、服務與聯絡資訊。其次，llms.txt 或明確的 AI 可讀資料能提供更直接的品牌摘要。最後，FAQ 與知識庫內容能補足使用者常問問題，讓 AI 在回答時有更具體的引用材料。
+
+### 給你的建議
+1. 先補齊網站的基礎 GEO 指標，尤其是 JSON-LD、Meta Description、OG Tags 與 llms.txt。
+2. 建立品牌知識庫，把服務、價格、地區、適合對象與常見問題整理成清楚問答。
+3. 每次優化後重新掃描，並用真實 AI 查詢追蹤品牌是否開始被提及。
+
+### 常見問題
+Q: 這個成功案例可以複製嗎？
+A: 可以複製方法，但結果會依產業競爭度、網站內容完整度與 AI 平台資料更新速度而不同。建議先從可控的技術指標與知識庫開始。
+
+Q: 需要多少技術能力才能做到？
+A: 基礎項目需要能修改網站標籤或安裝外掛；內容與知識庫則可以由營運或行銷人員先整理，再交由工程或網站管理者上線。`;
+  }
+
+  private buildCaseArticleSlug(caseData: {
+    id: string;
+    aiPlatform: string;
+    industry: string | null;
+  }) {
+    const slugParts = ['case', caseData.aiPlatform];
+    if (caseData.industry) slugParts.push(caseData.industry);
+    slugParts.push(caseData.id.slice(0, 10));
+    return slugParts
+      .join('-')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+
   async generateCaseArticle(caseId: string) {
     const caseData = await this.prisma.geoSuccessCase.findUnique({
       where: { id: caseId },
     });
 
     if (!caseData) throw new NotFoundException('Case not found');
+    if (caseData.generatedArticleId) {
+      const existingArticle = await this.prisma.blogArticle.findUnique({
+        where: { id: caseData.generatedArticleId },
+      });
+      if (existingArticle) return existingArticle;
+    }
 
-    const openai = new OpenAI({
-      apiKey: this.config.get<string>('OPENAI_API_KEY'),
-    });
+    let content = '';
+    try {
+      const apiKey = this.config.get<string>('OPENAI_API_KEY');
+      if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
 
-    const prompt = `根據以下 GEO 成功案例，撰寫一篇 700–900 字的繁體中文案例故事文章。
+      const openai = new OpenAI({ apiKey });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: this.buildCaseArticlePrompt(caseData) }],
+      });
 
-案例標題：${caseData.title}
-提問者問 AI：「${caseData.queryUsed}」
-AI 平台：${caseData.aiPlatform}
-AI 回應摘要：${caseData.aiResponse.slice(0, 500)}
-優化前分數：${caseData.beforeGeoScore ?? '未知'} → 優化後：${caseData.afterGeoScore ?? '未知'}
-花費天數：${caseData.improvementDays ?? '未知'}
-使用的技術：${caseData.tags.join(', ') || '未標記'}
+      content = completion.choices[0]?.message?.content?.trim() || '';
+      if (content.length < 200) {
+        throw new Error('Generated case article was empty or too short');
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Using fallback case article for ${caseId}: ${error instanceof Error ? error.message : error}`,
+      );
+      content = this.buildFallbackCaseArticle(caseData);
+    }
 
-文章結構：
-## ${caseData.title}
-### 背景
-### 他們做了什麼
-### AI 真的引用了
-### 關鍵技術要點
-### 給你的建議（3 個具體行動建議）
-### 常見問題
-Q: 這個成功案例可以複製嗎？
-Q: 需要多少技術能力才能做到？`;
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const content = completion.choices[0]?.message?.content || '';
-    // ASCII-only slug: AI crawlers (GPTBot / ClaudeBot) and search engines
-    // cannot key off percent-encoded CJK characters. Keep platform / industry
-    // as readable tags, trail with the case id prefix for uniqueness.
-    const slugParts = ['case', caseData.aiPlatform];
-    if (caseData.industry) slugParts.push(caseData.industry);
-    slugParts.push(caseData.id.slice(0, 10));
-    const slug = slugParts
-      .join('-')
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
+    const slug = this.buildCaseArticleSlug(caseData);
 
     const article = await this.prisma.blogArticle.create({
       data: {
         slug,
         title: caseData.title,
-        description: `GEO 成功案例：${caseData.title} — ${caseData.aiPlatform} 平台引用實錄`,
+        description: `GEO 成功案例：${caseData.title} 在 ${caseData.aiPlatform} 被引用`,
         content,
         category: 'case-study',
         templateType: 'geo_overview',
