@@ -165,7 +165,9 @@ export class KnowledgeService {
       where: { id: qaId, siteId },
     });
     if (!qa) throw new NotFoundException('Q&A not found');
-    return this.prisma.siteQa.update({ where: { id: qaId }, data: dto });
+    const updated = await this.prisma.siteQa.update({ where: { id: qaId }, data: dto });
+    this.pingKnowledgeUpdate(siteId);
+    return updated;
   }
 
   async remove(qaId: string, siteId: string, userId: string) {
@@ -174,7 +176,9 @@ export class KnowledgeService {
       where: { id: qaId, siteId },
     });
     if (!qa) throw new NotFoundException('Q&A not found');
-    return this.prisma.siteQa.delete({ where: { id: qaId } });
+    const deleted = await this.prisma.siteQa.delete({ where: { id: qaId } });
+    this.pingKnowledgeUpdate(siteId);
+    return deleted;
   }
 
   private filterLowQuality(items: GeneratedQa[]): GeneratedQa[] {
