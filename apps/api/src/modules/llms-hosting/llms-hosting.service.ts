@@ -3,8 +3,8 @@ import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FixService } from '../fix/fix.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
+import { emitLlmsFullInvalidated, llmsFullCacheEvents, REDIS_KEY_LLMS_FULL } from './llms-full-cache';
 
-const REDIS_KEY_LLMS_FULL = 'geovault:llms-full:v1';
 const REDIS_TTL_SEC = 1800; // 30 min — same as the old in-memory cache
 
 @Injectable()
@@ -38,15 +38,21 @@ export class LlmsHostingService implements OnModuleDestroy {
       this.logger.warn(`Redis init failed, in-memory fallback only: ${err}`);
       this.redis = null;
     }
+    llmsFullCacheEvents.on('invalidate', this.clearMemoryCache);
   }
 
   async onModuleDestroy() {
+    llmsFullCacheEvents.off('invalidate', this.clearMemoryCache);
     try {
       await this.redis?.quit();
     } catch {
       // ignore — process is exiting anyway
     }
   }
+
+  private clearMemoryCache = () => {
+    this.llmsFullCache = null;
+  };
 
   private pingIndexNow(path: string): void {
     this.indexNow
@@ -125,6 +131,13 @@ export class LlmsHostingService implements OnModuleDestroy {
     }
   }
 
+  invalidatePlatformLlmsFull(siteId?: string): void {
+    emitLlmsFullInvalidated();
+    this.invalidateRedisCache().catch(() => {});
+    this.pingIndexNow('/llms-full.txt');
+    if (siteId) this.pingIndexNow(`/directory/${siteId}`);
+  }
+
   async getLlmsTxt(siteId: string): Promise<string | null> {
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
@@ -159,10 +172,7 @@ export class LlmsHostingService implements OnModuleDestroy {
     // A site's llms.txt content changed — invalidate the platform-wide
     // cache and signal Bing/Yandex that /llms-full.txt plus this site's
     // directory page are stale.
-    this.llmsFullCache = null;
-    this.invalidateRedisCache().catch(() => {});
-    this.pingIndexNow('/llms-full.txt');
-    this.pingIndexNow(`/directory/${siteId}`);
+    this.invalidatePlatformLlmsFull(siteId);
 
     return updated;
   }
@@ -451,10 +461,7 @@ This dataset is maintained by Geovault — The APAC Authority on GEO.
         where: { id: siteId },
         data: { llmsTxt: result.code, llmsTxtUpdatedAt: new Date() },
       });
-      this.llmsFullCache = null;
-      this.invalidateRedisCache().catch(() => {});
-      this.pingIndexNow('/llms-full.txt');
-      this.pingIndexNow(`/directory/${siteId}`);
+      this.invalidatePlatformLlmsFull(siteId);
       return { content: result.code };
     }
 
@@ -464,9 +471,7 @@ This dataset is maintained by Geovault — The APAC Authority on GEO.
       where: { id: siteId },
       data: { llmsTxt: content, llmsTxtUpdatedAt: new Date() },
     });
-    this.llmsFullCache = null;
-    this.pingIndexNow('/llms-full.txt');
-    this.pingIndexNow(`/directory/${siteId}`);
+    this.invalidatePlatformLlmsFull(siteId);
     return { content };
   }
 }

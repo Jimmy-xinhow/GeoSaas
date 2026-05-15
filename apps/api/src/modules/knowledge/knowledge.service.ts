@@ -1,9 +1,11 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
 import { IndexNowService } from '../indexnow/indexnow.service';
+import { emitLlmsFullInvalidated, REDIS_KEY_LLMS_FULL } from '../llms-hosting/llms-full-cache';
 import { CreateQaDto } from './dto/create-qa.dto';
 import { UpdateQaDto } from './dto/update-qa.dto';
 
@@ -24,9 +26,10 @@ interface BatchConfig {
 }
 
 @Injectable()
-export class KnowledgeService {
+export class KnowledgeService implements OnModuleDestroy {
   private readonly logger = new Logger(KnowledgeService.name);
   private openai: OpenAI | null = null;
+  private readonly redis: Redis | null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -35,6 +38,27 @@ export class KnowledgeService {
     private readonly indexNow: IndexNowService,
   ) {
     this.initOpenAIClient();
+    try {
+      this.redis = new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        password: process.env.REDIS_PASSWORD || undefined,
+        tls: process.env.REDIS_TLS === 'true' ? {} : undefined,
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false,
+      });
+      this.redis.on('error', (err) => {
+        this.logger.warn(`Redis llms-full cache invalidation unavailable: ${err.message}`);
+      });
+    } catch (err) {
+      this.logger.warn(`Redis init failed for knowledge invalidation: ${err}`);
+      this.redis = null;
+    }
+  }
+
+  async onModuleDestroy() {
+    await this.redis?.quit().catch(() => {});
   }
 
   /**
@@ -53,6 +77,10 @@ export class KnowledgeService {
         .submitUrl(url)
         .catch((err) => this.logger.warn(`IndexNow ping failed for ${url}: ${err}`));
     }
+    emitLlmsFullInvalidated();
+    this.redis?.del(REDIS_KEY_LLMS_FULL).catch((err) => {
+      this.logger.warn(`Redis llms-full cache delete failed: ${err}`);
+    });
   }
 
   private initOpenAIClient() {
