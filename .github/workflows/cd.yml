@@ -70,33 +70,48 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
       - name: Checkout repository
+        if: env.VERCEL_TOKEN != ''
         uses: actions/checkout@v4
 
       - name: Install pnpm
+        if: env.VERCEL_TOKEN != ''
         uses: pnpm/action-setup@v4
         with:
           version: 9.1.0
 
       - name: Setup Node.js
+        if: env.VERCEL_TOKEN != ''
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - name: Install Vercel CLI
+        if: env.VERCEL_TOKEN != ''
         run: pnpm add -g vercel
 
       - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        if: env.VERCEL_TOKEN != ''
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build for production
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        if: env.VERCEL_TOKEN != ''
+        run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        if: env.VERCEL_TOKEN != ''
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Skip Vercel CLI deploy
+        if: env.VERCEL_TOKEN == ''
+        run: |
+          echo "VERCEL_TOKEN is not configured; skipping Vercel CLI deploy."
+          echo "Vercel GitHub Integration is expected to deploy the frontend from this push."
 
   # ── Run DB Migrations ───────────────────────────────────
   migrate-db:
