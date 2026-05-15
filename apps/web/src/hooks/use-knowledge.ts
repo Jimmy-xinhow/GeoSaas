@@ -47,7 +47,16 @@ export function useCreateQa(siteId: string) {
       );
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
+      queryClient.setQueryData<QaItem[]>(['knowledge', siteId], (current) => {
+        if (!current) return [created];
+        if (current.some((item) => item.id === created.id)) return current;
+        return [...current, created].sort(
+          (a, b) =>
+            a.sortOrder - b.sortOrder ||
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+      });
       queryClient.invalidateQueries({ queryKey: ['knowledge', siteId] });
     },
   });

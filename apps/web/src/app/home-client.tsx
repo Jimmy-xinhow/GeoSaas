@@ -140,8 +140,9 @@ function GuestScanResults({ scanId }: { scanId: string }) {
   if (scan.status === 'FAILED') {
     return (
       <div className="mt-8 bg-red-500/20 backdrop-blur-sm rounded-2xl p-6 max-w-2xl mx-auto">
-        <div className="flex items-center justify-center gap-2 text-white">
-          <AlertCircle className="h-5 w-5" /><span>掃描失敗，請稍後再試</span>
+        <div className="flex items-start justify-center gap-2 text-white text-left">
+          <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+          <span>無法完成掃描。請確認網址可公開連線，且網站沒有封鎖外部掃描或只允許登入後瀏覽。</span>
         </div>
       </div>
     )
@@ -179,7 +180,7 @@ function GuestScanResults({ scanId }: { scanId: string }) {
       </div>
       <IndexNowButton url={scan.url} />
       <div className="text-center">
-        <Link href="/register">
+        <Link href="/register" prefetch={false}>
           <Button size="lg" className="bg-white text-gray-900 hover:bg-gray-100 font-semibold h-12 px-10">
             註冊解鎖完整報告 & 自動修復
             <ArrowRight className="h-4 w-4 ml-2" />
@@ -378,7 +379,7 @@ export default function HomeClient() {
 
           {guestScan.isError && (
             <p className="mt-4 text-sm text-red-300">
-              {(guestScan.error as any)?.response?.data?.message || '掃描請求失敗，請稍後再試'}
+              {(guestScan.error as any)?.response?.data?.message || '無法建立掃描，請確認網址格式後再試。'}
             </p>
           )}
 
@@ -834,7 +835,7 @@ export default function HomeClient() {
           </div>
 
           <div className="text-center">
-            <Link href="/cases">
+            <Link href="/cases" prefetch={false}>
               <Button className="bg-white text-gray-900 hover:bg-gray-100 rounded-xl font-semibold">
                 查看更多成功案例
                 <ArrowRight className="h-4 w-4 ml-2" />
@@ -1171,7 +1172,7 @@ export default function HomeClient() {
                     ))}
                   </ul>
 
-                  <Link href="/register" className="block">
+                  <Link href="/register" prefetch={false} className="block">
                     <Button
                       className={cn(
                         'w-full h-12 rounded-xl font-semibold',
@@ -1306,7 +1307,7 @@ export default function HomeClient() {
           </div>
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/register">
+            <Link href="/register" prefetch={false}>
               <Button
                 size="lg"
                 className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-semibold h-14 px-10 rounded-xl shadow-lg shadow-green-500/25"

@@ -439,8 +439,10 @@ function AddQaForm({
     <Card className="border-blue-200 bg-blue-500/10">
       <CardContent className="p-4 space-y-3">
         <div>
-          <Label className="text-sm">問題</Label>
+          <Label htmlFor="manual-qa-question" className="text-sm">問題</Label>
           <Textarea
+            id="manual-qa-question"
+            aria-label="問題"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="例：你們的服務如何收費？"
@@ -449,8 +451,10 @@ function AddQaForm({
           />
         </div>
         <div>
-          <Label className="text-sm">回答</Label>
+          <Label htmlFor="manual-qa-answer" className="text-sm">回答</Label>
           <Textarea
+            id="manual-qa-answer"
+            aria-label="回答"
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             placeholder="例：我們提供免費方案和 Pro 方案，Pro 方案每月 NT$990..."

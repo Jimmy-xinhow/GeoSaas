@@ -91,6 +91,7 @@ function NavSection({ group }: { group: NavGroup }) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
                   isActive
@@ -117,7 +118,7 @@ export default function Sidebar() {
     <aside className="w-60 h-screen bg-gray-900 text-white flex flex-col sticky top-0 border-r border-white/5">
       {/* Logo */}
       <div className="p-4 pb-2">
-        <Link href="/dashboard">
+        <Link href="/dashboard" prefetch={false}>
           <GeovaultLogoCompactDark className="h-7 w-auto" />
         </Link>
       </div>
@@ -132,6 +133,7 @@ export default function Sidebar() {
         <div className="pt-2 border-t border-white/5 mt-2">
           <Link
             href="/settings"
+            prefetch={false}
             className={cn(
               'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
               pathname === '/settings'
@@ -149,6 +151,7 @@ export default function Sidebar() {
           <div>
             <Link
               href="/playbook"
+              prefetch={false}
               className={cn(
                 'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
                 pathname === '/playbook'
@@ -167,6 +170,7 @@ export default function Sidebar() {
           <div className="pt-2">
             <Link
               href="/admin"
+              prefetch={false}
               className={cn(
                 'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors border border-red-800/30',
                 pathname?.startsWith('/admin')
@@ -187,7 +191,7 @@ export default function Sidebar() {
           {user?.plan === 'PRO' ? 'Pro 方案' : user?.plan === 'STARTER' ? 'Starter 方案' : 'Free 方案'}
         </p>
         {user?.plan === 'FREE' && (
-          <Link href="/settings">
+          <Link href="/settings" prefetch={false}>
             <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs h-8">
               升級方案
             </Button>

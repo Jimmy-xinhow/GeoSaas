@@ -21,7 +21,7 @@ export default function PublicNavbar() {
   return (
     <nav className="flex items-center justify-between p-4 px-6 lg:px-12 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-50 border-b border-white/5">
       <div className="flex items-center gap-8">
-        <Link href="/" className="shrink-0">
+        <Link href="/" prefetch={false} className="shrink-0">
           <GeovaultLogoCompactDark className="h-8 w-auto" />
         </Link>
         <div className="hidden md:flex items-center gap-6">
@@ -45,6 +45,7 @@ export default function PublicNavbar() {
             <Link
               key={link.href}
               href={link.href}
+              prefetch={false}
               className={cn(
                 'text-sm transition-colors',
                 pathname === link.href || pathname?.startsWith(link.href + '/')
@@ -59,12 +60,12 @@ export default function PublicNavbar() {
       </div>
       <div className="flex items-center gap-3">
         <LanguageSwitcher />
-        <Link href="/login">
+        <Link href="/login" prefetch={false}>
           <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white hover:bg-white/10">
             登入
           </Button>
         </Link>
-        <Link href="/register">
+        <Link href="/register" prefetch={false}>
           <Button
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white"
