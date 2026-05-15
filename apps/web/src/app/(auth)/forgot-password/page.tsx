@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Mail, CheckCircle2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,25 +15,37 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { GeovaultLogoCompact } from '@/components/logo'
+import apiClient from '@/lib/api-client'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!email) return
-    // For now, just show confirmation. Email service not yet configured.
-    setSubmitted(true)
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!email || isSubmitting) return
+
+    setIsSubmitting(true)
+    try {
+      await apiClient.post('/auth/forgot-password', { email })
+      setSubmitted(true)
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || '無法送出重設密碼要求，請稍後再試')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <Card className="w-full max-w-md shadow-lg">
       <CardHeader className="text-center space-y-2">
-        <div className="mb-2 flex justify-center"><GeovaultLogoCompact className="h-9 w-auto" /></div>
+        <div className="mb-2 flex justify-center">
+          <GeovaultLogoCompact className="h-9 w-auto" />
+        </div>
         <CardTitle className="text-2xl">忘記密碼</CardTitle>
         <CardDescription>
-          {submitted ? '已收到你的請求' : '輸入你的 Email，我們將協助你重設密碼'}
+          {submitted ? '請檢查你的信箱' : '輸入註冊 Email，我們會寄出密碼重設連結'}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -40,11 +53,10 @@ export default function ForgotPasswordPage() {
           <div className="text-center space-y-4 py-4">
             <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
             <p className="text-sm text-gray-400">
-              如果 <strong className="text-white">{email}</strong> 已註冊，
-              我們會寄送密碼重設連結到你的信箱。
+              如果 <strong className="text-white">{email}</strong> 已註冊，重設連結會在幾分鐘內送達。
             </p>
             <p className="text-xs text-gray-500">
-              若沒收到信件，請聯繫客服：hello@geovault.app
+              連結 1 小時後失效，且只能使用一次。
             </p>
             <Link href="/login">
               <Button variant="outline" className="mt-4">
@@ -60,15 +72,16 @@ export default function ForgotPasswordPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="請輸入您的 Email"
+                placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
-            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={isSubmitting}>
               <Mail className="h-4 w-4 mr-2" />
-              發送重設連結
+              {isSubmitting ? '送出中...' : '發送重設連結'}
             </Button>
             <div className="text-center">
               <Link href="/login" className="text-sm text-gray-400 hover:text-white">

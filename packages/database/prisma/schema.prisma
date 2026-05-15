@@ -83,9 +83,24 @@ model User {
   orders             Order[]
   successCases       GeoSuccessCase[]
   creditTransactions CreditTransaction[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([managedBy])
   @@map("users")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model CreditTransaction {

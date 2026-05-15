@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       }),
     }),
     NotificationsModule,
+    EmailModule,
   ],
   controllers: [AuthController, AdminUsersController],
   providers: [AuthService, JwtStrategy, JwtRefreshStrategy],

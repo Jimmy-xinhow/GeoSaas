@@ -84,6 +84,21 @@ export class EmailService {
     });
   }
 
+  async sendPasswordReset(to: string, resetUrl: string) {
+    return this.send({
+      to,
+      subject: '重設你的 Geovault 密碼',
+      html: `
+        <h2>重設 Geovault 密碼</h2>
+        <p>我們收到你的密碼重設要求。此連結將於 1 小時後失效，且只能使用一次。</p>
+        <p><a href="${resetUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">重設密碼</a></p>
+        <p style="color:#6b7280;font-size:13px;">如果你沒有提出此要求，可以忽略這封信。</p>
+        <hr/>
+        <p style="color:#9ca3af;font-size:12px;">Geovault — The APAC Authority on AI Search Optimization</p>
+      `,
+    });
+  }
+
   private async send(params: { to: string; subject: string; html: string }) {
     if (!this.resend) {
       this.logger.warn('Resend not configured (RESEND_API_KEY missing), skipping email');

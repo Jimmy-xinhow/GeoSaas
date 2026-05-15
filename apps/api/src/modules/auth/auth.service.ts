@@ -7,9 +7,11 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { createHash, randomBytes } from 'crypto';
 import { OAuth2Client, TokenPayload } from 'google-auth-library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailService } from '../email/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -29,6 +31,7 @@ export class AuthService {
     private jwtService: JwtService,
     private config: ConfigService,
     private notifications: NotificationsService,
+    private email: EmailService,
   ) {
     this.googleClientId =
       this.config.get<string>('GOOGLE_CLIENT_ID') || GOOGLE_CLIENT_ID_FALLBACK;
@@ -161,6 +164,72 @@ export class AuthService {
     }
   }
 
+  async forgotPassword(emailInput: string) {
+    const email = this.normalizeEmail(emailInput);
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true, email: true },
+    });
+
+    const generic = {
+      message: '如果此 email 已註冊，我們會寄出密碼重設連結。',
+    };
+    if (!user) return generic;
+
+    await this.prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id, usedAt: null },
+    });
+
+    const token = randomBytes(32).toString('hex');
+    const tokenHash = this.hashPasswordResetToken(token);
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    const webUrl = this.config.get<string>('FRONTEND_URL')
+      || this.config.get<string>('WEB_URL')
+      || 'https://www.geovault.app';
+    const resetUrl = `${webUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+    await this.email.sendPasswordReset(user.email, resetUrl);
+
+    return generic;
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const tokenHash = this.hashPasswordResetToken(token);
+    const resetToken = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+    });
+    if (!resetToken || resetToken.usedAt || resetToken.expiresAt <= new Date()) {
+      throw new BadRequestException('重設連結無效或已過期');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { passwordHash },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.passwordResetToken.deleteMany({
+        where: {
+          userId: resetToken.userId,
+          usedAt: null,
+          id: { not: resetToken.id },
+        },
+      }),
+    ]);
+
+    return { message: '密碼已更新，請使用新密碼登入。' };
+  }
+
   async getProfile(userId: string) {
     return this.prisma.user.findUnique({
       where: { id: userId },
@@ -226,5 +295,9 @@ export class AuthService {
   private normalizeOptionalName(name?: string | null): string | undefined {
     const trimmed = typeof name === 'string' ? name.trim() : '';
     return trimmed || undefined;
+  }
+
+  private hashPasswordResetToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 }
