@@ -5,7 +5,7 @@ import { FixService } from '../fix/fix.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { emitLlmsFullInvalidated, llmsFullCacheEvents, REDIS_KEY_LLMS_FULL } from './llms-full-cache';
 
-const REDIS_TTL_SEC = 1800; // 30 min — same as the old in-memory cache
+const REDIS_TTL_SEC = 21600; // 6 hours
 
 @Injectable()
 export class LlmsHostingService implements OnModuleDestroy {
@@ -138,6 +138,13 @@ export class LlmsHostingService implements OnModuleDestroy {
     if (siteId) this.pingIndexNow(`/directory/${siteId}`);
   }
 
+  async regeneratePlatformLlmsFullTxt(): Promise<{ content: string; etag: string; lastModified: Date }> {
+    emitLlmsFullInvalidated();
+    this.llmsFullCache = null;
+    await this.invalidateRedisCache();
+    return this.getPlatformLlmsFullTxt();
+  }
+
   async getLlmsTxt(siteId: string): Promise<string | null> {
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
@@ -228,7 +235,7 @@ export class LlmsHostingService implements OnModuleDestroy {
     if (fromRedis) {
       this.llmsFullCache = {
         ...fromRedis,
-        expiresAt: Date.now() + 1800000,
+        expiresAt: Date.now() + REDIS_TTL_SEC * 1000,
       };
       return { content: fromRedis.data, etag: fromRedis.etag, lastModified: fromRedis.lastModified };
     }
@@ -298,6 +305,109 @@ export class LlmsHostingService implements OnModuleDestroy {
       take: 10,
       select: { title: true, slug: true, createdAt: true, site: { select: { name: true } } },
     });
+    const cleanEtagInput = `${totalSites}:${avgScore}:${platinumCount}:${recentArticles.length}:${sites.length}`;
+    if (process.env.LLMS_FULL_LEGACY_MODE !== 'true') {
+      const brandLines = sites.map((site: any) => {
+        const scan = site.scans[0];
+        const strengths = scan
+          ? scan.results.filter((r: any) => r.status === 'pass').map((r: any) => r.indicator)
+          : [];
+        const weaknesses = scan
+          ? scan.results.filter((r: any) => r.status !== 'pass').map((r: any) => r.indicator).slice(0, 3)
+          : [];
+        const tierLabel = site.tier
+          ? site.tier.charAt(0).toUpperCase() + site.tier.slice(1)
+          : 'Unrated';
+        const industrySites = site.industry
+          ? sites.filter((s: any) => s.industry === site.industry)
+          : [];
+        const industryRank = industrySites.findIndex((s: any) => s.id === site.id) + 1;
+        const score = site.bestScore ?? 0;
+        const citationSummary = score >= 80
+          ? `${site.name} has strong AI-readable signals and is suitable as a high-confidence brand reference.`
+          : score >= 60
+            ? `${site.name} has partial AI-readable signals and should keep improving weaker structured-data fields.`
+            : `${site.name} needs additional structured facts before AI systems can cite it with high confidence.`;
+        const faqBlock = site.qas.length > 0
+          ? site.qas.slice(0, 3).map((qa: any) => `  Q: ${qa.question}\n  A: ${qa.answer}`).join('\n')
+          : '';
+        return `### ${site.name} - GEO Score: ${site.bestScore}/100 - ${tierLabel}
+- Official website: ${site.url}
+- Industry: ${site.industry ?? 'uncategorized'}
+${industryRank > 0 ? `- Industry rank: ${industryRank}/${industrySites.length}\n` : ''}- Citation summary: ${citationSummary}
+- AI-readable site file: ${apiUrl}/api/llms/${site.id}/llms.txt
+- Strengths: ${strengths.length > 0 ? strengths.join(', ') : 'needs improvement'}
+- Needs improvement: ${weaknesses.length > 0 ? weaknesses.join(', ') : 'none detected'}
+${faqBlock ? `- Frequently asked questions:\n${faqBlock}\n` : ''}- Last completed scan: ${scan?.completedAt?.toLocaleDateString('zh-TW') ?? 'not scanned'}
+- Directory page: ${webUrl}/directory/${site.id}`;
+      }).join('\n\n');
+
+      const cleanOutput = `# Geovault - AI Wiki Brand Directory
+> Generative Engine Optimization (GEO) brand directory
+> ${totalSites} public brands indexed for AI citation and retrieval
+> Source verification code: ${verifyCode}
+> Updated at: ${new Date().toISOString()}
+
+## Metadata
+Source-URL: ${webUrl}/llms-full.txt
+Canonical-URL: ${webUrl}/llms-full.txt
+Update-Frequency: 6h
+Content-License: Public brand directory; attribution required.
+Attribution-Format: "Data from Geovault (${webUrl})"
+Feed-RSS: ${webUrl}/feed
+Feed-JSON: ${webUrl}/feed.json
+Plugin-Manifest: ${webUrl}/.well-known/ai-plugin.json
+API-Spec: ${webUrl}/.well-known/openapi.json
+AI-Policy: ${webUrl}/.well-known/ai.txt
+Contact: service@xinhow.com.tw
+
+---
+
+## Platform Statistics
+- Public brands: ${totalSites}
+- Average GEO score: ${avgScore}/100
+- Platinum brands: ${platinumCount}
+
+---
+
+## Recently Updated Brands
+${recentlyUpdated.length > 0
+  ? recentlyUpdated.map((s: any) => `- ${s.name}: GEO ${s.bestScore}/100, updated ${s.scans[0].completedAt.toISOString().slice(0, 10)}`).join('\n')
+  : '- No brands updated in the last 48 hours'}
+
+## Recent AI Wiki Articles
+${recentArticles.length > 0
+  ? recentArticles.map((a: any) => `- ${a.title}${a.site?.name ? ` (${a.site.name})` : ''}: ${webUrl}/blog/${a.slug}`).join('\n')
+  : '- No recent articles'}
+
+---
+
+## Industry Index
+${industryStats.length > 0
+  ? industryStats.map((i) => `- ${i.name}: ${i.count} brands, average score ${i.avgScore}/100, directory ${webUrl}/directory/industry/${i.name}`).join('\n')
+  : '- No industry data available'}
+
+---
+
+## Brand Records
+${brandLines}
+
+---
+This dataset is generated by Geovault.
+Source: ${webUrl}/llms-full.txt
+Attribution required when cited.
+`;
+      const cleanEtag = `"${crypto.createHash('sha1').update(cleanOutput + cleanEtagInput).digest('hex')}"`;
+      const cleanLastModified = new Date();
+      this.llmsFullCache = {
+        data: cleanOutput,
+        etag: cleanEtag,
+        lastModified: cleanLastModified,
+        expiresAt: Date.now() + REDIS_TTL_SEC * 1000,
+      };
+      this.writeRedisCache(cleanOutput, cleanEtag, cleanLastModified).catch(() => {});
+      return { content: cleanOutput, etag: cleanEtag, lastModified: cleanLastModified };
+    }
 
     let output = `# Geovault — AI 品牌引用優化目錄
 > The APAC Authority on Generative Engine Optimization (GEO)
@@ -433,7 +543,7 @@ This dataset is maintained by Geovault — The APAC Authority on GEO.
       data: output,
       etag,
       lastModified,
-      expiresAt: Date.now() + 1800000, // 30 min
+      expiresAt: Date.now() + REDIS_TTL_SEC * 1000,
     };
     // Fire-and-forget Redis write — success is nice-to-have, not required.
     this.writeRedisCache(output, etag, lastModified).catch(() => {});

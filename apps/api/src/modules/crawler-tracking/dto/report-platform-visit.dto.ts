@@ -3,6 +3,8 @@ import { IsIn, IsInt, IsOptional, IsString, IsUrl, Max, MaxLength, Min } from 'c
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AI_BOT_NAMES } from './report-visit.dto';
 
+const AI_BOT_CATEGORIES = ['training', 'search-index', 'user-triggered', 'general-crawler'] as const;
+
 export class ReportPlatformVisitDto {
   @ApiProperty()
   @IsString()
@@ -32,4 +34,10 @@ export class ReportPlatformVisitDto {
   @IsString()
   @MaxLength(40)
   source?: string;
+
+  @ApiPropertyOptional({ enum: AI_BOT_CATEGORIES })
+  @IsOptional()
+  @IsString()
+  @IsIn(AI_BOT_CATEGORIES)
+  botCategory?: (typeof AI_BOT_CATEGORIES)[number];
 }

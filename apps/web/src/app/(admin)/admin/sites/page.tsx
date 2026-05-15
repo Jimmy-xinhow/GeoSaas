@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import apiClient from '@/lib/api-client';
-import { Search, ExternalLink, RefreshCw, CheckCircle, ChevronLeft, ChevronRight, UserCheck, Star } from 'lucide-react';
+import { Search, ExternalLink, RefreshCw, CheckCircle, ChevronLeft, ChevronRight, UserCheck, Star, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const TIER_COLORS: Record<string, string> = {
@@ -15,6 +15,17 @@ const TIER_COLORS: Record<string, string> = {
   gold: 'bg-yellow-500/20 text-yellow-400',
   silver: 'bg-white/10 text-gray-300',
   bronze: 'bg-orange-500/20 text-orange-400',
+};
+
+const MISSING_FACT_LABELS: Record<string, string> = {
+  location: '地點',
+  services: '服務',
+  positioning: '品牌定位',
+  contact: '聯絡方式',
+  targetAudiences: '目標受眾',
+  notFor: '不適合對象',
+  qaPairs: '至少 6 組 Q&A',
+  socialLinks: '社群連結',
 };
 
 export default function AdminSitesPage() {
@@ -44,6 +55,28 @@ export default function AdminSitesPage() {
     },
   });
 
+  const { data: readiness } = useQuery({
+    queryKey: ['admin-client-daily-readiness'],
+    queryFn: async () => {
+      const { data } = await apiClient.get('/blog/client-daily/readiness');
+      return data as {
+        totalClients: number;
+        ready: number;
+        notReady: number;
+        rows: Array<{
+          siteId: string;
+          name: string;
+          industry: string | null;
+          url: string;
+          ready: boolean;
+          confidenceScore: number;
+          verifiedFactsCount: number;
+          missingFacts: string[];
+        }>;
+      };
+    },
+  });
+
   const clientSiteIds = new Set((clientSites || []).map((s: any) => s.id));
 
   const scanMutation = useMutation({
@@ -64,6 +97,7 @@ export default function AdminSitesPage() {
       toast.success(vars.isClient ? '已標註為客戶' : '已取消客戶標註');
       queryClient.invalidateQueries({ queryKey: ['admin-sites'] });
       queryClient.invalidateQueries({ queryKey: ['admin-client-sites'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-client-daily-readiness'] });
     },
   });
 
@@ -88,6 +122,63 @@ export default function AdminSitesPage() {
           </div>
         )}
       </div>
+
+      {readiness && readiness.totalClients > 0 && (
+        <Card className="bg-white/5 border-white/10">
+          <CardContent className="p-5 space-y-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-400" />
+                  每日 AI Wiki 產文就緒度
+                </h2>
+                <p className="text-xs text-gray-400 mt-1">
+                  自動產文啟用前必須完成品牌 facts。未完成的 client 不會產生空泛文章。
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Badge className="bg-green-500/20 text-green-300">Ready {readiness.ready}</Badge>
+                <Badge className="bg-yellow-500/20 text-yellow-300">Blocked {readiness.notReady}</Badge>
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              {readiness.rows.map((row) => (
+                <div
+                  key={row.siteId}
+                  className={`rounded-lg border p-3 ${row.ready ? 'border-green-500/20 bg-green-500/5' : 'border-yellow-500/20 bg-yellow-500/5'}`}
+                >
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-white">{row.name}</p>
+                        <Badge variant="outline" className={row.ready ? 'border-green-500/40 text-green-300' : 'border-yellow-500/40 text-yellow-200'}>
+                          {row.ready ? '可啟用' : '資料未完成'}
+                        </Badge>
+                        <span className="text-xs text-gray-400">Confidence {row.confidenceScore}</span>
+                        <span className="text-xs text-gray-400">Facts {row.verifiedFactsCount}</span>
+                      </div>
+                      <a href={row.url} target="_blank" rel="noopener" className="mt-1 inline-flex items-center gap-1 text-xs text-blue-400 hover:underline">
+                        {row.url.replace(/^https?:\/\//, '').slice(0, 48)}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                    {!row.ready && (
+                      <div className="flex max-w-xl flex-wrap gap-1.5">
+                        {row.missingFacts.map((fact) => (
+                          <Badge key={`${row.siteId}-${fact}`} variant="outline" className="border-yellow-500/30 text-yellow-100">
+                            {MISSING_FACT_LABELS[fact] || fact}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">

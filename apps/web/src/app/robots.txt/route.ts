@@ -11,7 +11,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 
 const AI_BOTS = [
   'GPTBot', 'ChatGPT-User', 'OAI-SearchBot',
-  'ClaudeBot', 'Claude-Web', 'anthropic-ai',
+  'ClaudeBot', 'Claude-User', 'Claude-SearchBot', 'Claude-Web', 'anthropic-ai',
   'PerplexityBot', 'Perplexity-User',
   'Google-Extended', 'Googlebot', 'GoogleOther',
   'bingbot', 'CopilotBot',

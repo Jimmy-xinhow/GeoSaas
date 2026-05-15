@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
+  Info,
   ChevronDown,
   ChevronRight,
   BookOpen,
@@ -37,7 +38,7 @@ import { IndicatorCard } from '@/components/scan/indicator-card'
 import ScanHistoryChart from '@/components/scan/scan-history-chart'
 import { CodeSnippetViewer } from '@/components/fix/code-snippet-viewer'
 import apiClient from '@/lib/api-client'
-import { useSite } from '@/hooks/use-sites'
+import { useBrandFactReadiness, useSite, useUpdateSiteProfile, type BrandFactReadiness, type SiteProfile } from '@/hooks/use-sites'
 import {
   useTriggerScan,
   useScanHistory,
@@ -436,11 +437,277 @@ function BadgeSection({ siteId }: { siteId: string }) {
 }
 
 // ── Main page component ──
+const missingFactLabels: Record<string, string> = {
+  location: '品牌所在地或服務區域',
+  services: '具體服務/產品項目',
+  positioning: '品牌定位描述',
+  contact: '聯絡方式',
+  targetAudiences: '目標客群',
+  notFor: '不適合/禁止描述',
+  qaPairs: '至少 6 組品牌 Q&A',
+  socialLinks: '社群連結',
+}
+
+function BrandFactReadinessSection({
+  readiness,
+  isLoading,
+  siteId,
+  profile,
+}: {
+  readiness?: BrandFactReadiness
+  isLoading: boolean
+  siteId: string
+  profile?: SiteProfile | null
+}) {
+  const updateProfile = useUpdateSiteProfile(siteId)
+  if (isLoading) {
+    return (
+      <Card className="bg-white/5 border-white/10">
+        <CardHeader>
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-4 w-64" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-24 w-full" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!readiness) return null
+
+  const missing = readiness.missingFacts.map((key) => missingFactLabels[key] || key)
+  const autoPublishingEnabled = readiness.ready && profile?.dailyContentPaused !== true
+  const confidenceColor = readiness.ready
+    ? 'text-green-400'
+    : readiness.confidenceScore >= 40
+      ? 'text-yellow-400'
+      : 'text-red-400'
+
+  return (
+    <Card className="bg-white/5 border-white/10">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Info className="h-5 w-5 text-blue-400" />
+              AI Wiki 可引用性
+            </CardTitle>
+            <CardDescription>
+              client_daily 與 llms-full 會依這些事實判斷能不能生成可被 AI 引用的內容。
+            </CardDescription>
+          </div>
+          <Badge className={readiness.ready ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}>
+            {readiness.ready ? '可生成' : '需補資料'}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <p className="text-xs text-muted-foreground">Fact Confidence</p>
+            <p className={`mt-1 text-3xl font-bold ${confidenceColor}`}>{readiness.confidenceScore}</p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <p className="text-xs text-muted-foreground">Verified Facts</p>
+            <p className="mt-1 text-3xl font-bold text-white">{readiness.verifiedFacts.length}</p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <p className="text-xs text-muted-foreground">Q&A</p>
+            <p className="mt-1 text-3xl font-bold text-white">{readiness.qaPairs.length}</p>
+          </div>
+        </div>
+
+        <div className={`rounded-lg border p-4 ${autoPublishingEnabled ? 'border-green-500/30 bg-green-500/10' : 'border-white/10 bg-white/5'}`}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">AI Wiki 自動產文</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                啟用前必須完成品牌定位、服務、地點、聯絡方式、目標受眾、不適合對象與至少 6 組 Q&A。
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant={autoPublishingEnabled ? 'outline' : 'default'}
+              disabled={!readiness.ready || updateProfile.isPending}
+              onClick={async () => {
+                try {
+                  await updateProfile.mutateAsync({
+                    ...(profile || {}),
+                    dailyContentPaused: autoPublishingEnabled,
+                  })
+                  toast.success(autoPublishingEnabled ? '已暫停自動產文' : '已啟用自動產文')
+                } catch (err: any) {
+                  const missingFacts = err?.response?.data?.missingFacts
+                  const detail = Array.isArray(missingFacts) && missingFacts.length > 0
+                    ? `缺少：${missingFacts.map((key) => missingFactLabels[key] || key).join('、')}`
+                    : err?.response?.data?.message
+                  toast.error(detail || '自動產文設定更新失敗')
+                }
+              }}
+            >
+              {updateProfile.isPending ? (
+                <>
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  更新中
+                </>
+              ) : autoPublishingEnabled ? '暫停自動產文' : readiness.ready ? '啟用自動產文' : '資料未完成'}
+            </Button>
+          </div>
+        </div>
+
+        {missing.length > 0 ? (
+          <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
+            <p className="text-sm font-medium text-yellow-200">下一步應補齊</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {missing.map((item) => (
+                <Badge key={item} variant="outline" className="border-yellow-500/40 text-yellow-100">
+                  {item}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-100">
+            這個品牌已具備基本可引用事實，後續每日內容可以安全生成。
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3">
+          <Link href={`/sites/${siteId}/knowledge`}>
+            <Button variant="outline" size="sm">
+              補 Q&A
+            </Button>
+          </Link>
+          <Link href={`/sites/${siteId}/llms-txt`}>
+            <Button variant="outline" size="sm">
+              更新 llms.txt
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProfileFactsEditor({
+  siteId,
+  profile,
+}: {
+  siteId: string
+  profile?: SiteProfile | null
+}) {
+  const updateProfile = useUpdateSiteProfile(siteId)
+  const [form, setForm] = useState({
+    description: profile?.description || '',
+    services: profile?.services || '',
+    positioning: profile?.positioning || profile?.uniqueValue || '',
+    location: profile?.location || '',
+    contact: profile?.contact || profile?.contactInfo || '',
+    targetAudience: profile?.targetAudience || profile?.targetAudiences?.join(', ') || '',
+    notFor: profile?.notFor?.join(', ') || profile?.forbidden?.join(', ') || '',
+  })
+
+  useEffect(() => {
+    setForm({
+      description: profile?.description || '',
+      services: profile?.services || '',
+      positioning: profile?.positioning || profile?.uniqueValue || '',
+      location: profile?.location || '',
+      contact: profile?.contact || profile?.contactInfo || '',
+      targetAudience: profile?.targetAudience || profile?.targetAudiences?.join(', ') || '',
+      notFor: profile?.notFor?.join(', ') || profile?.forbidden?.join(', ') || '',
+    })
+  }, [profile])
+
+  const setField = (key: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  const save = async () => {
+    const split = (value: string) =>
+      value
+        .split(/[,，、;\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+
+    try {
+      await updateProfile.mutateAsync({
+        ...(profile || {}),
+        description: form.description.trim(),
+        services: form.services.trim(),
+        positioning: form.positioning.trim(),
+        uniqueValue: form.positioning.trim(),
+        location: form.location.trim(),
+        contact: form.contact.trim(),
+        contactInfo: form.contact.trim(),
+        targetAudience: form.targetAudience.trim(),
+        targetAudiences: split(form.targetAudience),
+        notFor: split(form.notFor),
+        forbidden: split(form.notFor),
+      })
+      toast.success('品牌事實已更新')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || '品牌事實更新失敗')
+    }
+  }
+
+  const fieldClass = 'w-full rounded-md border border-white/10 bg-gray-950 px-3 py-2 text-sm text-white outline-none focus:border-blue-500'
+
+  return (
+    <Card className="bg-white/5 border-white/10">
+      <CardHeader>
+        <CardTitle>品牌事實資料</CardTitle>
+        <CardDescription>
+          這裡的資料會進入 BrandFact 與 AI Wiki 內容生成，請只填可公開、可被引用的事實。
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="space-y-1.5">
+            <span className="text-xs text-muted-foreground">品牌描述</span>
+            <textarea className={fieldClass} rows={3} value={form.description} onChange={(e) => setField('description', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-muted-foreground">服務/產品項目</span>
+            <textarea className={fieldClass} rows={3} value={form.services} onChange={(e) => setField('services', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-muted-foreground">品牌定位</span>
+            <textarea className={fieldClass} rows={3} value={form.positioning} onChange={(e) => setField('positioning', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-muted-foreground">所在地/服務區域</span>
+            <input className={fieldClass} value={form.location} onChange={(e) => setField('location', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-muted-foreground">公開聯絡方式</span>
+            <input className={fieldClass} value={form.contact} onChange={(e) => setField('contact', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-muted-foreground">目標客群，用逗號分隔</span>
+            <input className={fieldClass} value={form.targetAudience} onChange={(e) => setField('targetAudience', e.target.value)} />
+          </label>
+          <label className="space-y-1.5 md:col-span-2">
+            <span className="text-xs text-muted-foreground">不適合/禁止描述，用逗號分隔</span>
+            <input className={fieldClass} value={form.notFor} onChange={(e) => setField('notFor', e.target.value)} />
+          </label>
+        </div>
+        <Button onClick={save} disabled={updateProfile.isPending}>
+          {updateProfile.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+          儲存品牌事實
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function SiteDetailPage() {
   const params = useParams()
   const siteId = params.siteId as string
 
   const { data: site, isLoading: siteLoading } = useSite(siteId)
+  const { data: brandFacts, isLoading: brandFactsLoading } = useBrandFactReadiness(siteId)
   const queryClient = useQueryClient()
   const {
     data: scans,
@@ -628,6 +895,15 @@ export default function SiteDetailPage() {
           </div>
         </div>
       </div>
+
+      <BrandFactReadinessSection
+        readiness={brandFacts}
+        isLoading={brandFactsLoading}
+        siteId={siteId}
+        profile={site.profile}
+      />
+
+      <ProfileFactsEditor siteId={siteId} profile={site.profile} />
 
       {/* Scan progress banner */}
       {hasActiveScan && (

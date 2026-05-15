@@ -106,6 +106,17 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @Get('sites/:siteId/brand-facts')
+  @ApiOperation({ summary: 'Get brand fact readiness for AI Wiki content generation' })
+  getBrandFactReadiness(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getBrandFactReadiness(siteId, userId, role);
+  }
+
+  @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Post('generate/:siteId')
@@ -349,6 +360,21 @@ export class BlogArticleController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('client-daily/dry-run/:siteId')
+  @ApiOperation({
+    summary:
+      'Dry-run client_daily generation without creating a BlogArticle. Returns generated/rejected status, score, failed quality rules, and content preview for QA.',
+  })
+  dryRunClientDaily(
+    @Param('siteId') siteId: string,
+    @Query('dayType') dayType?: string,
+  ) {
+    return this.service.generateClientDailyContent(siteId, dayType as any, { dryRun: true });
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Post('client-daily/batch')
   @ApiOperation({
     summary:
@@ -359,6 +385,18 @@ export class BlogArticleController {
       console.error('client_daily batch crashed:', err);
     });
     return { message: 'client_daily batch started' };
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('client-daily/readiness')
+  @ApiOperation({
+    summary:
+      'Admin readiness summary for client_daily generation. Shows which paid public client sites are blocked by missing BrandFact fields.',
+  })
+  getClientDailyReadiness() {
+    return this.service.getClientDailyReadinessSummary();
   }
 
   @ApiBearerAuth()

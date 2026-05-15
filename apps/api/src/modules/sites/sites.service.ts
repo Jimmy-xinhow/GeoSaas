@@ -105,6 +105,9 @@ export class SitesService {
 
   async update(id: string, dto: UpdateSiteDto, userId: string, userRole?: string) {
     const before = await this.findOne(id, userId, userRole);
+    if (dto.profile && dto.profile.dailyContentPaused === false) {
+      await this.assertClientDailyCanBeEnabled(id, dto.profile);
+    }
     const data = {
       ...dto,
       ...(dto.url ? { url: this.normalizePublicSiteUrl(dto.url) } : {}),
@@ -125,6 +128,61 @@ export class SitesService {
     }
 
     return after;
+  }
+
+  private async assertClientDailyCanBeEnabled(siteId: string, nextProfile: Record<string, any>): Promise<void> {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: {
+        profile: true,
+        llmsTxt: true,
+        _count: { select: { qas: true, crawlerVisits: true } },
+      },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+
+    const existingProfile = site.profile && typeof site.profile === 'object' && !Array.isArray(site.profile)
+      ? site.profile as Record<string, any>
+      : {};
+    const profile = { ...existingProfile, ...nextProfile };
+    const enriched = profile._enriched && typeof profile._enriched === 'object' && !Array.isArray(profile._enriched)
+      ? profile._enriched as Record<string, any>
+      : {};
+    const text = (...values: unknown[]) =>
+      values.some((value) => typeof value === 'string' && value.trim().length > 0);
+    const arrayText = (value: unknown) =>
+      Array.isArray(value) && value.some((item) => String(item).trim().length > 0);
+
+    const missing = [
+      !text(profile.location, enriched.address) && 'location',
+      !text(profile.services, enriched.services) && 'services',
+      !text(profile.positioning, profile.uniqueValue, enriched.description, profile.description) && 'positioning',
+      !text(profile.contact, profile.contactInfo, enriched.telephone, enriched.email) && 'contact',
+      !arrayText(profile.targetAudiences) && !text(profile.targetAudience, profile.audience) && 'targetAudiences',
+      !arrayText(profile.notFor) && !arrayText(profile.forbidden) && 'notFor',
+      site._count.qas < 6 && 'qaPairs',
+    ].filter(Boolean) as string[];
+
+    const confidenceScore = Math.max(0, Math.min(100, Math.round(
+      (!missing.includes('location') ? 12 : 0) +
+      (!missing.includes('services') ? 18 : 0) +
+      (!missing.includes('positioning') ? 14 : 0) +
+      (!missing.includes('contact') ? 8 : 0) +
+      (!missing.includes('targetAudiences') ? 10 : 0) +
+      (!missing.includes('notFor') ? 6 : 0) +
+      (site._count.qas >= 6 ? 18 : site._count.qas * 3) +
+      (site.llmsTxt ? 6 : 0) +
+      (site._count.crawlerVisits > 0 ? 8 : 0)
+    )));
+
+    if (missing.length > 0 || confidenceScore < 55) {
+      throw new BadRequestException({
+        message: 'Cannot enable automatic AI Wiki publishing until required brand facts are complete.',
+        code: 'CLIENT_DAILY_NOT_READY',
+        missingFacts: missing,
+        confidenceScore,
+      });
+    }
   }
 
   private normalizePublicSiteUrl(url: string): string {

@@ -119,7 +119,7 @@ export class ContentQualityRunner {
         spec.rules,
         ctx,
       );
-      const passed = totalScore >= spec.passThreshold;
+      const passed = totalScore >= spec.passThreshold && !this.hasHardFailure(spec, failedRules);
       const entry: AttemptLogEntry = {
         templateType: spec.templateType,
         promptVersion: spec.promptVersion,
@@ -173,7 +173,7 @@ export class ContentQualityRunner {
           spec.rules,
           ctx,
         );
-        const passed = totalScore >= spec.passThreshold;
+        const passed = totalScore >= spec.passThreshold && !this.hasHardFailure(spec, failedRules);
         const entry: AttemptLogEntry = {
           templateType: spec.templateType,
           promptVersion: spec.promptVersion,
@@ -291,6 +291,12 @@ export class ContentQualityRunner {
     }
 
     return { totalScore, ruleScores, failedRules };
+  }
+
+  private hasHardFailure<T>(spec: ContentSpec<T>, failedRules: string[]): boolean {
+    const prefixes = spec.hardFailRules ?? [];
+    if (prefixes.length === 0 || failedRules.length === 0) return false;
+    return failedRules.some((rule) => prefixes.some((prefix) => rule.startsWith(prefix)));
   }
 
   private async persistLog(

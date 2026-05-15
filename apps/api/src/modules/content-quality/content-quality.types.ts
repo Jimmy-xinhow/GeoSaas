@@ -82,6 +82,9 @@ export interface ContentSpec<T = unknown> {
   // ─── Stage 3 ─────────────────────────────────────────────────
   rules: ScoringRule[];
   passThreshold: number;          // 0..100
+  // Rule reason prefixes that must be fully fixed even if the weighted score
+  // reaches passThreshold. Use for safety and factuality failures.
+  hardFailRules?: string[];
   maxFullRetries?: number;        // default: 1 (patch is preferred over full re-gen)
   maxPatchRetries?: number;       // default: 2
   buildPatchPrompt?(args: BuildPatchPromptArgs<T>): string;

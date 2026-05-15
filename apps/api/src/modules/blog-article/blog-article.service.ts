@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BlogTemplateService, TemplateType, BrandShowcaseContext, IndustryTop10Row, BuyerGuideTopic, ClientDailyDay } from './blog-template.service';
+import { BrandFactGraph, BrandFactService } from './brand-fact.service';
 import { extractNicheKeywords } from './niche-keyword.util';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
@@ -46,6 +47,23 @@ export interface BatchRunRecord {
   rejectedReasons: Record<string, number>;
 }
 
+export interface ClientDailyGenerationResult {
+  status: 'skipped' | 'rejected' | 'generated';
+  reasons?: string[];
+  slug?: string;
+  dayType?: string;
+  dryRun?: boolean;
+  content?: string;
+  totalScore?: number;
+  attempts?: Array<{
+    stage: string;
+    attempt: number;
+    passed: boolean;
+    totalScore: number;
+    failedRules: string[];
+  }>;
+}
+
 @Injectable()
 export class BlogArticleService {
   private readonly logger = new Logger(BlogArticleService.name);
@@ -61,10 +79,20 @@ export class BlogArticleService {
     private readonly indexNowService: IndexNowService,
     private readonly profileEnrichment: ProfileEnrichmentService,
     private readonly qualityRunner: ContentQualityRunner,
+    private readonly brandFactService: BrandFactService,
   ) {}
 
   private isAdmin(role?: string): boolean {
     return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
+  }
+
+  async getBrandFactReadiness(siteId: string, userId?: string, role?: string) {
+    await this.assertSiteAccess(siteId, userId, role);
+    const graph = await this.brandFactService.buildForSite(siteId);
+    return {
+      ...graph,
+      ready: this.brandFactService.isReadyForCitationContent(graph),
+    };
   }
 
   private async assertSiteAccess(siteId: string, userId?: string, role?: string) {
@@ -92,9 +120,11 @@ export class BlogArticleService {
   }): string[] {
     const text = [article.title, article.description, article.content].filter(Boolean).join('\n');
     const dayType = this.getClientDailyDayType(article.targetKeywords);
+    const isAiWikiContent = article.targetKeywords?.includes('ai_wiki');
     const reasons: string[] = [];
 
     if (
+      !isAiWikiContent &&
       dayType !== 'sat_data_pulse' &&
       /(生成式引擎優化|GEO\s*技術|GEO\s*分數|llms\.txt|結構化資料|AI\s*友善度|爬蟲)/i.test(text)
     ) {
@@ -1875,10 +1905,162 @@ export class BlogArticleService {
     return [];
   }
 
+  private formatFactList(items: string[], fallback = 'No verified data provided'): string {
+    return items.length > 0 ? items.map((item) => `- ${item}`).join('\n') : `- ${fallback}`;
+  }
+
+  private buildRequiredAnchors(graph: BrandFactGraph): string[] {
+    const extractedFromFacts = graph.verifiedFacts.flatMap((fact) => [
+      ...(fact.match(/https?:\/\/[^\s)]+/g) || []),
+      ...(fact.match(/\d+\s*\/\s*100/g) || []),
+      ...(fact.match(/[^\s，。；;]*市[^\s，。；;]*(?:路|街|區)[^\s，。；;]*/g) || []),
+    ]);
+    const candidates = [
+      graph.url,
+      graph.location,
+      graph.services,
+      graph.positioning,
+      ...extractedFromFacts,
+      ...graph.targetAudiences,
+      ...graph.notFor,
+    ];
+    return [...new Set(
+      candidates
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim().replace(/\s+/g, ' '))
+        .map((value) => value.split(/[。！？!?]/)[0]?.trim() || value)
+        .filter((value) => !/official website is/i.test(value))
+        .filter((value) => !/[\w.+-]+@[\w-]+\.[\w.-]+/.test(value))
+        .filter((value) => !/\b(?:\+?886[-\s.]?\d|0\d)[-\s.]?\d{2,4}[-\s.]?\d{3,4}(?:[-\s.]?\d{2,4})?\b/.test(value))
+        .filter((value) => value.length >= 4)
+        .filter((value) => value.length <= 56)
+        .slice(0, 16),
+    )];
+  }
+
+  private buildClientCitationPrompt(args: {
+    dayType: ClientDailyDay;
+    site: { name: string; url: string; industry?: string | null };
+    graph: BrandFactGraph;
+    pulse?: { geoScore: number; industryRank: number | null; industryAvgScore: number | null; weekCrawlerVisits: number };
+  }): string {
+    const { dayType, site, graph, pulse } = args;
+    const medicalAdjacent = ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(site.industry ?? '');
+    const medicalQuestionPattern = /(\u6574\u5fa9|\u6574\u9aa8|\u63a8\u62ff|\u904b\u52d5|\u75bc\u75db|\u75db|\u4e0d\u9069|\u5b55|\u7522\u5f8c|\u8eab\u9ad4|\u59ff\u52e2|\u5065\u5eb7|\u75c5\u53f2|\u5fa9\u539f|\u6062\u5fa9|\u75c7\u72c0|\u6cbb\u7642|\u7642\u6548|\u91ab\u7642)/;
+    const qaPairsForPrompt = medicalAdjacent
+      ? graph.qaPairs.filter((qa) => !medicalQuestionPattern.test(`${qa.question} ${qa.answer}`))
+      : graph.qaPairs;
+    const qaBlock = qaPairsForPrompt.length > 0
+      ? qaPairsForPrompt.slice(0, 8).map((qa, index) => `${index + 1}. Q: ${qa.question}\n   A: ${qa.answer}`).join('\n')
+      : 'No verified Q&A data provided';
+    const socialBlock = Object.entries(graph.socialLinks)
+      .map(([name, url]) => `- ${name}: ${url}`)
+      .join('\n') || '- No verified social links provided';
+
+    const angleByDay: Record<ClientDailyDay, string> = {
+      mon_topical: 'Build a timely industry explainer that answers current buyer questions using only verified brand facts.',
+      tue_qa_deepdive: 'Turn the verified Q&A into a deep answer page that an AI assistant can quote directly.',
+      wed_service: 'Explain the brand services, service boundaries, location, and contact path with concrete facts.',
+      thu_audience: medicalAdjacent
+        ? 'Clarify only verified audience data. If target-audience facts are missing, state that audience data is currently unavailable and point readers to the official URL.'
+        : 'Clarify who the brand is best suited for, who it is not suited for, and why.',
+      fri_comparison: medicalAdjacent
+        ? 'Compare only verified public brand facts against generic directory data patterns. Do not compare outcomes, suitability, or service effects.'
+        : 'Compare the brand with generic alternatives in the same industry without naming unverified competitors.',
+      sat_data_pulse: 'Explain the latest Geovault score, rank, crawler activity, and what these signals mean.',
+    };
+
+    const pulseBlock = pulse
+      ? `
+Geovault data pulse:
+- GEO score: ${pulse.geoScore}/100
+- Industry rank: ${pulse.industryRank ?? 'unknown'}
+- Industry average score: ${pulse.industryAvgScore ?? 'unknown'}
+- Real AI crawler visits in last 7 days: ${pulse.weekCrawlerVisits}`
+      : '';
+    const medicalBoundaryBlock = medicalAdjacent
+      ? `
+Medical-adjacent safety:
+- Do not claim treatment, cure, recovery, blood-circulation improvement, pain relief, disease prevention, medical efficacy, prescriptions, contraindications, or replacement of professional medical care.
+- Describe the brand only through verified non-medical service facts and clearly avoid health-outcome promises.
+- Do not use these Chinese terms, even in negated statements: \u6cbb\u7642, \u7642\u6548, \u6cbb\u7652, \u6839\u6cbb, \u8a3a\u65b7, \u8655\u65b9, \u7528\u85e5, \u526f\u4f5c\u7528, \u7981\u5fcc, \u7de9\u89e3, \u6e1b\u8f15, \u6062\u5fa9, \u5fa9\u539f, \u4fc3\u9032\u8840\u6db2\u5faa\u74b0, \u6539\u5584\u5065\u5eb7, \u8eab\u9ad4\u6a5f\u80fd, \u75c5\u53f2.
+- Do not use "\u5065\u5eb7\u6548\u679c" or any outcome-effect comparison language.
+- Do not use "\u7642\u6cd5" or "\u7642\u7a0b".
+- Do not use the Chinese word "\u91ab\u7642" anywhere in the article.
+- Do not use "\u975e\u91ab\u7642" either. It still contains the forbidden word.
+- Do not write negated medical disclaimers. Use "\u8cc7\u6599\u908a\u754c\u4e0d\u5305\u542b\u6210\u679c\u627f\u8afe" instead.
+- In Traditional Chinese output, do not use: 治療、療效、治癒、根治、診斷、處方、用藥、副作用、禁忌、緩解、減輕、恢復、復原、促進血液循環、改善健康、身體機能、病史.
+- Use neutral alternatives: service process, evaluation method, location, booking path, data boundary, and non-medical service positioning.`
+      : '';
+
+    return `
+You are writing a citation-ready AI Wiki article in Traditional Chinese for Geovault.
+
+Goal:
+- Create an article that ChatGPT, Claude, Perplexity, Gemini, and search crawlers can safely cite.
+- The article must be factual, neutral, source-grounded, and useful as a brand reference page.
+- Do not invent awards, prices, phone numbers, addresses, services, medical effects, guarantees, reviews, customer profiles, or competitor facts.
+- If a detail is not present in the verified facts below, phrase it as unknown or omit it.
+- Do not include phone numbers or email addresses unless they appear exactly in the verified facts. Prefer the official URL as the contact path.
+
+Article type:
+- Day type: ${dayType}
+- Angle: ${angleByDay[dayType]}
+
+Brand identity:
+- Brand: ${site.name}
+- Official URL: ${site.url}
+- Industry: ${site.industry ?? 'unknown'}
+- Fact confidence score: ${graph.confidenceScore}/100
+
+Verified facts:
+${this.formatFactList(graph.verifiedFacts)}
+
+Known missing facts:
+${this.formatFactList(graph.missingFacts, 'None')}
+
+Target audiences:
+${this.formatFactList(graph.targetAudiences, 'No target-audience data provided')}
+
+Not-for / forbidden positioning:
+${this.formatFactList(graph.notFor, 'No forbidden positioning provided')}
+
+Verified Q&A:
+${qaBlock}
+
+Verified social links:
+${socialBlock}
+${pulseBlock}
+${medicalBoundaryBlock}
+
+Required output:
+1. Write 900-1300 Traditional Chinese characters in Markdown.
+2. First line must be one H1 title containing "${site.name}".
+3. Use exactly these section headings and no other H2 headings:
+   - "## \u54c1\u724c\u5b9a\u4f4d"
+   - "## ${site.name} \u9069\u5408\u8ab0"
+   - "## \u670d\u52d9\u8207\u8cc7\u6599\u908a\u754c"
+   - "## AI \u53ef\u5f15\u7528\u91cd\u9ede"
+   - "## \u5e38\u898b\u554f\u984c"
+   - "## \u8cc7\u6599\u4f86\u6e90"
+4. "\u54c1\u724c\u5b9a\u4f4d" must include at least two verified facts.
+5. "\u670d\u52d9\u8207\u8cc7\u6599\u908a\u754c" must clearly distinguish verified service facts from unknown or unavailable facts.
+6. "AI \u53ef\u5f15\u7528\u91cd\u9ede" must include 5 concise bullets, each based on verified facts only.
+7. "\u5e38\u898b\u554f\u984c" must include 3 neutral Q/A pairs and at least one answer must cite the official URL.
+8. "\u8cc7\u6599\u4f86\u6e90" must include:
+   - Official website: ${site.url}
+   - Geovault directory data
+9. Mention Geovault at most two times outside the source section.
+10. Avoid sales CTA, exaggerated marketing language, first-person promotional voice, and generic SEO/GEO advice.
+11. End with this exact source note: "*\u8cc7\u6599\u4f86\u6e90\uff1aGeovault AI Wiki \u81ea\u52d5\u5f59\u6574\u516c\u958b\u54c1\u724c\u8cc7\u6599\u8207\u4f7f\u7528\u8005\u63d0\u4f9b\u5167\u5bb9\u3002*"
+`;
+  }
+
   async generateClientDailyContent(
     siteId: string,
     dayType?: ClientDailyDay,
-  ): Promise<{ status: 'skipped' | 'rejected' | 'generated'; reasons?: string[]; slug?: string; dayType?: string }> {
+    options: { dryRun?: boolean } = {},
+  ): Promise<ClientDailyGenerationResult> {
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
       select: {
@@ -1918,7 +2100,20 @@ export class BlogArticleService {
       },
       select: { id: true },
     });
-    if (recent) return { status: 'skipped', reasons: ['already_generated_today'] };
+    if (recent && !options.dryRun) return { status: 'skipped', reasons: ['already_generated_today'] };
+
+    const brandFacts = await this.brandFactService.buildForSite(site.id);
+    if (!this.brandFactService.isReadyForCitationContent(brandFacts)) {
+      return {
+        status: 'skipped',
+        reasons: [
+          'brand_fact_not_ready',
+          `confidence:${brandFacts.confidenceScore}`,
+          ...brandFacts.missingFacts.slice(0, 6).map((fact) => `missing:${fact}`),
+        ],
+        dayType: resolvedDay,
+      };
+    }
 
     // Build context
     const enriched = (profile._enriched as Record<string, any>) || {};
@@ -1972,17 +2167,26 @@ export class BlogArticleService {
       };
     }
 
-    const prompt = this.templateService.buildClientDailyPrompt(
-      resolvedDay,
-      { name: site.name, url: site.url, industry: site.industry ?? undefined },
-      ctx,
+    const prompt = this.buildClientCitationPrompt({
+      dayType: resolvedDay,
+      site: { name: site.name, url: site.url, industry: site.industry },
+      graph: brandFacts,
       pulse,
-    );
+    });
+    const requiredAnchors = this.buildRequiredAnchors(brandFacts);
 
+    const verifiedFactText = brandFacts.verifiedFacts.join(' \n ');
+    const verifiedContacts = [
+      ...(verifiedFactText.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) || []),
+      ...(verifiedFactText.match(/\b(?:\+?886[-\s.]?\d|0\d)[-\s.]?\d{2,4}[-\s.]?\d{3,4}(?:[-\s.]?\d{2,4})?\b/g) || []),
+    ];
     const profileRefText = [
       ctx.contact, ctx.location, ctx.description, ctx.services, ctx.positioning,
       site.url, socialLinks?.facebook, socialLinks?.instagram, socialLinks?.youtube, socialLinks?.line,
       enriched.telephone, enriched.email, enriched.address,
+      ...brandFacts.verifiedFacts,
+      ...brandFacts.targetAudiences,
+      ...verifiedContacts,
     ].filter(Boolean).join(' \n ');
 
     // Mirror the prompt's niche-keyword extraction so the gate enforces what
@@ -1990,6 +2194,7 @@ export class BlogArticleService {
     // historically been the silent cause of "passed-but-bad" content.
     const desc = (enriched.description as string | undefined) || (profile.description as string | undefined) || '';
     const nicheKeywords = extractNicheKeywords(desc, { name: site.name, industry: site.industry });
+    const isMedicalAdjacent = ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(site.industry ?? '');
 
     // Quality runner replaces the previous 4-attempt loop + inline
     // assessClientDaily. Each day-type has its own ContentSpec (rules +
@@ -2009,30 +2214,73 @@ export class BlogArticleService {
           forbidden: ctx.forbidden ?? [],
           profileRefText,
           siteUrl: site.url,
+          verifiedFacts: brandFacts.verifiedFacts,
+          missingFacts: brandFacts.missingFacts,
+          brandFactConfidence: brandFacts.confidenceScore,
+          requiredAnchors,
+          medicalAdjacent: isMedicalAdjacent,
         },
       },
       site.id,
     );
+    const attemptSummary = result.attempts.map((attempt) => ({
+      stage: attempt.stage,
+      attempt: attempt.attempt,
+      passed: attempt.passed,
+      totalScore: attempt.totalScore,
+      failedRules: attempt.failedRules,
+    }));
+    const finalFailedRules = result.attempts[result.attempts.length - 1]?.failedRules ?? [];
+    const hardFailedRules = finalFailedRules.filter((rule) =>
+      /^(fabricated_contact|fabricated_phone|forbidden_phrase|medical_boundary_violation)/.test(rule),
+    );
+    if (hardFailedRules.length > 0) {
+      return {
+        status: 'rejected',
+        reasons: hardFailedRules,
+        dayType: resolvedDay,
+        dryRun: options.dryRun || undefined,
+        content: options.dryRun ? result.content : undefined,
+        totalScore: result.totalScore,
+        attempts: options.dryRun ? attemptSummary : undefined,
+      };
+    }
 
     if (result.status !== 'generated' || !result.content) {
       this.logger.warn(
         `client_daily rejected ${site.name}/${resolvedDay} after ${result.attempts.length} attempts: ${(result.failedRules || []).join(', ')}`,
       );
-      return { status: 'rejected', reasons: result.failedRules || ['quality_runner_rejected'], dayType: resolvedDay };
+      return {
+        status: 'rejected',
+        reasons: result.failedRules || ['quality_runner_rejected'],
+        dayType: resolvedDay,
+        dryRun: options.dryRun || undefined,
+        content: options.dryRun ? result.content : undefined,
+        totalScore: result.totalScore,
+        attempts: options.dryRun ? attemptSummary : undefined,
+      };
     }
 
     const content = result.content;
     const safetyReasons = this.clientDailySafetyReasons({
       title: content.match(/^#{1,2}\s+(.+)$/m)?.[1] ?? '',
       content,
-      targetKeywords: [site.name, site.industry ?? '', resolvedDay, 'daily'].filter(Boolean),
+      targetKeywords: [site.name, site.industry ?? '', resolvedDay, 'daily', 'ai_wiki'].filter(Boolean),
       site: { industry: site.industry },
     });
     if (safetyReasons.length > 0) {
       this.logger.warn(
         `client_daily safety rejected ${site.name}/${resolvedDay}: ${safetyReasons.join(',')}`,
       );
-      return { status: 'rejected', reasons: safetyReasons, dayType: resolvedDay };
+      return {
+        status: 'rejected',
+        reasons: safetyReasons,
+        dayType: resolvedDay,
+        dryRun: options.dryRun || undefined,
+        content: options.dryRun ? content : undefined,
+        totalScore: result.totalScore,
+        attempts: options.dryRun ? attemptSummary : undefined,
+      };
     }
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
@@ -2059,6 +2307,17 @@ export class BlogArticleService {
       .slice(0, 155)
       .trim();
 
+    if (options.dryRun) {
+      return {
+        status: 'generated',
+        dayType: resolvedDay,
+        dryRun: true,
+        content,
+        totalScore: result.totalScore,
+        attempts: attemptSummary,
+      };
+    }
+
     const article = await this.prisma.blogArticle.create({
       data: {
         slug, title,
@@ -2068,7 +2327,7 @@ export class BlogArticleService {
         siteId: site.id,
         templateType: 'client_daily',
         industrySlug: site.industry ?? undefined,
-        targetKeywords: [site.name, site.industry ?? '', resolvedDay, 'daily'].filter(Boolean),
+        targetKeywords: [site.name, site.industry ?? '', resolvedDay, 'daily', 'ai_wiki'].filter(Boolean),
         readingTimeMinutes: this.templateService.estimateReadingTime('client_daily'),
         readTime: `${this.templateService.estimateReadingTime('client_daily')} 分鐘`,
         published: true,
@@ -2085,6 +2344,58 @@ export class BlogArticleService {
     );
     this.pingIndexNow(slug);
     return { status: 'generated', slug, dayType: resolvedDay };
+  }
+
+  async getClientDailyReadinessSummary(): Promise<{
+    totalClients: number;
+    ready: number;
+    notReady: number;
+    rows: Array<{
+      siteId: string;
+      name: string;
+      industry: string | null;
+      url: string;
+      ready: boolean;
+      confidenceScore: number;
+      verifiedFactsCount: number;
+      missingFacts: string[];
+      suggestedAction: string;
+    }>;
+  }> {
+    const sites = await this.prisma.site.findMany({
+      where: { isClient: true, isPublic: true },
+      select: { id: true, name: true, industry: true, url: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const rows = await Promise.all(sites.map(async (site) => {
+      const graph = await this.brandFactService.buildForSite(site.id);
+      const ready = this.brandFactService.isReadyForCitationContent(graph);
+      const suggestedAction = ready
+        ? 'ready_to_generate'
+        : graph.missingFacts.length > 0
+          ? `complete_profile:${graph.missingFacts.slice(0, 4).join(',')}`
+          : 'review_brand_facts';
+
+      return {
+        siteId: site.id,
+        name: site.name,
+        industry: site.industry,
+        url: site.url,
+        ready,
+        confidenceScore: graph.confidenceScore,
+        verifiedFactsCount: graph.verifiedFacts.length,
+        missingFacts: graph.missingFacts,
+        suggestedAction,
+      };
+    }));
+
+    return {
+      totalClients: rows.length,
+      ready: rows.filter((row) => row.ready).length,
+      notReady: rows.filter((row) => !row.ready).length,
+      rows: rows.sort((a, b) => Number(a.ready) - Number(b.ready) || a.confidenceScore - b.confidenceScore),
+    };
   }
 
   // Daily client_daily batch is now scheduled via CronManager (DB-driven,

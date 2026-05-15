@@ -1,51 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { AI_BOTS } from '@geovault/shared';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 
-// AI crawler User-Agent patterns. Pattern match is case-sensitive substring
-// on the UA header. Order doesn't matter — first match wins.
-const AI_BOT_PATTERNS = [
-  // OpenAI
-  { name: 'GPTBot', pattern: 'GPTBot' },
-  { name: 'ChatGPT-User', pattern: 'ChatGPT-User' },
-  { name: 'OAI-SearchBot', pattern: 'OAI-SearchBot' },
-  // Anthropic
-  { name: 'ClaudeBot', pattern: 'ClaudeBot' },
-  { name: 'Claude-Web', pattern: 'Claude-Web' },
-  { name: 'anthropic-ai', pattern: 'anthropic-ai' },
-  // Perplexity
-  { name: 'PerplexityBot', pattern: 'PerplexityBot' },
-  { name: 'Perplexity-User', pattern: 'Perplexity-User' },
-  // Google
-  { name: 'Google-Extended', pattern: 'Google-Extended' },
-  { name: 'Googlebot', pattern: 'Googlebot' },
-  { name: 'GoogleOther', pattern: 'GoogleOther' },
-  // Microsoft
-  { name: 'Bingbot', pattern: 'bingbot' },
-  { name: 'CopilotBot', pattern: 'CopilotBot' },
-  // Apple
-  { name: 'Applebot', pattern: 'Applebot' },
-  { name: 'Applebot-Extended', pattern: 'Applebot-Extended' },
-  // Meta
-  { name: 'Meta-ExternalAgent', pattern: 'Meta-ExternalAgent' },
-  { name: 'Meta-ExternalFetcher', pattern: 'Meta-ExternalFetcher' },
-  { name: 'FacebookBot', pattern: 'facebookexternalhit' },
-  // Amazon
-  { name: 'Amazonbot', pattern: 'Amazonbot' },
-  // ByteDance / TikTok
-  { name: 'Bytespider', pattern: 'Bytespider' },
-  { name: 'TikTokSpider', pattern: 'TikTokSpider' },
-  // Others
-  { name: 'cohere-ai', pattern: 'cohere-ai' },
-  { name: 'YouBot', pattern: 'YouBot' },
-  { name: 'CCBot', pattern: 'CCBot' },
-  { name: 'DuckAssistBot', pattern: 'DuckAssistBot' },
-  { name: 'MistralAI-User', pattern: 'MistralAI-User' },
-  { name: 'PanguBot', pattern: 'PanguBot' },
-  { name: 'Diffbot', pattern: 'Diffbot' },
-];
+// More-specific patterns first so Claude-SearchBot wins over ClaudeBot.
+const AI_BOT_PATTERNS = [...AI_BOTS].sort((a, b) => b.uaPattern.length - a.uaPattern.length);
 
 export function middleware(request: NextRequest) {
   const response = NextResponse.next();
@@ -85,7 +46,7 @@ export function middleware(request: NextRequest) {
   }
 
   // ─── Detect AI crawler from User-Agent (server-side, no JS needed) ───
-  const detectedBot = AI_BOT_PATTERNS.find((bot) => ua.includes(bot.pattern));
+  const detectedBot = AI_BOT_PATTERNS.find((bot) => ua.includes(bot.uaPattern));
 
   if (detectedBot) {
     // Fire-and-forget: report to API (non-blocking)
@@ -95,6 +56,7 @@ export function middleware(request: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           botName: detectedBot.name,
+          botCategory: detectedBot.category,
           url: `${SITE_URL}${pathname}`,
           userAgent: ua.slice(0, 500),
           statusCode: 200,

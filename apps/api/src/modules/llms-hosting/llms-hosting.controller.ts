@@ -1,8 +1,9 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Put, Req, Res } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Put, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles, RolesGuard } from '../../common/guards/roles.guard';
 import { CreditService } from '../billing/credit.service';
 import { LlmsHostingService } from './llms-hosting.service';
 import { UpdateLlmsTxtDto } from './dto/update-llms-txt.dto';
@@ -87,6 +88,21 @@ export class LlmsHostingController {
     res.set('Access-Control-Allow-Origin', '*');
     res.set('X-Content-Version', lastModified.toISOString());
     return sendConditional(req, res, content, etag, lastModified);
+  }
+
+  @ApiBearerAuth()
+  @Post('admin/llms/regenerate')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  @ApiOperation({ summary: 'Force regenerate platform llms-full.txt' })
+  async regeneratePlatformLlmsFullTxt() {
+    const { content, etag, lastModified } = await this.service.regeneratePlatformLlmsFullTxt();
+    return {
+      ok: true,
+      bytes: Buffer.byteLength(content, 'utf8'),
+      etag,
+      lastModified,
+    };
   }
 
   @Public()

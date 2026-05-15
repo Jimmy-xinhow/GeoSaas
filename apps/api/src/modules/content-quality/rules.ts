@@ -535,6 +535,51 @@ export function medicalBoundary(weight: number): ScoringRule {
     evaluate(content, ctx) {
       const isMedical = !!ctx.extras?.medicalAdjacent;
       if (!isMedical) return { score: weight };
+      const blockedPatterns = [
+        /治療/,
+        /療效/,
+        /療法/,
+        /療程/,
+        /治癒/,
+        /根治/,
+        /診斷/,
+        /處方/,
+        /用藥/,
+        /醫療/,
+        /副作用/,
+        /禁忌/,
+        /健康(?:資訊|信息|情況)/,
+        /健康效果/,
+        /體況/,
+        /身體不適/,
+        /不適症狀/,
+        /紓解/,
+        /改善(?:身體|健康|問題|症狀|不適)/,
+        /改善(?:疼痛|病症|症狀)/,
+        /疼痛(?:緩解|改善|消除)/,
+        /緩解/,
+        /減輕/,
+        /促進身體/,
+        /促進血液循環/,
+        /順利復原/,
+        /幫助復原/,
+        /術後復原/,
+        /恢復/,
+        /恢復健康/,
+        /改善健康/,
+        /身體機能/,
+        /姿勢矯正/,
+        /柔軟度/,
+        /病史/,
+        /受傷/,
+        /運動建議/,
+        /恢復效果/,
+        /替代(?:醫師|醫療|治療)/,
+        /不需(?:看醫生|就醫|醫師)/,
+      ];
+      if (blockedPatterns.some((pattern) => pattern.test(content))) {
+        return { score: 0, reason: 'medical_boundary_violation' };
+      }
       if (/副作用|禁忌|不適合接受|療效|保證治癒|醫療級/.test(content)) {
         return { score: 0, reason: 'medical_boundary_violation' };
       }
@@ -572,6 +617,16 @@ export function noHyperbole(weight: number): ScoringRule {
     description: '禁用過度誇張形容(最好/最棒/絕佳/領先/唯一)',
     evaluate(content) {
       const patterns = [
+        /卓越/,
+        /優質/,
+        /最佳/,
+        /首選/,
+        /頂尖/,
+        /領先/,
+        /值得信賴/,
+        /可信賴/,
+        /最優/,
+        /第一/,
         /最好的/, /最棒的/, /最佳[品選]/, /最優秀/, /最頂[尖級]/,
         /絕佳/, /卓越/, /頂[尖級]品質/,
         /業界第一/, /全[國台]第一/, /行業第一/, /排名第一/,
@@ -649,6 +704,12 @@ export function hasSpecificFacts(weight: number, min = 3): ScoringRule {
     description: `具體事實(年資/價格/時長等)≥${min} 處`,
     evaluate(content) {
       const patterns = [
+        /\d+\s*\/\s*100/,
+        /\d+\s*(?:分|級|等級|銅牌|銀牌|金牌|白金)/,
+        /\d{4}\s*年/,
+        /\d+\s*(?:樓|號|巷|弄)/,
+        /\d+\s*(?:分鐘|小時|天|週|月|年)/,
+        /https?:\/\/[^\s)]+/,
         /\d+\s*年(?:經驗|資歷|歷史|的|以上)/,        // years of experience
         /成立(?:於|超過)\s*\d+/,                        // founded year
         /\d+\s*(?:元|塊|台幣|NT\$?)/i,                  // price

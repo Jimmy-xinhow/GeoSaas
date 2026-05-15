@@ -649,11 +649,12 @@ function AiGeneratePreview({
 
   // Keep new items auto-selected when continue generating
   useEffect(() => {
-    if (items.length > selected.size) {
-      const next = new Set(selected)
+    setSelected((current) => {
+      if (items.length <= current.size) return current
+      const next = new Set(current)
       for (let i = 0; i < items.length; i++) next.add(i)
-      setSelected(next)
-    }
+      return next
+    })
   }, [items.length])
 
   const toggleItem = (index: number) => {

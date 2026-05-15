@@ -6,10 +6,35 @@ export interface SiteProfile {
   description?: string;
   services?: string;
   targetAudience?: string;
+  targetAudiences?: string[];
+  notFor?: string[];
+  forbidden?: string[];
   location?: string;
   keywords?: string[];
   uniqueValue?: string;
+  positioning?: string;
   contactInfo?: string;
+  contact?: string;
+  dailyContentPaused?: boolean;
+}
+
+export interface BrandFactReadiness {
+  siteId: string;
+  brandName: string;
+  industry: string | null;
+  url: string;
+  location?: string;
+  services?: string;
+  targetAudiences: string[];
+  notFor: string[];
+  positioning?: string;
+  contact?: string;
+  socialLinks: Record<string, string>;
+  qaPairs: Array<{ question: string; answer: string }>;
+  verifiedFacts: string[];
+  missingFacts: string[];
+  confidenceScore: number;
+  ready: boolean;
 }
 
 interface Site {
@@ -59,6 +84,17 @@ export function useSite(id: string) {
   });
 }
 
+export function useBrandFactReadiness(siteId: string) {
+  return useQuery({
+    queryKey: ['brand-facts', siteId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<BrandFactReadiness>(`/blog/sites/${siteId}/brand-facts`);
+      return data;
+    },
+    enabled: !!siteId,
+  });
+}
+
 export function useCreateSite() {
   const queryClient = useQueryClient();
 
@@ -99,6 +135,7 @@ export function useUpdateSiteProfile(siteId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sites', siteId] });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['brand-facts', siteId] });
     },
   });
 }

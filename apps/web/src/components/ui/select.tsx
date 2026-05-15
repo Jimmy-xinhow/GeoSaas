@@ -16,6 +16,7 @@ interface SelectContextValue {
   registerItem: (value: string, label: string) => void
   getLabel: (value: string) => string | undefined
   disabled?: boolean
+  contentId: string
 }
 
 const SelectContext = React.createContext<SelectContextValue>({
@@ -24,6 +25,7 @@ const SelectContext = React.createContext<SelectContextValue>({
   registerItem: () => {},
   getLabel: () => undefined,
   disabled: false,
+  contentId: '',
 })
 
 /* ------------------------------------------------------------------ */
@@ -42,6 +44,7 @@ function Select({ children, value, onValueChange, defaultValue, disabled }: Sele
   const [open, setOpen] = React.useState(false)
   const [internalValue, setInternalValue] = React.useState(defaultValue)
   const itemLabels = React.useRef<Map<string, string>>(new Map())
+  const contentId = React.useId()
 
   const currentValue = value ?? internalValue
   const handleChange = React.useCallback(
@@ -62,7 +65,7 @@ function Select({ children, value, onValueChange, defaultValue, disabled }: Sele
 
   return (
     <SelectContext.Provider
-      value={{ value: currentValue, onValueChange: handleChange, open, setOpen, registerItem, getLabel, disabled }}
+      value={{ value: currentValue, onValueChange: handleChange, open, setOpen, registerItem, getLabel, disabled, contentId }}
     >
       <div className="relative">{children}</div>
     </SelectContext.Provider>
@@ -78,7 +81,7 @@ interface SelectTriggerProps
 
 const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
   ({ className, children, ...props }, ref) => {
-    const { open, setOpen, disabled } = React.useContext(SelectContext)
+    const { open, setOpen, disabled, contentId } = React.useContext(SelectContext)
 
     return (
       <button
@@ -86,6 +89,7 @@ const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
         type="button"
         role="combobox"
         disabled={disabled}
+        aria-controls={contentId}
         aria-expanded={open}
         className={cn(
           'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
@@ -128,7 +132,7 @@ interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
   ({ className, children, ...props }, ref) => {
-    const { open, setOpen } = React.useContext(SelectContext)
+    const { open, setOpen, contentId } = React.useContext(SelectContext)
     const contentRef = React.useRef<HTMLDivElement>(null)
 
     // Close when clicking outside
@@ -153,6 +157,7 @@ const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
 
     return (
       <div
+        id={contentId}
         ref={(node) => {
           (contentRef as React.MutableRefObject<HTMLDivElement | null>).current = node
           if (typeof ref === 'function') ref(node)
