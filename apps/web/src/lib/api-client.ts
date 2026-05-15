@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { toast } from 'sonner';
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    suppressGlobalErrorToast?: boolean;
+  }
+}
+
 const apiClient = axios.create({
   baseURL: `${process.env.NEXT_PUBLIC_API_URL}/api`,
   headers: {
@@ -51,6 +57,7 @@ apiClient.interceptors.response.use(
     if (typeof window !== 'undefined') {
       const status = error.response?.status;
       const message = error.response?.data?.message;
+      const suppressGlobalErrorToast = Boolean(originalRequest?.suppressGlobalErrorToast);
 
       // Auto-refresh on 401
       if (status === 401 && !originalRequest._retry) {
@@ -100,11 +107,11 @@ apiClient.interceptors.response.use(
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         window.location.href = '/login';
-      } else if (status === 403) {
+      } else if (status === 403 && !suppressGlobalErrorToast) {
         toast.error('您沒有權限執行此操作', { id: 'forbidden-error' });
-      } else if (status === 429) {
+      } else if (status === 429 && !suppressGlobalErrorToast) {
         toast.error('請求過於頻繁，請稍後再試', { id: 'rate-limit-error' });
-      } else if (status && status >= 500) {
+      } else if (status && status >= 500 && !suppressGlobalErrorToast) {
         toast.error(message || '伺服器發生錯誤，請稍後再試', { id: 'server-error' });
       }
     }

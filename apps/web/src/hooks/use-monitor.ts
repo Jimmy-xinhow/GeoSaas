@@ -63,7 +63,8 @@ export function useCreateMonitor() {
     }) => {
       const { data } = await apiClient.post<Monitor>(
         `/sites/${payload.siteId}/monitors`,
-        { platform: payload.platform, query: payload.query }
+        { platform: payload.platform, query: payload.query },
+        { suppressGlobalErrorToast: true },
       );
       return data;
     },
@@ -79,7 +80,9 @@ export function useCheckCitation() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { data } = await apiClient.post<Monitor>(
-        `/monitors/${id}/check`
+        `/monitors/${id}/check`,
+        undefined,
+        { suppressGlobalErrorToast: true },
       );
       return data;
     },
@@ -94,7 +97,7 @@ export function useDeleteMonitor() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiClient.delete(`/monitors/${id}`);
+      await apiClient.delete(`/monitors/${id}`, { suppressGlobalErrorToast: true });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monitors'] });
