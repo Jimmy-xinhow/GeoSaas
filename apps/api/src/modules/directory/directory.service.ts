@@ -36,6 +36,32 @@ export class DirectoryService {
     return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
   }
 
+  private withDerivedScoreBadges<T extends { badge: string; label: string; awardedAt: Date }>(
+    badges: T[],
+    bestScore: number,
+    awardedAt: Date,
+  ): T[] {
+    const scoreBadges = [
+      { min: 50, badge: 'score_50', label: 'GEO 50+' },
+      { min: 60, badge: 'score_60', label: 'GEO 60+' },
+      { min: 70, badge: 'score_70', label: 'GEO 70+' },
+      { min: 80, badge: 'score_80', label: 'GEO 80+' },
+      { min: 90, badge: 'score_90', label: 'GEO 90+' },
+      { min: 100, badge: 'score_100', label: '滿分達成' },
+    ];
+    const byBadge = new Map<string, T>(badges.map((badge) => [badge.badge, badge]));
+
+    for (const scoreBadge of scoreBadges) {
+      if (bestScore >= scoreBadge.min && !byBadge.has(scoreBadge.badge)) {
+        byBadge.set(scoreBadge.badge, { ...scoreBadge, awardedAt } as unknown as T);
+      }
+    }
+
+    return Array.from(byBadge.values()).sort(
+      (a, b) => new Date(a.awardedAt).getTime() - new Date(b.awardedAt).getTime(),
+    );
+  }
+
   /**
    * One-shot aggregate query for /sitemap.xml. Replaces ~14 sequential HTTP
    * calls from the web container — those were timing out at the 3s deadline
@@ -586,10 +612,16 @@ export class DirectoryService {
       this.prisma.crawlerVisit.count({ where: { siteId } }),
     ]);
 
-    const { scans, ...siteData } = site;
+    const { scans, badges, ...siteData } = site;
+    const displayBadges = this.withDerivedScoreBadges(
+      badges,
+      site.bestScore,
+      site.bestScoreAt ?? site.createdAt,
+    );
 
     return {
       ...siteData,
+      badges: displayBadges,
       latestScan: scans[0] || null,
       scoreTrend: scoreTrend.map((s: any) => ({
         date: s.completedAt,
