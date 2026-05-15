@@ -26,8 +26,11 @@ export class BadgeController {
       return res.status(404).send('Site not found');
     }
     res.set('Content-Type', 'image/svg+xml');
-    res.set('Cache-Control', 'public, max-age=3600');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+    res.set('CDN-Cache-Control', 'public, max-age=3600');
+    res.set('Cloudflare-CDN-Cache-Control', 'public, max-age=3600');
     res.set('Access-Control-Allow-Origin', '*');
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     return res.send(svg);
   }
 
