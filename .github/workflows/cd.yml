@@ -139,6 +139,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Prisma migrate deploy
-        run: pnpm --filter @geovault/database exec prisma migrate deploy
+        run: |
+          for attempt in 1 2 3 4 5; do
+            echo "Prisma migrate deploy attempt ${attempt}/5"
+            if pnpm --filter @geovault/database exec prisma migrate deploy; then
+              exit 0
+            fi
+            if [ "$attempt" = "5" ]; then
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
