@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
-import pLimit from 'p-limit';
+import pLimit from '@/common/utils/p-limit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
 import { ChatgptDetector } from './platforms/chatgpt.detector';
@@ -28,11 +28,20 @@ export class MonitorService {
     private copilotDetector: CopilotDetector,
   ) {}
 
-  async findBySite(siteId: string) {
+  private async assertSiteAccess(siteId: string, userId: string, role?: string) {
+    if (role === 'ADMIN' || role === 'SUPER_ADMIN') return;
+    const site = await this.prisma.site.findFirst({ where: { id: siteId, userId } });
+    if (!site) throw new NotFoundException('Site not found');
+  }
+
+  async findBySite(siteId: string, userId: string, role?: string) {
+    await this.assertSiteAccess(siteId, userId, role);
     return this.prisma.monitor.findMany({ where: { siteId }, orderBy: { checkedAt: 'desc' } });
   }
 
-  async create(data: { siteId: string; platform: string; query: string }) {
+  async create(data: { siteId: string; platform: string; query: string }, userId: string, role?: string) {
+    await this.assertSiteAccess(data.siteId, userId, role);
+
     // Check plan limit: monitorPerMonth
     const site = await this.prisma.site.findUnique({ where: { id: data.siteId }, select: { userId: true } });
     if (site) {
@@ -69,9 +78,10 @@ export class MonitorService {
     return monitor;
   }
 
-  async checkCitation(id: string) {
+  async checkCitation(id: string, userId?: string, role?: string) {
     const monitor = await this.prisma.monitor.findUnique({ where: { id }, include: { site: true } });
     if (!monitor) throw new NotFoundException('Monitor not found');
+    if (userId) await this.assertSiteAccess(monitor.siteId, userId, role);
 
     let result: { mentioned: boolean; position: number | null; response: string };
     switch (monitor.platform) {
@@ -150,7 +160,13 @@ export class MonitorService {
     return { platforms, queries };
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId: string, role?: string) {
+    const monitor = await this.prisma.monitor.findUnique({
+      where: { id },
+      select: { siteId: true },
+    });
+    if (!monitor) throw new NotFoundException('Monitor not found');
+    await this.assertSiteAccess(monitor.siteId, userId, role);
     return this.prisma.monitor.delete({ where: { id } });
   }
 }

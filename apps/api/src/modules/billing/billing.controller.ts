@@ -5,6 +5,8 @@ import { BillingService } from './billing.service';
 import { CreditService } from './credit.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { CreateCheckoutDto } from './dto/create-checkout.dto';
+import { CreateCreditCheckoutDto } from './dto/create-credit-checkout.dto';
 
 @ApiTags('Billing')
 @Controller('billing')
@@ -16,8 +18,8 @@ export class BillingController {
 
   @ApiBearerAuth()
   @Post('checkout')
-  createCheckout(@Body('plan') plan: string, @CurrentUser('userId') userId: string) {
-    return this.billingService.createOrder(plan, userId);
+  createCheckout(@Body() dto: CreateCheckoutDto, @CurrentUser('userId') userId: string) {
+    return this.billingService.createOrder(dto.plan, userId);
   }
 
   @Public()
@@ -58,10 +60,10 @@ export class BillingController {
   @Post('credits/checkout')
   @ApiOperation({ summary: 'Purchase credit points (50/100/200)' })
   createCreditCheckout(
-    @Body('points') points: number,
+    @Body() dto: CreateCreditCheckoutDto,
     @CurrentUser('userId') userId: string,
   ) {
-    return this.billingService.createCreditOrder(points, userId);
+    return this.billingService.createCreditOrder(dto.points, userId);
   }
 
   @ApiBearerAuth()

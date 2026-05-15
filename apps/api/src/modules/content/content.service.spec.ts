@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { ContentService } from './content.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 import { AiService } from './ai/ai.service';
 
 describe('ContentService', () => {
@@ -14,8 +15,12 @@ describe('ContentService', () => {
       update: jest.Mock;
       delete: jest.Mock;
     };
+    user: {
+      findUnique: jest.Mock;
+    };
   };
   let aiService: {
+    assertConfigured: jest.Mock;
     generateFaq: jest.Mock;
     generateArticle: jest.Mock;
   };
@@ -42,8 +47,12 @@ describe('ContentService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
+      user: {
+        findUnique: jest.fn(),
+      },
     };
     aiService = {
+      assertConfigured: jest.fn(),
       generateFaq: jest.fn(),
       generateArticle: jest.fn(),
     };
@@ -52,11 +61,33 @@ describe('ContentService', () => {
       providers: [
         ContentService,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: PlanUsageService,
+          useValue: {
+            checkAndIncrement: jest.fn().mockResolvedValue({ allowed: true }),
+          },
+        },
         { provide: AiService, useValue: aiService },
       ],
     }).compile();
 
     service = module.get<ContentService>(ContentService);
+  });
+
+  describe('assertAiConfigured', () => {
+    it('should delegate configuration checks to the AI service', () => {
+      service.assertAiConfigured();
+
+      expect(aiService.assertConfigured).toHaveBeenCalled();
+    });
+
+    it('should surface AI configuration errors before generation side effects', () => {
+      aiService.assertConfigured.mockImplementation(() => {
+        throw new Error('OPENAI_API_KEY is not configured');
+      });
+
+      expect(() => service.assertAiConfigured()).toThrow('OPENAI_API_KEY is not configured');
+    });
   });
 
   describe('findAll', () => {
@@ -94,6 +125,7 @@ describe('ContentService', () => {
   describe('generate', () => {
     it('should generate FAQ content when type is FAQ', async () => {
       const faqBody = '<h2>FAQ</h2><p>Question 1...</p>';
+      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'FREE', role: 'USER' });
       aiService.generateFaq.mockResolvedValue(faqBody);
       prisma.content.create.mockResolvedValue({
         ...mockContent,
@@ -126,6 +158,7 @@ describe('ContentService', () => {
 
     it('should generate ARTICLE content when type is ARTICLE', async () => {
       const articleBody = '<h1>Article</h1><p>Content...</p>';
+      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'FREE', role: 'USER' });
       aiService.generateArticle.mockResolvedValue(articleBody);
       prisma.content.create.mockResolvedValue({
         ...mockContent,
@@ -148,6 +181,7 @@ describe('ContentService', () => {
 
     it('should use default language zh-TW when language is not specified', async () => {
       aiService.generateArticle.mockResolvedValue('body');
+      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'FREE', role: 'USER' });
       prisma.content.create.mockResolvedValue(mockContent);
 
       const dto = {
@@ -168,6 +202,7 @@ describe('ContentService', () => {
 
     it('should use fallback title when keywords array is empty for ARTICLE', async () => {
       aiService.generateArticle.mockResolvedValue('body');
+      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'FREE', role: 'USER' });
       prisma.content.create.mockResolvedValue(mockContent);
 
       const dto = {

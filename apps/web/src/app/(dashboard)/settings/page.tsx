@@ -205,12 +205,12 @@ export default function SettingsPage() {
                     {planInfo.description}
                   </p>
                 </div>
-                {plan !== 'ENTERPRISE' && (
+                {plan !== 'PRO' && (
                   <Button
                     variant="outline"
                     disabled={createCheckout.isPending}
                     onClick={() => {
-                      const nextPlan = plan === 'FREE' ? 'STARTER' : plan === 'STARTER' ? 'PRO' : 'ENTERPRISE';
+                      const nextPlan = plan === 'FREE' ? 'STARTER' : 'PRO';
                       createCheckout.mutate(nextPlan);
                     }}
                   >

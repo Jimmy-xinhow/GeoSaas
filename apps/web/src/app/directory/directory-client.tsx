@@ -360,9 +360,9 @@ export default function DirectoryClient() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <p className="text-2xl font-bold">
+                <div className="text-2xl font-bold">
                   {statsLoading ? <Skeleton className="h-7 w-12" /> : stats?.totalSites || 0}
-                </p>
+                </div>
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" />
               </div>
               <p className="text-sm text-gray-400">收錄網站</p>
@@ -376,9 +376,9 @@ export default function DirectoryClient() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <p className="text-2xl font-bold">
+                <div className="text-2xl font-bold">
                   {statsLoading ? <Skeleton className="h-7 w-12" /> : stats?.avgScore || 0}
-                </p>
+                </div>
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" style={{ animationDelay: '0.5s' }} />
               </div>
               <p className="text-sm text-gray-400">平均分數</p>
@@ -392,14 +392,14 @@ export default function DirectoryClient() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <p className="text-2xl font-bold">
+                <div className="text-2xl font-bold">
                   {statsLoading ? (
                     <Skeleton className="h-7 w-12" />
                   ) : (
                     (stats?.tierDistribution?.gold || 0) +
                     (stats?.tierDistribution?.platinum || 0)
                   )}
-                </p>
+                </div>
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" style={{ animationDelay: '1s' }} />
               </div>
               <p className="text-sm text-gray-400">金牌以上</p>

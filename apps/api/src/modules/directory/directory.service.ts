@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QueryDirectoryDto } from './dto/query-directory.dto';
 import { TogglePublicDto } from './dto/toggle-public.dto';
@@ -31,6 +31,10 @@ export class DirectoryService {
     private readonly prisma: PrismaService,
     @Optional() private readonly indexNowService?: IndexNowService,
   ) {}
+
+  private isAdmin(role?: string): boolean {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
+  }
 
   /**
    * One-shot aggregate query for /sitemap.xml. Replaces ~14 sequential HTTP
@@ -657,9 +661,12 @@ export class DirectoryService {
     return stars;
   }
 
-  async togglePublic(siteId: string, dto: TogglePublicDto) {
+  async togglePublic(siteId: string, dto: TogglePublicDto, userId: string, role?: string) {
     const site = await this.prisma.site.findUnique({ where: { id: siteId } });
     if (!site) throw new NotFoundException('Site not found');
+    if (!this.isAdmin(role) && site.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this site');
+    }
 
     const updated = await this.prisma.site.update({
       where: { id: siteId },

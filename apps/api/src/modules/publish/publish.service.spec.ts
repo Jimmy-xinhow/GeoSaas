@@ -1,11 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PublishService } from './publish.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 import { MediumAdapter } from './adapters/medium.adapter';
 import { LinkedInAdapter } from './adapters/linkedin.adapter';
 import { WordPressAdapter } from './adapters/wordpress.adapter';
+import { VocusAdapter } from './adapters/vocus.adapter';
+import { FacebookAdapter } from './adapters/facebook.adapter';
+import { GoogleBusinessAdapter } from './adapters/google-business.adapter';
 
 describe('PublishService', () => {
   let service: PublishService;
@@ -13,6 +17,9 @@ describe('PublishService', () => {
     content: {
       findFirst: jest.Mock;
       findMany: jest.Mock;
+    };
+    user: {
+      findUnique: jest.Mock;
     };
     publication: {
       create: jest.Mock;
@@ -42,6 +49,9 @@ describe('PublishService', () => {
         findFirst: jest.fn(),
         findMany: jest.fn(),
       },
+      user: {
+        findUnique: jest.fn(),
+      },
       publication: {
         create: jest.fn(),
         update: jest.fn(),
@@ -58,9 +68,18 @@ describe('PublishService', () => {
         PublishService,
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: configService },
+        {
+          provide: PlanUsageService,
+          useValue: {
+            checkAndIncrement: jest.fn().mockResolvedValue({ allowed: true }),
+          },
+        },
         { provide: MediumAdapter, useValue: mediumAdapter },
         { provide: LinkedInAdapter, useValue: linkedInAdapter },
         { provide: WordPressAdapter, useValue: wordPressAdapter },
+        { provide: VocusAdapter, useValue: { platform: 'vocus', publish: jest.fn() } },
+        { provide: FacebookAdapter, useValue: { platform: 'facebook', publish: jest.fn() } },
+        { provide: GoogleBusinessAdapter, useValue: { platform: 'google_business', publish: jest.fn() } },
       ],
     }).compile();
 
@@ -100,15 +119,13 @@ describe('PublishService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should handle unknown platforms gracefully by skipping adapters', async () => {
-      prisma.content.findFirst.mockResolvedValue(mockContent);
-      const pub = { id: 'pub-1', contentId, platform: 'unknown_platform', status: 'PENDING' };
-      prisma.publication.create.mockResolvedValue(pub);
+    it('should reject unknown platforms before creating publication records', async () => {
+      await expect(
+        service.publish(contentId, ['unknown_platform'], userId),
+      ).rejects.toThrow(BadRequestException);
 
-      const result = await service.publish(contentId, ['unknown_platform'], userId);
-
-      expect(result).toHaveLength(1);
-      // No adapter should be called for unknown platform
+      expect(prisma.content.findFirst).not.toHaveBeenCalled();
+      expect(prisma.publication.create).not.toHaveBeenCalled();
       expect(mediumAdapter.publish).not.toHaveBeenCalled();
       expect(linkedInAdapter.publish).not.toHaveBeenCalled();
       expect(wordPressAdapter.publish).not.toHaveBeenCalled();

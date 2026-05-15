@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RobotsParserService } from './robots-parser.service';
 import { SnippetGeneratorService } from './snippet-generator.service';
@@ -17,13 +17,58 @@ export class CrawlerTrackingService {
     private readonly snippetGen: SnippetGeneratorService,
   ) {}
 
+  private isAdmin(role?: string): boolean {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
+  }
+
+  private getBotDefinition(botName: string): AiBotDefinition {
+    const botDef = AI_BOTS.find((b: AiBotDefinition) => b.name === botName);
+    if (!botDef) throw new BadRequestException('Unknown AI bot');
+    return botDef;
+  }
+
+  private hostnameOf(value?: string | null): string | null {
+    if (!value) return null;
+    try {
+      return new URL(value).hostname.toLowerCase();
+    } catch {
+      return null;
+    }
+  }
+
+  private assertReportedUrlMatchesSite(reportedUrl: string, siteUrl: string) {
+    const reportedHost = this.hostnameOf(reportedUrl);
+    const siteHost = this.hostnameOf(siteUrl);
+    if (!reportedHost || !siteHost || reportedHost !== siteHost) {
+      throw new BadRequestException('Reported URL must belong to the tracked site');
+    }
+  }
+
+  private isGeovaultUrl(url: string): boolean {
+    const host = this.hostnameOf(url);
+    return host === 'geovault.app' || host === 'www.geovault.app';
+  }
+
+  private async assertSiteAccess(siteId: string, userId: string, role?: string) {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { id: true, userId: true, crawlerToken: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+    if (!this.isAdmin(role) && site.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this site');
+    }
+    return site;
+  }
+
   async reportVisit(dto: ReportVisitDto) {
     // Validate token
     const site = await this.prisma.site.findUnique({
       where: { crawlerToken: dto.token },
-      select: { id: true },
+      select: { id: true, url: true },
     });
     if (!site) throw new BadRequestException('Invalid token');
+    this.assertReportedUrlMatchesSite(dto.url, site.url);
 
     // Rate limit: 1000 per site per hour
     const oneHourAgo = new Date(Date.now() - 3600000);
@@ -36,16 +81,16 @@ export class CrawlerTrackingService {
     }
 
     // Resolve bot org
-    const botDef = AI_BOTS.find((b: AiBotDefinition) => b.name === dto.botName);
+    const botDef = this.getBotDefinition(dto.botName);
 
     await this.prisma.crawlerVisit.create({
       data: {
         siteId: site.id,
         botName: dto.botName,
-        botOrg: botDef?.org || 'Unknown',
-        url: dto.url,
+        botOrg: botDef.org,
+        url: dto.url.slice(0, 2048),
         statusCode: dto.statusCode,
-        userAgent: dto.userAgent,
+        userAgent: dto.userAgent?.slice(0, 500),
       },
     });
 
@@ -72,7 +117,7 @@ export class CrawlerTrackingService {
   }): Promise<void> {
     const site = await this.prisma.site.findUnique({
       where: { crawlerToken: data.token },
-      select: { id: true },
+      select: { id: true, url: true },
     });
     if (!site) {
       // Surfaces token-capture bugs (e.g. `.gif` accidentally included) and
@@ -85,6 +130,7 @@ export class CrawlerTrackingService {
 
     const botDef = matchAiBot(data.userAgent || '');
     if (!botDef) return; // not a bot — don't pollute the table with real users
+    if (data.url && this.hostnameOf(data.url) !== this.hostnameOf(site.url)) return;
 
     const oneHourAgo = new Date(Date.now() - 3600000);
     const count = await this.prisma.crawlerVisit.count({
@@ -100,7 +146,7 @@ export class CrawlerTrackingService {
         siteId: site.id,
         botName: botDef.name,
         botOrg: botDef.org,
-        url: data.url || '',
+        url: (data.url || '').slice(0, 2048),
         statusCode: 200,
         userAgent: data.userAgent.slice(0, 500),
         isSeeded: false,
@@ -120,6 +166,10 @@ export class CrawlerTrackingService {
     statusCode: number;
     source?: string;
   }) {
+    if (!this.isGeovaultUrl(data.url)) {
+      throw new BadRequestException('Platform crawler reports must target Geovault URLs');
+    }
+
     // Find or get the platform's own site record
     let platformSite = await this.prisma.site.findFirst({
       where: { url: 'https://www.geovault.app' },
@@ -153,14 +203,14 @@ export class CrawlerTrackingService {
     });
     if (count >= 500) return { ok: true, throttled: true };
 
-    const botDef = AI_BOTS.find((b: AiBotDefinition) => b.name === data.botName);
+    const botDef = this.getBotDefinition(data.botName);
 
     await this.prisma.crawlerVisit.create({
       data: {
         siteId: platformSite.id,
         botName: data.botName,
-        botOrg: botDef?.org || 'Unknown',
-        url: data.url,
+        botOrg: botDef.org,
+        url: data.url.slice(0, 2048),
         statusCode: data.statusCode,
         userAgent: data.userAgent?.slice(0, 500),
         isSeeded: false, // real visit, not simulated
@@ -171,12 +221,8 @@ export class CrawlerTrackingService {
     return { ok: true };
   }
 
-  async getDashboard(siteId: string) {
-    const site = await this.prisma.site.findUnique({
-      where: { id: siteId },
-      select: { id: true, crawlerToken: true },
-    });
-    if (!site) throw new NotFoundException('Site not found');
+  async getDashboard(siteId: string, userId: string, role?: string) {
+    const site = await this.assertSiteAccess(siteId, userId, role);
 
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 86400000);
@@ -230,7 +276,9 @@ export class CrawlerTrackingService {
     };
   }
 
-  async getStats(siteId: string) {
+  async getStats(siteId: string, userId: string, role?: string) {
+    await this.assertSiteAccess(siteId, userId, role);
+
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -258,7 +306,9 @@ export class CrawlerTrackingService {
     }));
   }
 
-  async getRobots(siteId: string) {
+  async getRobots(siteId: string, userId: string, role?: string) {
+    await this.assertSiteAccess(siteId, userId, role);
+
     const check = await this.prisma.crawlerRobotsCheck.findFirst({
       where: { siteId },
       orderBy: { checkedAt: 'desc' },
@@ -267,7 +317,9 @@ export class CrawlerTrackingService {
     return check;
   }
 
-  async getSnippet(siteId: string) {
+  async getSnippet(siteId: string, userId: string, role?: string) {
+    await this.assertSiteAccess(siteId, userId, role);
+
     let site = await this.prisma.site.findUnique({
       where: { id: siteId },
       select: { id: true, crawlerToken: true },
@@ -293,7 +345,9 @@ export class CrawlerTrackingService {
    * 1. Fetch user's site HTML and check if snippet script is present
    * 2. Check if any report has been received for this token
    */
-  async verifyInstallation(siteId: string) {
+  async verifyInstallation(siteId: string, userId: string, role?: string) {
+    await this.assertSiteAccess(siteId, userId, role);
+
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
       select: { id: true, url: true, crawlerToken: true },
@@ -385,9 +439,8 @@ export class CrawlerTrackingService {
     }
   }
 
-  async regenerateToken(siteId: string) {
-    const site = await this.prisma.site.findUnique({ where: { id: siteId } });
-    if (!site) throw new NotFoundException('Site not found');
+  async regenerateToken(siteId: string, userId: string, role?: string) {
+    await this.assertSiteAccess(siteId, userId, role);
 
     const token = randomBytes(24).toString('hex');
     await this.prisma.site.update({

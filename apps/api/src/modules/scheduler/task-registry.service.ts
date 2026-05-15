@@ -208,6 +208,10 @@ export class TaskRegistryService implements OnModuleInit {
     // are missing — gives us a signal in Railway log when prod silently breaks
     // (which is exactly what happened 4/28-4/30 with the @Cron version).
     this.cronManager.registerHandler('client_daily_sentinel', async () => {
+      if (process.env.E2E === '1') {
+        this.logger.log('client_daily sentinel skipped in E2E');
+        return;
+      }
       const dayMap = ['', 'mon_topical', 'tue_qa_deepdive', 'wed_service', 'thu_audience', 'fri_comparison', 'sat_data_pulse'];
       const today = new Date();
       const dow = today.getUTCDay(); // 0=Sun

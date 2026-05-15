@@ -72,7 +72,12 @@ export class KnowledgeController {
     @Body() dto: AiGenerateQaDto,
     @CurrentUser('userId') userId: string,
   ) {
-    const check = await this.credits.checkAndDeduct(userId, 2, '手動生成知識庫 Q&A');
+    await this.knowledgeService.verifySiteOwnership(siteId, userId);
+    const check = await this.credits.checkAndDeduct(
+      userId,
+      2,
+      'AI knowledge Q&A generation',
+    );
     if (!check.allowed) throw new ForbiddenException(check.message);
     return this.knowledgeService.aiGenerate(siteId, userId, dto.excludeQuestions);
   }

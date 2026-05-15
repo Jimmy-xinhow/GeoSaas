@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, OnModuleDestroy } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FixService } from '../fix/fix.service';
@@ -54,6 +54,41 @@ export class LlmsHostingService implements OnModuleDestroy {
       .catch((err) => this.logger.warn(`IndexNow ping failed for ${path}: ${err}`));
   }
 
+  private isAdmin(role?: string): boolean {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
+  }
+
+  async assertSiteAccess(siteId: string, userId: string, role?: string): Promise<void> {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { userId: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+    if (!this.isAdmin(role) && site.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this site');
+    }
+  }
+
+  async willUseAiForLlmsTxt(siteId: string): Promise<boolean> {
+    if (!this.fixService.hasAiClient()) return false;
+    return Boolean(await this.findLatestLlmsTxtScanResultId(siteId));
+  }
+
+  private async findLatestLlmsTxtScanResultId(siteId: string): Promise<string | undefined> {
+    const latestScan = await this.prisma.scan.findFirst({
+      where: { siteId, status: 'COMPLETED' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (!latestScan) return undefined;
+
+    const llmsTxtResult = await this.prisma.scanResult.findFirst({
+      where: { scanId: latestScan.id, indicator: 'llms_txt' },
+      select: { id: true },
+    });
+    return llmsTxtResult?.id;
+  }
+
   private async readRedisCache(): Promise<{ data: string; etag: string; lastModified: Date } | null> {
     if (!this.redis) return null;
     try {
@@ -99,7 +134,16 @@ export class LlmsHostingService implements OnModuleDestroy {
     return site.llmsTxt;
   }
 
-  async updateLlmsTxt(siteId: string, content: string) {
+  async getLlmsTxtForUser(siteId: string, userId: string, role?: string): Promise<string | null> {
+    await this.assertSiteAccess(siteId, userId, role);
+    return this.getLlmsTxt(siteId);
+  }
+
+  async updateLlmsTxt(siteId: string, content: string, userId?: string, role?: string) {
+    if (userId) {
+      await this.assertSiteAccess(siteId, userId, role);
+    }
+
     const site = await this.prisma.site.findUnique({ where: { id: siteId } });
     if (!site) throw new NotFoundException('Site not found');
 
@@ -386,31 +430,21 @@ This dataset is maintained by Geovault — The APAC Authority on GEO.
     return { content: output, etag, lastModified };
   }
 
-  async generateLlmsTxt(siteId: string) {
+  async generateLlmsTxt(siteId: string, userId?: string, role?: string) {
+    if (userId) {
+      await this.assertSiteAccess(siteId, userId, role);
+    }
+
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
       select: { id: true, name: true, url: true, profile: true },
     });
     if (!site) throw new NotFoundException('Site not found');
 
-    // Find the latest completed scan with llms_txt result
-    const latestScan = await this.prisma.scan.findFirst({
-      where: { siteId, status: 'COMPLETED' },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    });
+    const scanResultId = await this.findLatestLlmsTxtScanResultId(siteId);
 
-    let scanResultId: string | undefined;
-    if (latestScan) {
-      const llmsTxtResult = await this.prisma.scanResult.findFirst({
-        where: { scanId: latestScan.id, indicator: 'llms_txt' },
-        select: { id: true },
-      });
-      scanResultId = llmsTxtResult?.id;
-    }
-
-    // Use smart generate if we have a scan result, otherwise use template
-    if (scanResultId) {
+    // Use smart generate only when AI is configured and scan context exists.
+    if (scanResultId && this.fixService.hasAiClient()) {
       const result = await this.fixService.smartGenerate(siteId, 'llms_txt', scanResultId);
       // Auto-save to site
       await this.prisma.site.update({

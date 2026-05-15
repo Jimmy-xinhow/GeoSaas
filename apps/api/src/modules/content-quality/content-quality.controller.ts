@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
@@ -38,6 +38,32 @@ interface PromptVersionRow {
 export class ContentQualityController {
   constructor(private readonly prisma: PrismaService) {}
 
+  private parsePositiveInt(
+    value: string | undefined,
+    field: string,
+    fallback: number,
+    max: number,
+  ): number {
+    if (value === undefined || value === '') return fallback;
+    if (!/^\d+$/.test(value)) {
+      throw new BadRequestException(`${field} must be a positive integer`);
+    }
+    const parsed = Number(value);
+    if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > max) {
+      throw new BadRequestException(`${field} must be between 1 and ${max}`);
+    }
+    return parsed;
+  }
+
+  private normalizeOptionalText(value: string | undefined, field: string, maxLength: number): string | undefined {
+    if (value === undefined || value.trim() === '') return undefined;
+    const normalized = value.trim();
+    if (normalized.length > maxLength) {
+      throw new BadRequestException(`${field} is too long`);
+    }
+    return normalized;
+  }
+
   @Get('report')
   @ApiOperation({
     summary:
@@ -54,12 +80,14 @@ export class ContentQualityController {
     topFailedRules: FailedRuleStat[];
     promptVersions: PromptVersionRow[];
   }> {
-    const rangeDays = Math.max(1, Math.min(365, parseInt(days ?? '30', 10) || 30));
+    const rangeDays = this.parsePositiveInt(days, 'days', 30, 365);
     const since = new Date(Date.now() - rangeDays * 86400000);
 
     const where: Record<string, unknown> = { createdAt: { gte: since } };
-    if (templateType) where.templateType = templateType;
-    if (promptVersion) where.promptVersion = promptVersion;
+    const normalizedTemplateType = this.normalizeOptionalText(templateType, 'templateType', 80);
+    const normalizedPromptVersion = this.normalizeOptionalText(promptVersion, 'promptVersion', 80);
+    if (normalizedTemplateType) where.templateType = normalizedTemplateType;
+    if (normalizedPromptVersion) where.promptVersion = normalizedPromptVersion;
 
     const logs = await this.prisma.articleQualityLog.findMany({
       where,
@@ -184,9 +212,13 @@ export class ContentQualityController {
     @Query('templateType') templateType?: string,
     @Query('failedOnly') failedOnly?: string,
   ) {
-    const take = Math.max(1, Math.min(500, parseInt(limit ?? '50', 10) || 50));
+    const take = this.parsePositiveInt(limit, 'limit', 50, 500);
     const where: Record<string, unknown> = {};
-    if (templateType) where.templateType = templateType;
+    const normalizedTemplateType = this.normalizeOptionalText(templateType, 'templateType', 80);
+    if (normalizedTemplateType) where.templateType = normalizedTemplateType;
+    if (failedOnly !== undefined && !['true', '1', 'false', '0'].includes(failedOnly)) {
+      throw new BadRequestException('failedOnly must be boolean-like');
+    }
     if (failedOnly === 'true' || failedOnly === '1') where.passed = false;
     const rows = await this.prisma.articleQualityLog.findMany({
       where,

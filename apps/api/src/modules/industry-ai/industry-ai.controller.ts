@@ -1,13 +1,50 @@
-import { Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { IndustryAiService } from './industry-ai.service';
+import { RunIndustryComparisonDto, SeedIndustryQueriesDto } from './dto/industry-ai.dto';
 
 @ApiTags('Industry AI')
 @Controller('industry-ai')
 export class IndustryAiController {
   constructor(private readonly service: IndustryAiService) {}
+
+  private readonly allowedPlatforms = new Set(['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT']);
+
+  private normalizeIndustry(industry: string): string {
+    const normalized = industry?.trim();
+    if (!normalized) throw new BadRequestException('industry is required');
+    if (normalized.length > 80) throw new BadRequestException('industry must be at most 80 characters');
+    return normalized;
+  }
+
+  private normalizePlatform(platform?: string): string | undefined {
+    if (!platform) return undefined;
+    const normalized = platform.trim().toUpperCase();
+    if (!this.allowedPlatforms.has(normalized)) {
+      throw new BadRequestException('Invalid platform');
+    }
+    return normalized;
+  }
+
+  private parseWeeks(value: string | undefined): number {
+    if (!value) return 12;
+    if (!/^\d+$/.test(value)) {
+      throw new BadRequestException('weeks must be a positive integer');
+    }
+    const parsed = Number(value);
+    if (parsed < 1) throw new BadRequestException('weeks must be at least 1');
+    if (parsed > 52) throw new BadRequestException('weeks must be at most 52');
+    return parsed;
+  }
+
+  private normalizeId(value: string | undefined, name: string): string {
+    const normalized = value?.trim();
+    if (!normalized) throw new BadRequestException(`${name} is required`);
+    if (normalized.length > 128) throw new BadRequestException(`${name} must be at most 128 characters`);
+    return normalized;
+  }
 
   // ─── Public endpoints ───
 
@@ -18,21 +55,21 @@ export class IndustryAiController {
     @Param('industry') industry: string,
     @Query('platform') platform?: string,
   ) {
-    return this.service.getIndustryRanking(industry, platform);
+    return this.service.getIndustryRanking(this.normalizeIndustry(industry), this.normalizePlatform(platform));
   }
 
   @Public()
   @Get(':industry/sites')
   @ApiOperation({ summary: 'List sites in industry with AI data' })
   getSites(@Param('industry') industry: string) {
-    return this.service.getIndustrySites(industry);
+    return this.service.getIndustrySites(this.normalizeIndustry(industry));
   }
 
   @Public()
   @Get('site/:siteId/impression')
   @ApiOperation({ summary: 'Get AI brand impression page data' })
   getImpression(@Param('siteId') siteId: string) {
-    return this.service.getImpressionPage(siteId);
+    return this.service.getImpressionPage(this.normalizeId(siteId, 'siteId'));
   }
 
   @Public()
@@ -42,7 +79,7 @@ export class IndustryAiController {
     @Param('siteId') siteId: string,
     @Query('weeks') weeks?: string,
   ) {
-    return this.service.getCitationTrend(siteId, weeks ? parseInt(weeks, 10) : 12);
+    return this.service.getCitationTrend(this.normalizeId(siteId, 'siteId'), this.parseWeeks(weeks));
   }
 
   @Public()
@@ -53,16 +90,25 @@ export class IndustryAiController {
     @Query('a') siteAId: string,
     @Query('b') siteBId: string,
   ) {
-    return this.service.getComparison(siteAId, siteBId);
+    this.normalizeIndustry(industry);
+    return this.service.getComparison(
+      this.normalizeId(siteAId, 'a'),
+      this.normalizeId(siteBId, 'b'),
+    );
   }
 
-  @Public()
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Post(':industry/compare')
-  @ApiOperation({ summary: 'Run a fresh brand comparison' })
+  @ApiOperation({ summary: 'Run a fresh brand comparison (admin)' })
   runComparison(
-    @Body() body: { siteAId: string; siteBId: string },
+    @Body() body: RunIndustryComparisonDto,
   ) {
-    return this.service.runComparison(body.siteAId, body.siteBId);
+    return this.service.runComparison(
+      this.normalizeId(body.siteAId, 'siteAId'),
+      this.normalizeId(body.siteBId, 'siteBId'),
+    );
   }
 
   // ─── Admin endpoints ───
@@ -73,11 +119,12 @@ export class IndustryAiController {
   @Post(':industry/run')
   @ApiOperation({ summary: 'Trigger full industry AI test (admin, background)' })
   runTest(@Param('industry') industry: string) {
+    const normalizedIndustry = this.normalizeIndustry(industry);
     // Run in background to avoid HTTP timeout
-    this.service.runIndustryTest(industry).catch((err) => {
-      console.error(`Industry AI test failed for ${industry}:`, err);
+    this.service.runIndustryTest(normalizedIndustry).catch((err) => {
+      console.error(`Industry AI test failed for ${normalizedIndustry}:`, err);
     });
-    return { message: `Industry AI test started for ${industry}`, status: 'running' };
+    return { message: `Industry AI test started for ${normalizedIndustry}`, status: 'running' };
   }
 
   @ApiBearerAuth()
@@ -85,8 +132,8 @@ export class IndustryAiController {
   @Roles('ADMIN')
   @Post('queries')
   @ApiOperation({ summary: 'Seed industry queries (admin)' })
-  seedQueries(@Body() body: { industry: string; queries: { question: string; category: string }[] }) {
-    return this.service.seedQueries(body.industry, body.queries);
+  seedQueries(@Body() body: SeedIndustryQueriesDto) {
+    return this.service.seedQueries(this.normalizeIndustry(body.industry), body.queries);
   }
 
   @ApiBearerAuth()
@@ -95,6 +142,6 @@ export class IndustryAiController {
   @Get(':industry/queries')
   @ApiOperation({ summary: 'List industry queries (admin)' })
   getQueries(@Param('industry') industry: string) {
-    return this.service.getQueries(industry);
+    return this.service.getQueries(this.normalizeIndustry(industry));
   }
 }

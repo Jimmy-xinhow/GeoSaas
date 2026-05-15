@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SeedService } from './seed.service';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
+import { ImportSeedCsvDto } from './import-seed-csv.dto';
 
 @ApiTags('Admin — Seed')
 @ApiBearerAuth()
@@ -25,7 +26,7 @@ export class SeedController {
 
   @Post('import')
   @ApiOperation({ summary: 'Import CSV files into SeedSource' })
-  async importCsv(@Body() body: { files?: string[] }) {
+  async importCsv(@Body() body: ImportSeedCsvDto) {
     return this.service.importCsvFiles(body.files);
   }
 

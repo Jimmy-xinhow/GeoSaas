@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -31,12 +36,16 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const email = this.normalizeEmail(dto.email);
+    const name = this.normalizeOptionalName(dto.name);
+    const existing = await this.prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+    });
     if (existing) throw new ConflictException('Email already registered');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
-      data: { email: dto.email, passwordHash, name: dto.name },
+      data: { email, passwordHash, name },
       select: { id: true, email: true, name: true, role: true, plan: true, createdAt: true },
     });
 
@@ -49,7 +58,10 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const email = this.normalizeEmail(dto.email);
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+    });
     if (!user || !user.passwordHash) throw new UnauthorizedException('Invalid credentials');
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
@@ -157,15 +169,25 @@ export class AuthService {
   }
 
   async updateProfile(userId: string, data: { name?: string; email?: string }) {
+    const updateData: { name?: string; email?: string } = {};
     if (data.email) {
+      updateData.email = this.normalizeEmail(data.email);
       const existing = await this.prisma.user.findFirst({
-        where: { email: data.email, id: { not: userId } },
+        where: {
+          email: { equals: updateData.email, mode: 'insensitive' },
+          id: { not: userId },
+        },
       });
       if (existing) throw new ConflictException('Email already in use');
     }
+    if (data.name !== undefined) {
+      const name = this.normalizeOptionalName(data.name);
+      if (!name) throw new BadRequestException('Name is required');
+      updateData.name = name;
+    }
     return this.prisma.user.update({
       where: { id: userId },
-      data,
+      data: updateData,
       select: { id: true, email: true, name: true, role: true, plan: true, avatarUrl: true, createdAt: true },
     });
   }
@@ -195,5 +217,14 @@ export class AuthService {
       }),
     ]);
     return { token, refreshToken };
+  }
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
+  private normalizeOptionalName(name?: string | null): string | undefined {
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    return trimmed || undefined;
   }
 }

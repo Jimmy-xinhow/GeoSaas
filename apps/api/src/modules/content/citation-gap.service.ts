@@ -1,10 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import OpenAI from 'openai';
-import pLimit from 'p-limit';
+import pLimit from '@/common/utils/p-limit';
 
 export interface CitationGap {
   query: string;
@@ -38,6 +38,21 @@ export class CitationGapService {
   ) {
     const apiKey = this.config.get<string>('OPENAI_API_KEY');
     if (apiKey) this.openai = new OpenAI({ apiKey });
+  }
+
+  private isAdmin(role?: string): boolean {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
+  }
+
+  async assertSiteAccess(siteId: string, userId: string, role?: string): Promise<void> {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { userId: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+    if (!this.isAdmin(role) && site.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this site');
+    }
   }
 
   /**
@@ -189,8 +204,9 @@ ${gap.aiResponse}
             },
           });
           qasCreated++;
-        }
-      }
+    }
+  }
+
     } catch (err) {
       this.logger.warn(`Failed to generate gap QAs for ${site.name}: ${err}`);
     }

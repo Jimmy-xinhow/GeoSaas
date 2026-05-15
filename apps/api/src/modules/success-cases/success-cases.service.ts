@@ -15,7 +15,19 @@ export class SuccessCasesService {
     private readonly notifications: NotificationsService,
   ) {}
 
+  private async assertOwnsSite(userId: string, siteId?: string): Promise<void> {
+    if (!siteId) return;
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { userId: true },
+    });
+    if (!site || site.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this site');
+    }
+  }
+
   async create(userId: string, dto: CreateSuccessCaseDto) {
+    await this.assertOwnsSite(userId, dto.siteId);
     return this.prisma.geoSuccessCase.create({
       data: {
         userId,
@@ -179,7 +191,7 @@ export class SuccessCasesService {
       },
     });
 
-    if (!item) throw new NotFoundException('Case not found');
+    if (!item || item.status !== 'approved') throw new NotFoundException('Case not found');
 
     // Increment view count
     await this.prisma.geoSuccessCase.update({
@@ -195,6 +207,7 @@ export class SuccessCasesService {
     if (!existing) throw new NotFoundException('Case not found');
     if (existing.userId !== userId) throw new ForbiddenException('只能編輯自己的案例');
     if (existing.status !== 'pending') throw new ForbiddenException('只能編輯審核中的案例');
+    await this.assertOwnsSite(userId, dto.siteId);
 
     return this.prisma.geoSuccessCase.update({
       where: { id: caseId },

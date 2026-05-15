@@ -2,10 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { MonitorService } from './monitor.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 import { ChatgptDetector } from './platforms/chatgpt.detector';
 import { ClaudeDetector } from './platforms/claude.detector';
 import { PerplexityDetector } from './platforms/perplexity.detector';
 import { GeminiDetector } from './platforms/gemini.detector';
+import { CopilotDetector } from './platforms/copilot.detector';
 
 describe('MonitorService', () => {
   let service: MonitorService;
@@ -14,6 +16,7 @@ describe('MonitorService', () => {
   let claudeDetector: { detect: jest.Mock };
   let perplexityDetector: { detect: jest.Mock };
   let geminiDetector: { detect: jest.Mock };
+  let copilotDetector: { detect: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -26,6 +29,11 @@ describe('MonitorService', () => {
       },
       site: {
         findMany: jest.fn(),
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+      },
+      user: {
+        findUnique: jest.fn(),
       },
     };
 
@@ -33,15 +41,23 @@ describe('MonitorService', () => {
     claudeDetector = { detect: jest.fn() };
     perplexityDetector = { detect: jest.fn() };
     geminiDetector = { detect: jest.fn() };
+    copilotDetector = { detect: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MonitorService,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: PlanUsageService,
+          useValue: {
+            checkAndIncrement: jest.fn().mockResolvedValue({ allowed: true }),
+          },
+        },
         { provide: ChatgptDetector, useValue: chatgptDetector },
         { provide: ClaudeDetector, useValue: claudeDetector },
         { provide: PerplexityDetector, useValue: perplexityDetector },
         { provide: GeminiDetector, useValue: geminiDetector },
+        { provide: CopilotDetector, useValue: copilotDetector },
       ],
     }).compile();
 
@@ -118,11 +134,11 @@ describe('MonitorService', () => {
 
       const result = await service.getDashboard('u1');
 
-      expect(result.summary).toHaveLength(4);
-      const chatgpt = result.summary.find((s: any) => s.platform === 'CHATGPT');
+      expect(result.platforms).toHaveLength(5);
+      const chatgpt = result.platforms.find((s: any) => s.name === 'ChatGPT');
       expect(chatgpt.total).toBe(2);
-      expect(chatgpt.mentioned).toBe(1);
-      expect(chatgpt.rate).toBe(50);
+      expect(chatgpt.mentioned).toBe(0);
+      expect(chatgpt.rate).toBe(0);
     });
 
     it('should return empty summary when no monitors exist', async () => {
@@ -131,16 +147,19 @@ describe('MonitorService', () => {
 
       const result = await service.getDashboard('u1');
 
-      expect(result.summary.every((s: any) => s.total === 0)).toBe(true);
-      expect(result.recentChecks).toHaveLength(0);
+      expect(result.platforms.every((s: any) => s.total === 0)).toBe(true);
+      expect(result.queries).toHaveLength(0);
     });
   });
 
   describe('create', () => {
     it('should create a monitor record', async () => {
+      prisma.site.findFirst.mockResolvedValue({ id: 's1', userId: 'u1' });
+      prisma.site.findUnique.mockResolvedValue({ userId: 'u1' });
+      prisma.user.findUnique.mockResolvedValue({ id: 'u1', plan: 'FREE', role: 'USER' });
       prisma.monitor.create.mockResolvedValue({ id: 'm1', siteId: 's1', platform: 'CHATGPT', query: 'test query' });
 
-      const result = await service.create({ siteId: 's1', platform: 'CHATGPT', query: 'test query' });
+      const result = await service.create({ siteId: 's1', platform: 'CHATGPT', query: 'test query' }, 'u1', 'USER');
 
       expect(result.id).toBe('m1');
       expect(prisma.monitor.create).toHaveBeenCalled();
@@ -149,9 +168,11 @@ describe('MonitorService', () => {
 
   describe('remove', () => {
     it('should delete a monitor record', async () => {
+      prisma.monitor.findUnique.mockResolvedValue({ siteId: 's1' });
+      prisma.site.findFirst.mockResolvedValue({ id: 's1', userId: 'u1' });
       prisma.monitor.delete.mockResolvedValue({ id: 'm1' });
 
-      await service.remove('m1');
+      await service.remove('m1', 'u1', 'USER');
 
       expect(prisma.monitor.delete).toHaveBeenCalledWith({ where: { id: 'm1' } });
     });

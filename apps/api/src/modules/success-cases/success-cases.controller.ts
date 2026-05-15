@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Post, Put, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -12,6 +12,51 @@ import { RejectSuccessCaseDto } from './dto/reject-success-case.dto';
 export class SuccessCasesController {
   constructor(private readonly service: SuccessCasesService) {}
 
+  private readonly allowedStatuses = new Set(['pending', 'approved', 'rejected']);
+  private readonly allowedPlatforms = new Set(['chatgpt', 'claude', 'perplexity', 'gemini', 'copilot', 'other']);
+
+  private parsePositiveInt(value: string | undefined, fallback: number, max: number, name: string): number {
+    if (!value) return fallback;
+    if (!/^\d+$/.test(value)) {
+      throw new BadRequestException(`${name} must be a positive integer`);
+    }
+    const parsed = Number(value);
+    if (parsed < 1) {
+      throw new BadRequestException(`${name} must be at least 1`);
+    }
+    if (parsed > max) {
+      throw new BadRequestException(`${name} must be at most ${max}`);
+    }
+    return parsed;
+  }
+
+  private normalizePlatform(aiPlatform?: string): string | undefined {
+    if (!aiPlatform) return undefined;
+    const normalized = aiPlatform.trim().toLowerCase();
+    if (!this.allowedPlatforms.has(normalized)) {
+      throw new BadRequestException('Invalid aiPlatform');
+    }
+    return normalized;
+  }
+
+  private normalizeStatus(status?: string): string | undefined {
+    if (!status) return undefined;
+    const normalized = status.trim().toLowerCase();
+    if (!this.allowedStatuses.has(normalized)) {
+      throw new BadRequestException('Invalid status');
+    }
+    return normalized;
+  }
+
+  private normalizeIndustry(industry?: string): string | undefined {
+    const normalized = industry?.trim();
+    if (!normalized) return undefined;
+    if (normalized.length > 80) {
+      throw new BadRequestException('industry must be at most 80 characters');
+    }
+    return normalized;
+  }
+
   @Public()
   @Get('success-cases')
   @ApiOperation({ summary: 'List approved success cases' })
@@ -22,10 +67,10 @@ export class SuccessCasesController {
     @Query('limit') limit?: string,
   ) {
     return this.service.findAll({
-      aiPlatform: aiPlatform || undefined,
-      industry: industry || undefined,
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 12,
+      aiPlatform: this.normalizePlatform(aiPlatform),
+      industry: this.normalizeIndustry(industry),
+      page: this.parsePositiveInt(page, 1, 10000, 'page'),
+      limit: this.parsePositiveInt(limit, 12, 50, 'limit'),
     });
   }
 
@@ -88,11 +133,11 @@ export class SuccessCasesController {
     @Query('limit') limit?: string,
   ) {
     return this.service.adminFindAll({
-      status: status || undefined,
-      aiPlatform: aiPlatform || undefined,
-      industry: industry || undefined,
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 20,
+      status: this.normalizeStatus(status),
+      aiPlatform: this.normalizePlatform(aiPlatform),
+      industry: this.normalizeIndustry(industry),
+      page: this.parsePositiveInt(page, 1, 10000, 'page'),
+      limit: this.parsePositiveInt(limit, 20, 100, 'limit'),
     });
   }
 

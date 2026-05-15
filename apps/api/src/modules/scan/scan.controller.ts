@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ScanService } from './scan.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -10,6 +10,18 @@ import { Roles, RolesGuard } from '../../common/guards/roles.guard';
 export class ScanController {
   constructor(private scanService: ScanService) {}
 
+  private parseLimit(value: string | undefined, fallback: number, max: number): number {
+    if (value === undefined || value === '') return fallback;
+    if (!/^\d+$/.test(value)) {
+      throw new BadRequestException('limit must be a positive integer');
+    }
+    const parsed = Number(value);
+    if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > max) {
+      throw new BadRequestException(`limit must be between 1 and ${max}`);
+    }
+    return parsed;
+  }
+
   @Post('admin/scan/weekly-refresh')
   @Roles('ADMIN', 'SUPER_ADMIN')
   @UseGuards(RolesGuard)
@@ -18,7 +30,7 @@ export class ScanController {
       'Manually trigger the weekly scan refresh. ?limit=50 default, max 200. Picks isClient sites + stale (>14d) public sites, oldest first.',
   })
   triggerWeeklyRefresh(@Query('limit') limit?: string) {
-    const n = Math.max(1, Math.min(200, limit ? parseInt(limit, 10) : 50));
+    const n = this.parseLimit(limit, 50, 200);
     // Fire-and-forget — scans are ~10s each × N, would exceed HTTP timeout.
     this.scanService.runWeeklyRefresh(n).catch((err) => {
       console.error('weekly-refresh crashed:', err);
@@ -53,12 +65,20 @@ export class ScanController {
   }
 
   @Get('scans/:scanId')
-  getScan(@Param('scanId') scanId: string) {
-    return this.scanService.getScanById(scanId);
+  getScan(
+    @Param('scanId') scanId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.scanService.getScanById(scanId, userId, role);
   }
 
   @Get('scans/:scanId/results')
-  getScanResults(@Param('scanId') scanId: string) {
-    return this.scanService.getScanResults(scanId);
+  getScanResults(
+    @Param('scanId') scanId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.scanService.getScanResults(scanId, userId, role);
   }
 }

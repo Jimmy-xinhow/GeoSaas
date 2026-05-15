@@ -2,6 +2,7 @@ import { Controller, Get, Param, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { BadgeService } from './badge.service';
 
 @ApiTags('Badges')
@@ -33,9 +34,12 @@ export class BadgeController {
   @ApiBearerAuth()
   @Get('badge/:siteId/embed-code')
   @ApiOperation({ summary: 'Get embed code snippets for a site badge' })
-  async getEmbedCode(@Param('siteId') siteId: string) {
-    const code = await this.service.getEmbedCode(siteId);
-    if (!code) return { error: 'Site not found' };
+  async getEmbedCode(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    const code = await this.service.getEmbedCode(siteId, userId, role);
     return code;
   }
 }

@@ -1,11 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScanPipelineService } from '../scan/scan-pipeline.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
-import pLimit from 'p-limit';
+import pLimit from '@/common/utils/p-limit';
 
 interface CsvRow {
   url: string;
@@ -130,7 +130,12 @@ export class SeedService {
 
     let csvFiles: string[];
     if (files && files.length > 0) {
-      csvFiles = files.map((f) => path.resolve(seedDataDir, f));
+      csvFiles = files.map((f) => {
+        if (path.isAbsolute(f) || f.includes('..') || path.basename(f) !== f || !f.endsWith('.csv')) {
+          throw new BadRequestException('Invalid seed CSV filename');
+        }
+        return path.join(seedDataDir, f);
+      });
     } else {
       if (!fs.existsSync(seedDataDir)) return { imported: 0 };
       csvFiles = fs.readdirSync(seedDataDir)

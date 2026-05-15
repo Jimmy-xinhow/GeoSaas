@@ -196,8 +196,8 @@ export class IndustryAiService {
 
   // ─── Feature 1: Brand Impression Page ───
   async getImpressionPage(siteId: string) {
-    const site = await this.prisma.site.findUnique({
-      where: { id: siteId },
+    const site = await this.prisma.site.findFirst({
+      where: { id: siteId, isPublic: true },
       select: { id: true, name: true, url: true, industry: true, bestScore: true, tier: true },
     });
     if (!site) throw new NotFoundException('Site not found');
@@ -263,7 +263,7 @@ export class IndustryAiService {
 
     // Try snapshots first
     let snapshots = await this.prisma.industryAiSnapshot.findMany({
-      where: { industry, weekOf },
+      where: { industry, weekOf, site: { isPublic: true } },
       include: { site: { select: { id: true, name: true, url: true, bestScore: true, tier: true } } },
     });
 
@@ -271,7 +271,7 @@ export class IndustryAiService {
       const lastWeek = new Date(weekOf);
       lastWeek.setDate(lastWeek.getDate() - 7);
       snapshots = await this.prisma.industryAiSnapshot.findMany({
-        where: { industry, weekOf: lastWeek },
+        where: { industry, weekOf: lastWeek, site: { isPublic: true } },
         include: { site: { select: { id: true, name: true, url: true, bestScore: true, tier: true } } },
       });
     }
@@ -346,6 +346,12 @@ export class IndustryAiService {
 
   // ─── Feature 3: Citation Trend ───
   async getCitationTrend(siteId: string, weeks = 12) {
+    const site = await this.prisma.site.findFirst({
+      where: { id: siteId, isPublic: true },
+      select: { id: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+
     const snapshots = await this.prisma.industryAiSnapshot.findMany({
       where: { siteId },
       orderBy: { weekOf: 'desc' },
@@ -405,6 +411,14 @@ export class IndustryAiService {
 
   async getComparison(siteAId: string, siteBId: string) {
     const weekOf = this.getWeekOf();
+    const [siteA, siteB, snapA, snapB] = await Promise.all([
+      this.prisma.site.findFirst({ where: { id: siteAId, isPublic: true }, select: { id: true, name: true, url: true, bestScore: true, tier: true, industry: true } }),
+      this.prisma.site.findFirst({ where: { id: siteBId, isPublic: true }, select: { id: true, name: true, url: true, bestScore: true, tier: true, industry: true } }),
+      this.prisma.industryAiSnapshot.findFirst({ where: { siteId: siteAId }, orderBy: { weekOf: 'desc' } }),
+      this.prisma.industryAiSnapshot.findFirst({ where: { siteId: siteBId }, orderBy: { weekOf: 'desc' } }),
+    ]);
+    if (!siteA || !siteB) throw new NotFoundException('Site not found');
+
     let comparisons = await this.prisma.industryAiComparison.findMany({
       where: { siteAId, siteBId, weekOf },
     });
@@ -416,13 +430,6 @@ export class IndustryAiService {
         where: { siteAId, siteBId, weekOf: lastWeek },
       });
     }
-
-    const [siteA, siteB, snapA, snapB] = await Promise.all([
-      this.prisma.site.findUnique({ where: { id: siteAId }, select: { id: true, name: true, url: true, bestScore: true, tier: true, industry: true } }),
-      this.prisma.site.findUnique({ where: { id: siteBId }, select: { id: true, name: true, url: true, bestScore: true, tier: true, industry: true } }),
-      this.prisma.industryAiSnapshot.findFirst({ where: { siteId: siteAId }, orderBy: { weekOf: 'desc' } }),
-      this.prisma.industryAiSnapshot.findFirst({ where: { siteId: siteBId }, orderBy: { weekOf: 'desc' } }),
-    ]);
 
     return {
       siteA: { ...siteA, mentionRate: snapA?.mentionRate || 0, byPlatform: snapA?.byPlatform },

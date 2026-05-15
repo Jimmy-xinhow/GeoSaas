@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ScanPipelineService } from '../scan/scan-pipeline.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import OpenAI from 'openai';
-import pLimit from 'p-limit';
+import pLimit from '@/common/utils/p-limit';
 
 interface DiscoveredBusiness {
   name: string;

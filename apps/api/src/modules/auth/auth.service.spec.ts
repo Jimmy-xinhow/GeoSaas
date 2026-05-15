@@ -1,10 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -31,6 +32,7 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: JwtService, useValue: jwtService },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('test-secret') } },
+        { provide: NotificationsService, useValue: { create: jest.fn().mockResolvedValue({}) } },
       ],
     }).compile();
 
@@ -39,22 +41,26 @@ describe('AuthService', () => {
 
   describe('register', () => {
     it('should create a new user and return tokens', async () => {
-      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.findFirst.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue({
         id: '1', email: 'test@test.com', name: 'Test', role: 'USER', plan: 'FREE', createdAt: new Date(),
       });
 
-      const result = await service.register({ email: 'test@test.com', password: 'password123', name: 'Test' });
+      const result = await service.register({ email: ' TEST@Test.com ', password: 'password123', name: ' Test ' });
 
       expect(result.user.email).toBe('test@test.com');
       expect(result.token).toBe('mock-token');
-      expect(prisma.user.create).toHaveBeenCalled();
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ email: 'test@test.com', name: 'Test' }),
+        }),
+      );
     });
 
     it('should throw ConflictException if email already exists', async () => {
-      prisma.user.findUnique.mockResolvedValue({ id: '1', email: 'test@test.com' });
+      prisma.user.findFirst.mockResolvedValue({ id: '1', email: 'test@test.com' });
 
-      await expect(service.register({ email: 'test@test.com', password: 'password123' }))
+      await expect(service.register({ email: 'TEST@test.com', password: 'password123' }))
         .rejects.toThrow(ConflictException);
     });
   });
@@ -62,18 +68,18 @@ describe('AuthService', () => {
   describe('login', () => {
     it('should return user and tokens on valid credentials', async () => {
       const hash = await bcrypt.hash('password123', 10);
-      prisma.user.findUnique.mockResolvedValue({
+      prisma.user.findFirst.mockResolvedValue({
         id: '1', email: 'test@test.com', name: 'Test', passwordHash: hash, role: 'USER', plan: 'FREE',
       });
 
-      const result = await service.login({ email: 'test@test.com', password: 'password123' });
+      const result = await service.login({ email: ' TEST@Test.com ', password: 'password123' });
 
       expect(result.user.email).toBe('test@test.com');
       expect(result.token).toBe('mock-token');
     });
 
     it('should throw UnauthorizedException on invalid email', async () => {
-      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.findFirst.mockResolvedValue(null);
 
       await expect(service.login({ email: 'wrong@test.com', password: 'password123' }))
         .rejects.toThrow(UnauthorizedException);
@@ -81,7 +87,7 @@ describe('AuthService', () => {
 
     it('should throw UnauthorizedException on wrong password', async () => {
       const hash = await bcrypt.hash('correctpass', 10);
-      prisma.user.findUnique.mockResolvedValue({
+      prisma.user.findFirst.mockResolvedValue({
         id: '1', email: 'test@test.com', passwordHash: hash, role: 'USER',
       });
 
@@ -97,9 +103,14 @@ describe('AuthService', () => {
         id: '1', email: 'new@test.com', name: 'New Name', role: 'USER', plan: 'FREE', avatarUrl: null, createdAt: new Date(),
       });
 
-      const result = await service.updateProfile('1', { name: 'New Name', email: 'new@test.com' });
+      const result = await service.updateProfile('1', { name: ' New Name ', email: ' NEW@test.com ' });
 
       expect(result.name).toBe('New Name');
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { email: 'new@test.com', name: 'New Name' },
+        }),
+      );
     });
 
     it('should throw ConflictException if email is taken', async () => {
@@ -107,6 +118,12 @@ describe('AuthService', () => {
 
       await expect(service.updateProfile('1', { email: 'taken@test.com' }))
         .rejects.toThrow(ConflictException);
+    });
+
+    it('should reject blank profile names', async () => {
+      await expect(service.updateProfile('1', { name: '   ' }))
+        .rejects.toThrow(BadRequestException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -24,7 +24,7 @@ import {
   createBuyerGuideSpec,
 } from '../content-quality/specs/buyer-guide.spec';
 import OpenAI from 'openai';
-import pLimit from 'p-limit';
+import pLimit from '@/common/utils/p-limit';
 
 const ALL_TEMPLATE_TYPES: TemplateType[] = [
   'geo_overview',
@@ -62,6 +62,21 @@ export class BlogArticleService {
     private readonly profileEnrichment: ProfileEnrichmentService,
     private readonly qualityRunner: ContentQualityRunner,
   ) {}
+
+  private isAdmin(role?: string): boolean {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
+  }
+
+  private async assertSiteAccess(siteId: string, userId?: string, role?: string) {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { userId: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+    if (!this.isAdmin(role) && site.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this site');
+    }
+  }
 
   /**
    * Auto-ping IndexNow + WebSub hub when a new article is published.
@@ -2063,7 +2078,9 @@ export class BlogArticleService {
    * Per-client accumulation stats for dashboard display.
    * "本月累積 N 篇 AI 可引用內容" + recent article list.
    */
-  async getClientDailyStats(siteId: string) {
+  async getClientDailyStats(siteId: string, userId?: string, role?: string) {
+    await this.assertSiteAccess(siteId, userId, role);
+
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
@@ -2115,6 +2132,8 @@ export class BlogArticleService {
   async listClientDaily(
     siteId: string,
     opts: { page: number; limit: number },
+    userId?: string,
+    role?: string,
   ): Promise<{
     total: number;
     page: number;
@@ -2128,6 +2147,8 @@ export class BlogArticleService {
       url: string;
     }>;
   }> {
+    await this.assertSiteAccess(siteId, userId, role);
+
     const skip = (opts.page - 1) * opts.limit;
     const where = { siteId, templateType: 'client_daily' as const };
     const [total, rows] = await Promise.all([

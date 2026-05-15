@@ -8,7 +8,7 @@ import {
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { Cron } from '@nestjs/schedule';
-import pLimit from 'p-limit';
+import pLimit from '@/common/utils/p-limit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
 import { ScanPipelineService } from './scan-pipeline.service';
@@ -23,6 +23,10 @@ export class ScanService {
     private readonly planUsage: PlanUsageService,
     @Optional() @InjectQueue('scan') private readonly scanQueue?: Queue,
   ) {}
+
+  private isAdmin(role?: string): boolean {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
+  }
 
   async triggerScan(siteId: string, userId: string) {
     // Verify the site belongs to the user
@@ -81,12 +85,15 @@ export class ScanService {
     });
   }
 
-  async getScanById(scanId: string) {
+  async getScanById(scanId: string, userId: string, role?: string) {
     const scan = await this.prisma.scan.findUnique({
       where: { id: scanId },
       include: { results: true, site: true },
     });
     if (!scan) throw new NotFoundException('Scan not found');
+    if (!this.isAdmin(role) && scan.site.userId !== userId) {
+      throw new NotFoundException('Scan not found');
+    }
     return scan;
   }
 
@@ -113,7 +120,16 @@ export class ScanService {
     }));
   }
 
-  async getScanResults(scanId: string) {
+  async getScanResults(scanId: string, userId: string, role?: string) {
+    const scan = await this.prisma.scan.findUnique({
+      where: { id: scanId },
+      select: { site: { select: { userId: true } } },
+    });
+    if (!scan) throw new NotFoundException('Scan not found');
+    if (!this.isAdmin(role) && scan.site.userId !== userId) {
+      throw new NotFoundException('Scan not found');
+    }
+
     return this.prisma.scanResult.findMany({
       where: { scanId },
       orderBy: { score: 'asc' },

@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { FixService } from './fix.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 import { JsonLdGenerator } from './generators/json-ld.generator';
 import { LlmsTxtGenerator } from './generators/llms-txt.generator';
 import { OgTagsGenerator } from './generators/og-tags.generator';
@@ -36,6 +38,13 @@ describe('FixService', () => {
       providers: [
         FixService,
         { provide: PrismaService, useValue: prisma },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('') } },
+        {
+          provide: PlanUsageService,
+          useValue: {
+            checkAndIncrement: jest.fn().mockResolvedValue({ allowed: true }),
+          },
+        },
         { provide: JsonLdGenerator, useValue: jsonLdGen },
         { provide: LlmsTxtGenerator, useValue: llmsTxtGen },
         { provide: OgTagsGenerator, useValue: ogTagsGen },
@@ -44,6 +53,16 @@ describe('FixService', () => {
     }).compile();
 
     service = module.get<FixService>(FixService);
+  });
+
+  describe('assertSmartIndicatorSupported', () => {
+    it('should reject unsupported smart generation indicators', () => {
+      expect(() => service.assertSmartIndicatorSupported('not_supported')).toThrow(NotFoundException);
+    });
+
+    it('should accept supported smart generation indicators', () => {
+      expect(() => service.assertSmartIndicatorSupported('json_ld')).not.toThrow();
+    });
   });
 
   describe('generateJsonLd', () => {

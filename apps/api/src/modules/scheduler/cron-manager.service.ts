@@ -39,7 +39,7 @@ const DEFAULT_TASKS: Array<{
   {
     taskKey: 'monitor_daily_pro',
     name: 'Pro 用戶 AI 引用監控',
-    description: 'PRO/Enterprise 用戶的每日 AI 引用偵測',
+    description: 'PRO 用戶的每日 AI 引用偵測',
     cronExpr: '0 3 * * *',
     enabled: true,
   },

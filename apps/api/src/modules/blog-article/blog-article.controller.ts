@@ -1,9 +1,77 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { BlogArticleService } from './blog-article.service';
 import { IndustryInsightService, InsightType } from './industry-insight.service';
+import { GenerateInsightDto, PreviewBrandShowcaseDto } from './dto/blog-admin.dto';
+
+const ALLOWED_LOCALES = new Set(['zh-TW', 'en', 'ja']);
+
+function parsePositiveInt(
+  value: string | undefined,
+  field: string,
+  defaultValue: number,
+  max: number,
+): number {
+  if (value === undefined || value === '') return defaultValue;
+  if (!/^\d+$/.test(value)) {
+    throw new BadRequestException(`${field} must be a positive integer`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > max) {
+    throw new BadRequestException(`${field} must be between 1 and ${max}`);
+  }
+  return parsed;
+}
+
+function normalizeOptionalText(
+  value: string | undefined,
+  field: string,
+  maxLength: number,
+): string | undefined {
+  if (value === undefined || value.trim() === '') return undefined;
+  const normalized = value.trim();
+  if (normalized.length > maxLength) {
+    throw new BadRequestException(`${field} is too long`);
+  }
+  return normalized;
+}
+
+function normalizeRequiredText(value: string, field: string, maxLength: number): string {
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maxLength) {
+    throw new BadRequestException(`${field} is invalid`);
+  }
+  return normalized;
+}
+
+function normalizeLocale(value: string | undefined): string | undefined {
+  const normalized = normalizeOptionalText(value, 'locale', 12);
+  if (normalized && !ALLOWED_LOCALES.has(normalized)) {
+    throw new BadRequestException('locale is not supported');
+  }
+  return normalized;
+}
+
+function parseBoundedInt(
+  value: string | undefined,
+  field: string,
+  defaultValue: number,
+  min: number,
+  max: number,
+): number {
+  if (value === undefined || value === '') return defaultValue;
+  if (!/^\d+$/.test(value)) {
+    throw new BadRequestException(`${field} must be a positive integer`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new BadRequestException(`${field} must be between ${min} and ${max}`);
+  }
+  return parsed;
+}
 
 @ApiTags('Blog')
 @Controller('blog')
@@ -23,10 +91,10 @@ export class BlogArticleController {
     @Query('locale') locale?: string,
   ) {
     return this.service.listArticles({
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 12,
-      category: category || undefined,
-      locale: locale || undefined,
+      page: parsePositiveInt(page, 'page', 1, 10000),
+      limit: parsePositiveInt(limit, 'limit', 12, 50),
+      category: normalizeOptionalText(category, 'category', 80),
+      locale: normalizeLocale(locale),
     });
   }
 
@@ -34,10 +102,12 @@ export class BlogArticleController {
   @Get('articles/:slug')
   @ApiOperation({ summary: 'Get article by slug' })
   getBySlug(@Param('slug') slug: string) {
-    return this.service.getBySlug(slug);
+    return this.service.getBySlug(normalizeRequiredText(slug, 'slug', 220));
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Post('generate/:siteId')
   @ApiOperation({ summary: 'Generate AI analysis article for a site' })
   generate(@Param('siteId') siteId: string) {
@@ -45,6 +115,8 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Post('batch-generate')
   @ApiOperation({ summary: 'Batch generate articles for public sites without one' })
   batchGenerate() {
@@ -52,6 +124,8 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Post('generate-templates/:siteId')
   @ApiOperation({ summary: 'Generate all template-based AI articles for a site' })
   generateTemplates(@Param('siteId') siteId: string) {
@@ -59,6 +133,8 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Post('generate-bulk-templates')
   @ApiOperation({ summary: 'Trigger bulk template generation for all eligible sites' })
   async generateBulkTemplates() {
@@ -75,7 +151,7 @@ export class BlogArticleController {
   @Delete('quality-audit')
   @ApiOperation({ summary: 'Delete articles below quality threshold and return stats' })
   async qualityAudit(@Query('threshold') threshold?: string) {
-    const minScore = threshold ? parseInt(threshold, 10) : 85;
+    const minScore = parseBoundedInt(threshold, 'threshold', 85, 0, 100);
     return this.service.qualityAudit(minScore);
   }
 
@@ -89,14 +165,7 @@ export class BlogArticleController {
   })
   previewBrandShowcase(
     @Param('siteId') siteId: string,
-    @Body() body: {
-      description?: string;
-      services?: string;
-      location?: string;
-      contact?: string;
-      forbidden?: string[];
-      positioning?: string;
-    } = {},
+    @Body() body: PreviewBrandShowcaseDto = {},
   ) {
     return this.service.previewBrandShowcase(siteId, body);
   }
@@ -127,7 +196,7 @@ export class BlogArticleController {
       'Kick off a brand_showcase batch (fire-and-forget, returns immediately). ?limit=30 (default 15, max 200). Use /blog/brand-showcase/batch-status to check progress.',
   })
   brandShowcaseBatch(@Query('limit') limit?: string) {
-    const n = Math.max(1, Math.min(200, limit ? parseInt(limit, 10) : 15));
+    const n = parseBoundedInt(limit, 'limit', 15, 1, 200);
     // Fire-and-forget so Cloudflare (100s) / Railway proxies don't drop us.
     // Results land in DB + service logs; poll /batch-status for progress.
     this.service.runBrandShowcaseBatch(n).catch((err) => {
@@ -298,8 +367,12 @@ export class BlogArticleController {
     summary:
       '付費客戶 daily content 累積統計 — 本月 / 本週 / 總數 + 最近 10 篇 + 方案配額。Dashboard 要顯示的「本月累積 N 篇」就是這支。',
   })
-  getClientDailyStats(@Param('siteId') siteId: string) {
-    return this.service.getClientDailyStats(siteId);
+  getClientDailyStats(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getClientDailyStats(siteId, userId, role);
   }
 
   @ApiBearerAuth()
@@ -312,24 +385,30 @@ export class BlogArticleController {
     @Param('siteId') siteId: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @CurrentUser('userId') userId?: string,
+    @CurrentUser('role') role?: string,
   ) {
     return this.service.listClientDaily(siteId, {
-      page: page ? Math.max(1, parseInt(page, 10)) : 1,
-      limit: limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 30,
-    });
+      page: parseBoundedInt(page, 'page', 1, 1, 10000),
+      limit: parseBoundedInt(limit, 'limit', 30, 1, 100),
+    }, userId, role);
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Post('insights/generate')
   @ApiOperation({ summary: 'Generate insight article for an industry' })
-  generateInsight(@Body() body: { industry: string; type?: InsightType }) {
+  generateInsight(@Body() body: GenerateInsightDto) {
     return this.insightService.generateInsightArticle(
-      body.industry,
-      body.type || 'industry_current_state',
+      body.industry.trim(),
+      (body.type || 'industry_current_state') as InsightType,
     );
   }
 
   @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Post('insights/generate-all')
   @ApiOperation({ summary: 'Generate industry_current_state for all eligible industries' })
   async generateAllInsights() {

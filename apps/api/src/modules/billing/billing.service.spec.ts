@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { BadRequestException } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlanUsageService } from '../../common/guards/plan.guard';
+import { CreditService } from './credit.service';
 import * as newebpayUtil from './newebpay.util';
 
 jest.mock('./newebpay.util');
@@ -15,6 +17,7 @@ describe('BillingService', () => {
     site: { count: jest.Mock };
     order: { create: jest.Mock; findUnique: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
   };
+  let creditService: { addCredits: jest.Mock };
 
   const userId = 'user-1';
 
@@ -25,6 +28,7 @@ describe('BillingService', () => {
       site: { count: jest.fn() },
       order: { create: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     };
+    creditService = { addCredits: jest.fn().mockResolvedValue({}) };
 
     const configGet = jest.fn((key: string) => {
       const map: Record<string, string> = {
@@ -43,6 +47,16 @@ describe('BillingService', () => {
         BillingService,
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: { get: configGet } },
+        {
+          provide: PlanUsageService,
+          useValue: {
+            getUsageSummary: jest.fn().mockResolvedValue({ scansThisMonth: 15, sitesCount: 3 }),
+          },
+        },
+        {
+          provide: CreditService,
+          useValue: creditService,
+        },
       ],
     }).compile();
 
@@ -60,9 +74,18 @@ describe('BillingService', () => {
 
       const result = await service.createOrder('PRO', userId);
 
+      expect(newebpayUtil.encryptTradeInfo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ReturnURL: 'http://localhost:4000/api/billing/return',
+          NotifyURL: 'http://localhost:4000/api/billing/notify',
+          ClientBackURL: 'http://localhost:3001/settings',
+        }),
+        '12345678901234567890123456789012',
+        '1234567890123456',
+      );
       expect(prisma.order.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ userId, plan: 'PRO', amount: 1490, status: 'PENDING' }),
+          data: expect.objectContaining({ userId, plan: 'PRO', amount: 690, status: 'PENDING' }),
         }),
       );
       expect(result).toEqual({
@@ -77,6 +100,87 @@ describe('BillingService', () => {
     it('should throw for invalid plan', async () => {
       await expect(service.createOrder('INVALID', userId)).rejects.toThrow(BadRequestException);
     });
+
+    it('should reject missing NewebPay gateway URL in production', async () => {
+      jest.clearAllMocks();
+      (service as any).config.get = jest.fn((key: string) => {
+        const map: Record<string, string> = {
+          NODE_ENV: 'production',
+          FRONTEND_URL: 'https://geovault.app',
+        };
+        return map[key] || '';
+      });
+      prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
+      prisma.order.create.mockResolvedValue({});
+
+      await expect(service.createOrder('PRO', userId)).rejects.toThrow(BadRequestException);
+      expect(prisma.order.create).not.toHaveBeenCalled();
+      expect(newebpayUtil.encryptTradeInfo).not.toHaveBeenCalled();
+    });
+
+    it('should reject localhost callback URLs in production', async () => {
+      jest.clearAllMocks();
+      (service as any).config.get = jest.fn((key: string) => {
+        const map: Record<string, string> = {
+          NODE_ENV: 'production',
+          NEWEBPAY_API_URL: 'https://core.newebpay.com/MPG/mpg_gateway',
+          API_PUBLIC_URL: 'http://localhost:4000',
+          FRONTEND_URL: 'https://geovault.app',
+        };
+        return map[key] || '';
+      });
+      prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
+      prisma.order.create.mockResolvedValue({});
+
+      await expect(service.createOrder('PRO', userId)).rejects.toThrow(BadRequestException);
+      expect(prisma.order.create).not.toHaveBeenCalled();
+      expect(newebpayUtil.encryptTradeInfo).not.toHaveBeenCalled();
+    });
+
+    it('should generate unique merchant order numbers for rapid repeated plan checkouts', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(1778803000000);
+      prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
+      prisma.order.create.mockResolvedValue({});
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('encrypted_data');
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('SHA_HASH');
+
+      await service.createOrder('STARTER', userId);
+      await service.createOrder('STARTER', userId);
+
+      const firstOrderNo = prisma.order.create.mock.calls[0][0].data.merchantOrderNo;
+      const secondOrderNo = prisma.order.create.mock.calls[1][0].data.merchantOrderNo;
+      expect(firstOrderNo).toMatch(/^GEO1778803000000/);
+      expect(secondOrderNo).toMatch(/^GEO1778803000000/);
+      expect(firstOrderNo).not.toBe(secondOrderNo);
+    });
+  });
+
+  describe('createCreditOrder', () => {
+    it('should generate unique merchant order numbers for rapid repeated credit checkouts', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(1778803000000);
+      prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
+      prisma.order.create.mockResolvedValue({});
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('encrypted_data');
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('SHA_HASH');
+
+      await service.createCreditOrder(50, userId);
+      await service.createCreditOrder(50, userId);
+
+      expect(newebpayUtil.encryptTradeInfo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ReturnURL: 'http://localhost:4000/api/billing/return',
+          NotifyURL: 'http://localhost:4000/api/billing/notify',
+        }),
+        '12345678901234567890123456789012',
+        '1234567890123456',
+      );
+
+      const firstOrderNo = prisma.order.create.mock.calls[0][0].data.merchantOrderNo;
+      const secondOrderNo = prisma.order.create.mock.calls[1][0].data.merchantOrderNo;
+      expect(firstOrderNo).toMatch(/^CRD1778803000000/);
+      expect(secondOrderNo).toMatch(/^CRD1778803000000/);
+      expect(firstOrderNo).not.toBe(secondOrderNo);
+    });
   });
 
   describe('handleNotify', () => {
@@ -84,10 +188,10 @@ describe('BillingService', () => {
       (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('VALID_SHA');
       (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
         Status: 'SUCCESS',
-        Result: { MerchantOrderNo: 'GEO123', TradeNo: 'TN123', PaymentType: 'CREDIT' },
+        Result: { MerchantOrderNo: 'GEO123', TradeNo: 'TN123', PaymentType: 'CREDIT', Amt: 690 },
       });
       prisma.order.findUnique.mockResolvedValue({
-        merchantOrderNo: 'GEO123', userId, plan: 'PRO', status: 'PENDING',
+        merchantOrderNo: 'GEO123', userId, plan: 'PRO', amount: 690, status: 'PENDING',
       });
       prisma.order.update.mockResolvedValue({});
       prisma.user.update.mockResolvedValue({});
@@ -108,6 +212,98 @@ describe('BillingService', () => {
     it('should throw when TradeSha verification fails', async () => {
       (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('EXPECTED');
       await expect(service.handleNotify('encrypted', 'WRONG')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject successful payment notifications when amount mismatches the order', async () => {
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('SHA');
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: { MerchantOrderNo: 'GEO123', TradeNo: 'TN123', PaymentType: 'CREDIT', Amt: 1 },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'GEO123',
+        userId,
+        plan: 'PRO',
+        amount: 690,
+        status: 'PENDING',
+      });
+      prisma.order.update.mockResolvedValue({});
+
+      await expect(service.handleNotify('encrypted', 'SHA')).rejects.toThrow(BadRequestException);
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { merchantOrderNo: 'GEO123' },
+        data: expect.objectContaining({ status: 'FAILED' }),
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should add credits only for a valid credit package order', async () => {
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('SHA');
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: { MerchantOrderNo: 'CRD123', TradeNo: 'TN123', PaymentType: 'CREDIT', Amt: 250 },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        merchantOrderNo: 'CRD123',
+        userId,
+        plan: 'CREDITS_50',
+        amount: 250,
+        status: 'PENDING',
+      });
+      prisma.order.update.mockResolvedValue({});
+
+      await service.handleNotify('encrypted', 'SHA');
+
+      expect(creditService.addCredits).toHaveBeenCalledWith(userId, 50, 'order-1');
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should reject successful plan payments when stored plan and amount are inconsistent', async () => {
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('SHA');
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: { MerchantOrderNo: 'GEO123', TradeNo: 'TN123', PaymentType: 'CREDIT', Amt: 1 },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'GEO123',
+        userId,
+        plan: 'PRO',
+        amount: 1,
+        status: 'PENDING',
+      });
+      prisma.order.update.mockResolvedValue({});
+
+      await expect(service.handleNotify('encrypted', 'SHA')).rejects.toThrow(BadRequestException);
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { merchantOrderNo: 'GEO123' },
+        data: expect.objectContaining({ status: 'FAILED' }),
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should reject successful credit payments when stored package and amount are inconsistent', async () => {
+      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('SHA');
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: { MerchantOrderNo: 'CRD123', TradeNo: 'TN123', PaymentType: 'CREDIT', Amt: 999 },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        merchantOrderNo: 'CRD123',
+        userId,
+        plan: 'CREDITS_999',
+        amount: 999,
+        status: 'PENDING',
+      });
+      prisma.order.update.mockResolvedValue({});
+
+      await expect(service.handleNotify('encrypted', 'SHA')).rejects.toThrow(BadRequestException);
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { merchantOrderNo: 'CRD123' },
+        data: expect.objectContaining({ status: 'FAILED' }),
+      });
+      expect(creditService.addCredits).not.toHaveBeenCalled();
     });
 
     it('should skip already paid orders', async () => {
@@ -148,16 +344,17 @@ describe('BillingService', () => {
       prisma.site.count.mockResolvedValue(3);
 
       const result = await service.getSubscription(userId);
-      expect(result).toEqual({ plan: 'PRO', usage: { scansThisMonth: 15, sitesCount: 3 } });
+      expect(result).toEqual({
+        plan: 'PRO',
+        role: undefined,
+        usage: { scansThisMonth: 15, sitesCount: 3 },
+      });
     });
 
     it('should return undefined plan when user not found', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
-      prisma.scan.count.mockResolvedValue(0);
-      prisma.site.count.mockResolvedValue(0);
-
       const result = await service.getSubscription(userId);
-      expect(result).toEqual({ plan: undefined, usage: { scansThisMonth: 0, sitesCount: 0 } });
+      expect(result).toBeNull();
     });
   });
 });

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useIndustryAiSites, useBrandComparison, useRunComparison } from '@/hooks/use-industry-ai';
+import { useIndustryAiSites, useBrandComparison } from '@/hooks/use-industry-ai';
 import { INDUSTRIES } from '@geovault/shared';
 import { ArrowLeft, ArrowLeftRight, Bot, Zap, Loader2 } from 'lucide-react';
 import PublicNavbar from '@/components/layout/public-navbar';
@@ -25,18 +25,12 @@ export default function CompareClient({ params }: { params: { industry: string }
   const [siteBId, setSiteBId] = useState('');
   const { data: sites } = useIndustryAiSites(industry);
   const { data: comparison, isLoading: loadingComparison, refetch } = useBrandComparison(industry, siteAId, siteBId);
-  const runMutation = useRunComparison();
 
   const industryLabel = INDUSTRIES.find((i) => i.value === industry)?.label || industry;
 
   const handleCompare = async () => {
     if (!siteAId || !siteBId) return;
-    try {
-      await runMutation.mutateAsync({ industry, siteAId, siteBId });
-      refetch();
-    } catch (err) {
-      // comparison failed — silent
-    }
+    refetch();
   };
 
   return (
@@ -102,18 +96,15 @@ export default function CompareClient({ params }: { params: { industry: string }
               <div className="text-center mt-4">
                 <Button
                   onClick={handleCompare}
-                  disabled={!siteAId || !siteBId || runMutation.isPending}
+                  disabled={!siteAId || !siteBId || loadingComparison}
                   className="bg-purple-600 hover:bg-purple-700"
                 >
-                  {runMutation.isPending ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> AI 比較中...</>
+                  {loadingComparison ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> 載入比較中...</>
                   ) : (
-                    <><Zap className="h-4 w-4 mr-2" /> 開始 AI 對比</>
+                    <><Zap className="h-4 w-4 mr-2" /> 查看 AI 對比</>
                   )}
                 </Button>
-                {runMutation.isPending && (
-                  <p className="text-xs text-gray-500 mt-2">正在詢問 5 個 AI 平台，約需 15 秒...</p>
-                )}
               </div>
             </CardContent>
           </Card>

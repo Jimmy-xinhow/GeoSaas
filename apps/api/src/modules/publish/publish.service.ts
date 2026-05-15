@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
 import { ConfigService } from '@nestjs/config';
@@ -14,6 +20,14 @@ import { IPlatformAdapter } from './adapters/adapter.interface';
 export class PublishService {
   private logger = new Logger(PublishService.name);
   private adapterMap: Record<string, IPlatformAdapter>;
+  private readonly allowedPlatforms = new Set([
+    'medium',
+    'linkedin',
+    'wordpress',
+    'vocus',
+    'facebook',
+    'google_business',
+  ]);
 
   constructor(
     private prisma: PrismaService,
@@ -37,11 +51,12 @@ export class PublishService {
   }
 
   async publish(contentId: string, platforms: string[], userId: string) {
+    const normalizedPlatforms = this.normalizePlatforms(platforms);
     const content = await this.prisma.content.findFirst({ where: { id: contentId, userId } });
     if (!content) throw new NotFoundException('Content not found');
 
     // Check plan limit: multiPlatform (publishing to multiple platforms)
-    if (platforms.length > 1) {
+    if (normalizedPlatforms.length > 1) {
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
       if (user) {
         const check = await this.planUsage.checkAndIncrement(userId, 'multiPlatform', user.plan, user.role);
@@ -54,7 +69,7 @@ export class PublishService {
     }
 
     const publications = await Promise.all(
-      platforms.map((platform) =>
+      normalizedPlatforms.map((platform) =>
         this.prisma.publication.create({
           data: { contentId, platform, status: 'PENDING' },
         }),
@@ -72,6 +87,30 @@ export class PublishService {
     }
 
     return publications;
+  }
+
+  private normalizePlatforms(platforms: unknown): string[] {
+    if (!Array.isArray(platforms)) {
+      throw new BadRequestException('Platforms must be a non-empty array');
+    }
+
+    const normalized = platforms
+      .filter((platform): platform is string => typeof platform === 'string')
+      .map((platform) => platform.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (normalized.length === 0) {
+      throw new BadRequestException('At least one platform is required');
+    }
+
+    const invalid = normalized.filter(
+      (platform) => !this.allowedPlatforms.has(platform),
+    );
+    if (invalid.length > 0) {
+      throw new BadRequestException(`Invalid platform: ${invalid.join(', ')}`);
+    }
+
+    return [...new Set(normalized)];
   }
 
   private async publishViaAdapter(publicationId: string, content: { title: string; body: string }, adapter: IPlatformAdapter) {

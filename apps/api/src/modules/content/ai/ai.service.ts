@@ -6,11 +6,21 @@ import { buildArticlePrompt } from './prompts/article.prompt';
 
 @Injectable()
 export class AiService {
-  private client: OpenAI;
+  private client: OpenAI | null = null;
+  private readonly apiKey?: string;
   private logger = new Logger(AiService.name);
 
   constructor(private config: ConfigService) {
-    this.client = new OpenAI({ apiKey: this.config.get('OPENAI_API_KEY') });
+    this.apiKey = this.config.get('OPENAI_API_KEY');
+    if (this.apiKey) {
+      this.client = new OpenAI({ apiKey: this.apiKey });
+    }
+  }
+
+  assertConfigured() {
+    if (!this.client) {
+      throw new BadRequestException('OPENAI_API_KEY is not configured');
+    }
   }
 
   private handleApiError(error: unknown, context: string): never {
@@ -46,10 +56,11 @@ export class AiService {
   }
 
   async generateFaq(brand: string, industry: string, keywords: string[], language: string = 'zh-TW'): Promise<string> {
+    this.assertConfigured();
     const { system, user } = buildFaqPrompt(brand, industry, keywords, language);
 
     try {
-      const response = await this.client.chat.completions.create({
+      const response = await this.client!.chat.completions.create({
         model: 'gpt-4o',
         max_tokens: 4096,
         messages: [
@@ -65,10 +76,11 @@ export class AiService {
   }
 
   async generateArticle(brand: string, topic: string, keywords: string[], language: string = 'zh-TW'): Promise<string> {
+    this.assertConfigured();
     const { system, user } = buildArticlePrompt(brand, topic, keywords, language);
 
     try {
-      const response = await this.client.chat.completions.create({
+      const response = await this.client!.chat.completions.create({
         model: 'gpt-4o',
         max_tokens: 8192,
         messages: [

@@ -1,5 +1,14 @@
-import { Controller, Get, Post, Param, Query, ForbiddenException } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import {
+  BadRequestException,
+  Controller,
+  ForbiddenException,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BrandSpreadService } from './brand-spread.service';
 import { CreditService } from '../billing/credit.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -10,6 +19,15 @@ import { PrismaService } from '../../prisma/prisma.service';
 @ApiBearerAuth()
 @Controller('brand-spread')
 export class BrandSpreadController {
+  private readonly allowedPlatforms = new Set([
+    'medium',
+    'vocus',
+    'linkedin',
+    'facebook',
+    'google_business',
+    'ptt',
+  ]);
+
   constructor(
     private readonly service: BrandSpreadService,
     private readonly planUsage: PlanUsageService,
@@ -29,14 +47,28 @@ export class BrandSpreadController {
     @Param('siteId') siteId: string,
     @Query('platforms') platforms?: string,
     @CurrentUser('userId') userId?: string,
+    @CurrentUser('role') role?: string,
   ) {
+    await this.assertCanUseSite(siteId, userId, role);
+    const platformList = this.parsePlatforms(platforms) ?? [
+      'medium',
+      'vocus',
+      'linkedin',
+      'facebook',
+      'google_business',
+      'ptt',
+    ];
+
     if (userId) {
-      const platformList = platforms ? platforms.split(',') : ['medium', 'vocus', 'linkedin', 'facebook', 'google_business', 'ptt'];
       const totalPoints = platformList.length * 2; // 2 points per platform
-      const check = await this.credits.checkAndDeduct(userId, totalPoints, `品牌擴散內容生成（${platformList.length} 平台，${totalPoints} 點）`);
+      const check = await this.credits.checkAndDeduct(
+        userId,
+        totalPoints,
+        `Generate brand spread content (${platformList.length} platforms, ${totalPoints} credits)`,
+      );
       if (!check.allowed) throw new ForbiddenException(check.message);
     }
-    const platformList = platforms ? platforms.split(',') : undefined;
+
     return this.service.generateAll(siteId, platformList);
   }
 
@@ -45,11 +77,55 @@ export class BrandSpreadController {
   async weeklyPlan(
     @Param('siteId') siteId: string,
     @CurrentUser('userId') userId?: string,
+    @CurrentUser('role') role?: string,
   ) {
+    await this.assertCanUseSite(siteId, userId, role);
+
     if (userId) {
-      const check = await this.credits.checkAndDeduct(userId, 2, '生成週內容計畫');
+      const check = await this.credits.checkAndDeduct(
+        userId,
+        2,
+        'Generate weekly brand spread plan',
+      );
       if (!check.allowed) throw new ForbiddenException(check.message);
     }
+
     return this.service.generateWeeklyPlan(siteId);
+  }
+
+  private parsePlatforms(platforms?: string): string[] | undefined {
+    if (!platforms) return undefined;
+    const parsed = platforms
+      .split(',')
+      .map((platform) => platform.trim())
+      .filter(Boolean);
+    if (parsed.length === 0) {
+      throw new BadRequestException('At least one platform is required');
+    }
+
+    const invalid = parsed.filter(
+      (platform) => !this.allowedPlatforms.has(platform),
+    );
+    if (invalid.length > 0) {
+      throw new BadRequestException(`Invalid platform: ${invalid.join(', ')}`);
+    }
+
+    return [...new Set(parsed)];
+  }
+
+  private async assertCanUseSite(
+    siteId: string,
+    userId?: string,
+    role?: string,
+  ) {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { userId: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+    if (role === 'ADMIN' || role === 'SUPER_ADMIN') return;
+    if (!userId || site.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this site');
+    }
   }
 }

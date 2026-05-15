@@ -36,6 +36,7 @@ import { ScoreGauge } from '@/components/scan/score-gauge'
 import { IndicatorCard } from '@/components/scan/indicator-card'
 import ScanHistoryChart from '@/components/scan/scan-history-chart'
 import { CodeSnippetViewer } from '@/components/fix/code-snippet-viewer'
+import apiClient from '@/lib/api-client'
 import { useSite } from '@/hooks/use-sites'
 import {
   useTriggerScan,
@@ -318,6 +319,119 @@ function DetailSkeleton() {
         </Card>
       </div>
     </div>
+  )
+}
+
+interface BadgeEmbedCode {
+  available: boolean
+  message?: string
+  imgTag?: string
+  markdownBadge?: string
+  svgUrl?: string
+}
+
+function BadgeSection({ siteId }: { siteId: string }) {
+  const [embedCode, setEmbedCode] = useState<BadgeEmbedCode | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'html' | 'markdown' | 'help'>('html')
+
+  useEffect(() => {
+    let mounted = true
+    setIsLoading(true)
+    apiClient
+      .get<BadgeEmbedCode>(`/badge/${siteId}/embed-code`)
+      .then(({ data }) => {
+        if (mounted) setEmbedCode(data)
+      })
+      .catch(() => {
+        if (mounted) {
+          setEmbedCode({
+            available: false,
+            message: '暫時無法取得 Badge 狀態，請稍後再試。',
+          })
+        }
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [siteId])
+
+  const currentCode = activeTab === 'markdown' ? embedCode?.markdownBadge : embedCode?.imgTag
+
+  const copyCode = async () => {
+    if (!currentCode) return
+    try {
+      await navigator.clipboard.writeText(currentCode)
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = currentCode
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    toast.success('已複製 Badge 程式碼')
+  }
+
+  return (
+    <Card className="bg-white/5 border-white/10">
+      <CardHeader>
+        <CardTitle>取得 Badge</CardTitle>
+        <CardDescription>
+          將 GEO 分數 Badge 放到你的網站、README 或合作頁面。
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : embedCode?.available ? (
+          <>
+            {embedCode.svgUrl && (
+              <div className="rounded-lg border border-white/10 bg-white p-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={embedCode.svgUrl} alt="GEO Score badge preview" width={148} height={20} />
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant={activeTab === 'html' ? 'default' : 'outline'} size="sm" onClick={() => setActiveTab('html')}>
+                HTML
+              </Button>
+              <Button variant={activeTab === 'markdown' ? 'default' : 'outline'} size="sm" onClick={() => setActiveTab('markdown')}>
+                Markdown
+              </Button>
+              <Button variant={activeTab === 'help' ? 'default' : 'outline'} size="sm" onClick={() => setActiveTab('help')}>
+                安裝說明
+              </Button>
+            </div>
+            {activeTab === 'help' ? (
+              <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-muted-foreground space-y-2">
+                <p>WordPress: Appearance / Widgets / Custom HTML.</p>
+                <p>Webflow: add an Embed element and paste the HTML.</p>
+                <p>Squarespace: use a Code Block.</p>
+                <p>General HTML: paste it where the badge should appear.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <pre className="max-h-44 overflow-auto rounded-lg border border-white/10 bg-gray-950 p-4 text-xs text-gray-200">
+                  {currentCode}
+                </pre>
+                <Button variant="outline" size="sm" onClick={copyCode}>
+                  複製程式碼
+                </Button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+            {embedCode?.message || '此網站目前尚無可公開嵌入的 Badge。'}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -608,6 +722,8 @@ export default function SiteDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <BadgeSection siteId={siteId} />
 
       {/* Scan history chart */}
       <Card className="bg-white/5 border-white/10">

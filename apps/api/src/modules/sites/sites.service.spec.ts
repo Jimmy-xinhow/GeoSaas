@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SitesService } from './sites.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
@@ -14,6 +14,9 @@ describe('SitesService', () => {
       findFirst: jest.Mock;
       update: jest.Mock;
       delete: jest.Mock;
+    };
+    user: {
+      findUnique: jest.Mock;
     };
   };
 
@@ -36,6 +39,9 @@ describe('SitesService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
+      user: {
+        findUnique: jest.fn(),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -53,14 +59,24 @@ describe('SitesService', () => {
   describe('create', () => {
     it('should create a site for the given user', async () => {
       const dto = { name: 'Test Site', url: 'https://example.com' };
+      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'FREE', role: 'USER' });
       prisma.site.create.mockResolvedValue({ ...mockSite, ...dto });
 
       const result = await service.create(dto as any, userId);
 
       expect(prisma.site.create).toHaveBeenCalledWith({
-        data: { ...dto, userId },
+        data: { ...dto, url: 'https://example.com/', userId },
       });
       expect(result.name).toBe('Test Site');
+    });
+
+    it('should reject private or local site URLs before creating records', async () => {
+      await expect(
+        service.create({ name: 'Local Site', url: 'http://127.0.0.1:4000' } as any, userId),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(prisma.site.create).not.toHaveBeenCalled();
     });
   });
 
@@ -124,6 +140,16 @@ describe('SitesService', () => {
         data: { name: 'Updated Site' },
       });
       expect(result.name).toBe('Updated Site');
+    });
+
+    it('should reject private or local site URLs when updating', async () => {
+      prisma.site.findFirst.mockResolvedValue(mockSite);
+
+      await expect(
+        service.update(siteId, { url: 'http://10.0.0.1' } as any, userId),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.site.update).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when updating a non-existent site', async () => {

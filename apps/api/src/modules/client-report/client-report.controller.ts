@@ -1,9 +1,9 @@
 import { Controller, Get, Post, Delete, Param, Body, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
-import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ClientReportService } from './client-report.service';
+import { UpsertQuerySetDto } from './dto/upsert-query-set.dto';
 
 @ApiTags('Client Reports')
 @ApiBearerAuth()
@@ -14,10 +14,11 @@ export class ClientReportController {
   @Post('query-sets')
   @ApiOperation({ summary: 'Create/update a client query set' })
   async upsertQuerySet(
-    @Body() body: { siteId: string; name: string; queries: { category: string; question: string }[] },
+    @Body() body: UpsertQuerySetDto,
+    @CurrentUser('userId') userId: string,
     @CurrentUser('role') role: string,
   ) {
-    await this.service.assertSiteAccess(body.siteId, role);
+    await this.service.assertSiteAccess(body.siteId, userId, role);
     return this.service.upsertQuerySet(body.siteId, body.name, body.queries);
   }
 
@@ -25,9 +26,10 @@ export class ClientReportController {
   @ApiOperation({ summary: 'Get query sets for a site' })
   async getQuerySets(
     @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
     @CurrentUser('role') role: string,
   ) {
-    await this.service.assertSiteAccess(siteId, role);
+    await this.service.assertSiteAccess(siteId, userId, role);
     return this.service.getQuerySets(siteId);
   }
 
@@ -51,7 +53,7 @@ export class ClientReportController {
     @CurrentUser('userId') userId: string,
     @CurrentUser('role') role: string,
   ) {
-    await this.service.assertSiteAccess(siteId, role);
+    await this.service.assertSiteAccess(siteId, userId, role);
     return this.service.getQuotaStatus(siteId, userId);
   }
 
@@ -59,9 +61,10 @@ export class ClientReportController {
   @ApiOperation({ summary: 'Get all reports for a site' })
   async getReports(
     @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
     @CurrentUser('role') role: string,
   ) {
-    await this.service.assertSiteAccess(siteId, role);
+    await this.service.assertSiteAccess(siteId, userId, role);
     return this.service.getReports(siteId);
   }
 
@@ -69,9 +72,10 @@ export class ClientReportController {
   @ApiOperation({ summary: 'Get a single report' })
   async getReport(
     @Param('reportId') reportId: string,
+    @CurrentUser('userId') userId: string,
     @CurrentUser('role') role: string,
   ) {
-    await this.service.assertReportAccess(reportId, role);
+    await this.service.assertReportAccess(reportId, userId, role);
     return this.service.getReport(reportId);
   }
 
@@ -79,16 +83,22 @@ export class ClientReportController {
   @ApiOperation({ summary: 'Delete a report' })
   async deleteReport(
     @Param('reportId') reportId: string,
+    @CurrentUser('userId') userId: string,
     @CurrentUser('role') role: string,
   ) {
-    await this.service.assertReportAccess(reportId, role);
+    await this.service.assertReportAccess(reportId, userId, role);
     return this.service.deleteReport(reportId);
   }
 
-  @Public()
   @Get('report/:reportId/html')
   @ApiOperation({ summary: 'Get report as HTML (for PDF download)' })
-  async getReportHtml(@Param('reportId') reportId: string, @Res() res: Response) {
+  async getReportHtml(
+    @Param('reportId') reportId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+    @Res() res: Response,
+  ) {
+    await this.service.assertReportAccess(reportId, userId, role);
     const html = await this.service.getReportHtml(reportId);
     res.set('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
@@ -101,13 +111,13 @@ export class ClientReportController {
   })
   async getGeoComprehensive(
     @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
     @CurrentUser('role') role: string,
   ) {
-    await this.service.assertSiteAccess(siteId, role);
+    await this.service.assertSiteAccess(siteId, userId, role);
     return this.service.getGeoComprehensive(siteId);
   }
 
-  @Public()
   @Get('complete/:siteId/html')
   @ApiOperation({
     summary:
@@ -115,8 +125,11 @@ export class ClientReportController {
   })
   async getCompleteHtml(
     @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
     @Res() res: Response,
   ) {
+    await this.service.assertSiteAccess(siteId, userId, role);
     const html = await this.service.getCompleteReportHtml(siteId);
     res.set('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
@@ -129,10 +142,11 @@ export class ClientReportController {
   })
   async getCompleteCsv(
     @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
     @CurrentUser('role') role: string,
     @Res() res: Response,
   ) {
-    await this.service.assertSiteAccess(siteId, role);
+    await this.service.assertSiteAccess(siteId, userId, role);
     const csv = await this.service.getCompleteReportCsv(siteId);
     res.set('Content-Type', 'text/csv; charset=utf-8');
     res.set('Content-Disposition', `attachment; filename="geovault-report-${siteId}-${new Date().toISOString().slice(0, 10)}.csv"`);

@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Delete, Param, Query, Body, UseGuards, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Patch, Delete, Param, Query, Body, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -10,6 +10,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 @Controller('admin/users')
 export class AdminUsersController {
   constructor(private prisma: PrismaService) {}
+
+  private readonly allowedRoles = new Set(['USER', 'STAFF', 'ADMIN', 'SUPER_ADMIN']);
+  private readonly allowedPlans = new Set(['FREE', 'STARTER', 'PRO']);
 
   @Get()
   @ApiOperation({ summary: 'List all users (admin)' })
@@ -60,6 +63,9 @@ export class AdminUsersController {
     @Param('userId') userId: string,
     @Body('role') role: string,
   ) {
+    if (!this.allowedRoles.has(role)) {
+      throw new BadRequestException('Invalid role');
+    }
     return this.prisma.user.update({
       where: { id: userId },
       data: { role: role as any },
@@ -73,6 +79,9 @@ export class AdminUsersController {
     @Param('userId') userId: string,
     @Body('plan') plan: string,
   ) {
+    if (!this.allowedPlans.has(plan)) {
+      throw new BadRequestException('Invalid plan');
+    }
     return this.prisma.user.update({
       where: { id: userId },
       data: { plan: plan as any },
@@ -99,7 +108,7 @@ export class AdminUsersController {
     @Param('userId') userId: string,
     @Body('password') password: string,
   ) {
-    if (!password || password.length < 8) throw new ForbiddenException('密碼至少需要 8 個字元');
+    if (!password || password.length < 8) throw new BadRequestException('Password must be at least 8 characters');
     const bcrypt = await import('bcrypt');
     const passwordHash = await bcrypt.hash(password, 10);
     await this.prisma.user.update({
@@ -115,9 +124,11 @@ export class AdminUsersController {
     @Param('userId') userId: string,
     @Body('name') name: string,
   ) {
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    if (!trimmed) throw new BadRequestException('Name is required');
     return this.prisma.user.update({
       where: { id: userId },
-      data: { name },
+      data: { name: trimmed },
       select: { id: true, name: true },
     });
   }

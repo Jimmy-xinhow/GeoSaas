@@ -20,7 +20,7 @@ export class MonitorSchedulerService {
    */
   @Cron(CronExpression.EVERY_DAY_AT_3AM, { name: 'monitor-daily-pro' })
   async handleDailyProCheck() {
-    await this.runScheduledChecks(['PRO', 'ENTERPRISE'], 'daily');
+    await this.runScheduledChecks(['PRO'], 'daily');
   }
 
   /**

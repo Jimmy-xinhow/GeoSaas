@@ -40,6 +40,56 @@ export class FixService {
 
   // ── Legacy template-based generators (kept for backward compatibility) ──
 
+  hasAiClient(): boolean {
+    return Boolean(this.openai);
+  }
+
+  assertSmartIndicatorSupported(indicator: string): void {
+    if (!SUPPORTED_SMART_INDICATORS.has(indicator)) {
+      throw new NotFoundException(`Indicator "${indicator}" does not support smart generation`);
+    }
+  }
+
+  private isAdmin(role?: string): boolean {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
+  }
+
+  async assertSmartGenerateAccess(
+    siteId: string,
+    scanResultId: string,
+    userId: string,
+    role?: string,
+  ): Promise<void> {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { userId: true },
+    });
+    if (!site) throw new NotFoundException('Site not found');
+    if (!this.isAdmin(role) && site.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this site');
+    }
+
+    const scanResult = await this.prisma.scanResult.findUnique({
+      where: { id: scanResultId },
+      select: { scan: { select: { siteId: true } } },
+    });
+    if (!scanResult || scanResult.scan.siteId !== siteId) {
+      throw new NotFoundException('Scan result not found');
+    }
+  }
+
+  private async assertScanResultAccess(scanResultId: string, userId?: string, role?: string): Promise<void> {
+    if (!userId) return;
+    const scanResult = await this.prisma.scanResult.findUnique({
+      where: { id: scanResultId },
+      select: { scan: { select: { site: { select: { userId: true } } } } },
+    });
+    if (!scanResult) throw new NotFoundException(`ScanResult with id "${scanResultId}" not found`);
+    if (!this.isAdmin(role) && scanResult.scan.site.userId !== userId) {
+      throw new NotFoundException(`ScanResult with id "${scanResultId}" not found`);
+    }
+  }
+
   generateJsonLd(data: GenerateJsonLdDto) {
     return { code: this.jsonLdGen.generate(data), language: 'html' };
   }
@@ -58,9 +108,10 @@ export class FixService {
 
   // ── AI-powered smart generation ──
 
-  async smartGenerate(siteId: string, indicator: string, scanResultId: string) {
-    if (!SUPPORTED_SMART_INDICATORS.has(indicator)) {
-      throw new NotFoundException(`Indicator "${indicator}" does not support smart generation`);
+  async smartGenerate(siteId: string, indicator: string, scanResultId: string, userId?: string, role?: string) {
+    this.assertSmartIndicatorSupported(indicator);
+    if (userId) {
+      await this.assertSmartGenerateAccess(siteId, scanResultId, userId, role);
     }
 
     // 1. Fetch site info (including profile)
@@ -363,7 +414,9 @@ ${qas.length > 0 ? `1. 知識庫已包含 ${qas.length} 筆真實 Q&A，請直�
 
   // ── Apply fix ──
 
-  async applyFix(scanResultId: string, generatedCode: string) {
+  async applyFix(scanResultId: string, generatedCode: string, userId?: string, role?: string) {
+    await this.assertScanResultAccess(scanResultId, userId, role);
+
     const scanResult = await this.prisma.scanResult.findUnique({
       where: { id: scanResultId },
     });

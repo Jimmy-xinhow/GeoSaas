@@ -19,7 +19,8 @@ async function getCaseData(id: string) {
       next: { revalidate: 3600 },
     });
     if (!res.ok) return null;
-    return await res.json();
+    const payload = await res.json();
+    return payload?.data ?? payload;
   } catch {
     return null;
   }
@@ -31,23 +32,23 @@ export async function generateMetadata({
   params: { id: string };
 }): Promise<Metadata> {
   const caseData = await getCaseData(params.id);
-  if (!caseData) return { title: 'GEO 成功案例' };
+  if (!caseData) return { title: 'GEO 成功案例 | Geovault' };
 
   const platformLabel = PLATFORM_LABELS[caseData.aiPlatform] || caseData.aiPlatform;
   const scoreChange =
     caseData.beforeGeoScore != null && caseData.afterGeoScore != null
-      ? ` | GEO ${caseData.beforeGeoScore} → ${caseData.afterGeoScore}`
+      ? ` | GEO ${caseData.beforeGeoScore} -> ${caseData.afterGeoScore}`
       : '';
 
   return {
     title: `${caseData.title} — ${platformLabel} 引用案例${scoreChange}`,
-    description: `${caseData.title}。AI 搜尋問題：「${caseData.queryUsed}」。透過 GEO 優化成功被 ${platformLabel} 主動推薦。`,
+    description: `${caseData.title} 的 AI 引用成功案例，使用者提問：「${caseData.queryUsed}」。了解品牌如何提升 GEO 能見度並被 ${platformLabel} 引用。`,
     alternates: {
       canonical: `${SITE_URL}/cases/${params.id}`,
     },
     openGraph: {
-      title: caseData.title,
-      description: `被 ${platformLabel} 主動引用的成功案例${scoreChange}`,
+      title: `${caseData.title} — ${platformLabel} 引用案例`,
+      description: `真實品牌被 ${platformLabel} 引用的 GEO 成功案例${scoreChange}`,
       url: `${SITE_URL}/cases/${params.id}`,
       type: 'article',
       images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],

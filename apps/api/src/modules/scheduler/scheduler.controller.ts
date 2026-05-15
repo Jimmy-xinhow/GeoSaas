@@ -1,9 +1,10 @@
-import { Controller, Get, Patch, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Patch, Post, Param, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CronManagerService } from './cron-manager.service';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import cronParser from 'cron-parser';
+import { UpdateScheduledTaskDto } from './update-scheduled-task.dto';
 
 @ApiTags('Admin — Scheduler')
 @ApiBearerAuth()
@@ -28,23 +29,28 @@ export class SchedulerController {
   @ApiOperation({ summary: 'Update a scheduled task (cron, enabled, etc.)' })
   async updateTask(
     @Param('taskKey') taskKey: string,
-    @Body() body: { cronExpr?: string; enabled?: boolean; name?: string; description?: string },
+    @Body() body: UpdateScheduledTaskDto,
   ) {
     const data: any = {};
 
     if (body.cronExpr !== undefined) {
+      const cronExpr = body.cronExpr.trim();
       // Validate cron expression
       try {
-        cronParser.parseExpression(body.cronExpr);
+        cronParser.parseExpression(cronExpr);
       } catch {
-        return { error: 'Invalid cron expression' };
+        throw new BadRequestException('Invalid cron expression');
       }
-      data.cronExpr = body.cronExpr;
-      data.nextRunAt = cronParser.parseExpression(body.cronExpr).next().toDate();
+      data.cronExpr = cronExpr;
+      data.nextRunAt = cronParser.parseExpression(cronExpr).next().toDate();
     }
     if (body.enabled !== undefined) data.enabled = body.enabled;
-    if (body.name !== undefined) data.name = body.name;
-    if (body.description !== undefined) data.description = body.description;
+    if (body.name !== undefined) {
+      const name = body.name.trim();
+      if (!name) throw new BadRequestException('name is required');
+      data.name = name;
+    }
+    if (body.description !== undefined) data.description = body.description.trim();
 
     return this.prisma.scheduledTask.update({
       where: { taskKey },

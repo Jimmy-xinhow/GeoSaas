@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException, ForbiddenException, OnModuleInit
 import { PrismaService } from '../../prisma/prisma.service';
 import { MonitorService } from '../monitor/monitor.service';
 import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
-import pLimit from 'p-limit';
+import pLimit from '@/common/utils/p-limit';
 
 // 4-hour cooldown between runs of the SAME query set. Even with plan-level
 // monthly quota, a client that hits the button accidentally shouldn't burn
@@ -76,23 +76,26 @@ export class ClientReportService implements OnModuleInit {
    * Assert that the current user role can access a site's reports.
    * STAFF can only access isClient=true sites; ADMIN/SUPER_ADMIN can access any.
    */
-  async assertSiteAccess(siteId: string, role: string): Promise<void> {
+  async assertSiteAccess(siteId: string, userId: string, role: string): Promise<void> {
     if (role === 'ADMIN' || role === 'SUPER_ADMIN') return;
 
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
-      select: { isClient: true },
+      select: { isClient: true, userId: true },
     });
     if (!site) throw new NotFoundException('Site not found');
+    if (site.userId === userId) return;
     if (role === 'STAFF' && !site.isClient) {
       throw new ForbiddenException('此網站不在您的權限範圍內');
     }
+    if (role === 'STAFF' && site.isClient) return;
+    throw new ForbiddenException('無權存取此網站報告');
   }
 
   /**
    * Assert that the current user role can access a specific report.
    */
-  async assertReportAccess(reportId: string, role: string): Promise<void> {
+  async assertReportAccess(reportId: string, userId: string, role: string): Promise<void> {
     if (role === 'ADMIN' || role === 'SUPER_ADMIN') return;
 
     const report = await this.prisma.monitorReport.findUnique({
@@ -100,7 +103,7 @@ export class ClientReportService implements OnModuleInit {
       select: { siteId: true },
     });
     if (!report) throw new NotFoundException('Report not found');
-    await this.assertSiteAccess(report.siteId, role);
+    await this.assertSiteAccess(report.siteId, userId, role);
   }
 
   /** Create or update a client query set */
@@ -141,7 +144,7 @@ export class ClientReportService implements OnModuleInit {
     if (!querySet) throw new NotFoundException('Query set not found');
 
     if (role) {
-      await this.assertSiteAccess(querySet.siteId, role);
+      await this.assertSiteAccess(querySet.siteId, userId ?? querySet.site.userId, role);
     }
 
     // Check for recent completed report (within 14 days) — CACHE HIT is free

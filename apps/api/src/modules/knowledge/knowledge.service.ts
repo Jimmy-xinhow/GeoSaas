@@ -64,7 +64,7 @@ export class KnowledgeService {
     }
   }
 
-  private async verifySiteOwnership(siteId: string, userId: string) {
+  async verifySiteOwnership(siteId: string, userId: string) {
     const site = await this.prisma.site.findFirst({
       where: { id: siteId, userId },
     });

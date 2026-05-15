@@ -26,7 +26,7 @@ export class CreateSuccessCaseDto {
   @ApiProperty() @IsString() @MinLength(20) @MaxLength(2000)
   aiResponse: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsUrl()
+  @ApiPropertyOptional() @IsOptional() @IsUrl({ require_protocol: true, protocols: ['http', 'https'] }) @MaxLength(2048)
   screenshotUrl?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Max(100)
@@ -38,12 +38,12 @@ export class CreateSuccessCaseDto {
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) @Max(365)
   improvementDays?: number;
 
-  @ApiPropertyOptional() @IsOptional() @IsString()
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(128)
   siteId?: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsString()
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(80)
   industry?: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsArray() @IsString({ each: true }) @ArrayMaxSize(10)
+  @ApiPropertyOptional() @IsOptional() @IsArray() @IsString({ each: true }) @MaxLength(40, { each: true }) @ArrayMaxSize(10)
   tags?: string[];
 }

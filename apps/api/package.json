@@ -9,7 +9,7 @@
     "start:prod": "node dist/main",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "db:generate": "prisma generate --schema=../../packages/database/prisma/schema.prisma"
+    "db:generate": "echo Prisma client generation is owned by @geovault/database"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
@@ -41,7 +41,6 @@
     "helmet": "^7.2.0",
     "ioredis": "^5.4.0",
     "openai": "^4.73.0",
-    "p-limit": "^7.3.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "prisma": "5.18.0",

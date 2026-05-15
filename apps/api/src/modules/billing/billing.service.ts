@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreditService } from './credit.service';
 import { encryptTradeInfo, generateTradeSha, decryptTradeInfo, NewebPayTradeInfo } from './newebpay.util';
@@ -42,14 +43,79 @@ export class BillingService {
       this.config.get('NEWEBPAY_API_URL') || 'https://ccore.newebpay.com/MPG/mpg_gateway';
   }
 
+  private buildMerchantOrderNo(prefix: 'GEO' | 'CRD', userId: string): string {
+    const userSuffix = userId.replace(/[^a-zA-Z0-9]/g, '').slice(-6).padStart(6, '0');
+    return `${prefix}${Date.now()}${userSuffix}${randomBytes(3).toString('hex').toUpperCase()}`;
+  }
+
+  private async failPaidOrder(merchantOrderNo: string, rawResponse: unknown): Promise<void> {
+    await this.prisma.order.update({
+      where: { merchantOrderNo },
+      data: { status: 'FAILED', rawResponse: rawResponse as any },
+    });
+  }
+
+  private isProduction(): boolean {
+    return this.config.get('NODE_ENV') === 'production';
+  }
+
+  private getNewebpayApiUrl(): string {
+    if (this.isProduction() && !this.config.get('NEWEBPAY_API_URL')) {
+      throw new BadRequestException('NEWEBPAY_API_URL must be configured in production');
+    }
+    return this.newebpayApiUrl;
+  }
+
+  private assertPublicCallbackUrl(value: string, name: string): string {
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      throw new BadRequestException(`${name} must be a valid URL`);
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new BadRequestException(`${name} must use HTTP(S)`);
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const isLocal =
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host === '127.0.0.1' ||
+      host === '::1' ||
+      host === '[::1]';
+
+    if (this.isProduction() && (parsed.protocol !== 'https:' || isLocal)) {
+      throw new BadRequestException(`${name} must be a public HTTPS URL in production`);
+    }
+
+    parsed.username = '';
+    parsed.password = '';
+    parsed.hash = '';
+    return parsed.toString();
+  }
+
+  private getBillingCallbackUrl(envKey: 'NEWEBPAY_RETURN_URL' | 'NEWEBPAY_NOTIFY_URL', path: string): string {
+    const configured = this.config.get<string>(envKey)?.trim();
+    if (configured) return this.assertPublicCallbackUrl(configured, envKey);
+
+    const apiBase = this.config.get<string>('API_PUBLIC_URL') || 'http://localhost:4000';
+    const url = new URL(path, apiBase);
+    return this.assertPublicCallbackUrl(url.toString(), envKey);
+  }
+
   async createOrder(plan: string, userId: string) {
     const price = PLAN_PRICE[plan];
     if (!price) throw new BadRequestException(`無效的方案: ${plan}`);
+    const paymentUrl = this.getNewebpayApiUrl();
+    const returnUrl = this.getBillingCallbackUrl('NEWEBPAY_RETURN_URL', '/api/billing/return');
+    const notifyUrl = this.getBillingCallbackUrl('NEWEBPAY_NOTIFY_URL', '/api/billing/notify');
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    const merchantOrderNo = `GEO${timestamp}${userId.slice(-6)}`;
+    const merchantOrderNo = this.buildMerchantOrderNo('GEO', userId);
 
     await this.prisma.order.create({
       data: { merchantOrderNo, userId, plan, amount: price, status: 'PENDING' },
@@ -64,8 +130,8 @@ export class BillingService {
       Amt: price,
       ItemDesc: PLAN_DESC[plan] || plan,
       Email: user?.email,
-      ReturnURL: `${this.config.get('API_PUBLIC_URL') || 'http://localhost:4000'}/api/billing/return`,
-      NotifyURL: `${this.config.get('API_PUBLIC_URL') || 'http://localhost:4000'}/api/billing/notify`,
+      ReturnURL: returnUrl,
+      NotifyURL: notifyUrl,
       ClientBackURL: `${this.config.get('FRONTEND_URL')}/settings`,
       CREDIT: 1,
     };
@@ -74,7 +140,7 @@ export class BillingService {
     const tradeSha = generateTradeSha(aesEncrypted, this.hashKey, this.hashIV);
 
     return {
-      paymentUrl: this.newebpayApiUrl,
+      paymentUrl,
       MerchantID: this.merchantId,
       TradeInfo: aesEncrypted,
       TradeSha: tradeSha,
@@ -85,11 +151,14 @@ export class BillingService {
   async createCreditOrder(points: number, userId: string) {
     const price = CREDIT_PACKAGES[points];
     if (!price) throw new BadRequestException(`無效的點數包: ${points}。可選: 50, 100, 200`);
+    const paymentUrl = this.getNewebpayApiUrl();
+    const returnUrl = this.getBillingCallbackUrl('NEWEBPAY_RETURN_URL', '/api/billing/return');
+    const notifyUrl = this.getBillingCallbackUrl('NEWEBPAY_NOTIFY_URL', '/api/billing/notify');
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    const merchantOrderNo = `CRD${timestamp}${userId.slice(-6)}`;
+    const merchantOrderNo = this.buildMerchantOrderNo('CRD', userId);
 
     await this.prisma.order.create({
       data: { merchantOrderNo, userId, plan: `CREDITS_${points}`, amount: price, status: 'PENDING' },
@@ -104,8 +173,8 @@ export class BillingService {
       Amt: price,
       ItemDesc: `Geovault 點數充值 ${points} 點`,
       Email: user?.email,
-      ReturnURL: `${this.config.get('API_PUBLIC_URL') || 'https://api.geovault.app'}/api/billing/return`,
-      NotifyURL: `${this.config.get('API_PUBLIC_URL') || 'https://api.geovault.app'}/api/billing/notify`,
+      ReturnURL: returnUrl,
+      NotifyURL: notifyUrl,
       ClientBackURL: `${this.config.get('FRONTEND_URL')}/settings`,
       CREDIT: 1,
     };
@@ -114,7 +183,7 @@ export class BillingService {
     const tradeSha = generateTradeSha(aesEncrypted, this.hashKey, this.hashIV);
 
     return {
-      paymentUrl: this.newebpayApiUrl,
+      paymentUrl,
       MerchantID: this.merchantId,
       TradeInfo: aesEncrypted,
       TradeSha: tradeSha,
@@ -140,6 +209,28 @@ export class BillingService {
     if (order.status === 'PAID') return { message: 'OK' };
 
     if (decrypted.Status === 'SUCCESS') {
+      const paidAmount = Number(result.Amt);
+      if (!Number.isFinite(paidAmount) || paidAmount !== order.amount) {
+        this.logger.warn(
+          `Payment amount mismatch for ${merchantOrderNo}: expected ${order.amount}, got ${result.Amt}`,
+        );
+        await this.failPaidOrder(merchantOrderNo, decrypted);
+        throw new BadRequestException('Payment amount mismatch');
+      }
+
+      if (order.plan.startsWith('CREDITS_')) {
+        const points = Number(order.plan.replace('CREDITS_', ''));
+        if (!Number.isInteger(points) || CREDIT_PACKAGES[points] !== order.amount) {
+          this.logger.warn(`Invalid credit package order ${merchantOrderNo}: ${order.plan}/${order.amount}`);
+          await this.failPaidOrder(merchantOrderNo, decrypted);
+          throw new BadRequestException('Invalid credit package order');
+        }
+      } else if (PLAN_PRICE[order.plan] !== order.amount) {
+        this.logger.warn(`Invalid plan order ${merchantOrderNo}: ${order.plan}/${order.amount}`);
+        await this.failPaidOrder(merchantOrderNo, decrypted);
+        throw new BadRequestException('Invalid plan order');
+      }
+
       await this.prisma.order.update({
         where: { merchantOrderNo },
         data: {

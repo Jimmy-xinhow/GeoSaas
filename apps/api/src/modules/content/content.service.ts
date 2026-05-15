@@ -22,6 +22,10 @@ export class ContentService {
     return content;
   }
 
+  assertAiConfigured() {
+    this.aiService.assertConfigured();
+  }
+
   async generate(dto: GenerateContentDto, userId: string) {
     // Check plan limit: contentPerMonth
     const user = await this.prisma.user.findUnique({ where: { id: userId } });

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 interface BadgeDef {
@@ -36,6 +36,10 @@ export class BadgeService {
   private readonly logger = new Logger(BadgeService.name);
 
   constructor(private readonly prisma: PrismaService) {}
+
+  private isAdmin(role?: string): boolean {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
+  }
 
   /** Evaluate and award badges for a site after scan completion */
   async evaluateBadges(siteId: string): Promise<string[]> {
@@ -108,7 +112,7 @@ export class BadgeService {
   /** Get badges for a site */
   async getSiteBadges(siteId: string) {
     return this.prisma.siteBadge.findMany({
-      where: { siteId },
+      where: { siteId, site: { isPublic: true } },
       orderBy: { awardedAt: 'asc' },
       select: { badge: true, label: true, awardedAt: true },
     });
@@ -158,13 +162,31 @@ export class BadgeService {
   }
 
   /** Get embed code snippets for a site badge */
-  async getEmbedCode(siteId: string) {
-    const site = await this.prisma.site.findFirst({
-      where: { id: siteId, isPublic: true },
-      select: { bestScore: true },
+  async getEmbedCode(siteId: string, userId?: string, role?: string) {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { bestScore: true, isPublic: true, userId: true },
     });
 
-    if (!site) return null;
+    if (!site) {
+      return {
+        available: false,
+        reason: 'site_not_found',
+        message: '找不到此網站。',
+      };
+    }
+
+    if (!this.isAdmin(role) && site.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this site');
+    }
+
+    if (!site.isPublic) {
+      return {
+        available: false,
+        reason: 'site_not_public',
+        message: '此網站尚未公開，因此暫時無法產生公開 Badge。',
+      };
+    }
 
     const apiUrl = process.env.API_PUBLIC_URL || 'https://api.geovault.app';
     const webUrl = process.env.FRONTEND_URL || 'https://www.geovault.app';
@@ -173,6 +195,6 @@ export class BadgeService {
     const imgTag = `<a href="${webUrl}/directory/${siteId}" target="_blank" rel="noopener">\n  <img src="${apiUrl}/api/badge/${siteId}.svg" alt="GEO Score: ${score} | Verified by Geovault" width="148" height="20">\n</a>`;
     const markdownBadge = `[![GEO Score: ${score}](${apiUrl}/api/badge/${siteId}.svg)](${webUrl}/directory/${siteId})`;
 
-    return { imgTag, markdownBadge, svgUrl: `${apiUrl}/api/badge/${siteId}.svg` };
+    return { available: true, imgTag, markdownBadge, svgUrl: `${apiUrl}/api/badge/${siteId}.svg` };
   }
 }

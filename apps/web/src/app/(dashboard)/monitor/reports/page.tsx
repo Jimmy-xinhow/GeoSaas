@@ -22,6 +22,14 @@ const PLATFORM_LABELS: Record<string, string> = {
 };
 const PLATFORMS = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'];
 
+async function openHtmlExport(path: string) {
+  const res = await apiClient.get(path, { responseType: 'blob' });
+  const blob = new Blob([res.data], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 function formatEta(seconds: number): string {
   if (seconds <= 0) return '即將完成';
   const m = Math.floor(seconds / 60);
@@ -147,10 +155,13 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
       .sort((a, b) => b.count - a.count);
   }, [results]);
 
-  const handleDownloadPdf = () => {
-    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/client-reports/report/${reportId}/html`;
-    window.open(url, '_blank');
-    toast.success('已開啟報告，使用 Ctrl+P 儲存為 PDF');
+  const handleDownloadPdf = async () => {
+    try {
+      await openHtmlExport(`/client-reports/report/${reportId}/html`);
+      toast.success('已開啟報告，使用 Ctrl+P 儲存為 PDF');
+    } catch {
+      toast.error('下載失敗');
+    }
   };
 
   return (
@@ -582,9 +593,13 @@ export default function ClientReportsPage() {
     }
   };
 
-  const handleDownloadPdf = (reportId: string) => {
-    window.open(`${process.env.NEXT_PUBLIC_API_URL}/api/client-reports/report/${reportId}/html`, '_blank');
-    toast.success('已開啟報告，使用 Ctrl+P 儲存為 PDF');
+  const handleDownloadPdf = async (reportId: string) => {
+    try {
+      await openHtmlExport(`/client-reports/report/${reportId}/html`);
+      toast.success('已開啟報告，使用 Ctrl+P 儲存為 PDF');
+    } catch {
+      toast.error('下載失敗');
+    }
   };
 
   return (
@@ -880,10 +895,13 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
   const maxTrend = Math.max(100, ...scanTrend.map((s) => s.score));
   const maxBucket = Math.max(1, ...crawler.byWeek.map((w) => w.count));
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL;
-  const handleExportHtml = () => {
-    window.open(`${apiBase}/api/client-reports/complete/${siteId}/html`, '_blank');
-    toast.success('已開啟完整報告，使用 Ctrl+P 存為 PDF');
+  const handleExportHtml = async () => {
+    try {
+      await openHtmlExport(`/client-reports/complete/${siteId}/html`);
+      toast.success('已開啟完整報告，使用 Ctrl+P 存為 PDF');
+    } catch {
+      toast.error('下載失敗');
+    }
   };
   const handleExportCsv = () => {
     // Use apiClient so auth header goes through

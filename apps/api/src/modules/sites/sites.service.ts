@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
 import { IndexNowService } from '../indexnow/indexnow.service';
@@ -17,6 +23,7 @@ export class SitesService {
   ) {}
 
   async create(dto: CreateSiteDto, userId: string) {
+    const url = this.normalizePublicSiteUrl(dto.url);
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     const check = await this.planUsage.checkAndIncrement(userId, 'maxSites', user.plan, user.role);
@@ -27,7 +34,7 @@ export class SitesService {
     }
 
     const site = await this.prisma.site.create({
-      data: { ...dto, userId },
+      data: { ...dto, url, userId },
     });
 
     // If the new site is public, AI crawlers should learn about it fast:
@@ -98,7 +105,11 @@ export class SitesService {
 
   async update(id: string, dto: UpdateSiteDto, userId: string, userRole?: string) {
     const before = await this.findOne(id, userId, userRole);
-    const after = await this.prisma.site.update({ where: { id }, data: dto });
+    const data = {
+      ...dto,
+      ...(dto.url ? { url: this.normalizePublicSiteUrl(dto.url) } : {}),
+    };
+    const after = await this.prisma.site.update({ where: { id }, data });
 
     // Ping when a site transitions to public or when a public site's
     // identity-shaping fields (name/url/industry/description) change —
@@ -114,6 +125,61 @@ export class SitesService {
     }
 
     return after;
+  }
+
+  private normalizePublicSiteUrl(url: string): string {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new BadRequestException('Invalid URL');
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new BadRequestException('Only HTTP(S) URLs can be used for sites');
+    }
+
+    parsed.username = '';
+    parsed.password = '';
+    parsed.hash = '';
+
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      this.isPrivateOrReservedIp(hostname)
+    ) {
+      throw new BadRequestException('Private or local URLs cannot be used for sites');
+    }
+
+    return parsed.toString();
+  }
+
+  private isPrivateOrReservedIp(hostname: string): boolean {
+    const normalized = hostname.replace(/^\[|\]$/g, '');
+    const ipv4 = normalized.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4) {
+      const parts = ipv4.slice(1).map(Number);
+      if (parts.some((part) => part < 0 || part > 255)) return true;
+      const [a, b] = parts;
+      return (
+        a === 0 ||
+        a === 10 ||
+        a === 127 ||
+        (a === 169 && b === 254) ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168) ||
+        a >= 224
+      );
+    }
+
+    return (
+      normalized === '::1' ||
+      normalized === '0:0:0:0:0:0:0:1' ||
+      normalized.startsWith('fc') ||
+      normalized.startsWith('fd') ||
+      normalized.startsWith('fe80:')
+    );
   }
 
   async remove(id: string, userId: string, userRole?: string) {

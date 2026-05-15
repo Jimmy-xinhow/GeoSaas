@@ -1,15 +1,32 @@
-import { Controller, Get, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { DirectoryService } from './directory.service';
 import { QueryDirectoryDto } from './dto/query-directory.dto';
 import { TogglePublicDto } from './dto/toggle-public.dto';
+import { VerifySiteDto } from './dto/verify-site.dto';
 
 @ApiTags('Directory')
 @Controller()
 export class DirectoryController {
   constructor(private readonly service: DirectoryService) {}
+
+  private parseLimit(value: string | undefined, fallback: number, max: number): number {
+    if (!value) return fallback;
+    if (!/^\d+$/.test(value)) {
+      throw new BadRequestException('limit must be a positive integer');
+    }
+    const parsed = Number(value);
+    if (parsed < 1) {
+      throw new BadRequestException('limit must be at least 1');
+    }
+    if (parsed > max) {
+      throw new BadRequestException(`limit must be at most ${max}`);
+    }
+    return parsed;
+  }
 
   @Public()
   @Get('directory/sitemap-data')
@@ -106,7 +123,7 @@ export class DirectoryController {
   @Get('directory/crawler-feed')
   @ApiOperation({ summary: 'Get real-time AI crawler activity feed for public sites' })
   crawlerFeed(@Query('limit') limit?: string) {
-    return this.service.getCrawlerFeed(limit ? parseInt(limit, 10) : 20);
+    return this.service.getCrawlerFeed(this.parseLimit(limit, 20, 100));
   }
 
   @Public()
@@ -123,7 +140,7 @@ export class DirectoryController {
     @Param('siteId') siteId: string,
     @Query('limit') limit?: string,
   ) {
-    return this.service.getSiteFeedEvents(siteId, limit ? parseInt(limit, 10) : 50);
+    return this.service.getSiteFeedEvents(siteId, this.parseLimit(limit, 50, 100));
   }
 
   @ApiBearerAuth()
@@ -132,8 +149,10 @@ export class DirectoryController {
   togglePublic(
     @Param('siteId') siteId: string,
     @Body() dto: TogglePublicDto,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
   ) {
-    return this.service.togglePublic(siteId, dto);
+    return this.service.togglePublic(siteId, dto, userId, role);
   }
 
   @ApiBearerAuth()
@@ -143,7 +162,7 @@ export class DirectoryController {
   @ApiOperation({ summary: 'Toggle verified status (admin)' })
   async verify(
     @Param('siteId') siteId: string,
-    @Body() body: { isVerified: boolean },
+    @Body() body: VerifySiteDto,
   ) {
     return this.service.setVerified(siteId, body.isVerified);
   }

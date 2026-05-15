@@ -1,9 +1,12 @@
 const createNextIntlPlugin = require('next-intl/plugin');
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
+const isWindows = process.platform === 'win32';
 
 /** @type {import('next').NextConfig} */
 module.exports = withNextIntl({
-  output: 'standalone',
+  // Next standalone output creates symlinks while copying traced files. That is
+  // fine on Railway/Linux, but many Windows dev machines lack symlink rights.
+  ...(isWindows ? {} : { output: 'standalone' }),
   transpilePackages: ['@geovault/shared'],
   images: {
     remotePatterns: [

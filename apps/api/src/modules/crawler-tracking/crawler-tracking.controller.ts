@@ -2,12 +2,14 @@ import { Controller, Get, Post, Param, Body, Query, UseGuards, Req, Res } from '
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles, RolesGuard } from '../../common/guards/roles.guard';
 import { CrawlerTrackingService } from './crawler-tracking.service';
 import { PerplexityPingService } from './perplexity-ping.service';
 import { CrawlerBoostService } from './crawler-boost.service';
 import { ReportVisitDto } from './dto/report-visit.dto';
 import { QueryVisitsDto } from './dto/query-visits.dto';
+import { ReportPlatformVisitDto } from './dto/report-platform-visit.dto';
 
 // Standard 43-byte 1×1 transparent GIF89a payload — same bytes used by every
 // pixel-tracking system. Pre-allocated as a module constant so we don't
@@ -97,50 +99,74 @@ export class CrawlerTrackingController {
   @Public()
   @Post('crawler/report-platform')
   @ApiOperation({ summary: 'Report AI crawler visit to Geovault platform (from middleware)' })
-  reportPlatform(@Body() body: { botName: string; url: string; userAgent: string; statusCode: number; source?: string }) {
+  reportPlatform(@Body() body: ReportPlatformVisitDto) {
     return this.service.reportPlatformVisit(body);
   }
 
   @ApiBearerAuth()
   @Get('sites/:siteId/crawler')
   @ApiOperation({ summary: 'Get crawler dashboard data' })
-  dashboard(@Param('siteId') siteId: string) {
-    return this.service.getDashboard(siteId);
+  dashboard(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getDashboard(siteId, userId, role);
   }
 
   @ApiBearerAuth()
   @Get('sites/:siteId/crawler/stats')
   @ApiOperation({ summary: 'Get 30-day daily crawler stats' })
-  stats(@Param('siteId') siteId: string) {
-    return this.service.getStats(siteId);
+  stats(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getStats(siteId, userId, role);
   }
 
   @ApiBearerAuth()
   @Get('sites/:siteId/crawler/robots')
   @ApiOperation({ summary: 'Get robots.txt analysis' })
-  robots(@Param('siteId') siteId: string) {
-    return this.service.getRobots(siteId);
+  robots(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getRobots(siteId, userId, role);
   }
 
   @ApiBearerAuth()
   @Get('crawler/snippet/:siteId')
   @ApiOperation({ summary: 'Get JS tracking snippet for a site' })
-  snippet(@Param('siteId') siteId: string) {
-    return this.service.getSnippet(siteId);
+  snippet(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getSnippet(siteId, userId, role);
   }
 
   @ApiBearerAuth()
   @Post('sites/:siteId/crawler/verify')
   @ApiOperation({ summary: 'Verify tracking snippet installation on user site' })
-  verifyInstallation(@Param('siteId') siteId: string) {
-    return this.service.verifyInstallation(siteId);
+  verifyInstallation(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.verifyInstallation(siteId, userId, role);
   }
 
   @ApiBearerAuth()
   @Post('sites/:siteId/crawler/token/regenerate')
   @ApiOperation({ summary: 'Regenerate crawler tracking token' })
-  regenerateToken(@Param('siteId') siteId: string) {
-    return this.service.regenerateToken(siteId);
+  regenerateToken(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.regenerateToken(siteId, userId, role);
   }
 
   @ApiBearerAuth()
