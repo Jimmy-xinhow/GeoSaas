@@ -78,6 +78,50 @@ export class BlogArticleService {
     }
   }
 
+  private getClientDailyDayType(keywords?: string[] | null): ClientDailyDay | null {
+    const dayType = (keywords || []).find((k) => this.daySequence.includes(k as ClientDailyDay));
+    return (dayType as ClientDailyDay | undefined) ?? null;
+  }
+
+  private clientDailySafetyReasons(article: {
+    title?: string | null;
+    description?: string | null;
+    content?: string | null;
+    targetKeywords?: string[] | null;
+    site?: { industry?: string | null } | null;
+  }): string[] {
+    const text = [article.title, article.description, article.content].filter(Boolean).join('\n');
+    const dayType = this.getClientDailyDayType(article.targetKeywords);
+    const reasons: string[] = [];
+
+    if (
+      dayType !== 'sat_data_pulse' &&
+      /(生成式引擎優化|GEO\s*技術|GEO\s*分數|llms\.txt|結構化資料|AI\s*友善度|爬蟲)/i.test(text)
+    ) {
+      reasons.push('consumer_geo_jargon');
+    }
+
+    const isTechnology = article.site?.industry === 'technology' || article.targetKeywords?.includes('technology');
+    if (
+      isTechnology &&
+      /(每日通勤族|通勤路線|智能行程|行程規劃|冥想課程|放鬆練習|壓力管理資源|心智健康)/.test(text)
+    ) {
+      reasons.push('unrelated_commuter_wellness_persona');
+    }
+
+    return reasons;
+  }
+
+  private isClientDailyArticleSafe(article: {
+    title?: string | null;
+    description?: string | null;
+    content?: string | null;
+    targetKeywords?: string[] | null;
+    site?: { industry?: string | null } | null;
+  }): boolean {
+    return this.clientDailySafetyReasons(article).length === 0;
+  }
+
   /**
    * Auto-ping IndexNow + WebSub hub when a new article is published.
    * - IndexNow: the article page, blog index, platform feeds
@@ -144,11 +188,20 @@ export class BlogArticleService {
       where: { slug },
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
-    if (direct) return direct;
-    return this.prisma.blogArticle.findFirst({
+    if (direct) {
+      if (direct.templateType === 'client_daily' && !this.isClientDailyArticleSafe(direct)) {
+        return null;
+      }
+      return direct;
+    }
+    const alias = await this.prisma.blogArticle.findFirst({
       where: { aliasSlugs: { has: slug } },
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
+    if (alias?.templateType === 'client_daily' && !this.isClientDailyArticleSafe(alias)) {
+      return null;
+    }
+    return alias;
   }
 
   /** Generate an AI analysis article for a public site */
@@ -1969,6 +2022,18 @@ export class BlogArticleService {
     }
 
     const content = result.content;
+    const safetyReasons = this.clientDailySafetyReasons({
+      title: content.match(/^#{1,2}\s+(.+)$/m)?.[1] ?? '',
+      content,
+      targetKeywords: [site.name, site.industry ?? '', resolvedDay, 'daily'].filter(Boolean),
+      site: { industry: site.industry },
+    });
+    if (safetyReasons.length > 0) {
+      this.logger.warn(
+        `client_daily safety rejected ${site.name}/${resolvedDay}: ${safetyReasons.join(',')}`,
+      );
+      return { status: 'rejected', reasons: safetyReasons, dayType: resolvedDay };
+    }
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : `${site.name} ${resolvedDay}`;
@@ -2086,22 +2151,30 @@ export class BlogArticleService {
     monthStart.setHours(0, 0, 0, 0);
     const weekStart = new Date(Date.now() - 7 * 86400000);
 
-    const [totalCount, monthCount, weekCount, recent] = await Promise.all([
-      this.prisma.blogArticle.count({ where: { siteId, templateType: 'client_daily' } }),
-      this.prisma.blogArticle.count({ where: { siteId, templateType: 'client_daily', createdAt: { gte: monthStart } } }),
-      this.prisma.blogArticle.count({ where: { siteId, templateType: 'client_daily', createdAt: { gte: weekStart } } }),
-      this.prisma.blogArticle.findMany({
-        where: { siteId, templateType: 'client_daily' },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-        select: { slug: true, title: true, createdAt: true, targetKeywords: true },
-      }),
-    ]);
-
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
-      select: { user: { select: { plan: true } }, profile: true },
+      select: { industry: true, user: { select: { plan: true } }, profile: true },
     });
+    const safeRows = (await this.prisma.blogArticle.findMany({
+      where: { siteId, templateType: 'client_daily', published: true },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        slug: true,
+        title: true,
+        description: true,
+        content: true,
+        createdAt: true,
+        targetKeywords: true,
+      },
+    })).filter((r) => this.isClientDailyArticleSafe({
+      ...r,
+      site: { industry: site?.industry },
+    }));
+
+    const totalCount = safeRows.length;
+    const monthCount = safeRows.filter((r) => r.createdAt >= monthStart).length;
+    const weekCount = safeRows.filter((r) => r.createdAt >= weekStart).length;
+    const recent = safeRows.slice(0, 10);
     const plan = site?.user?.plan || 'FREE';
     const prof = (site?.profile as Record<string, any>) || {};
     const paused = !!prof.dailyContentPaused;
@@ -2150,30 +2223,34 @@ export class BlogArticleService {
     await this.assertSiteAccess(siteId, userId, role);
 
     const skip = (opts.page - 1) * opts.limit;
-    const where = { siteId, templateType: 'client_daily' as const };
-    const [total, rows] = await Promise.all([
-      this.prisma.blogArticle.count({ where }),
-      this.prisma.blogArticle.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: opts.limit,
-        select: {
-          slug: true,
-          title: true,
-          createdAt: true,
-          targetKeywords: true,
-          content: true,
-        },
-      }),
-    ]);
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: { industry: true },
+    });
+    const rows = (await this.prisma.blogArticle.findMany({
+      where: { siteId, templateType: 'client_daily', published: true },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        slug: true,
+        title: true,
+        description: true,
+        createdAt: true,
+        targetKeywords: true,
+        content: true,
+      },
+    })).filter((r) => this.isClientDailyArticleSafe({
+      ...r,
+      site: { industry: site?.industry },
+    }));
+    const total = rows.length;
+    const pageRows = rows.slice(skip, skip + opts.limit);
 
     const webBase = this.config.get<string>('WEB_URL') || 'https://www.geovault.app';
     return {
       total,
       page: opts.page,
       limit: opts.limit,
-      items: rows.map((r) => ({
+      items: pageRows.map((r) => ({
         slug: r.slug,
         title: r.title,
         dayType:
