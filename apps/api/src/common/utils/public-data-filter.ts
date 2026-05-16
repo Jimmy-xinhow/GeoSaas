@@ -45,6 +45,42 @@ function getProfileDescription(profile: unknown): string {
   return typeof value === 'string' ? value.trim() : String(value || '').trim();
 }
 
+function countMatches(text: string, patterns: RegExp[]): number {
+  return patterns.reduce((count, pattern) => count + (pattern.test(text) ? 1 : 0), 0);
+}
+
+export function isLikelyEditorialDirectoryName(name?: string | null): boolean {
+  const text = (name || '').trim();
+  if (!text) return false;
+
+  const startsLikeListArticle =
+    /^(?:【)?(?:20\d{2}|TOP\s?\d+|\d+\s*(?:間|家|大|個|位)|[一二三四五六七八九十]+大)/i.test(text);
+  const hasQuestionTitle = /[?？]/.test(text) && text.length >= 18;
+  const hasExplicitEditorialPhrase =
+    /(懶人包|總整理|一次看|盤點|全攻略|攻略集|推薦清單|排名清單|完整.*指南|這一篇|必看|費用.*評價|價錢.*服務)/i.test(text);
+  const hasEditorialBrackets = /[【】《》]/.test(text) && /(20\d{2}|TOP|推薦|攻略|清單|評價)/i.test(text);
+  const softSignals = countMatches(text, [
+    /推薦/i,
+    /精選/i,
+    /人氣/i,
+    /最新/i,
+    /比較/i,
+    /挑選/i,
+    /費用/i,
+    /評價/i,
+    /清單/i,
+    /完整/i,
+  ]);
+
+  return (
+    startsLikeListArticle ||
+    hasQuestionTitle ||
+    hasExplicitEditorialPhrase ||
+    hasEditorialBrackets ||
+    (text.length >= 28 && softSignals >= 2)
+  );
+}
+
 export function publicSiteWhere(where: Record<string, unknown> = {}) {
   return {
     AND: [
@@ -117,6 +153,7 @@ export function getDirectorySiteSeoIssues(site: DirectorySeoSite): string[] {
   if (!site.latestScanCompletedAt) issues.push('missing-completed-scan');
   if (description.length < 40) issues.push('thin-description');
   if (supportCount < 1) issues.push('missing-supporting-content');
+  if (isLikelyEditorialDirectoryName(site.name)) issues.push('editorial-title-name');
 
   return issues;
 }
