@@ -46,11 +46,11 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen max-w-full overflow-x-hidden">
       <Sidebar />
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 min-w-0 flex flex-col">
         <Header />
-        <div className="flex-1 overflow-auto p-6 bg-gray-900 text-white">
+        <div className="flex-1 min-w-0 overflow-auto overflow-x-hidden p-4 sm:p-6 bg-gray-900 text-white">
           <ErrorBoundary>{children}</ErrorBoundary>
         </div>
       </main>

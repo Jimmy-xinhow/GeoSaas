@@ -61,7 +61,7 @@ export default function LoginPage() {
   }
 
   return (
-    <Card className="w-full max-w-md shadow-lg">
+    <Card className="w-full max-w-md max-w-full shadow-lg overflow-hidden">
       <CardHeader className="text-center space-y-2">
         <div className="mb-2 flex justify-center"><GeovaultLogoCompact className="h-9 w-auto" /></div>
         <CardTitle className="text-2xl">歡迎回來</CardTitle>

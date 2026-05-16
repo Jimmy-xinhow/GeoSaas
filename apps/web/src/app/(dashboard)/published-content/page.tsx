@@ -64,9 +64,9 @@ export default function PublishedContentPage() {
   const isFreeOrUnentitled = stats && stats.activeDaysPerWeek === 0 && stats.totalCount === 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="space-y-6 w-full max-w-full overflow-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <FileText className="h-6 w-6" />
             Geovault 為您發布的內容
@@ -93,13 +93,13 @@ export default function PublishedContentPage() {
       {/* Site selector */}
       <Card>
         <CardContent className="p-5">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <span className="text-sm font-medium shrink-0">選擇網站:</span>
             <Select
               value={selectedSiteId}
               onValueChange={(v) => { setSelectedSiteId(v); setPage(1); }}
             >
-              <SelectTrigger className="w-[320px]">
+              <SelectTrigger className="w-full sm:w-[320px]">
                 <SelectValue placeholder="選擇要查看的網站" />
               </SelectTrigger>
               <SelectContent className="max-h-[400px] bg-gray-900 border-white/10">
@@ -191,7 +191,7 @@ export default function PublishedContentPage() {
           {!isFreeOrUnentitled && (
             <Card>
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <CardTitle className="text-base">
                     已發布文章
                     {list && list.total > 0 && (
@@ -265,7 +265,7 @@ export default function PublishedContentPage() {
 
                     {/* Pagination */}
                     {totalPages > 1 && (
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4 pt-4 border-t border-white/10">
                         <span className="text-xs text-gray-400">
                           第 {list.page} / {totalPages} 頁
                         </span>

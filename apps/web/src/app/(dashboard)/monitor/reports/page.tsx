@@ -603,9 +603,9 @@ export default function ClientReportsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="space-y-6 w-full max-w-full overflow-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <FileText className="h-6 w-6" />
             驗收報告
@@ -630,10 +630,10 @@ export default function ClientReportsPage() {
       {/* Site Selector: Search + Dropdown */}
       <Card>
         <CardContent className="p-5 space-y-3">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <span className="text-sm font-medium shrink-0">選擇客戶：</span>
             <Select value={selectedSiteId} onValueChange={(v) => { setSelectedSiteId(v); setActiveReportId(''); setSiteSearch(''); }}>
-              <SelectTrigger className="w-[280px]">
+              <SelectTrigger className="w-full sm:w-[280px]">
                 <SelectValue placeholder={`下拉選擇 (共 ${(sites as any[])?.length ?? 0} 個)`} />
               </SelectTrigger>
               {/* Solid background so long client lists don't read through the
@@ -661,7 +661,7 @@ export default function ClientReportsPage() {
               </SelectContent>
             </Select>
             <span className="text-sm text-muted-foreground">或</span>
-            <div className="relative flex-1">
+            <div className="relative w-full min-w-0 sm:flex-1">
               <input
                 type="text"
                 placeholder="搜尋客戶名稱或網址..."
@@ -709,7 +709,7 @@ export default function ClientReportsPage() {
             </div>
           )}
           {selectedSiteId && !siteSearch && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-muted-foreground">已選：</span>
               <Badge variant="secondary" className="text-sm">
                 {(sites as any[])?.find((s: any) => s.id === selectedSiteId)?.name}
@@ -734,7 +734,7 @@ export default function ClientReportsPage() {
             {/* Quota banner — shows monthly used / limit. Hidden for staff/admin
                 who bypass quota anyway (bypassesQuota=true from API). */}
             {quota && !quota.bypassesQuota && (
-              <div className={`p-3 rounded-lg border text-sm flex items-center justify-between ${
+              <div className={`p-3 rounded-lg border text-sm flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${
                 quota.monthly.remaining === 0
                   ? 'bg-red-500/10 border-red-500/30 text-red-300'
                   : quota.monthly.remaining === 1

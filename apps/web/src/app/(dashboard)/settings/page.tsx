@@ -100,7 +100,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 w-full max-w-2xl overflow-hidden">
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-white">設定</h1>
@@ -191,8 +191,8 @@ export default function SettingsPage() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between p-4 rounded-lg bg-blue-500/20 border border-blue-500/30">
-                <div>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 rounded-lg bg-blue-500/20 border border-blue-500/30">
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-lg font-semibold text-blue-300">
                       {planInfo.label}
@@ -219,7 +219,7 @@ export default function SettingsPage() {
                 )}
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-4">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-3 rounded-lg border border-white/10">
                   <p className="text-sm text-muted-foreground">本月掃描</p>
                   <p className="text-2xl font-bold">
@@ -251,7 +251,7 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Balance */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 text-center">
               <p className="text-3xl font-bold text-yellow-400">{creditData?.credits ?? 0}</p>
               <p className="text-xs text-yellow-400/70 mt-1">可用點數</p>
@@ -271,7 +271,7 @@ export default function SettingsPage() {
           {/* Top-up buttons */}
           <div>
             <p className="text-sm text-muted-foreground mb-2">充值點數（1 點 = NT$5，購買後 12 個月內有效）</p>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               {[
                 { points: 50, price: 250 },
                 { points: 100, price: 500 },

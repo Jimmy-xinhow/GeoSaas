@@ -41,7 +41,7 @@ export default function AuthLayout({
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex max-w-full overflow-x-hidden">
       {/* Left side - branding */}
       <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 items-center justify-center relative overflow-hidden">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
@@ -58,7 +58,7 @@ export default function AuthLayout({
       </div>
 
       {/* Right side - form */}
-      <div className="flex-1 flex items-center justify-center bg-gray-900 p-6">
+      <div className="flex-1 min-w-0 flex items-center justify-center bg-gray-900 px-4 py-6 sm:p-6 overflow-x-hidden">
         {children}
       </div>
     </div>

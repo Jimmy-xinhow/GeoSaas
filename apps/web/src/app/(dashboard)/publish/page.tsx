@@ -129,7 +129,7 @@ export default function PublishPage() {
   const publishedContents = contents?.filter((c: any) => c.status === 'PUBLISHED' || c.status === 'DRAFT') || []
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-hidden">
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-white">多平台佈局</h1>
@@ -173,7 +173,7 @@ export default function PublishPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">選擇平台</label>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               {PLATFORMS.map((p) => (
                 <button
                   key={p.key}
@@ -219,8 +219,8 @@ export default function PublishPage() {
               )}
             >
               <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="flex min-w-0 items-center gap-3">
                     <div
                       className={cn(
                         'h-10 w-10 rounded-lg flex items-center justify-center font-bold text-sm',
@@ -238,7 +238,7 @@ export default function PublishPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span
                     className={cn(
                       'flex items-center gap-1 text-sm font-medium',

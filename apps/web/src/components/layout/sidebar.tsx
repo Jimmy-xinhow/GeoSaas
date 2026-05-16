@@ -115,7 +115,7 @@ export default function Sidebar() {
   const user = useAuthStore((s) => s.user)
 
   return (
-    <aside className="w-60 h-screen bg-gray-900 text-white flex flex-col sticky top-0 border-r border-white/5">
+    <aside className="w-60 shrink-0 h-screen bg-gray-900 text-white flex flex-col sticky top-0 border-r border-white/5">
       {/* Logo */}
       <div className="p-4 pb-2">
         <Link href="/dashboard" prefetch={false}>
