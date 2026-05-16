@@ -4,6 +4,14 @@
   "buildCommand": "cd ../.. && pnpm build --filter=web",
   "outputDirectory": ".next",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "geovault.app" }],
+      "destination": "https://www.geovault.app/$1",
+      "permanent": true
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
