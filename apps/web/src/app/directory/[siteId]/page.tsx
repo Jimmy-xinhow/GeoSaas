@@ -20,6 +20,18 @@ async function fetchSite(siteId: string): Promise<DirectorySiteDetail | null> {
   }
 }
 
+function truncateMeta(value: string, max = 155): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max - 1).trim()}…`;
+}
+
+function truncateTitle(value: string, max = 34): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max - 1).trim()}…`;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -28,11 +40,13 @@ export async function generateMetadata({
   const site = await fetchSite(params.siteId);
   if (!site) return { title: 'Site Not Found - Geovault' };
 
-  const industryText = site.industry ? ` | ${site.industry}` : '';
-  const tierText = site.tier ? ` | ${site.tier.toUpperCase()}` : '';
+  const industryText = site.industry ? `，行業：${site.industry}` : '';
+  const tierText = site.tier ? ` ${site.tier.toUpperCase()}` : '';
   const canonical = `${SITE_URL}/directory/${params.siteId}`;
-  const title = `${site.name} - GEO Score ${site.bestScore}/100${tierText}`;
-  const description = `${site.name} (${site.url}) has a GEO score of ${site.bestScore}/100${industryText}. View its AI visibility profile, technical strengths, improvement priorities, and machine-readable brand data on Geovault.`;
+  const title = `${truncateTitle(site.name)} GEO ${site.bestScore}/100${tierText}`;
+  const description = truncateMeta(
+    `${site.name} 的 GEO 分數為 ${site.bestScore}/100${industryText}。查看 AI 可讀性、技術強項、改善優先順序與 Geovault 品牌資料頁。`,
+  );
 
   return {
     title,
@@ -49,7 +63,7 @@ export async function generateMetadata({
       },
     },
     openGraph: {
-      title: `${site.name} - GEO Score ${site.bestScore}/100`,
+      title,
       description,
       url: canonical,
       type: 'website',
@@ -57,7 +71,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${site.name} - GEO Score ${site.bestScore}/100`,
+      title,
       description,
       images: [OG_IMAGE],
     },

@@ -56,6 +56,17 @@ export default function CaseDetailClient({ initialCase }: { initialCase?: Succes
 
   const caseView = { ...resolvedCase, tags: resolvedCase.tags || [] };
   const platformCfg = PLATFORM_CONFIG[caseView.aiPlatform] || PLATFORM_CONFIG.other;
+  const scoreSummary =
+    caseView.beforeGeoScore != null && caseView.afterGeoScore != null
+      ? `GEO 分數從 ${caseView.beforeGeoScore} 提升到 ${caseView.afterGeoScore}，增加 ${caseView.afterGeoScore - caseView.beforeGeoScore} 分`
+      : 'GEO 優化後，品牌在 AI 搜尋中的可讀性與可引用性獲得提升';
+  const daysSummary = caseView.improvementDays
+    ? `，改善週期約 ${caseView.improvementDays} 天`
+    : '';
+  const tagSummary = caseView.tags.length > 0
+    ? caseView.tags.join('、')
+    : '結構化資料、品牌知識庫、AI 可讀內容與引用監控';
+  const industrySummary = caseView.industry ? `${caseView.industry} 行業` : '同類品牌';
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -125,6 +136,44 @@ export default function CaseDetailClient({ initialCase }: { initialCase?: Succes
             />
           </>
         )}
+
+        <section className="mt-10 space-y-6 text-gray-300">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-3">案例重點拆解</h2>
+            <p>
+              這個案例記錄了品牌如何讓 {platformCfg.label} 在回答「{caseView.queryUsed}」時具備可引用的內容線索。
+              {scoreSummary}{daysSummary}。對 {industrySummary} 來說，這代表網站內容不只是被搜尋引擎收錄，
+              還需要能被 AI 模型快速理解品牌定位、服務範圍、專業證據與使用者常問問題。
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-2">AI 真的引用了什麼</h3>
+            <p>
+              本案例的關鍵不是單純追求排名，而是讓 AI 回答中出現可驗證的品牌資訊。使用者提出具體問題後，
+              AI 需要找到品牌名稱、服務情境、改善依據與可比對的內容來源。當網站具備清楚的知識庫、
+              FAQ、結構化資料與機器可讀說明時，AI 較容易把品牌放進回答脈絡，而不是只引用大型平台或通用百科資料。
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-2">GEO 改善重點</h3>
+            <p>
+              這次案例涉及的核心做法包含：{tagSummary}。這些內容會共同補足 AI 判斷品牌可信度時需要的訊號：
+              第一，讓頁面主題與服務項目更明確；第二，讓 FAQ 與專業說明可以直接被摘要；第三，讓 llms.txt、
+              JSON-LD 與公開目錄頁提供一致的機器可讀資料；第四，透過後續引用監測確認 AI 回答是否真的開始採用品牌內容。
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-2">可複製的行動建議</h3>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>先整理品牌最常被詢問的搜尋問題，並把答案寫成可直接引用的段落。</li>
+              <li>補齊品牌介紹、服務範圍、聯絡方式、FAQ、案例證據與結構化資料。</li>
+              <li>定期用 ChatGPT、Claude、Perplexity、Gemini 與 Copilot 測試實際提問，追蹤品牌是否被引用。</li>
+            </ul>
+          </div>
+        </section>
 
         {/* CTA */}
         <div className="mt-12 p-8 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl text-center">

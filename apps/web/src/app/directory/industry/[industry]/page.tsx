@@ -26,24 +26,26 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const industryLabel =
     INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
+  const title = `${industryLabel} GEO 與 AI 搜尋優化完整指南 | Geovault`;
+  const description = `${industryLabel}行業的 AI 搜尋優化完整指南。查看行業平均 GEO 分數、品牌排行、指標通過率與 AI 可讀內容建議。`;
 
   return {
-    title: `${industryLabel} AI 搜尋優化完整指南`,
-    description: `${industryLabel}行業的 AI 搜尋優化完整指南。查看行業平均 GEO 分數、等級分布、各項指標通過率，以及所有品牌的 AI 友善度排行。`,
+    title,
+    description,
     alternates: {
       canonical: `${SITE_URL}/directory/industry/${params.industry}`,
     },
     openGraph: {
-      title: `${industryLabel} AI 搜尋優化完整指南`,
-      description: `${industryLabel}行業 GEO 分數排行與 AI 可讀性分析。`,
+      title,
+      description,
       url: `${SITE_URL}/directory/industry/${params.industry}`,
       type: 'website',
       images: [{ url: OG_IMAGE, width: 1200, height: 630 }],
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${industryLabel} AI 搜尋優化完整指南`,
-      description: `${industryLabel}行業 GEO 分數排行與 AI 可讀性分析。`,
+      title,
+      description,
       images: [OG_IMAGE],
     },
   };
@@ -52,6 +54,15 @@ export async function generateMetadata({
 export default async function IndustryWikiPage({ params }: { params: { industry: string } }) {
   const sites = await getIndustryDirectorySnapshot(params.industry);
   const industryLabel = INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
+  const pageJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: `${industryLabel} GEO 與 AI 搜尋優化完整指南`,
+    description: `${industryLabel}行業的品牌 GEO 分數、AI 可讀性與公開品牌索引。`,
+    url: `${SITE_URL}/directory/industry/${params.industry}`,
+    isPartOf: { '@type': 'WebSite', name: 'Geovault', url: SITE_URL },
+    about: { '@type': 'Thing', name: `${industryLabel} AI 搜尋優化` },
+  };
   const itemListJsonLd = sites.length > 0
     ? {
         '@context': 'https://schema.org',
@@ -68,6 +79,7 @@ export default async function IndustryWikiPage({ params }: { params: { industry:
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(pageJsonLd) }} />
       {itemListJsonLd && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
       )}

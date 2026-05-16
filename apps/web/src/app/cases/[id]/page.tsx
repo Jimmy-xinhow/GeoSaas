@@ -35,6 +35,12 @@ function truncateDescription(value: string, max = 155): string {
   return `${normalized.slice(0, max - 1).trim()}…`;
 }
 
+function truncateTitle(value: string, max = 34): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max - 1).trim()}…`;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -46,9 +52,9 @@ export async function generateMetadata({
   const platformLabel = PLATFORM_LABELS[caseData.aiPlatform] || caseData.aiPlatform;
   const scoreChange =
     caseData.beforeGeoScore != null && caseData.afterGeoScore != null
-      ? ` | GEO ${caseData.beforeGeoScore} -> ${caseData.afterGeoScore}`
+      ? ` GEO ${caseData.beforeGeoScore}->${caseData.afterGeoScore}`
       : '';
-  const title = `${caseData.title} — ${platformLabel} 引用案例${scoreChange}`;
+  const title = `${truncateTitle(caseData.title)} | ${platformLabel} AI 引用案例${scoreChange}`;
   const description = truncateDescription(
     `${caseData.title} 的 AI 引用成功案例，使用者提問：「${caseData.queryUsed}」。了解品牌如何提升 GEO 能見度並被 ${platformLabel} 引用。`,
   );
@@ -60,7 +66,7 @@ export async function generateMetadata({
       canonical: `${SITE_URL}/cases/${params.id}`,
     },
     openGraph: {
-      title: `${caseData.title} — ${platformLabel} 引用案例`,
+      title,
       description,
       url: `${SITE_URL}/cases/${params.id}`,
       type: 'article',
@@ -68,7 +74,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${caseData.title} — ${platformLabel} 引用案例`,
+      title,
       description,
       images: [`${SITE_URL}/opengraph-image`],
     },

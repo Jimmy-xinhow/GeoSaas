@@ -75,6 +75,25 @@ export default async function CasesPage() {
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
       )}
       <CasesClient />
+      <section className="bg-gray-900 text-white max-w-4xl mx-auto px-6 py-12">
+        <h2 className="text-2xl font-bold mb-4">如何判讀 GEO 成功案例</h2>
+        <div className="space-y-4 text-sm leading-7 text-gray-300">
+          <p>
+            Geovault 的成功案例庫聚焦在「品牌是否真的被 AI 回答引用」，而不是只展示一般 SEO 排名。
+            每個案例都會記錄使用者實際提問、AI 平台、回應摘要、優化前後 GEO 分數，以及可能影響引用結果的技術項目。
+          </p>
+          <p>
+            對正在建立 AI 搜尋能見度的品牌來說，這些案例可以用來比對三件事：第一，AI 是否能理解品牌提供的服務；
+            第二，網站是否具備 llms.txt、JSON-LD、FAQ Schema、品牌知識庫等機器可讀訊號；第三，內容是否足夠具體，
+            讓 ChatGPT、Claude、Perplexity、Gemini 或 Copilot 在回答使用者問題時有明確依據。
+          </p>
+          <p>
+            案例分數的變化代表網站從「可被搜尋」逐步走向「可被 AI 引用」。分數提升通常來自結構化資料補強、
+            問答內容擴充、品牌資訊一致化與持續監控。若你的品牌已經出現在 AI 回答中，可以提交案例讓更多使用者了解
+            哪些內容與技術訊號真正有效。
+          </p>
+        </div>
+      </section>
       {cases.length > 0 && (
         <section className="bg-gray-900 text-white max-w-4xl mx-auto px-6 pb-16">
           <h2 className="text-lg font-bold mb-4">最新 GEO 成功案例</h2>

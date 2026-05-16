@@ -25,23 +25,26 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const industryLabel =
     INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
+  const title = `${industryLabel} AI 引用排行與品牌推薦分析 | Geovault`;
+  const description = `${industryLabel}行業的 AI 搜尋推薦排行。查看哪些品牌較常被 ChatGPT、Claude、Perplexity、Gemini、Copilot 推薦。`;
 
   return {
-    title: `${industryLabel} — AI 搜尋推薦排行`,
-    description: `${industryLabel}行業的 AI 搜尋推薦排行榜。查看哪些品牌被 ChatGPT、Claude、Perplexity、Gemini、Copilot 最常推薦，以及各平台的引用率分析。`,
+    title,
+    description,
     alternates: {
       canonical: `${SITE_URL}/industry/${params.industry}`,
     },
     openGraph: {
-      title: `${industryLabel} — AI 搜尋推薦排行`,
-      description: `${industryLabel}行業 AI 引用率排行與各平台推薦分析。`,
+      title,
+      description,
       url: `${SITE_URL}/industry/${params.industry}`,
       type: 'website',
       images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${industryLabel} — AI 搜尋推薦排行`,
+      title,
+      description,
       images: [`${SITE_URL}/opengraph-image`],
     },
   };
@@ -54,6 +57,15 @@ export default async function IndustryRankingPage({
 }) {
   const sites = await getIndustrySites(params.industry);
   const industryLabel = INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
+  const pageJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: `${industryLabel} AI 引用排行與品牌推薦分析`,
+    description: `${industryLabel}行業在 AI 搜尋中的品牌推薦排行與引用分析。`,
+    url: `${SITE_URL}/industry/${params.industry}`,
+    isPartOf: { '@type': 'WebSite', name: 'Geovault', url: SITE_URL },
+    about: { '@type': 'Thing', name: `${industryLabel} AI 引用排行` },
+  };
   const itemListJsonLd = sites.length > 0
     ? {
         '@context': 'https://schema.org',
@@ -70,6 +82,7 @@ export default async function IndustryRankingPage({
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(pageJsonLd) }} />
       {itemListJsonLd && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
       )}
