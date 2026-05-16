@@ -189,6 +189,19 @@ export default function SiteDetailClient({
     }),
     score: t.score,
   }))
+  const passedIndicators = siteData.latestScan?.results.filter((r) => r.status === 'pass') || []
+  const warningIndicators = siteData.latestScan?.results.filter((r) => r.status === 'warning') || []
+  const failedIndicators = siteData.latestScan?.results.filter((r) => r.status === 'fail') || []
+  const totalIndicators = siteData.latestScan?.results.length || 0
+  const passRate = totalIndicators > 0 ? Math.round((passedIndicators.length / totalIndicators) * 100) : 0
+  const topPassed = passedIndicators
+    .slice(0, 3)
+    .map((r) => ScanIndicatorLabel[r.indicator as ScanIndicator] || r.indicator)
+    .join('、')
+  const priorityIssues = [...failedIndicators, ...warningIndicators]
+    .slice(0, 3)
+    .map((r) => ScanIndicatorLabel[r.indicator as ScanIndicator] || r.indicator)
+    .join('、')
 
   return (
     <div className="bg-gray-900 text-white min-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -249,6 +262,15 @@ export default function SiteDetailClient({
                 {siteData.profile.description}
               </p>
             )}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-gray-300">
+              <p>
+                這個公開品牌頁整理了 {siteData.name} 在 AI 搜尋中的可讀性訊號，包含 GEO 分數、掃描結果、
+                品牌知識庫、AI 爬蟲造訪紀錄與可被大型語言模型引用的基礎資料。
+                {industryLabel ? ` 在「${industryLabel}」行業中，` : ' 對同類品牌來說，'}
+                這些訊號會影響 ChatGPT、Claude、Perplexity、Gemini 與 Copilot 是否能理解品牌提供的服務、
+                適合對象與可信度。
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -302,10 +324,6 @@ export default function SiteDetailClient({
 
       {/* Why AI Recommends This Brand */}
       {siteData.latestScan && (() => {
-        const passedIndicators = siteData.latestScan.results.filter((r) => r.status === 'pass');
-        const totalIndicators = siteData.latestScan.results.length;
-        const passRate = totalIndicators > 0 ? Math.round((passedIndicators.length / totalIndicators) * 100) : 0;
-        const industryLabel = INDUSTRIES.find((i) => i.value === siteData.industry)?.label;
         return passedIndicators.length > 0 ? (
           <Card className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
             <CardHeader>
@@ -344,6 +362,34 @@ export default function SiteDetailClient({
           </Card>
         ) : null;
       })()}
+
+      <Card className="bg-white/5 border-white/10">
+        <CardHeader>
+          <CardTitle className="text-white">AI 引用判讀摘要</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm leading-7 text-gray-300">
+          <p>
+            {siteData.name} 目前的 GEO 分數為 <strong className="text-white">{siteData.bestScore}/100</strong>
+            {siteData.tier ? `，屬於 ${siteData.tier.toUpperCase()} 等級` : ''}。
+            {totalIndicators > 0
+              ? ` 最近一次掃描共檢查 ${totalIndicators} 項 AI 可讀性指標，其中 ${passedIndicators.length} 項通過，通過率約 ${passRate}%。`
+              : ' 目前尚未提供完整掃描指標，建議持續補齊可被 AI 讀取的內容訊號。'}
+          </p>
+          <p>
+            {topPassed
+              ? `已具備的強項包含 ${topPassed}，這些資料能幫助 AI 更快判斷品牌名稱、服務內容與頁面主題。`
+              : '此品牌仍需要補齊更多可被機器理解的公開訊號，例如結構化資料、品牌描述、FAQ 與明確的服務分類。'}
+            {priorityIssues
+              ? ` 後續可優先改善 ${priorityIssues}，讓 AI 在回答使用者比較或推薦問題時更容易引用此品牌。`
+              : ' 目前主要任務是持續累積品牌知識庫與真實案例，讓引用依據更完整。'}
+          </p>
+          <p>
+            AI 搜尋不是只看單一頁面的關鍵字，而是綜合判斷公開目錄頁、官網內容、llms.txt、FAQ、結構化資料與
+            使用者問題之間是否一致。當這些資料一致且具體時，品牌更容易在「推薦哪一家」、「哪個服務適合我」、
+            「同業如何比較」等 AI 回答場景中被提及。
+          </p>
+        </CardContent>
+      </Card>
 
       {/* AI Crawler Activity */}
       <Card className="bg-white/5 border-white/10">

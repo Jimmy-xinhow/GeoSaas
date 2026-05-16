@@ -80,6 +80,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // ─── Industry directory index pages ───
   for (const ind of INDUSTRIES) {
+    if (ind.value === 'other') continue;
     entries.push({
       url: `${BASE_URL}/directory/industry/${ind.value}`,
       lastModified: now,
