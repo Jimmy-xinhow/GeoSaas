@@ -35,7 +35,7 @@ function truncateDescription(value: string, max = 155): string {
   return `${normalized.slice(0, max - 1).trim()}…`;
 }
 
-function truncateTitle(value: string, max = 34): string {
+function truncateTitle(value: string, max = 24): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
   if (normalized.length <= max) return normalized;
   return `${normalized.slice(0, max - 1).trim()}…`;
@@ -54,7 +54,7 @@ export async function generateMetadata({
     caseData.beforeGeoScore != null && caseData.afterGeoScore != null
       ? ` GEO ${caseData.beforeGeoScore}->${caseData.afterGeoScore}`
       : '';
-  const title = `${truncateTitle(caseData.title)} | ${platformLabel} AI 引用案例${scoreChange}`;
+  const title = `${truncateTitle(caseData.title)} | ${platformLabel}案例${scoreChange}`;
   const description = truncateDescription(
     `${caseData.title} 的 AI 引用成功案例，使用者提問：「${caseData.queryUsed}」。了解品牌如何提升 GEO 能見度並被 ${platformLabel} 引用。`,
   );

@@ -25,7 +25,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const industryLabel =
     INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
-  const title = `${industryLabel} AI 引用排行與品牌推薦分析 | Geovault`;
+  const title = `${industryLabel} AI 引用排行與品牌推薦分析`;
   const description = `${industryLabel}行業的 AI 搜尋推薦排行。查看哪些品牌較常被 ChatGPT、Claude、Perplexity、Gemini、Copilot 推薦。`;
 
   return {

@@ -26,7 +26,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const industryLabel =
     INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
-  const title = `${industryLabel} GEO 與 AI 搜尋優化完整指南 | Geovault`;
+  const title = `${industryLabel} GEO 與 AI 搜尋優化完整指南`;
   const description = `${industryLabel}行業的 AI 搜尋優化完整指南。查看行業平均 GEO 分數、品牌排行、指標通過率與 AI 可讀內容建議。`;
 
   return {
