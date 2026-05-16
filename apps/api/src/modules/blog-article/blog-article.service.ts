@@ -29,7 +29,6 @@ import pLimit from '@/common/utils/p-limit';
 import {
   isIndexablePublicBlogArticle,
   isPublicSafeArticle,
-  publicBlogArticleWhere,
   publicIndexableBlogArticleWhere,
   publicSiteWhere,
 } from '../../common/utils/public-data-filter';
@@ -231,6 +230,7 @@ export class BlogArticleService {
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
     if (direct) {
+      if (!direct.published) return null;
       if (!isPublicSafeArticle(direct)) return null;
       if (!isIndexablePublicBlogArticle(direct)) return null;
       if (direct.templateType === 'client_daily' && !this.isClientDailyArticleSafe(direct)) {
@@ -239,7 +239,7 @@ export class BlogArticleService {
       return direct;
     }
     const alias = await this.prisma.blogArticle.findFirst({
-      where: publicBlogArticleWhere({ aliasSlugs: { has: slug } }),
+      where: publicIndexableBlogArticleWhere({ published: true, aliasSlugs: { has: slug } }),
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
     if (alias?.templateType === 'client_daily' && !this.isClientDailyArticleSafe(alias)) {
