@@ -60,8 +60,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: '/terms', priority: 0.3, changeFrequency: 'yearly' as const },
   ];
   for (const page of staticPages) {
+    const url = page.url === '/' ? BASE_URL : `${BASE_URL}${page.url}`;
     entries.push({
-      url: `${BASE_URL}${page.url}`,
+      url,
       lastModified: now,
       changeFrequency: page.changeFrequency,
       priority: page.priority,
