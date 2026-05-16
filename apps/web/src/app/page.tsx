@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import HomeClient from './home-client';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
+const HOME_URL = SITE_URL.endsWith('/') ? SITE_URL : `${SITE_URL}/`;
 
 export const metadata: Metadata = {
   title: 'Geovault — 讓 AI 主動推薦你的品牌 | APAC #1 GEO 優化平台',
@@ -20,9 +21,9 @@ export const metadata: Metadata = {
     'AI 品牌推薦',
   ],
   alternates: {
-    canonical: SITE_URL,
+    canonical: HOME_URL,
     languages: {
-      'zh-TW': SITE_URL,
+      'zh-TW': HOME_URL,
       en: `${SITE_URL}/en`,
       ja: `${SITE_URL}/ja`,
     },
