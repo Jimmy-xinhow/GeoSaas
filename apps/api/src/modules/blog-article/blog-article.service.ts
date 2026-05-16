@@ -27,6 +27,7 @@ import {
 import OpenAI from 'openai';
 import pLimit from '@/common/utils/p-limit';
 import {
+  isIndexablePublicBlogArticle,
   isPublicSafeArticle,
   publicBlogArticleWhere,
   publicIndexableBlogArticleWhere,
@@ -184,7 +185,7 @@ export class BlogArticleService {
     if (category) where.category = category;
     if (locale) where.locale = locale;
 
-    const [items, total] = await Promise.all([
+    const [items] = await Promise.all([
       this.prisma.blogArticle.findMany({
         where,
         select: {
@@ -203,13 +204,18 @@ export class BlogArticleService {
           site: { select: { name: true, url: true, bestScore: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
+        take: 2000,
       }),
-      this.prisma.blogArticle.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    const filtered = items.filter((article) => isIndexablePublicBlogArticle(article));
+    return {
+      items: filtered.slice(skip, skip + limit),
+      total: filtered.length,
+      page,
+      limit,
+      totalPages: Math.ceil(filtered.length / limit),
+    };
   }
 
   /** Get a single article by slug.
@@ -226,6 +232,7 @@ export class BlogArticleService {
     });
     if (direct) {
       if (!isPublicSafeArticle(direct)) return null;
+      if (!isIndexablePublicBlogArticle(direct)) return null;
       if (direct.templateType === 'client_daily' && !this.isClientDailyArticleSafe(direct)) {
         return null;
       }
@@ -238,6 +245,7 @@ export class BlogArticleService {
     if (alias?.templateType === 'client_daily' && !this.isClientDailyArticleSafe(alias)) {
       return null;
     }
+    if (alias && !isIndexablePublicBlogArticle(alias)) return null;
     return alias;
   }
 

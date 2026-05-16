@@ -33,6 +33,20 @@ type DirectorySeoSite = {
   blogArticlesCount?: number | null;
 };
 
+type PublicBlogSeoArticle = {
+  title?: string | null;
+  description?: string | null;
+  slug?: string | null;
+  site?: { name?: string | null; url?: string | null } | null;
+};
+
+type PublicSuccessCase = {
+  title?: string | null;
+  queryUsed?: string | null;
+  aiResponse?: string | null;
+  site?: { name?: string | null; url?: string | null; isPublic?: boolean | null } | null;
+};
+
 function getProfileDescription(profile: unknown): string {
   if (!profile || typeof profile !== 'object') return '';
   const data = profile as Record<string, unknown>;
@@ -141,6 +155,17 @@ export function publicIndexableBlogArticleWhere(where: Record<string, unknown> =
   };
 }
 
+export function getPublicBlogArticleSeoIssues(article: PublicBlogSeoArticle): string[] {
+  const issues: string[] = [];
+  if (!isPublicSafeArticle(article)) issues.push('unsafe-test-article');
+  if (isLikelyEditorialDirectoryName(article.site?.name)) issues.push('editorial-site-name');
+  return issues;
+}
+
+export function isIndexablePublicBlogArticle(article: PublicBlogSeoArticle): boolean {
+  return getPublicBlogArticleSeoIssues(article).length === 0;
+}
+
 export function getDirectorySiteSeoIssues(site: DirectorySeoSite): string[] {
   const issues: string[] = [];
   const description = getProfileDescription(site.profile);
@@ -210,6 +235,24 @@ export function publicSuccessCaseWhere(where: Record<string, unknown> = {}) {
       },
     ],
   };
+}
+
+export function getPublicSuccessCaseSeoIssues(item: PublicSuccessCase): string[] {
+  const issues: string[] = [];
+  const text = `${item.title || ''}\n${item.queryUsed || ''}\n${item.aiResponse || ''}`;
+
+  if (!item.title || item.title.trim().length < 10) issues.push('short-title');
+  if (!item.queryUsed || item.queryUsed.trim().length < 8) issues.push('short-query');
+  if (!item.aiResponse || item.aiResponse.trim().length < 80) issues.push('thin-ai-response');
+  if (/Codex QA|Admin E2E|E2E|皜祈岫|example\.com|localhost/i.test(text)) issues.push('test-content');
+  if (!isPublicSafeSite(item.site)) issues.push('unsafe-test-site');
+  if (item.site && item.site.isPublic === false) issues.push('non-public-site');
+
+  return issues;
+}
+
+export function isIndexablePublicSuccessCase(item: PublicSuccessCase): boolean {
+  return getPublicSuccessCaseSeoIssues(item).length === 0;
 }
 
 export function unsafePublicSuccessCaseWhere(where: Record<string, unknown> = {}) {

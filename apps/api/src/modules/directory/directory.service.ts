@@ -13,6 +13,8 @@ import {
   publicIndexableBlogArticleWhere,
   publicSiteWhere,
   publicSuccessCaseWhere,
+  isIndexablePublicBlogArticle,
+  isIndexablePublicSuccessCase,
   unsafePublicBlogArticleWhere,
   unsafePublicSiteWhere,
   unsafePublicSuccessCaseWhere,
@@ -184,13 +186,26 @@ export class DirectoryService {
       }),
       this.prisma.blogArticle.findMany({
         where: publicIndexableBlogArticleWhere({ published: true }),
-        select: { slug: true, createdAt: true },
+        select: {
+          slug: true,
+          title: true,
+          description: true,
+          createdAt: true,
+          site: { select: { name: true, url: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: 2000,
       }),
       this.prisma.geoSuccessCase.findMany({
         where: publicSuccessCaseWhere({ status: 'approved' }),
-        select: { id: true, createdAt: true },
+        select: {
+          id: true,
+          title: true,
+          queryUsed: true,
+          aiResponse: true,
+          createdAt: true,
+          site: { select: { name: true, url: true, isPublic: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: 500,
       }),
@@ -241,8 +256,12 @@ export class DirectoryService {
 
     return {
       sites: indexableSites.map((s) => ({ id: s.id, bestScoreAt: s.bestScoreAt })),
-      blogArticles,
-      cases,
+      blogArticles: blogArticles
+        .filter((article) => isIndexablePublicBlogArticle(article))
+        .map(({ slug, createdAt }) => ({ slug, createdAt })),
+      cases: cases
+        .filter((item) => isIndexablePublicSuccessCase(item))
+        .map(({ id, createdAt }) => ({ id, createdAt })),
       industrySites,
     };
   }

@@ -4,7 +4,11 @@ import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateSuccessCaseDto } from './dto/create-success-case.dto';
-import { isPublicSafeSite, publicSuccessCaseWhere } from '../../common/utils/public-data-filter';
+import {
+  isIndexablePublicSuccessCase,
+  isPublicSafeSite,
+  publicSuccessCaseWhere,
+} from '../../common/utils/public-data-filter';
 
 @Injectable()
 export class SuccessCasesService {
@@ -51,36 +55,36 @@ export class SuccessCasesService {
     limit?: number;
   }) {
     const { status = 'approved', aiPlatform, industry, page = 1, limit = 12 } = filters;
-    const skip = (page - 1) * limit;
 
     const where: any = publicSuccessCaseWhere({ status });
     if (aiPlatform) where.aiPlatform = aiPlatform;
     if (industry) where.industry = industry;
 
-    const [items, total] = await Promise.all([
-      this.prisma.geoSuccessCase.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          title: true,
-          aiPlatform: true,
-          queryUsed: true,
-          beforeGeoScore: true,
-          afterGeoScore: true,
-          improvementDays: true,
-          industry: true,
-          tags: true,
-          viewCount: true,
-          createdAt: true,
-          user: { select: { name: true } },
-          site: { select: { name: true, url: true } },
-        },
-      }),
-      this.prisma.geoSuccessCase.count({ where }),
-    ]);
+    const rows = await this.prisma.geoSuccessCase.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+      select: {
+        id: true,
+        title: true,
+        aiPlatform: true,
+        queryUsed: true,
+        aiResponse: true,
+        beforeGeoScore: true,
+        afterGeoScore: true,
+        improvementDays: true,
+        industry: true,
+        tags: true,
+        viewCount: true,
+        createdAt: true,
+        user: { select: { name: true } },
+        site: { select: { name: true, url: true, isPublic: true } },
+      },
+    });
+
+    const filtered = rows.filter((item) => isIndexablePublicSuccessCase(item));
+    const total = filtered.length;
+    const items = filtered.slice((page - 1) * limit, page * limit).map(({ aiResponse, ...item }) => item);
 
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
@@ -168,22 +172,27 @@ export class SuccessCasesService {
   }
 
   async findFeatured() {
-    return this.prisma.geoSuccessCase.findMany({
+    const rows = await this.prisma.geoSuccessCase.findMany({
       where: publicSuccessCaseWhere({ status: 'approved', featuredAt: { not: null } }),
       orderBy: { featuredAt: 'desc' },
-      take: 12,
+      take: 100,
       select: {
         id: true,
         title: true,
         aiPlatform: true,
         queryUsed: true,
+        aiResponse: true,
         beforeGeoScore: true,
         afterGeoScore: true,
         tags: true,
         createdAt: true,
-        site: { select: { name: true, url: true } },
+        site: { select: { name: true, url: true, isPublic: true } },
       },
     });
+    return rows
+      .filter((item) => isIndexablePublicSuccessCase(item))
+      .slice(0, 12)
+      .map(({ aiResponse, ...item }) => item);
   }
 
   async findById(id: string) {
@@ -199,6 +208,7 @@ export class SuccessCasesService {
     if (
       !item ||
       item.status !== 'approved' ||
+      !isIndexablePublicSuccessCase(item) ||
       item.title.toLowerCase().includes('codex qa') ||
       item.queryUsed.toLowerCase().includes('codex qa') ||
       item.aiResponse.toLowerCase().includes('codex qa') ||
