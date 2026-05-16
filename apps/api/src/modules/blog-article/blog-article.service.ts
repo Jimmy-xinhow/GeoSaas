@@ -26,7 +26,12 @@ import {
 } from '../content-quality/specs/buyer-guide.spec';
 import OpenAI from 'openai';
 import pLimit from '@/common/utils/p-limit';
-import { isPublicSafeArticle, publicBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
+import {
+  isPublicSafeArticle,
+  publicBlogArticleWhere,
+  publicIndexableBlogArticleWhere,
+  publicSiteWhere,
+} from '../../common/utils/public-data-filter';
 
 const ALL_TEMPLATE_TYPES: TemplateType[] = [
   'geo_overview',
@@ -175,7 +180,7 @@ export class BlogArticleService {
     const { page = 1, limit = 12, category, locale } = params;
     const skip = (page - 1) * limit;
 
-    const where: any = publicBlogArticleWhere({ published: true });
+    const where: any = publicIndexableBlogArticleWhere({ published: true });
     if (category) where.category = category;
     if (locale) where.locale = locale;
 

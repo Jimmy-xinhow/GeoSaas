@@ -13,6 +13,14 @@ const articleExclusions = [
   { slug: { contains: 'codex-qa', mode: 'insensitive' } },
 ];
 
+const indexableBlogTemplateTypes = [
+  'brand_showcase',
+  'client_daily',
+  'industry_top10',
+  'buyer_guide',
+  'industry_current_state',
+];
+
 export function publicSiteWhere(where: Record<string, unknown> = {}) {
   return {
     AND: [
@@ -52,6 +60,21 @@ export function publicBlogArticleWhere(where: Record<string, unknown> = {}) {
               },
             },
           },
+        ],
+      },
+    ],
+  };
+}
+
+export function publicIndexableBlogArticleWhere(where: Record<string, unknown> = {}) {
+  return {
+    AND: [
+      publicBlogArticleWhere(where),
+      { templateType: { in: indexableBlogTemplateTypes } },
+      {
+        OR: [
+          { siteId: null },
+          { site: { is: { isPublic: true } } },
         ],
       },
     ],

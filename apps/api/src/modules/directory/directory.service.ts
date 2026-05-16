@@ -6,6 +6,7 @@ import { IndexNowService } from '../indexnow/indexnow.service';
 import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
 import {
   publicBlogArticleWhere,
+  publicIndexableBlogArticleWhere,
   publicSiteWhere,
   publicSuccessCaseWhere,
   unsafePublicBlogArticleWhere,
@@ -104,7 +105,7 @@ export class DirectoryService {
         take: 2000,
       }),
       this.prisma.blogArticle.findMany({
-        where: publicBlogArticleWhere({ published: true }),
+        where: publicIndexableBlogArticleWhere({ published: true }),
         select: { slug: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
         take: 2000,
