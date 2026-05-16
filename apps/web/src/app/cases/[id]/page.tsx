@@ -20,7 +20,10 @@ async function getCaseData(id: string) {
     });
     if (!res.ok) return null;
     const payload = await res.json();
-    return payload?.data ?? payload;
+    if (Object.prototype.hasOwnProperty.call(payload || {}, 'data')) {
+      return payload.data || null;
+    }
+    return payload;
   } catch {
     return null;
   }

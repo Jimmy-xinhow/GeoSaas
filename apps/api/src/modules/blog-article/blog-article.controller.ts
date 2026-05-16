@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, NotFoundException, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -101,8 +101,10 @@ export class BlogArticleController {
   @Public()
   @Get('articles/:slug')
   @ApiOperation({ summary: 'Get article by slug' })
-  getBySlug(@Param('slug') slug: string) {
-    return this.service.getBySlug(normalizeRequiredText(slug, 'slug', 220));
+  async getBySlug(@Param('slug') slug: string) {
+    const article = await this.service.getBySlug(normalizeRequiredText(slug, 'slug', 220));
+    if (!article) throw new NotFoundException('Article not found');
+    return article;
   }
 
   @ApiBearerAuth()

@@ -31,6 +31,14 @@ interface ResolvedPost {
   targetKeywords?: string[];
 }
 
+function unwrapArticlePayload(payload: any) {
+  if (!payload) return null;
+  if (Object.prototype.hasOwnProperty.call(payload, 'data')) {
+    return payload.data || null;
+  }
+  return payload;
+}
+
 export function generateStaticParams() {
   return getAllPosts().map((post) => ({ slug: post.slug }));
 }
@@ -60,7 +68,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(params.slug)}`, { next: { revalidate: 3600 } });
     if (res.ok) {
       const data = await res.json();
-      const article = data?.data || data;
+      const article = unwrapArticlePayload(data);
       if (article) {
         return {
           title: article.title,
@@ -130,7 +138,7 @@ export default async function BlogPostPage({ params }: Props) {
     if (!res) notFound();
     if (!res.ok) notFound();
     const data = await res.json().catch(() => null);
-    resolvedArticle = data?.data || data;
+    resolvedArticle = unwrapArticlePayload(data);
     if (!resolvedArticle) notFound();
   }
 
