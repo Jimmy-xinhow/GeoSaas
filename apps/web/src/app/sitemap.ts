@@ -10,7 +10,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 // for the full revalidate window. Forcing dynamic = render at request time,
 // where the API is always reachable.
 export const dynamic = 'force-dynamic';
-export const revalidate = 3600;
+export const revalidate = 0;
 
 // One aggregate fetch instead of ~14 parallel fetches. Web→API goes through
 // Cloudflare (not Railway internal networking), so 14 concurrent calls were
@@ -31,7 +31,7 @@ async function fetchSitemapData(): Promise<SitemapData | null> {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
     const res = await fetch(`${API_URL}/api/directory/sitemap-data`, {
-      next: { revalidate: 3600 },
+      cache: 'no-store',
       signal: ctl.signal,
     });
     clearTimeout(timer);
