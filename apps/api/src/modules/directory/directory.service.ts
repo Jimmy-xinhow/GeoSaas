@@ -5,6 +5,8 @@ import { TogglePublicDto } from './dto/toggle-public.dto';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
 import {
+  getDirectorySiteSeoIssues,
+  isIndexableDirectorySite,
   publicBlogArticleWhere,
   publicIndexableBlogArticleWhere,
   publicSiteWhere,
@@ -99,8 +101,23 @@ export class DirectoryService {
   async getSitemapData() {
     const [sites, blogArticles, cases, industrySitesRaw] = await Promise.all([
       this.prisma.site.findMany({
-        where: publicSiteWhere({ isPublic: true }),
-        select: { id: true, bestScoreAt: true, industry: true },
+        where: publicSiteWhere({ isPublic: true, bestScore: { gte: 60 }, industry: { not: null } }),
+        select: {
+          id: true,
+          name: true,
+          url: true,
+          profile: true,
+          bestScore: true,
+          bestScoreAt: true,
+          industry: true,
+          _count: { select: { qas: true, blogArticles: true } },
+          scans: {
+            where: { status: 'COMPLETED' },
+            orderBy: { completedAt: 'desc' },
+            take: 1,
+            select: { completedAt: true },
+          },
+        },
         orderBy: { bestScore: 'desc' },
         take: 2000,
       }),
@@ -117,20 +134,52 @@ export class DirectoryService {
         take: 500,
       }),
       this.prisma.site.findMany({
-        where: publicSiteWhere({ isPublic: true, bestScore: { gt: 0 }, industry: { not: null } }),
-        select: { id: true, industry: true },
+        where: publicSiteWhere({ isPublic: true, bestScore: { gte: 60 }, industry: { not: null } }),
+        select: {
+          id: true,
+          name: true,
+          url: true,
+          profile: true,
+          bestScore: true,
+          bestScoreAt: true,
+          industry: true,
+          _count: { select: { qas: true, blogArticles: true } },
+          scans: {
+            where: { status: 'COMPLETED' },
+            orderBy: { completedAt: 'desc' },
+            take: 1,
+            select: { completedAt: true },
+          },
+        },
         orderBy: { bestScore: 'desc' },
       }),
     ]);
 
     const industrySites: Record<string, string[]> = {};
-    for (const s of industrySitesRaw) {
+    const indexableSites = sites.filter((s) =>
+      isIndexableDirectorySite({
+        ...s,
+        latestScanCompletedAt: s.scans[0]?.completedAt,
+        qasCount: s._count.qas,
+        blogArticlesCount: s._count.blogArticles,
+      }),
+    );
+    const indexableIndustrySites = industrySitesRaw.filter((s) =>
+      isIndexableDirectorySite({
+        ...s,
+        latestScanCompletedAt: s.scans[0]?.completedAt,
+        qasCount: s._count.qas,
+        blogArticlesCount: s._count.blogArticles,
+      }),
+    );
+
+    for (const s of indexableIndustrySites) {
       if (!s.industry) continue;
       (industrySites[s.industry] ||= []).push(s.id);
     }
 
     return {
-      sites: sites.map((s) => ({ id: s.id, bestScoreAt: s.bestScoreAt })),
+      sites: indexableSites.map((s) => ({ id: s.id, bestScoreAt: s.bestScoreAt })),
       blogArticles,
       cases,
       industrySites,
@@ -686,6 +735,12 @@ export class DirectoryService {
           orderBy: { awardedAt: 'asc' },
           select: { badge: true, label: true, awardedAt: true },
         },
+        _count: {
+          select: {
+            qas: true,
+            blogArticles: true,
+          },
+        },
       },
     });
 
@@ -707,16 +762,24 @@ export class DirectoryService {
       this.prisma.crawlerVisit.count({ where: { siteId } }),
     ]);
 
-    const { scans, badges, ...siteData } = site;
+    const { scans, badges, _count, ...siteData } = site;
     const displayBadges = this.withDerivedScoreBadges(
       badges,
       site.bestScore,
       site.bestScoreAt ?? site.createdAt,
     );
+    const seoIssues = getDirectorySiteSeoIssues({
+      ...site,
+      latestScanCompletedAt: scans[0]?.completedAt,
+      qasCount: _count.qas,
+      blogArticlesCount: _count.blogArticles,
+    });
 
     return {
       ...siteData,
       badges: displayBadges,
+      seoIndexable: seoIssues.length === 0,
+      seoIssues,
       latestScan: scans[0] || null,
       scoreTrend: scoreTrend.map((s: any) => ({
         date: s.completedAt,

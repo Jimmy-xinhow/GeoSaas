@@ -21,6 +21,30 @@ const indexableBlogTemplateTypes = [
   'industry_current_state',
 ];
 
+type DirectorySeoSite = {
+  name?: string | null;
+  url?: string | null;
+  industry?: string | null;
+  bestScore?: number | null;
+  bestScoreAt?: Date | string | null;
+  profile?: unknown;
+  latestScanCompletedAt?: Date | string | null;
+  qasCount?: number | null;
+  blogArticlesCount?: number | null;
+};
+
+function getProfileDescription(profile: unknown): string {
+  if (!profile || typeof profile !== 'object') return '';
+  const data = profile as Record<string, unknown>;
+  const value =
+    data.description ??
+    data.summary ??
+    data.brandDescription ??
+    data.about ??
+    '';
+  return typeof value === 'string' ? value.trim() : String(value || '').trim();
+}
+
 export function publicSiteWhere(where: Record<string, unknown> = {}) {
   return {
     AND: [
@@ -79,6 +103,26 @@ export function publicIndexableBlogArticleWhere(where: Record<string, unknown> =
       },
     ],
   };
+}
+
+export function getDirectorySiteSeoIssues(site: DirectorySeoSite): string[] {
+  const issues: string[] = [];
+  const description = getProfileDescription(site.profile);
+  const supportCount = (site.qasCount || 0) + (site.blogArticlesCount || 0);
+
+  if (!isPublicSafeSite(site)) issues.push('unsafe-test-site');
+  if (!site.bestScore || site.bestScore < 60) issues.push('low-score');
+  if (!site.industry) issues.push('missing-industry');
+  if (!site.bestScoreAt) issues.push('missing-score-date');
+  if (!site.latestScanCompletedAt) issues.push('missing-completed-scan');
+  if (description.length < 40) issues.push('thin-description');
+  if (supportCount < 1) issues.push('missing-supporting-content');
+
+  return issues;
+}
+
+export function isIndexableDirectorySite(site: DirectorySeoSite): boolean {
+  return getDirectorySiteSeoIssues(site).length === 0;
 }
 
 export function unsafePublicBlogArticleWhere(where: Record<string, unknown> = {}) {

@@ -267,6 +267,8 @@ export interface DirectorySiteDetail {
   bestScoreAt: string | null;
   profile: Record<string, any> | null;
   createdAt: string;
+  seoIndexable?: boolean;
+  seoIssues?: string[];
   latestScan: {
     id: string;
     totalScore: number;
