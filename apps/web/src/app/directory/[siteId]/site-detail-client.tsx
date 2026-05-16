@@ -146,10 +146,17 @@ function DetailSkeleton() {
   )
 }
 
-export default function SiteDetailClient({ siteId }: { siteId: string }) {
+export default function SiteDetailClient({
+  siteId,
+  initialSite,
+}: {
+  siteId: string
+  initialSite?: DirectorySiteDetail
+}) {
   const { data: site, isLoading, isError } = useSiteDetail(siteId)
+  const resolvedSite = site ?? initialSite
 
-  if (isLoading) {
+  if (isLoading && !resolvedSite) {
     return (
       <div className="bg-gray-900 text-white min-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <DetailSkeleton />
@@ -157,7 +164,7 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
     )
   }
 
-  if (isError || !site) {
+  if (isError || !resolvedSite) {
     return (
       <div className="bg-gray-900 text-white min-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
         <Globe className="h-16 w-16 text-gray-500 mx-auto mb-4" />
@@ -173,8 +180,9 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
     )
   }
 
-  const industryLabel = INDUSTRIES.find((i) => i.value === site.industry)?.label
-  const chartData = site.scoreTrend.map((t) => ({
+  const siteData = resolvedSite
+  const industryLabel = INDUSTRIES.find((i) => i.value === siteData.industry)?.label
+  const chartData = siteData.scoreTrend.map((t) => ({
     month: new Date(t.date).toLocaleDateString('zh-TW', {
       month: 'short',
       day: 'numeric',
@@ -184,7 +192,7 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
 
   return (
     <div className="bg-gray-900 text-white min-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      <JsonLdScript site={site} />
+      <JsonLdScript site={siteData} />
 
       {/* Back link */}
       <Link
@@ -203,17 +211,17 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl font-bold">
-                    {site.name}
+                    {siteData.name}
                   </h1>
-                  <TierBadge tier={site.tier} />
+                  <TierBadge tier={siteData.tier} />
                 </div>
                 <a
-                  href={site.url}
+                  href={siteData.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline text-sm"
                 >
-                  {site.url}
+                  {siteData.url}
                 </a>
               </div>
             </div>
@@ -224,21 +232,21 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
                   {industryLabel}
                 </span>
               )}
-              {site.bestScoreAt && (
+              {siteData.bestScoreAt && (
                 <span className="inline-flex items-center gap-1">
                   <Calendar className="h-3.5 w-3.5" />
-                  最後掃描：{new Date(site.bestScoreAt).toLocaleDateString('zh-TW')}
+                  最後掃描：{new Date(siteData.bestScoreAt).toLocaleDateString('zh-TW')}
                 </span>
               )}
               <span className="inline-flex items-center gap-1">
                 <Calendar className="h-3.5 w-3.5" />
-                收錄：{new Date(site.createdAt).toLocaleDateString('zh-TW')}
+                收錄：{new Date(siteData.createdAt).toLocaleDateString('zh-TW')}
               </span>
             </div>
 
-            {site.profile?.description && (
+            {siteData.profile?.description && (
               <p className="text-gray-400 text-sm leading-relaxed">
-                {site.profile.description}
+                {siteData.profile.description}
               </p>
             )}
           </CardContent>
@@ -246,16 +254,16 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
 
         <Card className="flex items-center justify-center bg-white/5 border-white/10">
           <CardContent className="p-6 text-center">
-            <ScoreGauge score={site.bestScore} size={180} />
+            <ScoreGauge score={siteData.bestScore} size={180} />
             <p className="text-sm text-gray-400 mt-2">GEO 總分</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Badges */}
-      {site.badges && site.badges.length > 0 && (
+      {siteData.badges && siteData.badges.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {site.badges.map((b) => (
+          {siteData.badges.map((b) => (
             <div
               key={b.badge}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded-full text-sm"
@@ -268,14 +276,14 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
       )}
 
       {/* Indicator Breakdown */}
-      {site.latestScan && site.latestScan.results.length > 0 && (
+      {siteData.latestScan && siteData.latestScan.results.length > 0 && (
         <Card className="bg-white/5 border-white/10">
           <CardHeader>
             <CardTitle className="text-white">AI 優化指標明細</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {site.latestScan.results.map((r) => (
+              {siteData.latestScan.results.map((r) => (
                 <IndicatorCard
                   key={r.indicator}
                   name={
@@ -293,22 +301,22 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
       )}
 
       {/* Why AI Recommends This Brand */}
-      {site.latestScan && (() => {
-        const passedIndicators = site.latestScan.results.filter((r) => r.status === 'pass');
-        const totalIndicators = site.latestScan.results.length;
+      {siteData.latestScan && (() => {
+        const passedIndicators = siteData.latestScan.results.filter((r) => r.status === 'pass');
+        const totalIndicators = siteData.latestScan.results.length;
         const passRate = totalIndicators > 0 ? Math.round((passedIndicators.length / totalIndicators) * 100) : 0;
-        const industryLabel = INDUSTRIES.find((i) => i.value === site.industry)?.label;
+        const industryLabel = INDUSTRIES.find((i) => i.value === siteData.industry)?.label;
         return passedIndicators.length > 0 ? (
           <Card className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
                 <Bot className="h-5 w-5 text-blue-400" />
-                為什麼 AI 會推薦 {site.name}？
+                為什麼 AI 會推薦 {siteData.name}？
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-gray-300 text-sm">
-                根據 Geovault 分析，{site.name} 的 AI 可讀性指標通過率為 <strong className="text-white">{passRate}%</strong>（{passedIndicators.length}/{totalIndicators} 項），
+                根據 Geovault 分析，{siteData.name} 的 AI 可讀性指標通過率為 <strong className="text-white">{passRate}%</strong>（{passedIndicators.length}/{totalIndicators} 項），
                 這意味著 AI 搜尋引擎能有效理解並推薦此品牌。
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -344,12 +352,12 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
             <Bot className="h-5 w-5 text-purple-500" />
             AI 爬蟲造訪紀錄
             <Badge variant="secondary" className="ml-auto text-xs font-normal">
-              共 {site.crawlerActivity.totalVisits} 次造訪
+              共 {siteData.crawlerActivity.totalVisits} 次造訪
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {site.crawlerActivity.bots.length === 0 ? (
+          {siteData.crawlerActivity.bots.length === 0 ? (
             <p className="text-center text-gray-500 py-6">
               尚無 AI 爬蟲造訪紀錄
             </p>
@@ -365,7 +373,7 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {site.crawlerActivity.bots.map((bot) => (
+                  {siteData.crawlerActivity.bots.map((bot) => (
                     <tr key={bot.name} className="hover:bg-white/5">
                       <td className="py-3 font-medium">{bot.name}</td>
                       <td className="py-3 text-gray-400">{bot.org}</td>
@@ -397,7 +405,7 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
       )}
 
       {/* Knowledge Base Preview */}
-      {site.qas.length > 0 && (
+      {siteData.qas.length > 0 && (
         <Card className="bg-white/5 border-white/10">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
@@ -407,7 +415,7 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {site.qas.map((qa) => (
+              {siteData.qas.map((qa) => (
                 <div
                   key={qa.id}
                   className="border border-white/10 rounded-lg p-4 space-y-2"
@@ -431,7 +439,7 @@ export default function SiteDetailClient({ siteId }: { siteId: string }) {
       {/* CTA */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-center text-white">
         <h2 className="text-2xl font-bold">
-          想像 {site.name} 一樣被 AI 主動推薦？
+          想像 {siteData.name} 一樣被 AI 主動推薦？
         </h2>
         <p className="mt-2 text-blue-100">
           免費掃描你的網站，3 分鐘內查看 AI 能見度分數，開始讓 ChatGPT、Claude、Perplexity 推薦你的品牌。

@@ -18,6 +18,10 @@ export async function generateMetadata({
     alternates: {
       canonical: `${SITE_URL}/industry/${params.industry}/compare`,
     },
+    robots: {
+      index: false,
+      follow: true,
+    },
     openGraph: {
       title: `${industryLabel} — AI 品牌比較`,
       description: `${industryLabel}行業 AI 搜尋推薦品牌比較工具。`,

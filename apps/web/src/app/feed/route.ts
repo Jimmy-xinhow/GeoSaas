@@ -105,6 +105,7 @@ ${items}
       'Content-Type': 'application/xml; charset=utf-8',
       'Cache-Control': 'public, max-age=3600',
       'Access-Control-Allow-Origin': '*',
+      'X-Robots-Tag': 'noindex, follow',
     },
   });
 }

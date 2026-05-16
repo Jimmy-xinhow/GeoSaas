@@ -52,6 +52,16 @@ export function middleware(request: NextRequest) {
   }
 
   // ─── Detect AI crawler from User-Agent (server-side, no JS needed) ───
+  if (
+    pathname === '/feed' ||
+    pathname === '/feed.json' ||
+    /^\/directory\/[^/]+\/feed(?:\.json)?$/.test(pathname) ||
+    /^\/industry\/[^/]+\/compare$/.test(pathname) ||
+    /^\/industry\/[^/]+\/[^/]+$/.test(pathname)
+  ) {
+    response.headers.set('X-Robots-Tag', 'noindex, follow');
+  }
+
   const detectedBot = AI_BOT_PATTERNS.find((bot) => ua.includes(bot.uaPattern));
 
   if (detectedBot) {

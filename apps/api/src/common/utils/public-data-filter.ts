@@ -85,7 +85,10 @@ export function publicSuccessCaseWhere(where: Record<string, unknown> = {}) {
       {
         NOT: [
           { title: { contains: 'Codex QA', mode: 'insensitive' } },
+          { title: { contains: 'Admin E2E', mode: 'insensitive' } },
+          { title: { contains: 'E2E 成功案例', mode: 'insensitive' } },
           { queryUsed: { contains: 'Codex QA', mode: 'insensitive' } },
+          { queryUsed: { contains: '測試', mode: 'insensitive' } },
           { aiResponse: { contains: 'Codex QA', mode: 'insensitive' } },
         ],
       },
@@ -112,7 +115,10 @@ export function unsafePublicSuccessCaseWhere(where: Record<string, unknown> = {}
       {
         OR: [
           { title: { contains: 'Codex QA', mode: 'insensitive' } },
+          { title: { contains: 'Admin E2E', mode: 'insensitive' } },
+          { title: { contains: 'E2E 成功案例', mode: 'insensitive' } },
           { queryUsed: { contains: 'Codex QA', mode: 'insensitive' } },
+          { queryUsed: { contains: '測試', mode: 'insensitive' } },
           { aiResponse: { contains: 'Codex QA', mode: 'insensitive' } },
           {
             site: {

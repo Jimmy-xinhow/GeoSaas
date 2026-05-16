@@ -1,28 +1,20 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import SiteDetailClient from './site-detail-client';
+import type { DirectorySiteDetail } from '@/hooks/use-directory';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const OG_IMAGE = `${SITE_URL}/opengraph-image`;
 
-type DirectorySite = {
-  id: string;
-  name: string;
-  url: string;
-  industry?: string | null;
-  tier?: string | null;
-  bestScore: number;
-};
-
-async function fetchSite(siteId: string): Promise<DirectorySite | null> {
+async function fetchSite(siteId: string): Promise<DirectorySiteDetail | null> {
   try {
     const res = await fetch(`${API_BASE}/api/directory/${siteId}`, {
       next: { revalidate: 3600 },
     });
     if (!res.ok) return null;
     const json = await res.json();
-    return json.data as DirectorySite;
+    return (json.data ?? json) as DirectorySiteDetail;
   } catch {
     return null;
   }
@@ -103,7 +95,7 @@ export default async function SiteDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <SiteDetailClient siteId={params.siteId} />
+      <SiteDetailClient siteId={params.siteId} initialSite={site} />
     </>
   );
 }

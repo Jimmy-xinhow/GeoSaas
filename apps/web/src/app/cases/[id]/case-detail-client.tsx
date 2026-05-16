@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Award, Clock, Eye, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useSuccessCase } from '@/hooks/use-cases';
+import { useSuccessCase, type SuccessCase } from '@/hooks/use-cases';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
@@ -31,12 +31,13 @@ function markdownToHtml(md: string): string {
     .replace(/<p><\/p>/g, '');
 }
 
-export default function CaseDetailClient() {
+export default function CaseDetailClient({ initialCase }: { initialCase?: SuccessCase }) {
   const params = useParams();
   const id = params.id as string;
   const { data: caseData, isLoading } = useSuccessCase(id);
+  const resolvedCase = caseData ?? initialCase;
 
-  if (isLoading) {
+  if (isLoading && !resolvedCase) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -44,7 +45,7 @@ export default function CaseDetailClient() {
     );
   }
 
-  if (!caseData) {
+  if (!resolvedCase) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center flex-col gap-4">
         <h2 className="text-xl font-bold text-white">找不到案例</h2>
@@ -53,7 +54,8 @@ export default function CaseDetailClient() {
     );
   }
 
-  const platformCfg = PLATFORM_CONFIG[caseData.aiPlatform] || PLATFORM_CONFIG.other;
+  const caseView = { ...resolvedCase, tags: resolvedCase.tags || [] };
+  const platformCfg = PLATFORM_CONFIG[caseView.aiPlatform] || PLATFORM_CONFIG.other;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -67,33 +69,33 @@ export default function CaseDetailClient() {
 
         <div className="flex items-center gap-3 mb-4">
           <Badge className={platformCfg.color}>{platformCfg.label}</Badge>
-          {caseData.tags.map((t) => (
+          {caseView.tags.map((t) => (
             <Badge key={t} variant="outline">{t}</Badge>
           ))}
           <span className="flex items-center gap-1 text-xs text-gray-400 ml-auto">
             <Eye className="h-3 w-3" />
-            {caseData.viewCount}
+            {caseView.viewCount}
           </span>
         </div>
 
-        <h1 className="text-3xl font-bold text-white mb-4">{caseData.title}</h1>
+        <h1 className="text-3xl font-bold text-white mb-4">{caseView.title}</h1>
 
         {/* Score change */}
-        {caseData.beforeGeoScore != null && caseData.afterGeoScore != null && (
+        {caseView.beforeGeoScore != null && caseView.afterGeoScore != null && (
           <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-red-500/10 to-green-500/10 rounded-xl mb-6">
             <div className="text-center">
-              <p className="text-2xl font-bold text-red-400">{caseData.beforeGeoScore}</p>
+              <p className="text-2xl font-bold text-red-400">{caseView.beforeGeoScore}</p>
               <p className="text-xs text-yellow-200/60">優化前</p>
             </div>
             <span className="text-gray-400 text-xl">→</span>
             <div className="text-center">
-              <p className="text-2xl font-bold text-green-400">{caseData.afterGeoScore}</p>
+              <p className="text-2xl font-bold text-green-400">{caseView.afterGeoScore}</p>
               <p className="text-xs text-yellow-200/60">優化後</p>
             </div>
             <div className="text-center ml-auto">
-              <p className="text-xl font-bold text-green-400">+{caseData.afterGeoScore - caseData.beforeGeoScore}</p>
-              {caseData.improvementDays && (
-                <p className="text-xs text-yellow-200/60">{caseData.improvementDays} 天達成</p>
+              <p className="text-xl font-bold text-green-400">+{caseView.afterGeoScore - caseView.beforeGeoScore}</p>
+              {caseView.improvementDays && (
+                <p className="text-xs text-yellow-200/60">{caseView.improvementDays} 天達成</p>
               )}
             </div>
           </div>
@@ -102,24 +104,24 @@ export default function CaseDetailClient() {
         {/* Query */}
         <div className="bg-white/5 rounded-xl p-4 mb-6">
           <p className="text-xs text-yellow-200/60 mb-1">AI 搜尋問題</p>
-          <p className="text-white font-medium">「{caseData.queryUsed}」</p>
+          <p className="text-white font-medium">「{caseView.queryUsed}」</p>
         </div>
 
         {/* AI Response */}
-        {caseData.aiResponse && (
+        {caseView.aiResponse && (
           <div className="bg-blue-500/10 rounded-xl p-4 mb-8">
             <p className="text-xs text-blue-400 mb-1">{platformCfg.label} 回應</p>
-            <p className="text-gray-300 text-sm whitespace-pre-wrap">{caseData.aiResponse}</p>
+            <p className="text-gray-300 text-sm whitespace-pre-wrap">{caseView.aiResponse}</p>
           </div>
         )}
 
         {/* Generated article */}
-        {caseData.generatedArticle?.content && (
+        {caseView.generatedArticle?.content && (
           <>
             <hr className="mb-8 border-white/10" />
             <div
               className="prose prose-invert prose-lg max-w-none prose-headings:text-white prose-p:text-gray-300"
-              dangerouslySetInnerHTML={{ __html: markdownToHtml(caseData.generatedArticle.content) }}
+              dangerouslySetInnerHTML={{ __html: markdownToHtml(caseView.generatedArticle.content) }}
             />
           </>
         )}
@@ -136,3 +138,4 @@ export default function CaseDetailClient() {
     </div>
   );
 }
+

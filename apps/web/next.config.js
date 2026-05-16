@@ -28,6 +28,34 @@ module.exports = withNextIntl({
       { source: '/api/llms-full.txt', destination: '/llms-full.txt', permanent: true },
     ];
   },
+  async headers() {
+    return [
+      {
+        source: '/feed',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }],
+      },
+      {
+        source: '/feed.json',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }],
+      },
+      {
+        source: '/directory/:siteId/feed',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }],
+      },
+      {
+        source: '/directory/:siteId/feed.json',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }],
+      },
+      {
+        source: '/industry/:industry/compare',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }],
+      },
+      {
+        source: '/industry/:industry/:siteId',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }],
+      },
+    ];
+  },
   // NOTE: previously had `rewrites()` proxying /api/:path* to api.geovault.app.
   // That was vestigial — the frontend always calls api.geovault.app directly
   // via NEXT_PUBLIC_API_URL — and the proxy was returning 403 in production

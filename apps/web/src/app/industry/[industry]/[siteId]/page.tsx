@@ -28,7 +28,15 @@ export async function generateMetadata({
     INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
 
   const data = await getBrandData(params.industry, params.siteId);
-  if (!data) return { title: `${industryLabel} — AI 品牌印象分析` };
+  if (!data) {
+    return {
+      title: `${industryLabel} — AI 品牌印象分析`,
+      robots: {
+        index: false,
+        follow: true,
+      },
+    };
+  }
 
   const siteName = data.site?.name || params.siteId;
 
@@ -37,6 +45,10 @@ export async function generateMetadata({
     description: `${siteName} 在 ${industryLabel} 行業的 AI 搜尋印象分析。查看 5 大 AI 平台對此品牌的評價、推薦語氣與引用趨勢。`,
     alternates: {
       canonical: `${SITE_URL}/industry/${params.industry}/${params.siteId}`,
+    },
+    robots: {
+      index: false,
+      follow: true,
     },
     openGraph: {
       title: `${siteName} — AI 品牌印象分析`,

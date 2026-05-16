@@ -83,6 +83,7 @@ ${items}
       'Cache-Control': 'public, max-age=3600',
       'Access-Control-Allow-Origin': '*',
       'Last-Modified': lastModified.toUTCString(),
+      'X-Robots-Tag': 'noindex, follow',
     },
   });
 }

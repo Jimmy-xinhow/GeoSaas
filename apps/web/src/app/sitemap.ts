@@ -58,10 +58,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: '/guide', priority: 0.8, changeFrequency: 'monthly' as const },
     { url: '/privacy', priority: 0.3, changeFrequency: 'yearly' as const },
     { url: '/terms', priority: 0.3, changeFrequency: 'yearly' as const },
-    { url: '/feed', priority: 0.3, changeFrequency: 'daily' as const },
-    { url: '/feed.json', priority: 0.3, changeFrequency: 'daily' as const },
-    { url: '/llms.txt', priority: 0.5, changeFrequency: 'daily' as const },
-    { url: '/llms-full.txt', priority: 0.5, changeFrequency: 'daily' as const },
   ];
   for (const page of staticPages) {
     entries.push({
@@ -101,12 +97,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly',
       priority: 0.8,
     });
-    entries.push({
-      url: `${BASE_URL}/industry/${ind.value}/compare`,
-      lastModified: now,
-      changeFrequency: 'weekly',
-      priority: 0.6,
-    });
   }
 
   // ─── Single aggregate API call ───
@@ -121,18 +111,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified,
       changeFrequency: 'weekly',
       priority: 0.6,
-    });
-    entries.push({
-      url: `${BASE_URL}/directory/${s.id}/feed`,
-      lastModified,
-      changeFrequency: 'daily',
-      priority: 0.4,
-    });
-    entries.push({
-      url: `${BASE_URL}/directory/${s.id}/feed.json`,
-      lastModified,
-      changeFrequency: 'daily',
-      priority: 0.4,
     });
   }
 
@@ -154,19 +132,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.5,
     });
-  }
-
-  // Per-industry brand pages
-  for (const [industry, siteIds] of Object.entries(data.industrySites)) {
-    if (industry === 'other') continue;
-    for (const siteId of siteIds) {
-      entries.push({
-        url: `${BASE_URL}/industry/${industry}/${siteId}`,
-        lastModified: now,
-        changeFrequency: 'weekly',
-        priority: 0.7,
-      });
-    }
   }
 
   return entries;

@@ -69,6 +69,7 @@ export async function GET(
       'Cache-Control': 'public, max-age=3600',
       'Access-Control-Allow-Origin': '*',
       'Last-Modified': lastModified,
+      'X-Robots-Tag': 'noindex, follow',
     },
   });
 }

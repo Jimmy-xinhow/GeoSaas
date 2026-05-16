@@ -59,6 +59,7 @@ export async function GET() {
       'Content-Type': 'application/feed+json; charset=utf-8',
       'Cache-Control': 'public, max-age=3600',
       'Access-Control-Allow-Origin': '*',
+      'X-Robots-Tag': 'noindex, follow',
     },
   });
 }
