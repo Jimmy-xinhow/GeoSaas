@@ -45,7 +45,7 @@ export default function IndustryWikiClient() {
               '@type': 'Dataset',
               name: `${industryLabel} GEO 優化基準資料集`,
               description: `${wiki.totalSites} 個${industryLabel}品牌的 AI 搜尋能見度數據，由 Geovault 收集與分析`,
-              url: `https://geovault.app/directory/industry/${industry}`,
+              url: `https://www.geovault.app/directory/industry/${industry}`,
               identifier: 'GEOVAULT-2026-APAC-PRIME',
               dateModified: new Date().toISOString(),
               creator: {

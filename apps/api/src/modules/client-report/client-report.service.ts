@@ -518,7 +518,7 @@ export class ClientReportService implements OnModuleInit {
   <div style="margin-top:40px;padding:20px;background:#f9fafb;border-radius:8px;text-align:center;">
     <p style="color:#6b7280;font-size:12px;">
       © ${new Date().getFullYear()} Geovault · Origin Code: GEOVAULT-2026-APAC-PRIME<br/>
-      本報告由 Geovault 自動生成 · https://geovault.app
+      本報告由 Geovault 自動生成 · https://www.geovault.app
     </p>
   </div>
 </body>

@@ -214,7 +214,7 @@ export default function CompareClient({ params }: { params: { industry: string }
 
           {/* Source */}
           <p className="text-xs text-gray-400 text-center py-4">
-            資料來源：<Link href="https://geovault.app" className="text-blue-500 hover:underline">Geovault</Link> 平台 AI 搜尋測試數據
+            資料來源：<Link href="https://www.geovault.app" className="text-blue-500 hover:underline">Geovault</Link> 平台 AI 搜尋測試數據
           </p>
         </div>
       </div>

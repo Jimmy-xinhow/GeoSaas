@@ -3,6 +3,15 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { QueryDirectoryDto } from './dto/query-directory.dto';
 import { TogglePublicDto } from './dto/toggle-public.dto';
 import { IndexNowService } from '../indexnow/indexnow.service';
+import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
+import {
+  publicBlogArticleWhere,
+  publicSiteWhere,
+  publicSuccessCaseWhere,
+  unsafePublicBlogArticleWhere,
+  unsafePublicSiteWhere,
+  unsafePublicSuccessCaseWhere,
+} from '../../common/utils/public-data-filter';
 
 // Simple in-memory cache with TTL
 class MemCache {
@@ -20,6 +29,10 @@ class MemCache {
   set(key: string, data: any, ttlMs: number) {
     this.store.set(key, { data, expiresAt: Date.now() + ttlMs });
   }
+
+  clear() {
+    this.store.clear();
+  }
 }
 
 @Injectable()
@@ -30,10 +43,16 @@ export class DirectoryService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly indexNowService?: IndexNowService,
+    @Optional() private readonly llmsHostingService?: LlmsHostingService,
   ) {}
 
   private isAdmin(role?: string): boolean {
     return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
+  }
+
+  private invalidatePublicDirectoryCaches(siteId?: string): void {
+    this.cache.clear();
+    this.llmsHostingService?.invalidatePlatformLlmsFull(siteId);
   }
 
   private withDerivedScoreBadges<T extends { badge: string; label: string; awardedAt: Date }>(
@@ -79,25 +98,25 @@ export class DirectoryService {
   async getSitemapData() {
     const [sites, blogArticles, cases, industrySitesRaw] = await Promise.all([
       this.prisma.site.findMany({
-        where: { isPublic: true },
+        where: publicSiteWhere({ isPublic: true }),
         select: { id: true, bestScoreAt: true, industry: true },
         orderBy: { bestScore: 'desc' },
         take: 2000,
       }),
       this.prisma.blogArticle.findMany({
-        where: { published: true },
+        where: publicBlogArticleWhere({ published: true }),
         select: { slug: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
         take: 2000,
       }),
       this.prisma.geoSuccessCase.findMany({
-        where: { status: 'approved' },
+        where: publicSuccessCaseWhere({ status: 'approved' }),
         select: { id: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
         take: 500,
       }),
       this.prisma.site.findMany({
-        where: { isPublic: true, bestScore: { gt: 0 }, industry: { not: null } },
+        where: publicSiteWhere({ isPublic: true, bestScore: { gt: 0 }, industry: { not: null } }),
         select: { id: true, industry: true },
         orderBy: { bestScore: 'desc' },
       }),
@@ -117,11 +136,86 @@ export class DirectoryService {
     };
   }
 
+  async auditPublicDataHygiene(apply = false) {
+    const [unsafeSites, unsafeArticles, unsafeCases] = await Promise.all([
+      this.prisma.site.findMany({
+        where: unsafePublicSiteWhere({ isPublic: true }),
+        select: { id: true, name: true, url: true, isPublic: true },
+        take: 100,
+      }),
+      this.prisma.blogArticle.findMany({
+        where: unsafePublicBlogArticleWhere({ published: true }),
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          published: true,
+          site: { select: { name: true, url: true } },
+        },
+        take: 100,
+      }),
+      this.prisma.geoSuccessCase.findMany({
+        where: unsafePublicSuccessCaseWhere({ status: 'approved' }),
+        select: {
+          id: true,
+          title: true,
+          aiPlatform: true,
+          status: true,
+          site: { select: { name: true, url: true } },
+        },
+        take: 100,
+      }),
+    ]);
+
+    const result: Record<string, any> = {
+      dryRun: !apply,
+      unsafeSites: { count: unsafeSites.length, samples: unsafeSites },
+      unsafeArticles: { count: unsafeArticles.length, samples: unsafeArticles },
+      unsafeCases: { count: unsafeCases.length, samples: unsafeCases },
+    };
+
+    if (!apply) return result;
+
+    const [sitesUpdated, articlesUpdated, casesUpdated] = await Promise.all([
+      this.prisma.site.updateMany({
+        where: unsafePublicSiteWhere({ isPublic: true }),
+        data: { isPublic: false },
+      }),
+      this.prisma.blogArticle.updateMany({
+        where: unsafePublicBlogArticleWhere({ published: true }),
+        data: { published: false },
+      }),
+      this.prisma.geoSuccessCase.updateMany({
+        where: unsafePublicSuccessCaseWhere({ status: 'approved' }),
+        data: {
+          status: 'rejected',
+          featuredAt: null,
+          rejectionReason: 'Removed from public SEO surfaces by hygiene cleanup',
+        },
+      }),
+    ]);
+
+    const webUrl = process.env.FRONTEND_URL || 'https://www.geovault.app';
+    for (const path of ['/sitemap.xml', '/blog', '/directory', '/cases', '/llms.txt', '/llms-full.txt']) {
+      this.indexNowService?.submitUrl(`${webUrl}${path}`).catch(() => {});
+    }
+    this.invalidatePublicDirectoryCaches();
+
+    return {
+      ...result,
+      applied: {
+        sitesSetPrivate: sitesUpdated.count,
+        articlesUnpublished: articlesUpdated.count,
+        casesRejected: casesUpdated.count,
+      },
+    };
+  }
+
   async listDirectory(query: QueryDirectoryDto) {
     const { search, industry, tier, minScore, page = 1, limit = 12 } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = { isPublic: true };
+    const where: any = publicSiteWhere({ isPublic: true });
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -163,7 +257,7 @@ export class DirectoryService {
 
   async getLeaderboard() {
     return this.prisma.site.findMany({
-      where: { isPublic: true, bestScore: { gt: 0 } },
+      where: publicSiteWhere({ isPublic: true, bestScore: { gt: 0 } }),
       select: {
         id: true,
         name: true,
@@ -182,14 +276,14 @@ export class DirectoryService {
     if (cached) return cached;
 
     const [totalSites, avgResult, tierCounts] = await Promise.all([
-      this.prisma.site.count({ where: { isPublic: true } }),
+      this.prisma.site.count({ where: publicSiteWhere({ isPublic: true }) }),
       this.prisma.site.aggregate({
-        where: { isPublic: true },
+        where: publicSiteWhere({ isPublic: true }),
         _avg: { bestScore: true },
       }),
       this.prisma.site.groupBy({
         by: ['tier'],
-        where: { isPublic: true, tier: { not: null } },
+        where: publicSiteWhere({ isPublic: true, tier: { not: null } }),
         _count: true,
       }),
     ]);
@@ -213,10 +307,10 @@ export class DirectoryService {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     return this.prisma.site.findMany({
-      where: {
+      where: publicSiteWhere({
         isPublic: true,
         createdAt: { gte: thirtyDaysAgo },
-      },
+      }),
       select: {
         id: true,
         name: true,
@@ -238,7 +332,7 @@ export class DirectoryService {
     const topSites = await this.prisma.crawlerVisit.groupBy({
       by: ['siteId'],
       where: {
-        site: { isPublic: true },
+        site: publicSiteWhere({ isPublic: true }),
         visitedAt: { gte: oneDayAgo },
       },
       _count: true,
@@ -250,7 +344,7 @@ export class DirectoryService {
 
     const siteIds = topSites.map((s: any) => s.siteId);
     const sites = await this.prisma.site.findMany({
-      where: { id: { in: siteIds } },
+      where: publicSiteWhere({ id: { in: siteIds } }),
       select: { id: true, name: true, url: true, industry: true, tier: true, bestScore: true },
     });
 
@@ -266,7 +360,7 @@ export class DirectoryService {
     const topSites = await this.prisma.crawlerVisit.groupBy({
       by: ['siteId'],
       where: {
-        site: { isPublic: true },
+        site: publicSiteWhere({ isPublic: true }),
       },
       _count: true,
       orderBy: { _count: { siteId: 'desc' } },
@@ -277,7 +371,7 @@ export class DirectoryService {
 
     const siteIds = topSites.map((s: any) => s.siteId);
     const sites = await this.prisma.site.findMany({
-      where: { id: { in: siteIds } },
+      where: publicSiteWhere({ id: { in: siteIds } }),
       select: { id: true, name: true, url: true, industry: true, tier: true, bestScore: true },
     });
 
@@ -297,7 +391,7 @@ export class DirectoryService {
       where: {
         status: 'COMPLETED',
         completedAt: { gte: sevenDaysAgo },
-        site: { isPublic: true },
+        site: publicSiteWhere({ isPublic: true }),
       },
       orderBy: { completedAt: 'desc' },
       distinct: ['siteId'],
@@ -323,7 +417,7 @@ export class DirectoryService {
   /** Full wiki data for a specific industry */
   async getIndustryWikiData(industrySlug: string) {
     const sites = await this.prisma.site.findMany({
-      where: { industry: industrySlug, isPublic: true },
+      where: publicSiteWhere({ industry: industrySlug, isPublic: true }),
       select: {
         id: true,
         name: true,
@@ -409,14 +503,14 @@ export class DirectoryService {
   /** Stats for a specific industry */
   async getIndustryStats(industry: string) {
     const [totalSites, avgResult, topSites] = await Promise.all([
-      this.prisma.site.count({ where: { isPublic: true, industry } }),
+      this.prisma.site.count({ where: publicSiteWhere({ isPublic: true, industry }) }),
       this.prisma.site.aggregate({
-        where: { isPublic: true, industry },
+        where: publicSiteWhere({ isPublic: true, industry }),
         _avg: { bestScore: true },
         _max: { bestScore: true },
       }),
       this.prisma.site.findMany({
-        where: { isPublic: true, industry, bestScore: { gt: 0 } },
+        where: publicSiteWhere({ isPublic: true, industry, bestScore: { gt: 0 } }),
         select: { id: true, name: true, url: true, tier: true, bestScore: true },
         orderBy: { bestScore: 'desc' },
         take: 5,
@@ -436,7 +530,7 @@ export class DirectoryService {
   async getAllIndustryStats() {
     const stats = await this.prisma.site.groupBy({
       by: ['industry'],
-      where: { isPublic: true, industry: { not: null } },
+      where: publicSiteWhere({ isPublic: true, industry: { not: null } }),
       _count: true,
       _avg: { bestScore: true },
     });
@@ -464,7 +558,7 @@ export class DirectoryService {
       crawlerVisits24h,
       activeBotCount,
     ] = await Promise.all([
-      this.prisma.site.count({ where: { isPublic: true } }),
+      this.prisma.site.count({ where: publicSiteWhere({ isPublic: true }) }),
       this.prisma.scan.count({ where: { status: 'COMPLETED' } }),
       this.prisma.crawlerVisit.count(),
       this.prisma.crawlerVisit.count({ where: { visitedAt: { gte: oneDayAgo } } }),
@@ -492,7 +586,7 @@ export class DirectoryService {
 
     const recentVisits = await this.prisma.crawlerVisit.findMany({
       where: {
-        site: { isPublic: true },
+        site: publicSiteWhere({ isPublic: true }),
       },
       select: {
         id: true,
@@ -518,14 +612,14 @@ export class DirectoryService {
     const [last24hCount, activeBots] = await Promise.all([
       this.prisma.crawlerVisit.count({
         where: {
-          site: { isPublic: true },
+          site: publicSiteWhere({ isPublic: true }),
           visitedAt: { gte: oneDayAgo },
         },
       }),
       this.prisma.crawlerVisit.groupBy({
         by: ['botName'],
         where: {
-          site: { isPublic: true },
+          site: publicSiteWhere({ isPublic: true }),
           visitedAt: { gte: oneDayAgo },
         },
         _count: true,
@@ -548,7 +642,7 @@ export class DirectoryService {
 
   async getSiteDetail(siteId: string) {
     const site = await this.prisma.site.findFirst({
-      where: { id: siteId, isPublic: true },
+      where: publicSiteWhere({ id: siteId, isPublic: true }),
       select: {
         id: true,
         name: true,
@@ -643,11 +737,11 @@ export class DirectoryService {
   async getProgressStars() {
     // Get public sites that have at least 2 scans
     const sites = await this.prisma.site.findMany({
-      where: {
+      where: publicSiteWhere({
         isPublic: true,
         bestScore: { gt: 0 },
         scans: { some: { status: 'COMPLETED' } },
-      },
+      }),
       select: {
         id: true,
         name: true,
@@ -722,6 +816,7 @@ export class DirectoryService {
         this.logger.warn(`IndexNow auto-submit failed for ${site.url}: ${err}`);
       });
     }
+    this.invalidatePublicDirectoryCaches(siteId);
 
     return updated;
   }
@@ -738,7 +833,7 @@ export class DirectoryService {
     this.logger.log('Recalculating site tiers...');
 
     const sites = await this.prisma.site.findMany({
-      where: { isPublic: true },
+      where: publicSiteWhere({ isPublic: true }),
       select: {
         id: true,
         bestScore: true,
@@ -778,7 +873,7 @@ export class DirectoryService {
    */
   async getSiteFeedEvents(siteId: string, limit = 50) {
     const site = await this.prisma.site.findFirst({
-      where: { id: siteId, isPublic: true },
+      where: publicSiteWhere({ id: siteId, isPublic: true }),
       select: { id: true, name: true, url: true, industry: true, bestScore: true, updatedAt: true },
     });
     if (!site) throw new NotFoundException('Site not found');
@@ -803,7 +898,7 @@ export class DirectoryService {
         select: { badge: true, label: true, awardedAt: true },
       }),
       this.prisma.blogArticle.findMany({
-        where: { siteId, published: true },
+        where: publicBlogArticleWhere({ siteId, published: true }),
         orderBy: { createdAt: 'desc' },
         take: limit,
         select: { slug: true, title: true, description: true, createdAt: true },

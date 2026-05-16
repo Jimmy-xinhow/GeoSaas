@@ -60,10 +60,8 @@ export default async function RootLayout({
         <link rel="ai-plugin" type="application/json" href="/.well-known/ai-plugin.json" />
         <link rel="ai-policy" type="text/plain" href="/.well-known/ai.txt" />
 
-        {/* hreflang */}
+        {/* hreflang: only advertise locales that have real, indexable pages. */}
         <link rel="alternate" hrefLang="zh-TW" href="https://www.geovault.app" />
-        <link rel="alternate" hrefLang="en" href="https://www.geovault.app/en" />
-        <link rel="alternate" hrefLang="ja" href="https://www.geovault.app/ja" />
         <link rel="alternate" hrefLang="x-default" href="https://www.geovault.app" />
       </head>
       <body className={inter.className}>

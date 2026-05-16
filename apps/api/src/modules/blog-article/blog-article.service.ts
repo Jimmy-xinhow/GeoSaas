@@ -26,6 +26,7 @@ import {
 } from '../content-quality/specs/buyer-guide.spec';
 import OpenAI from 'openai';
 import pLimit from '@/common/utils/p-limit';
+import { isPublicSafeArticle, publicBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
 
 const ALL_TEMPLATE_TYPES: TemplateType[] = [
   'geo_overview',
@@ -174,7 +175,7 @@ export class BlogArticleService {
     const { page = 1, limit = 12, category, locale } = params;
     const skip = (page - 1) * limit;
 
-    const where: any = { published: true };
+    const where: any = publicBlogArticleWhere({ published: true });
     if (category) where.category = category;
     if (locale) where.locale = locale;
 
@@ -219,13 +220,14 @@ export class BlogArticleService {
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
     if (direct) {
+      if (!isPublicSafeArticle(direct)) return null;
       if (direct.templateType === 'client_daily' && !this.isClientDailyArticleSafe(direct)) {
         return null;
       }
       return direct;
     }
     const alias = await this.prisma.blogArticle.findFirst({
-      where: { aliasSlugs: { has: slug } },
+      where: publicBlogArticleWhere({ aliasSlugs: { has: slug } }),
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
     if (alias?.templateType === 'client_daily' && !this.isClientDailyArticleSafe(alias)) {
@@ -1350,11 +1352,11 @@ export class BlogArticleService {
     // Pull ranked public sites for this industry. Take 3x the limit so we
     // can filter out sites with corrupt names and still land 10 clean ones.
     const rawSites = await this.prisma.site.findMany({
-      where: {
+      where: publicSiteWhere({
         isPublic: true,
         industry: industrySlug,
         bestScore: { gt: 0 },
-      },
+      }),
       orderBy: { bestScore: 'desc' },
       take: Math.max(opts.limit ?? 10, 10) * 3,
       select: {
@@ -1411,7 +1413,7 @@ export class BlogArticleService {
 
     // Industry stats (all public sites)
     const stats = await this.prisma.site.aggregate({
-      where: { isPublic: true, industry: industrySlug, bestScore: { gt: 0 } },
+      where: publicSiteWhere({ isPublic: true, industry: industrySlug, bestScore: { gt: 0 } }),
       _avg: { bestScore: true },
       _count: { id: true },
     });
@@ -1587,12 +1589,12 @@ export class BlogArticleService {
 
   private async resolveIndustryStats(industrySlug: string) {
     const stats = await this.prisma.site.aggregate({
-      where: { isPublic: true, industry: industrySlug, bestScore: { gt: 0 } },
+      where: publicSiteWhere({ isPublic: true, industry: industrySlug, bestScore: { gt: 0 } }),
       _avg: { bestScore: true },
       _count: { id: true },
     });
     const topSites = await this.prisma.site.findMany({
-      where: { isPublic: true, industry: industrySlug, bestScore: { gt: 0 } },
+      where: publicSiteWhere({ isPublic: true, industry: industrySlug, bestScore: { gt: 0 } }),
       orderBy: { bestScore: 'desc' },
       take: 3,
       select: { bestScore: true },
@@ -1785,12 +1787,12 @@ export class BlogArticleService {
 
     // Industry stats (only public sites with a score, matches Layer 2 rules)
     const stats = await this.prisma.site.aggregate({
-      where: { isPublic: true, industry: industrySlug, bestScore: { gt: 0 } },
+      where: publicSiteWhere({ isPublic: true, industry: industrySlug, bestScore: { gt: 0 } }),
       _avg: { bestScore: true },
       _count: { id: true },
     });
     const topSites = await this.prisma.site.findMany({
-      where: { isPublic: true, industry: industrySlug, bestScore: { gt: 0 } },
+      where: publicSiteWhere({ isPublic: true, industry: industrySlug, bestScore: { gt: 0 } }),
       orderBy: { bestScore: 'desc' },
       take: 3,
       select: { bestScore: true },
@@ -2363,7 +2365,7 @@ Required output:
     }>;
   }> {
     const sites = await this.prisma.site.findMany({
-      where: { isClient: true, isPublic: true },
+      where: publicSiteWhere({ isClient: true, isPublic: true }),
       select: { id: true, name: true, industry: true, url: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -2419,7 +2421,7 @@ Required output:
     }
 
     const sites = await this.prisma.site.findMany({
-      where: { isClient: true, isPublic: true },
+      where: publicSiteWhere({ isClient: true, isPublic: true }),
       select: { id: true, name: true },
     });
     this.logger.log(`client_daily batch start: ${sites.length} clients, dayType=${dayType}`);

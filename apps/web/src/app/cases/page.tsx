@@ -2,7 +2,19 @@ import { Metadata } from 'next';
 import CasesClient from './cases-client';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 const OG_IMAGE = `${SITE_URL}/opengraph-image`;
+
+async function getCaseSnapshot() {
+  try {
+    const res = await fetch(`${API_URL}/api/success-cases?limit=8`, { next: { revalidate: 3600 } });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json?.data?.items || json?.items || [];
+  } catch {
+    return [];
+  }
+}
 
 export const metadata: Metadata = {
   title: 'GEO 成功案例 — 真實品牌被 AI 引用的故事',
@@ -37,14 +49,45 @@ const jsonLd = {
   identifier: 'GEOVAULT-2026-APAC-PRIME',
 };
 
-export default function CasesPage() {
+export default async function CasesPage() {
+  const cases = await getCaseSnapshot();
+  const itemListJsonLd = cases.length > 0
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        name: 'Geovault GEO 成功案例',
+        itemListElement: cases.map((item: any, index: number) => ({
+          '@type': 'ListItem',
+          position: index + 1,
+          url: `${SITE_URL}/cases/${item.id}`,
+          name: item.title,
+        })),
+      }
+    : null;
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      {itemListJsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
+      )}
       <CasesClient />
+      {cases.length > 0 && (
+        <section className="bg-gray-900 text-white max-w-4xl mx-auto px-6 pb-16">
+          <h2 className="text-lg font-bold mb-4">最新 GEO 成功案例</h2>
+          <div className="space-y-3">
+            {cases.map((item: any) => (
+              <a key={item.id} href={`/cases/${item.id}`} className="block rounded-xl border border-white/10 bg-white/5 p-5 hover:bg-white/10 transition-colors">
+                <h3 className="font-semibold text-white">{item.title}</h3>
+                <p className="mt-1 text-sm text-yellow-200/60 line-clamp-1">{item.queryUsed}</p>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
     </>
   );
 }

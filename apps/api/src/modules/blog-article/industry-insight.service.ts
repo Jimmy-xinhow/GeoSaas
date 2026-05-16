@@ -9,6 +9,7 @@ import {
   IndustryInsightData,
   createIndustryInsightSpec,
 } from '../content-quality/specs/industry-insight.spec';
+import { publicSiteWhere } from '../../common/utils/public-data-filter';
 
 export type InsightType =
   | 'industry_current_state'
@@ -121,7 +122,7 @@ export class IndustryInsightService {
 
     const industries = await this.prisma.site.groupBy({
       by: ['industry'],
-      where: { isPublic: true, industry: { not: null } },
+      where: publicSiteWhere({ isPublic: true, industry: { not: null } }),
       _count: { id: true },
     });
 
@@ -154,7 +155,7 @@ export class IndustryInsightService {
   async generateAll(): Promise<{ generated: number }> {
     const industries = await this.prisma.site.groupBy({
       by: ['industry'],
-      where: { isPublic: true, industry: { not: null } },
+      where: publicSiteWhere({ isPublic: true, industry: { not: null } }),
       _count: { id: true },
     });
 
@@ -174,7 +175,7 @@ export class IndustryInsightService {
 
   private async getIndustryData(industrySlug: string) {
     const sites = await this.prisma.site.findMany({
-      where: { industry: industrySlug, isPublic: true },
+      where: publicSiteWhere({ industry: industrySlug, isPublic: true }),
       select: {
         bestScore: true,
         tier: true,
@@ -263,7 +264,7 @@ ${data.weakestIndicators.map((w, i) => `${i + 1}. ${w.name}（僅 ${w.passRate}%
 6. 每段落不超過 3-4 句，長內容拆成條列式
 7. 不用「首先」「其次」「最後」等過渡詞，直接講重點
 8. 不用「在這篇文章中」「讓我們」「接下來」等廢話
-9. 文末標注：*資料來源：[Geovault](https://geovault.app) 平台 GEO 掃描數據*`;
+9. 文末標注：*資料來源：[Geovault](https://www.geovault.app) 平台 GEO 掃描數據*`;
 
     const prompts: Record<InsightType, string> = {
       industry_current_state: `你是一位產業分析師。請根據以下真實數據，撰寫一篇 900–1100 字的繁體中文行業報告。

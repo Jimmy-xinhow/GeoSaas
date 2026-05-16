@@ -8,6 +8,18 @@ export const dynamic = 'force-static';
 export const revalidate = 86400;
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
+const HOSTNAME = new URL(BASE_URL).hostname;
+const PRIVATE_PATHS = [
+  '/api/',
+  '/settings',
+  '/admin/',
+  '/dashboard/',
+  '/cdn-cgi/',
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+];
 
 const AI_BOTS = [
   'GPTBot', 'ChatGPT-User', 'OAI-SearchBot',
@@ -31,18 +43,7 @@ export async function GET() {
     // closed and spread the load with a modest Crawl-delay.
     'User-agent: *',
     'Allow: /',
-    'Disallow: /api/',
-    'Disallow: /settings',
-    'Disallow: /admin/',
-    'Disallow: /dashboard/',
-    'Disallow: /cdn-cgi/',
-    // Auth pages have no AI-citable content. Real-world telemetry showed
-    // ~30% of crawl budget being spent on /login + /register; reclaim it
-    // for directory + blog pages where citations actually compound.
-    'Disallow: /login',
-    'Disallow: /register',
-    'Disallow: /forgot-password',
-    'Disallow: /reset-password',
+    ...PRIVATE_PATHS.map((path) => `Disallow: ${path}`),
     'Crawl-delay: 5',
     '',
   ];
@@ -52,18 +53,16 @@ export async function GET() {
   for (const bot of AI_BOTS) {
     lines.push(`User-agent: ${bot}`);
     lines.push('Allow: /');
-    lines.push('Disallow: /cdn-cgi/');
-    lines.push('Disallow: /login');
-    lines.push('Disallow: /register');
-    lines.push('Disallow: /forgot-password');
-    lines.push('Disallow: /reset-password');
+    for (const path of PRIVATE_PATHS) {
+      lines.push(`Disallow: ${path}`);
+    }
     // Shorter delay for AI bots — we actively want them to index fresher.
     lines.push('Crawl-delay: 1');
     lines.push('');
   }
 
   lines.push(`Sitemap: ${BASE_URL}/sitemap.xml`);
-  lines.push(`Host: ${BASE_URL}`);
+  lines.push(`Host: ${HOSTNAME}`);
 
   return new Response(lines.join('\n'), {
     headers: {

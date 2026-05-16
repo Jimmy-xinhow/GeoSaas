@@ -25,7 +25,7 @@ export class EmailService {
         <h2>${data.siteName} 掃描完成</h2>
         <p>您的網站 <strong>${data.siteName}</strong> 的 GEO 掃描已完成。</p>
         <p style="font-size: 48px; font-weight: bold; color: ${data.score >= 80 ? '#22c55e' : data.score >= 60 ? '#3b82f6' : '#ef4444'};">${data.score}/100</p>
-        <p><a href="https://geovault.app/sites/${data.url}" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">查看詳細報告</a></p>
+        <p><a href="https://www.geovault.app/sites/${data.url}" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">查看詳細報告</a></p>
         <hr/>
         <p style="color: #9ca3af; font-size: 12px;">Geovault — The APAC Authority on AI Search Optimization</p>
       `,
@@ -40,7 +40,7 @@ export class EmailService {
       html: `
         <h2>🏅 新徽章解鎖！</h2>
         <p>您的網站 <strong>${data.siteName}</strong> 獲得了 <strong>「${data.badgeLabel}」</strong> 徽章。</p>
-        <p><a href="https://geovault.app" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">前往查看</a></p>
+        <p><a href="https://www.geovault.app" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">前往查看</a></p>
         <hr/>
         <p style="color: #9ca3af; font-size: 12px;">Geovault — The APAC Authority on AI Search Optimization</p>
       `,
@@ -55,7 +55,7 @@ export class EmailService {
       html: `
         <h2>AI 引用變動通知</h2>
         <p>${data.changes}</p>
-        <p><a href="https://geovault.app/monitor" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">查看監控儀表板</a></p>
+        <p><a href="https://www.geovault.app/monitor" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">查看監控儀表板</a></p>
         <hr/>
         <p style="color: #9ca3af; font-size: 12px;">Geovault — The APAC Authority on AI Search Optimization</p>
       `,
@@ -77,7 +77,7 @@ export class EmailService {
           <li>📊 追蹤 AI 爬蟲造訪紀錄</li>
           <li>📈 監控 ChatGPT、Claude、Copilot 等 AI 引用狀態</li>
         </ol>
-        <p><a href="https://geovault.app/dashboard" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">開始使用</a></p>
+        <p><a href="https://www.geovault.app/dashboard" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">開始使用</a></p>
         <hr/>
         <p style="color: #9ca3af; font-size: 12px;">Geovault — The APAC Authority on AI Search Optimization</p>
       `,

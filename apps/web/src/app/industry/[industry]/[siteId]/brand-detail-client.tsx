@@ -204,7 +204,7 @@ export default function BrandDetailClient({ params }: { params: { industry: stri
 
           {/* Source */}
           <p className="text-xs text-gray-400 text-center py-4">
-            資料來源：<Link href="https://geovault.app" className="text-blue-500 hover:underline">Geovault</Link> 平台 AI 搜尋測試數據
+            資料來源：<Link href="https://www.geovault.app" className="text-blue-500 hover:underline">Geovault</Link> 平台 AI 搜尋測試數據
             · 更新週期：每週一 · 測試涵蓋 ChatGPT、Claude、Perplexity、Gemini、Copilot
           </p>
         </div>

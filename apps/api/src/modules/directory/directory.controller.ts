@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Patch, Post, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -153,6 +153,15 @@ export class DirectoryController {
     @CurrentUser('role') role: string,
   ) {
     return this.service.togglePublic(siteId, dto, userId, role);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @Post('admin/seo/public-hygiene')
+  @ApiOperation({ summary: 'Audit or clean unsafe public SEO data. Defaults to dry-run; pass ?apply=true to unpublish/private unsafe records.' })
+  publicDataHygiene(@Query('apply') apply?: string) {
+    return this.service.auditPublicDataHygiene(apply === 'true' || apply === '1');
   }
 
   @ApiBearerAuth()

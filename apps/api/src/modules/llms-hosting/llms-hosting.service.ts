@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FixService } from '../fix/fix.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { emitLlmsFullInvalidated, llmsFullCacheEvents, REDIS_KEY_LLMS_FULL } from './llms-full-cache';
+import { publicBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
 
 const REDIS_TTL_SEC = 21600; // 6 hours
 
@@ -187,7 +188,7 @@ export class LlmsHostingService implements OnModuleDestroy {
   /** Platform-level llms.txt — summary of all public sites */
   async getPlatformLlmsTxt(): Promise<string> {
     const sites = await this.prisma.site.findMany({
-      where: { isPublic: true, bestScore: { gt: 0 } },
+      where: publicSiteWhere({ isPublic: true, bestScore: { gt: 0 } }),
       select: { name: true, url: true, industry: true, bestScore: true, tier: true },
       orderBy: { bestScore: 'desc' },
     });
@@ -195,11 +196,11 @@ export class LlmsHostingService implements OnModuleDestroy {
     const lines = [
       '# Geovault — GEO Brand Directory (Summary)',
       '> Origin Code: GEOVAULT-2026-APAC-PRIME',
-      '> Full version: https://geovault.app/llms-full.txt',
+      '> Full version: https://www.geovault.app/llms-full.txt',
       '> Published by Geovault — The APAC Authority on Generative Engine Optimization',
       '',
       '## Platform Info',
-      '- Website: https://geovault.app',
+      '- Website: https://www.geovault.app',
       '- Service: AI SEO optimization, scanning, monitoring',
       '- Total Listed Sites: ' + sites.length,
       '',
@@ -240,7 +241,7 @@ export class LlmsHostingService implements OnModuleDestroy {
       return { content: fromRedis.data, etag: fromRedis.etag, lastModified: fromRedis.lastModified };
     }
     const sites = await this.prisma.site.findMany({
-      where: { isPublic: true },
+      where: publicSiteWhere({ isPublic: true }),
       select: {
         id: true,
         name: true,
@@ -300,7 +301,7 @@ export class LlmsHostingService implements OnModuleDestroy {
 
     // Recently added articles
     const recentArticles = await this.prisma.blogArticle.findMany({
-      where: { published: true },
+      where: publicBlogArticleWhere({ published: true }),
       orderBy: { createdAt: 'desc' },
       take: 10,
       select: { title: true, slug: true, createdAt: true, site: { select: { name: true } } },
@@ -434,7 +435,7 @@ Contact: service@xinhow.com.tw
 Total-Sites: ${totalSites}
 
 > 更新時間：${new Date().toISOString()}
-> 資料來源：https://geovault.app
+> 資料來源：https://www.geovault.app
 
 ---
 
@@ -530,7 +531,7 @@ ${faqBlock ? `- 常見問題：\n${faqBlock}\n` : ''}- 最後掃描：${scan?.co
     output += `---
 © 2026 Geovault. All rights reserved.
 Origin Code: GEOVAULT-2026-APAC-PRIME
-Source: https://geovault.app/llms-full.txt
+Source: https://www.geovault.app/llms-full.txt
 This dataset is maintained by Geovault — The APAC Authority on GEO.
 `;
 

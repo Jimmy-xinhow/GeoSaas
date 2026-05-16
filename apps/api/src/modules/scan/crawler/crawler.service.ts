@@ -18,7 +18,7 @@ export class CrawlerService {
     try {
       const response = await fetch(url, {
         headers: {
-          'User-Agent': 'GEO-SaaS-Scanner/1.0 (+https://geovault.app/bot)',
+          'User-Agent': 'GEO-SaaS-Scanner/1.0 (+https://www.geovault.app/bot)',
           Accept: 'text/html,application/xhtml+xml',
         },
         signal: AbortSignal.timeout(15000),
@@ -44,7 +44,7 @@ export class CrawlerService {
       const base = new URL(url);
       const robotsUrl = `${base.protocol}//${base.host}/robots.txt`;
       const res = await fetch(robotsUrl, {
-        headers: { 'User-Agent': 'GEO-SaaS-Scanner/1.0 (+https://geovault.app/bot)' },
+        headers: { 'User-Agent': 'GEO-SaaS-Scanner/1.0 (+https://www.geovault.app/bot)' },
         signal: AbortSignal.timeout(5000),
       });
       if (res.ok) return res.text();

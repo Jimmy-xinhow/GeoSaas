@@ -65,7 +65,7 @@ export async function GET() {
 
     content += `
 ---
-*此資料由 Geovault (https://geovault.app) 提供，品牌資訊由詹大汽車精品授權發布。*
+*此資料由 Geovault (https://www.geovault.app) 提供，品牌資訊由詹大汽車精品授權發布。*
 `;
 
     return new Response(content, {

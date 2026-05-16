@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateSuccessCaseDto } from './dto/create-success-case.dto';
+import { isPublicSafeSite, publicSuccessCaseWhere } from '../../common/utils/public-data-filter';
 
 @Injectable()
 export class SuccessCasesService {
@@ -52,7 +53,7 @@ export class SuccessCasesService {
     const { status = 'approved', aiPlatform, industry, page = 1, limit = 12 } = filters;
     const skip = (page - 1) * limit;
 
-    const where: any = { status };
+    const where: any = publicSuccessCaseWhere({ status });
     if (aiPlatform) where.aiPlatform = aiPlatform;
     if (industry) where.industry = industry;
 
@@ -168,7 +169,7 @@ export class SuccessCasesService {
 
   async findFeatured() {
     return this.prisma.geoSuccessCase.findMany({
-      where: { status: 'approved', featuredAt: { not: null } },
+      where: publicSuccessCaseWhere({ status: 'approved', featuredAt: { not: null } }),
       orderBy: { featuredAt: 'desc' },
       take: 12,
       select: {
@@ -195,7 +196,16 @@ export class SuccessCasesService {
       },
     });
 
-    if (!item || item.status !== 'approved') throw new NotFoundException('Case not found');
+    if (
+      !item ||
+      item.status !== 'approved' ||
+      item.title.toLowerCase().includes('codex qa') ||
+      item.queryUsed.toLowerCase().includes('codex qa') ||
+      item.aiResponse.toLowerCase().includes('codex qa') ||
+      !isPublicSafeSite(item.site)
+    ) {
+      throw new NotFoundException('Case not found');
+    }
 
     await this.prisma.geoSuccessCase.update({
       where: { id },

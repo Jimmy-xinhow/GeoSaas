@@ -9,6 +9,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 const AI_BOT_PATTERNS = [...AI_BOTS].sort((a, b) => b.uaPattern.length - a.uaPattern.length);
 
 export function middleware(request: NextRequest) {
+  if (request.nextUrl.hostname === 'geovault.app') {
+    const url = request.nextUrl.clone();
+    url.hostname = 'www.geovault.app';
+    return NextResponse.redirect(url, 301);
+  }
+
   const response = NextResponse.next();
   const ua = request.headers.get('user-agent') || '';
   const pathname = request.nextUrl.pathname;
