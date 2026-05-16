@@ -4,6 +4,8 @@ import { QueryDirectoryDto } from './dto/query-directory.dto';
 import { TogglePublicDto } from './dto/toggle-public.dto';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
+import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
+import { BlogArticleService } from '../blog-article/blog-article.service';
 import {
   getDirectorySiteSeoIssues,
   isIndexableDirectorySite,
@@ -47,6 +49,8 @@ export class DirectoryService {
     private readonly prisma: PrismaService,
     @Optional() private readonly indexNowService?: IndexNowService,
     @Optional() private readonly llmsHostingService?: LlmsHostingService,
+    @Optional() private readonly profileEnrichment?: ProfileEnrichmentService,
+    @Optional() private readonly blogArticleService?: BlogArticleService,
   ) {}
 
   private isAdmin(role?: string): boolean {
@@ -56,6 +60,63 @@ export class DirectoryService {
   private invalidatePublicDirectoryCaches(siteId?: string): void {
     this.cache.clear();
     this.llmsHostingService?.invalidatePlatformLlmsFull(siteId);
+  }
+
+  private getProfileDescription(profile: unknown): string {
+    if (!profile || typeof profile !== 'object') return '';
+    const data = profile as Record<string, unknown>;
+    const value =
+      data.description ??
+      data.summary ??
+      data.brandDescription ??
+      data.about ??
+      '';
+    return typeof value === 'string' ? value.trim() : String(value || '').trim();
+  }
+
+  private async addBaselineSeoQa(site: {
+    id: string;
+    name: string;
+    url: string;
+    industry: string | null;
+    bestScore: number;
+    profile: unknown;
+  }): Promise<number> {
+    const existing = await this.prisma.siteQa.count({ where: { siteId: site.id } });
+    if (existing > 0) return 0;
+
+    const description = this.getProfileDescription(site.profile);
+    if (description.length < 40) return 0;
+
+    const industryText = site.industry ? `，產業分類為 ${site.industry}` : '';
+    const items = [
+      {
+        question: `${site.name} 是什麼品牌？`,
+        answer: `${site.name} 的官方網站是 ${site.url}${industryText}。根據 Geovault 收錄資料，這個品牌目前的 GEO 分數為 ${site.bestScore}/100。${description}`,
+        category: 'brand',
+      },
+      {
+        question: `${site.name} 的 GEO 分數代表什麼？`,
+        answer: `${site.name} 的 GEO 分數用來評估網站對 AI 搜尋與大型語言模型引用的友善程度，會參考結構化資料、llms.txt、Meta Description、FAQ Schema、Open Graph 標籤與內容可讀性等訊號。`,
+        category: 'geo',
+      },
+      {
+        question: `AI 在什麼情境下可能引用 ${site.name}？`,
+        answer: `當使用者詢問與 ${site.name}${site.industry ? `、${site.industry}` : ''} 或其官方網站資訊相關的問題時，AI 可以根據品牌描述、網站 URL、GEO 分數與公開知識庫資料理解這個品牌。`,
+        category: 'ai-citation',
+      },
+    ];
+
+    await this.prisma.siteQa.createMany({
+      data: items.map((item, index) => ({
+        siteId: site.id,
+        question: item.question,
+        answer: item.answer,
+        category: item.category,
+        sortOrder: index,
+      })),
+    });
+    return items.length;
   }
 
   private withDerivedScoreBadges<T extends { badge: string; label: string; awardedAt: Date }>(
@@ -259,6 +320,202 @@ export class DirectoryService {
         casesRejected: casesUpdated.count,
       },
     };
+  }
+
+  async recoverDirectorySeo(opts: {
+    apply?: boolean;
+    limit?: number;
+    includeArticles?: boolean;
+  } = {}) {
+    const apply = opts.apply === true;
+    const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
+    const includeArticles = opts.includeArticles === true;
+
+    const candidates = await this.prisma.site.findMany({
+      where: publicSiteWhere({
+        isPublic: true,
+        bestScore: { gte: 60 },
+        industry: { not: null },
+      }),
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        profile: true,
+        industry: true,
+        bestScore: true,
+        bestScoreAt: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            qas: true,
+            blogArticles: true,
+            crawlerVisits: true,
+          },
+        },
+        scans: {
+          where: { status: 'COMPLETED' },
+          orderBy: { completedAt: 'desc' },
+          take: 1,
+          select: { completedAt: true },
+        },
+      },
+      orderBy: [{ bestScore: 'desc' }, { updatedAt: 'asc' }],
+      take: 500,
+    });
+
+    const withIssues = candidates
+      .map((site) => ({
+        site,
+        issues: getDirectorySiteSeoIssues({
+          ...site,
+          latestScanCompletedAt: site.scans[0]?.completedAt,
+          qasCount: site._count.qas,
+          blogArticlesCount: site._count.blogArticles,
+        }),
+        descriptionLength: this.getProfileDescription(site.profile).length,
+      }))
+      .filter((item) => item.issues.length > 0);
+
+    const recoverable = withIssues
+      .filter(
+        (item) =>
+          !item.issues.some((issue) =>
+            [
+              'low-score',
+              'missing-industry',
+              'missing-score-date',
+              'missing-completed-scan',
+              'unsafe-test-site',
+            ].includes(issue),
+          ),
+      )
+      .sort((a, b) => {
+        const aOnlySupport = a.issues.length === 1 && a.issues[0] === 'missing-supporting-content';
+        const bOnlySupport = b.issues.length === 1 && b.issues[0] === 'missing-supporting-content';
+        if (aOnlySupport !== bOnlySupport) return aOnlySupport ? -1 : 1;
+        return b.site.bestScore - a.site.bestScore;
+      })
+      .slice(0, limit);
+
+    const result = {
+      apply,
+      includeArticles,
+      scanned: candidates.length,
+      alreadyIndexable: candidates.length - withIssues.length,
+      blocked: withIssues.length,
+      attempted: recoverable.length,
+      enriched: 0,
+      qaCreated: 0,
+      articlesGenerated: 0,
+      stillBlocked: 0,
+      samples: [] as Array<{
+        id: string;
+        name: string;
+        beforeIssues: string[];
+        afterIssues?: string[];
+        descriptionLengthBefore: number;
+        descriptionLengthAfter?: number;
+        qasBefore: number;
+        qasAfter?: number;
+        articleStatus?: string;
+      }>,
+    };
+
+    for (const item of recoverable) {
+      const sample = {
+        id: item.site.id,
+        name: item.site.name,
+        beforeIssues: item.issues,
+        descriptionLengthBefore: item.descriptionLength,
+        qasBefore: item.site._count.qas,
+      } as (typeof result.samples)[number];
+
+      if (!apply) {
+        result.samples.push(sample);
+        continue;
+      }
+
+      if (item.issues.includes('thin-description') && this.profileEnrichment) {
+        const enriched = await this.profileEnrichment.enrichSite(item.site.id);
+        if (enriched?.description) result.enriched++;
+      }
+
+      const refreshed = await this.prisma.site.findUnique({
+        where: { id: item.site.id },
+        select: {
+          id: true,
+          name: true,
+          url: true,
+          profile: true,
+          industry: true,
+          bestScore: true,
+          bestScoreAt: true,
+          _count: { select: { qas: true, blogArticles: true } },
+          scans: {
+            where: { status: 'COMPLETED' },
+            orderBy: { completedAt: 'desc' },
+            take: 1,
+            select: { completedAt: true },
+          },
+        },
+      });
+      if (!refreshed) continue;
+
+      const qaCreated = await this.addBaselineSeoQa(refreshed);
+      result.qaCreated += qaCreated;
+
+      let after = await this.prisma.site.findUnique({
+        where: { id: item.site.id },
+        select: {
+          id: true,
+          name: true,
+          url: true,
+          profile: true,
+          industry: true,
+          bestScore: true,
+          bestScoreAt: true,
+          _count: { select: { qas: true, blogArticles: true } },
+          scans: {
+            where: { status: 'COMPLETED' },
+            orderBy: { completedAt: 'desc' },
+            take: 1,
+            select: { completedAt: true },
+          },
+        },
+      });
+      if (!after) continue;
+
+      let afterIssues = getDirectorySiteSeoIssues({
+        ...after,
+        latestScanCompletedAt: after.scans[0]?.completedAt,
+        qasCount: after._count.qas,
+        blogArticlesCount: after._count.blogArticles,
+      });
+
+      if (includeArticles && afterIssues.length === 0 && this.blogArticleService) {
+        const article = await this.blogArticleService.generateBrandShowcaseForSite(after.id);
+        sample.articleStatus = article.status;
+        if (article.status === 'generated') result.articlesGenerated++;
+      }
+
+      after = await this.prisma.site.findUnique({
+        where: { id: item.site.id },
+        select: {
+          profile: true,
+          _count: { select: { qas: true, blogArticles: true } },
+        },
+      }) as any;
+
+      sample.descriptionLengthAfter = after ? this.getProfileDescription(after.profile).length : undefined;
+      sample.qasAfter = after?._count.qas;
+      sample.afterIssues = afterIssues;
+      if (afterIssues.length > 0) result.stillBlocked++;
+      this.invalidatePublicDirectoryCaches(item.site.id);
+      result.samples.push(sample);
+    }
+
+    return result;
   }
 
   async listDirectory(query: QueryDirectoryDto) {

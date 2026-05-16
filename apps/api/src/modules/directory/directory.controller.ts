@@ -167,6 +167,26 @@ export class DirectoryController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
+  @Post('admin/seo/directory-recovery')
+  @ApiOperation({
+    summary:
+      'Recover near-indexable directory pages by enriching profile data and baseline Q&A. Dry-run by default.',
+  })
+  directoryRecovery(
+    @Query('apply') apply?: string,
+    @Query('limit') limit?: string,
+    @Query('includeArticles') includeArticles?: string,
+  ) {
+    return this.service.recoverDirectorySeo({
+      apply: apply === 'true' || apply === '1',
+      limit: this.parseLimit(limit, 10, 50),
+      includeArticles: includeArticles === 'true' || includeArticles === '1',
+    });
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Patch('admin/sites/:siteId/verify')
   @ApiOperation({ summary: 'Toggle verified status (admin)' })
   async verify(
