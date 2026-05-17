@@ -68,6 +68,15 @@ export function isLikelyEditorialDirectoryName(name?: string | null): boolean {
   const text = (name || '').trim();
   if (!text) return false;
 
+  const obviousScrapedTitle =
+    /\.\.\.|(?:\d+\s*(?:\u5927|\u9593|\u5bb6|\u500b|\u9805))|\u4e00\u6b21\u641e\u61c2|\u7cbe\u9078|\u4e3b\u9801|\u670d\u52d9\u7bc4\u570d|\u7b2c\s*\d+\s*\u9801/i.test(text);
+  const obviousSearchTitle =
+    /(?:\u63a8\u85a6|\u9996\u9078|\u6392\u540d|\u6392\u884c|\u6e05\u55ae).*(?:\u63a8\u85a6|\u9996\u9078|\u6392\u540d|\u6392\u884c|\u6e05\u55ae)|(?:\u63a8\u85a6|\u9996\u9078|\u6392\u540d|\u6392\u884c|\u6e05\u55ae).*(?:\u53f0\u5317|\u65b0\u5317|\u53f0\u4e2d|\u9ad8\u96c4|\u7db2\u53cb|\u514d\u8cbb)/i.test(text);
+
+  if (text.length >= 18 && (obviousScrapedTitle || obviousSearchTitle)) {
+    return true;
+  }
+
   const cleanStartsLikeListArticle =
     /^(?:【?20\d{2}|TOP\s?\d+|\d+\s*(?:大|間|家)|.*(?:推薦|排名|排行|清單|懶人包))/i.test(text);
   const cleanHasQuestionTitle = /[?？]/.test(text) && text.length >= 18;
