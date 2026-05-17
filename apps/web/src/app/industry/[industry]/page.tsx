@@ -101,6 +101,29 @@ export default async function IndustryRankingPage({
           </div>
         </section>
       )}
+      <section className="bg-gray-50 max-w-5xl mx-auto px-4 pb-20">
+        <div className="rounded-xl border bg-white p-6 md:p-8 text-gray-700 leading-7 space-y-4">
+          <h2 className="text-xl font-bold text-gray-900">
+            {industryLabel}品牌如何提升 AI 搜尋推薦機率
+          </h2>
+          <p>
+            在 AI 搜尋情境中，使用者通常不只輸入品牌名稱，而是提出「推薦哪一家」、「哪個服務適合我」、
+            「附近有哪些選擇」這類決策型問題。Geovault 的{industryLabel}排行會整理公開品牌的 GEO 分數、
+            AI 引用率、網站可讀性與品牌資料完整度，協助使用者理解哪些品牌更容易被 ChatGPT、Claude、
+            Perplexity、Gemini 或 Copilot 正確辨識。
+          </p>
+          <p>
+            對{industryLabel}業者來說，影響 AI 推薦的關鍵通常包含三個層面：網站是否具備清楚的
+            JSON-LD 與 meta 資訊、是否提供 llms.txt 或其他機器可讀內容、以及品牌服務、地區、適合對象、
+            常見問題是否足夠具體。當這些資料越完整，AI 在回答消費者問題時越容易引用正確品牌，而不是只引用大型平台或泛用文章。
+          </p>
+          <p>
+            本頁的排行不是傳統廣告版位，也不是單純的 SEO 排名；它更接近 AI 可讀資料索引。每個品牌頁都會保留
+            GEO 分數、指標狀態、AI 爬蟲造訪紀錄與可驗證的公開資料，讓搜尋引擎與 AI 爬蟲能用穩定格式理解
+            {industryLabel}品牌的定位與可信度。
+          </p>
+        </div>
+      </section>
     </>
   );
 }
