@@ -76,6 +76,21 @@ export class DirectoryService {
     return typeof value === 'string' ? value.trim() : String(value || '').trim();
   }
 
+  private countCoreGeoFailures(scan?: {
+    results?: Array<{ indicator?: string | null; status?: string | null }>;
+  } | null): number {
+    return (scan?.results || []).filter((result) => {
+      const indicator = String(result.indicator || '').toLowerCase();
+      return (
+        result.status === 'fail' &&
+        (indicator.includes('json') ||
+          indicator.includes('llms') ||
+          indicator.includes('schema') ||
+          indicator.includes('meta'))
+      );
+    }).length;
+  }
+
   private async addBaselineSeoQa(site: {
     id: string;
     name: string;
@@ -178,7 +193,10 @@ export class DirectoryService {
             where: { status: 'COMPLETED' },
             orderBy: { completedAt: 'desc' },
             take: 1,
-            select: { completedAt: true },
+            select: {
+              completedAt: true,
+              results: { select: { indicator: true, status: true } },
+            },
           },
         },
         orderBy: { bestScore: 'desc' },
@@ -224,7 +242,10 @@ export class DirectoryService {
             where: { status: 'COMPLETED' },
             orderBy: { completedAt: 'desc' },
             take: 1,
-            select: { completedAt: true },
+            select: {
+              completedAt: true,
+              results: { select: { indicator: true, status: true } },
+            },
           },
         },
         orderBy: { bestScore: 'desc' },
@@ -238,6 +259,7 @@ export class DirectoryService {
         latestScanCompletedAt: s.scans[0]?.completedAt,
         qasCount: s._count.qas,
         blogArticlesCount: s._count.blogArticles,
+        coreGeoFailuresCount: this.countCoreGeoFailures(s.scans[0]),
       }),
     );
     const indexableIndustrySites = industrySitesRaw.filter((s) =>
@@ -246,6 +268,7 @@ export class DirectoryService {
         latestScanCompletedAt: s.scans[0]?.completedAt,
         qasCount: s._count.qas,
         blogArticlesCount: s._count.blogArticles,
+        coreGeoFailuresCount: this.countCoreGeoFailures(s.scans[0]),
       }),
     );
 

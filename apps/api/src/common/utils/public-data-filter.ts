@@ -31,6 +31,7 @@ type DirectorySeoSite = {
   latestScanCompletedAt?: Date | string | null;
   qasCount?: number | null;
   blogArticlesCount?: number | null;
+  coreGeoFailuresCount?: number | null;
 };
 
 type PublicBlogSeoArticle = {
@@ -66,6 +67,36 @@ function countMatches(text: string, patterns: RegExp[]): number {
 export function isLikelyEditorialDirectoryName(name?: string | null): boolean {
   const text = (name || '').trim();
   if (!text) return false;
+
+  const cleanStartsLikeListArticle =
+    /^(?:【?20\d{2}|TOP\s?\d+|\d+\s*(?:大|間|家)|.*(?:推薦|排名|排行|清單|懶人包))/i.test(text);
+  const cleanHasQuestionTitle = /[?？]/.test(text) && text.length >= 18;
+  const cleanHasExplicitEditorialPhrase =
+    /(懶人包|總整理|全攻略|完整攻略|一次了解|哪間|必看|PTT|Dcard|網友都推|推薦清單)/i.test(text);
+  const cleanHasEditorialBrackets =
+    /[【】「」《》]/.test(text) && /(20\d{2}|TOP|推薦|排行|排名|清單|攻略|懶人包)/i.test(text);
+  const cleanSoftSignals = countMatches(text, [
+    /推薦/i,
+    /清單/i,
+    /排行/i,
+    /排名/i,
+    /攻略/i,
+    /懶人包/i,
+    /總整理/i,
+    /教學/i,
+    /哪間/i,
+    /必看/i,
+  ]);
+
+  if (
+    cleanStartsLikeListArticle ||
+    cleanHasQuestionTitle ||
+    cleanHasExplicitEditorialPhrase ||
+    cleanHasEditorialBrackets ||
+    (text.length >= 28 && cleanSoftSignals >= 2)
+  ) {
+    return true;
+  }
 
   const startsLikeListArticle =
     /^(?:【)?(?:20\d{2}|TOP\s?\d+|\d+\s*(?:間|家|大|個|位)|[一二三四五六七八九十]+大)/i.test(text);
@@ -177,7 +208,9 @@ export function getDirectorySiteSeoIssues(site: DirectorySeoSite): string[] {
   if (!site.bestScoreAt) issues.push('missing-score-date');
   if (!site.latestScanCompletedAt) issues.push('missing-completed-scan');
   if (description.length < 40) issues.push('thin-description');
+  if ((site.qasCount || 0) < 2) issues.push('weak-knowledge');
   if (supportCount < 1) issues.push('missing-supporting-content');
+  if ((site.coreGeoFailuresCount || 0) >= 2) issues.push('core-geo-failures');
   if (isLikelyEditorialDirectoryName(site.name)) issues.push('editorial-title-name');
 
   return issues;
