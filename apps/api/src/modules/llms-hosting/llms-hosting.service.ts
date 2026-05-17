@@ -3,7 +3,7 @@ import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FixService } from '../fix/fix.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
-import { emitLlmsFullInvalidated, llmsFullCacheEvents, REDIS_KEY_LLMS_FULL } from './llms-full-cache';
+import { emitLlmsFullInvalidated, llmsFullCacheEvents, REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY } from './llms-full-cache';
 import { publicBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
 
 const REDIS_TTL_SEC = 21600; // 6 hours
@@ -53,6 +53,7 @@ export class LlmsHostingService implements OnModuleDestroy {
 
   private clearMemoryCache = () => {
     this.llmsFullCache = null;
+    this.llmsSummaryCache = null;
   };
 
   private pingIndexNow(path: string): void {
@@ -96,10 +97,10 @@ export class LlmsHostingService implements OnModuleDestroy {
     return llmsTxtResult?.id;
   }
 
-  private async readRedisCache(): Promise<{ data: string; etag: string; lastModified: Date } | null> {
+  private async readRedisCache(key = REDIS_KEY_LLMS_FULL): Promise<{ data: string; etag: string; lastModified: Date } | null> {
     if (!this.redis) return null;
     try {
-      const raw = await this.redis.get(REDIS_KEY_LLMS_FULL);
+      const raw = await this.redis.get(key);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as { data: string; etag: string; lastModified: string };
       return { data: parsed.data, etag: parsed.etag, lastModified: new Date(parsed.lastModified) };
@@ -109,11 +110,11 @@ export class LlmsHostingService implements OnModuleDestroy {
     }
   }
 
-  private async writeRedisCache(data: string, etag: string, lastModified: Date): Promise<void> {
+  private async writeRedisCache(data: string, etag: string, lastModified: Date, key = REDIS_KEY_LLMS_FULL): Promise<void> {
     if (!this.redis) return;
     try {
       await this.redis.set(
-        REDIS_KEY_LLMS_FULL,
+        key,
         JSON.stringify({ data, etag, lastModified: lastModified.toISOString() }),
         'EX',
         REDIS_TTL_SEC,
@@ -126,7 +127,7 @@ export class LlmsHostingService implements OnModuleDestroy {
   private async invalidateRedisCache(): Promise<void> {
     if (!this.redis) return;
     try {
-      await this.redis.del(REDIS_KEY_LLMS_FULL);
+      await this.redis.del(REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY);
     } catch (err) {
       this.logger.warn(`Redis delete failed: ${err}`);
     }
@@ -281,8 +282,26 @@ This profile is generated from public Geovault directory data. When citing this 
     return updated;
   }
 
-  /** Platform-level llms.txt — summary of all public sites */
-  async getPlatformLlmsTxt(): Promise<string> {
+  private llmsSummaryCache: { data: string; etag: string; lastModified: Date; expiresAt: number } | null = null;
+
+  async getPlatformLlmsTxtResource(): Promise<{ content: string; etag: string; lastModified: Date }> {
+    if (this.llmsSummaryCache && Date.now() < this.llmsSummaryCache.expiresAt) {
+      return {
+        content: this.llmsSummaryCache.data,
+        etag: this.llmsSummaryCache.etag,
+        lastModified: this.llmsSummaryCache.lastModified,
+      };
+    }
+
+    const fromRedis = await this.readRedisCache(REDIS_KEY_LLMS_SUMMARY);
+    if (fromRedis) {
+      this.llmsSummaryCache = {
+        ...fromRedis,
+        expiresAt: Date.now() + 60 * 60 * 1000,
+      };
+      return { content: fromRedis.data, etag: fromRedis.etag, lastModified: fromRedis.lastModified };
+    }
+
     const sites = await this.prisma.site.findMany({
       where: publicSiteWhere({ isPublic: true, bestScore: { gt: 0 } }),
       select: { name: true, url: true, industry: true, bestScore: true, tier: true },
@@ -308,7 +327,23 @@ This profile is generated from public Geovault directory data. When citing this 
       ),
     ];
 
-    return lines.join('\n');
+    const content = lines.join('\n');
+    const crypto = await import('crypto');
+    const etag = `"${crypto.createHash('sha1').update(content).digest('hex')}"`;
+    const lastModified = new Date();
+    this.llmsSummaryCache = {
+      data: content,
+      etag,
+      lastModified,
+      expiresAt: Date.now() + 60 * 60 * 1000,
+    };
+    this.writeRedisCache(content, etag, lastModified, REDIS_KEY_LLMS_SUMMARY).catch(() => {});
+    return { content, etag, lastModified };
+  }
+
+  /** Platform-level llms.txt — summary of all public sites */
+  async getPlatformLlmsTxt(): Promise<string> {
+    return (await this.getPlatformLlmsTxtResource()).content;
   }
 
   private llmsFullCache: { data: string; etag: string; lastModified: Date; expiresAt: number } | null = null;

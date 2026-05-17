@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 
 export const REDIS_KEY_LLMS_FULL = 'llms:full:txt';
+export const REDIS_KEY_LLMS_SUMMARY = 'llms:summary:txt';
 export const llmsFullCacheEvents = new EventEmitter();
 
 export function emitLlmsFullInvalidated(): void {

@@ -47,12 +47,12 @@ export class LlmsHostingController {
   @Public()
   @Get('platform/llms.txt')
   @ApiOperation({ summary: 'Platform-level llms.txt summary of all public sites' })
-  async getPlatformLlmsTxt(@Res() res: Response) {
-    const content = await this.service.getPlatformLlmsTxt();
+  async getPlatformLlmsTxt(@Req() req: Request, @Res() res: Response) {
+    const { content, etag, lastModified } = await this.service.getPlatformLlmsTxtResource();
     res.set('Cache-Control', 'public, max-age=3600');
     res.set('Access-Control-Allow-Origin', '*');
-    res.set('Last-Modified', new Date().toUTCString());
-    return res.type('text/plain').send(content);
+    res.type('text/plain');
+    return sendConditional(req, res, content, etag, lastModified);
   }
 
   @Public()
@@ -70,12 +70,12 @@ export class LlmsHostingController {
   @Public()
   @Get('llms.txt')
   @ApiOperation({ summary: 'Direct /api/llms.txt shortcut' })
-  async getLlmsTxtDirect(@Res() res: Response) {
-    const content = await this.service.getPlatformLlmsTxt();
+  async getLlmsTxtDirect(@Req() req: Request, @Res() res: Response) {
+    const { content, etag, lastModified } = await this.service.getPlatformLlmsTxtResource();
     res.set('Cache-Control', 'public, max-age=3600');
     res.set('Access-Control-Allow-Origin', '*');
-    res.set('Last-Modified', new Date().toUTCString());
-    return res.type('text/plain').send(content);
+    res.type('text/plain');
+    return sendConditional(req, res, content, etag, lastModified);
   }
 
   @Public()
