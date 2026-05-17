@@ -5,10 +5,30 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const CONTACT_EMAIL = 'service@xinhow.com.tw';
 
 export const metadata: Metadata = {
-  title: '服務條款',
-  description: 'Geovault 服務條款 — 規範您使用本服務之權利義務、付費方案、退款政策與相關法律事項。',
+  title: 'Geovault 服務條款、付費方案與使用規範',
+  description: '閱讀 Geovault 服務條款，了解帳號註冊、GEO 掃描、AI 內容生成、成功案例、付費方案、退款政策、資料授權與使用限制。',
   alternates: { canonical: `${SITE_URL}/terms` },
   robots: { index: true, follow: true },
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'Geovault 服務條款、付費方案與使用規範',
+  description: metadata.description,
+  url: `${SITE_URL}/terms`,
+  inLanguage: 'zh-TW',
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'Geovault',
+    url: SITE_URL,
+  },
+  publisher: {
+    '@type': 'Organization',
+    name: 'Geovault',
+    url: SITE_URL,
+    email: CONTACT_EMAIL,
+  },
 };
 
 function SectionHeader({ num, title }: { num: string; title: string }) {
@@ -62,6 +82,7 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
 export default function TermsPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-gray-300">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <PublicNavbar />
 
       {/* Hero */}

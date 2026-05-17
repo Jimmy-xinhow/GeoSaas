@@ -6,10 +6,30 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const CONTACT_EMAIL = 'service@xinhow.com.tw';
 
 export const metadata: Metadata = {
-  title: '隱私權政策',
-  description: 'Geovault 隱私權政策 — 說明我們如何蒐集、使用及保護您的個人資料。',
+  title: 'Geovault 隱私權政策與資料保護說明',
+  description: '了解 Geovault 如何蒐集、使用、保存與保護帳號資料、網站掃描資料、AI 引用監測資料、付款資料與公開 GEO 目錄資料。',
   alternates: { canonical: `${SITE_URL}/privacy` },
   robots: { index: true, follow: true },
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'Geovault 隱私權政策與資料保護說明',
+  description: metadata.description,
+  url: `${SITE_URL}/privacy`,
+  inLanguage: 'zh-TW',
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'Geovault',
+    url: SITE_URL,
+  },
+  publisher: {
+    '@type': 'Organization',
+    name: 'Geovault',
+    url: SITE_URL,
+    email: CONTACT_EMAIL,
+  },
 };
 
 function SectionHeader({ num, title }: { num: string; title: string }) {
@@ -63,6 +83,7 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-gray-300">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <PublicNavbar />
 
       {/* Hero */}
