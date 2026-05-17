@@ -113,7 +113,7 @@ export class LlmsHostingController {
     @Param('siteId') siteId: string,
     @Res() res: Response,
   ) {
-    const content = await this.service.getLlmsTxt(siteId);
+    const content = await this.service.getPublicLlmsTxt(siteId);
     if (!content) {
       return res.status(404).type('text/plain').send('# llms.txt not configured');
     }
