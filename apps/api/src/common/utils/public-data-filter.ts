@@ -77,7 +77,7 @@ export function normalizePublicSiteName(name?: string | null): string {
   }
 
   const categoryPrefix = text.match(/^([^:：｜|－-]{2,8})[:：]\s*(.{3,})$/);
-  if (categoryPrefix && /設計|花藝|眼鏡|婚攝|美髮|牙醫|旅遊|清潔|裝潢/.test(categoryPrefix[1])) {
+  if (categoryPrefix && /^(花藝設計|室內設計|裝潢設計|美髮設計|婚攝|眼鏡)$/.test(categoryPrefix[1])) {
     text = categoryPrefix[2].trim();
   }
 
