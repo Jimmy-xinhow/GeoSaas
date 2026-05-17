@@ -3,8 +3,22 @@ export const dynamic = 'force-dynamic';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
+const FEED_CACHE_TTL_MS = 30 * 60 * 1000;
+
+let feedCache: { body: string; expiresAt: number } | null = null;
 
 export async function GET() {
+  if (feedCache && feedCache.expiresAt > Date.now()) {
+    return new Response(feedCache.body, {
+      headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
+        'Access-Control-Allow-Origin': '*',
+        'X-Robots-Tag': 'noindex, follow',
+      },
+    });
+  }
+
   let blogArticles: any[] = [];
   let newsArticles: any[] = [];
 
@@ -99,6 +113,8 @@ export async function GET() {
 ${items}
   </channel>
 </rss>`;
+
+  feedCache = { body: rss, expiresAt: Date.now() + FEED_CACHE_TTL_MS };
 
   return new Response(rss, {
     headers: {

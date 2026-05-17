@@ -2,8 +2,22 @@ export const dynamic = 'force-dynamic';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
+const FEED_CACHE_TTL_MS = 30 * 60 * 1000;
+
+let feedJsonCache: { body: string; expiresAt: number } | null = null;
 
 export async function GET() {
+  if (feedJsonCache && feedJsonCache.expiresAt > Date.now()) {
+    return new Response(feedJsonCache.body, {
+      headers: {
+        'Content-Type': 'application/feed+json; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
+        'Access-Control-Allow-Origin': '*',
+        'X-Robots-Tag': 'noindex, follow',
+      },
+    });
+  }
+
   let blogArticles: any[] = [];
   let newsArticles: any[] = [];
 
@@ -53,8 +67,10 @@ export async function GET() {
     hubs: [{ type: 'WebSub', url: 'https://pubsubhubbub.appspot.com/' }],
     items: allItems,
   };
+  const body = JSON.stringify(feed, null, 2);
+  feedJsonCache = { body, expiresAt: Date.now() + FEED_CACHE_TTL_MS };
 
-  return new Response(JSON.stringify(feed, null, 2), {
+  return new Response(body, {
     headers: {
       'Content-Type': 'application/feed+json; charset=utf-8',
       'Cache-Control': 'public, max-age=3600',

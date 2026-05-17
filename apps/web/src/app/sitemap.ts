@@ -18,6 +18,7 @@ export const revalidate = 0;
 // the sitemap kept emitting only the static URLs (~106). With a single call
 // the API does its 4 queries in parallel internally where Prisma is cheap.
 const FETCH_TIMEOUT_MS = 15000;
+const SITEMAP_DATA_TTL_MS = 30 * 60 * 1000;
 
 interface SitemapData {
   sites: Array<{ id: string; bestScoreAt: string | null }>;
@@ -26,7 +27,13 @@ interface SitemapData {
   industrySites: Record<string, string[]>;
 }
 
+let sitemapDataCache: { data: SitemapData; expiresAt: number } | null = null;
+
 async function fetchSitemapData(): Promise<SitemapData | null> {
+  if (sitemapDataCache && sitemapDataCache.expiresAt > Date.now()) {
+    return sitemapDataCache.data;
+  }
+
   try {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
@@ -37,9 +44,11 @@ async function fetchSitemapData(): Promise<SitemapData | null> {
     clearTimeout(timer);
     if (!res.ok) return null;
     const json = await res.json();
-    return (json?.data ?? json) as SitemapData;
+    const data = (json?.data ?? json) as SitemapData;
+    sitemapDataCache = { data, expiresAt: Date.now() + SITEMAP_DATA_TTL_MS };
+    return data;
   } catch {
-    return null;
+    return sitemapDataCache?.data ?? null;
   }
 }
 
