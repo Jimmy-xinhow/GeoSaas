@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
 import { IndexNowService } from '../indexnow/indexnow.service';
-import { emitLlmsFullInvalidated, REDIS_KEY_LLMS_FULL } from '../llms-hosting/llms-full-cache';
+import { emitLlmsFullInvalidated, REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY } from '../llms-hosting/llms-full-cache';
 import { CreateQaDto } from './dto/create-qa.dto';
 import { UpdateQaDto } from './dto/update-qa.dto';
 
@@ -30,6 +30,7 @@ export class KnowledgeService implements OnModuleDestroy {
   private readonly logger = new Logger(KnowledgeService.name);
   private openai: OpenAI | null = null;
   private readonly redis: Redis | null;
+  private redisAvailable = true;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -47,9 +48,12 @@ export class KnowledgeService implements OnModuleDestroy {
         lazyConnect: true,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
+        retryStrategy: () => null,
       });
       this.redis.on('error', (err) => {
         this.logger.warn(`Redis llms-full cache invalidation unavailable: ${err.message}`);
+        this.redisAvailable = false;
+        this.redis?.disconnect();
       });
     } catch (err) {
       this.logger.warn(`Redis init failed for knowledge invalidation: ${err}`);
@@ -78,7 +82,8 @@ export class KnowledgeService implements OnModuleDestroy {
         .catch((err) => this.logger.warn(`IndexNow ping failed for ${url}: ${err}`));
     }
     emitLlmsFullInvalidated();
-    this.redis?.del(REDIS_KEY_LLMS_FULL).catch((err) => {
+    if (!this.redis || !this.redisAvailable) return;
+    this.redis.del(REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY).catch((err) => {
       this.logger.warn(`Redis llms-full cache delete failed: ${err}`);
     });
   }

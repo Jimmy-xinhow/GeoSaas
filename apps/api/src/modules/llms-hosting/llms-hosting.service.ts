@@ -13,6 +13,7 @@ export class LlmsHostingService implements OnModuleDestroy {
   private readonly logger = new Logger(LlmsHostingService.name);
   private readonly webUrl = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
   private readonly redis: Redis | null;
+  private redisAvailable = true;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -31,9 +32,12 @@ export class LlmsHostingService implements OnModuleDestroy {
         lazyConnect: true,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
+        retryStrategy: () => null,
       });
       this.redis.on('error', (err) => {
         this.logger.warn(`Redis llms-full cache unavailable: ${err.message}`);
+        this.redisAvailable = false;
+        this.redis?.disconnect();
       });
     } catch (err) {
       this.logger.warn(`Redis init failed, in-memory fallback only: ${err}`);
@@ -98,7 +102,7 @@ export class LlmsHostingService implements OnModuleDestroy {
   }
 
   private async readRedisCache(key = REDIS_KEY_LLMS_FULL): Promise<{ data: string; etag: string; lastModified: Date } | null> {
-    if (!this.redis) return null;
+    if (!this.redis || !this.redisAvailable) return null;
     try {
       const raw = await this.redis.get(key);
       if (!raw) return null;
@@ -111,7 +115,7 @@ export class LlmsHostingService implements OnModuleDestroy {
   }
 
   private async writeRedisCache(data: string, etag: string, lastModified: Date, key = REDIS_KEY_LLMS_FULL): Promise<void> {
-    if (!this.redis) return;
+    if (!this.redis || !this.redisAvailable) return;
     try {
       await this.redis.set(
         key,
@@ -125,7 +129,7 @@ export class LlmsHostingService implements OnModuleDestroy {
   }
 
   private async invalidateRedisCache(): Promise<void> {
-    if (!this.redis) return;
+    if (!this.redis || !this.redisAvailable) return;
     try {
       await this.redis.del(REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY);
     } catch (err) {
