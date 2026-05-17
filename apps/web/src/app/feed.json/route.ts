@@ -18,12 +18,17 @@ export async function GET() {
     });
   }
 
+  const [blogResult, newsResult] = await Promise.allSettled([
+    fetch(`${API_URL}/api/blog/articles?limit=50`, { cache: 'no-store' }),
+    fetch(`${API_URL}/api/news?limit=50`, { cache: 'no-store' }),
+  ]);
+
   let blogArticles: any[] = [];
   let newsArticles: any[] = [];
 
   try {
-    const res = await fetch(`${API_URL}/api/blog/articles?limit=50`, { cache: 'no-store' });
-    if (res.ok) {
+    const res = blogResult.status === 'fulfilled' ? blogResult.value : null;
+    if (res?.ok) {
       const data = await res.json();
       blogArticles = (data?.data?.items || data?.items || []).map((a: any) => ({
         id: `${SITE_URL}/blog/${a.slug}`,
@@ -37,8 +42,8 @@ export async function GET() {
   } catch {}
 
   try {
-    const res = await fetch(`${API_URL}/api/news?limit=50`, { cache: 'no-store' });
-    if (res.ok) {
+    const res = newsResult.status === 'fulfilled' ? newsResult.value : null;
+    if (res?.ok) {
       const data = await res.json();
       const items = data?.data?.items || data?.items || [];
       newsArticles = items.map((a: any) => ({

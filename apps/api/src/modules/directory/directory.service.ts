@@ -182,7 +182,7 @@ export class DirectoryService {
    *   industrySites{}  — { [industry]: [siteId, ...] } for /industry/{ind}/{id}
    */
   async getSitemapData() {
-    const [sites, blogArticles, cases, industrySitesRaw] = await Promise.all([
+    const [sites, blogArticles, cases] = await Promise.all([
       this.prisma.site.findMany({
         where: publicSiteWhere({ isPublic: true, bestScore: { gte: 60 }, industry: { not: null } }),
         select: {
@@ -232,29 +232,6 @@ export class DirectoryService {
         orderBy: { createdAt: 'desc' },
         take: 500,
       }),
-      this.prisma.site.findMany({
-        where: publicSiteWhere({ isPublic: true, bestScore: { gte: 60 }, industry: { not: null } }),
-        select: {
-          id: true,
-          name: true,
-          url: true,
-          profile: true,
-          bestScore: true,
-          bestScoreAt: true,
-          industry: true,
-          _count: { select: { qas: true, blogArticles: true } },
-          scans: {
-            where: { status: 'COMPLETED' },
-            orderBy: { completedAt: 'desc' },
-            take: 1,
-            select: {
-              completedAt: true,
-              results: { select: { indicator: true, status: true } },
-            },
-          },
-        },
-        orderBy: { bestScore: 'desc' },
-      }),
     ]);
 
     const industrySites: Record<string, string[]> = {};
@@ -267,17 +244,7 @@ export class DirectoryService {
         coreGeoFailuresCount: this.countCoreGeoFailures(s.scans[0]),
       }),
     );
-    const indexableIndustrySites = industrySitesRaw.filter((s) =>
-      isIndexableDirectorySite({
-        ...s,
-        latestScanCompletedAt: s.scans[0]?.completedAt,
-        qasCount: s._count.qas,
-        blogArticlesCount: s._count.blogArticles,
-        coreGeoFailuresCount: this.countCoreGeoFailures(s.scans[0]),
-      }),
-    );
-
-    for (const s of indexableIndustrySites) {
+    for (const s of indexableSites) {
       if (!s.industry) continue;
       (industrySites[s.industry] ||= []).push(s.id);
     }
