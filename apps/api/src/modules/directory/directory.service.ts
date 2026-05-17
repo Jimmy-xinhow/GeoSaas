@@ -18,6 +18,7 @@ import {
   unsafePublicBlogArticleWhere,
   unsafePublicSiteWhere,
   unsafePublicSuccessCaseWhere,
+  normalizePublicSiteName,
 } from '../../common/utils/public-data-filter';
 
 // Simple in-memory cache with TTL
@@ -89,6 +90,10 @@ export class DirectoryService {
           indicator.includes('meta'))
       );
     }).length;
+  }
+
+  private withPublicDisplayName<T extends { name: string | null }>(site: T): T {
+    return { ...site, name: normalizePublicSiteName(site.name) };
   }
 
   private async addBaselineSeoQa(site: {
@@ -596,7 +601,7 @@ export class DirectoryService {
     ]);
 
     return {
-      items,
+      items: items.map((site) => this.withPublicDisplayName(site)),
       total,
       page,
       limit,
@@ -605,7 +610,7 @@ export class DirectoryService {
   }
 
   async getLeaderboard() {
-    return this.prisma.site.findMany({
+    const sites = await this.prisma.site.findMany({
       where: publicSiteWhere({ isPublic: true, bestScore: { gt: 0 } }),
       select: {
         id: true,
@@ -618,6 +623,7 @@ export class DirectoryService {
       orderBy: { bestScore: 'desc' },
       take: 10,
     });
+    return sites.map((site) => this.withPublicDisplayName(site));
   }
 
   async getStats() {
@@ -655,7 +661,7 @@ export class DirectoryService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    return this.prisma.site.findMany({
+    const sites = await this.prisma.site.findMany({
       where: publicSiteWhere({
         isPublic: true,
         createdAt: { gte: thirtyDaysAgo },
@@ -672,6 +678,7 @@ export class DirectoryService {
       orderBy: { createdAt: 'desc' },
       take: 30,
     });
+    return sites.map((site) => this.withPublicDisplayName(site));
   }
 
   /** Top 10 sites by crawler visits in the last 24h */
@@ -697,7 +704,7 @@ export class DirectoryService {
       select: { id: true, name: true, url: true, industry: true, tier: true, bestScore: true },
     });
 
-    const siteMap = new Map(sites.map((s: any) => [s.id, s]));
+    const siteMap = new Map(sites.map((s: any) => [s.id, this.withPublicDisplayName(s)]));
     return topSites.map((t: any) => ({
       ...(siteMap.get(t.siteId) || {}),
       todayVisits: t._count,
@@ -724,7 +731,7 @@ export class DirectoryService {
       select: { id: true, name: true, url: true, industry: true, tier: true, bestScore: true },
     });
 
-    const siteMap = new Map(sites.map((s: any) => [s.id, s]));
+    const siteMap = new Map(sites.map((s: any) => [s.id, this.withPublicDisplayName(s)]));
     return topSites.map((t: any) => ({
       ...(siteMap.get(t.siteId) || {}),
       totalVisits: t._count,
@@ -756,7 +763,7 @@ export class DirectoryService {
     });
 
     return recentScans.map((s: any) => ({
-      ...s.site,
+      ...this.withPublicDisplayName(s.site),
       lastScanScore: s.totalScore,
       lastScanAt: s.completedAt,
     }));
@@ -841,7 +848,7 @@ export class DirectoryService {
       weakestIndicators,
       topSites: sites.slice(0, 10).map((s: any) => ({
         id: s.id,
-        name: s.name,
+        name: normalizePublicSiteName(s.name),
         url: s.url,
         bestScore: s.bestScore,
         tier: s.tier,
@@ -871,7 +878,7 @@ export class DirectoryService {
       totalSites,
       avgScore: Math.round(avgResult._avg.bestScore || 0),
       maxScore: avgResult._max.bestScore || 0,
-      topSites,
+      topSites: topSites.map((site) => this.withPublicDisplayName(site)),
     };
   }
 
@@ -976,7 +983,10 @@ export class DirectoryService {
     ]);
 
     const feedResult = {
-      feed: recentVisits,
+      feed: recentVisits.map((visit) => ({
+        ...visit,
+        site: this.withPublicDisplayName(visit.site),
+      })),
       stats: {
         last24h: last24hCount,
         activeBots: activeBots.map((b: any) => ({
@@ -1061,7 +1071,8 @@ export class DirectoryService {
       this.prisma.crawlerVisit.count({ where: { siteId } }),
     ]);
 
-    const { scans, badges, _count, ...siteData } = site;
+    const { scans, badges, _count, ...rawSiteData } = site;
+    const siteData = this.withPublicDisplayName(rawSiteData);
     const displayBadges = this.withDerivedScoreBadges(
       badges,
       site.bestScore,
@@ -1132,7 +1143,7 @@ export class DirectoryService {
 
         return {
           id: s.id,
-          name: s.name,
+          name: normalizePublicSiteName(s.name),
           url: s.url,
           industry: s.industry,
           tier: s.tier,
@@ -1240,6 +1251,7 @@ export class DirectoryService {
       select: { id: true, name: true, url: true, industry: true, bestScore: true, updatedAt: true },
     });
     if (!site) throw new NotFoundException('Site not found');
+    const publicSite = this.withPublicDisplayName(site);
 
     const [scans, qas, badges, articles] = await Promise.all([
       this.prisma.scan.findMany({
@@ -1285,8 +1297,8 @@ export class DirectoryService {
       events.push({
         id: `scan-${s.id}`,
         type: 'scan',
-        title: `${site.name} — GEO 分數更新:${s.totalScore}/100`,
-        summary: `${site.name} 於 ${s.completedAt.toISOString().slice(0, 10)} 完成新一次 AI 可見度掃描,最新分數為 ${s.totalScore}/100。`,
+        title: `${publicSite.name} — GEO 分數更新:${s.totalScore}/100`,
+        summary: `${publicSite.name} 於 ${s.completedAt.toISOString().slice(0, 10)} 完成新一次 AI 可見度掃描,最新分數為 ${s.totalScore}/100。`,
         timestamp: s.completedAt,
         category: 'scan',
       });
@@ -1295,7 +1307,7 @@ export class DirectoryService {
       events.push({
         id: `qa-${q.id}`,
         type: 'qa',
-        title: `${site.name} 新增常見問題:${q.question.slice(0, 60)}`,
+        title: `${publicSite.name} 新增常見問題:${q.question.slice(0, 60)}`,
         summary: q.answer.slice(0, 280),
         timestamp: q.createdAt,
         category: q.category ?? 'qa',
@@ -1305,8 +1317,8 @@ export class DirectoryService {
       events.push({
         id: `badge-${b.badge}-${b.awardedAt.getTime()}`,
         type: 'badge',
-        title: `${site.name} 獲得徽章:${b.label}`,
-        summary: `${site.name} 於 ${b.awardedAt.toISOString().slice(0, 10)} 獲得「${b.label}」徽章。`,
+        title: `${publicSite.name} 獲得徽章:${b.label}`,
+        summary: `${publicSite.name} 於 ${b.awardedAt.toISOString().slice(0, 10)} 獲得「${b.label}」徽章。`,
         timestamp: b.awardedAt,
         category: 'badge',
       });
@@ -1326,7 +1338,7 @@ export class DirectoryService {
     events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
     return {
-      site: { id: site.id, name: site.name, url: site.url, industry: site.industry, bestScore: site.bestScore },
+      site: { id: publicSite.id, name: publicSite.name, url: publicSite.url, industry: publicSite.industry, bestScore: publicSite.bestScore },
       events: events.slice(0, limit),
       lastModified: events[0]?.timestamp ?? site.updatedAt,
     };

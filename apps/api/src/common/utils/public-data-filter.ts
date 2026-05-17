@@ -64,6 +64,40 @@ function countMatches(text: string, patterns: RegExp[]): number {
   return patterns.reduce((count, pattern) => count + (pattern.test(text) ? 1 : 0), 0);
 }
 
+export function normalizePublicSiteName(name?: string | null): string {
+  const original = (name || '').replace(/\s+/g, ' ').trim();
+  if (!original) return '';
+
+  let text = original.replace(/^【(.+)】$/, '$1').trim();
+  const ellipsisIndex = Math.min(
+    ...[text.indexOf('...'), text.indexOf('…')].filter((index) => index >= 0),
+  );
+  if (Number.isFinite(ellipsisIndex)) {
+    text = text.slice(0, ellipsisIndex).trim();
+  }
+
+  const categoryPrefix = text.match(/^([^:：｜|－-]{2,8})[:：]\s*(.{3,})$/);
+  if (categoryPrefix && /設計|花藝|眼鏡|婚攝|美髮|牙醫|旅遊|清潔|裝潢/.test(categoryPrefix[1])) {
+    text = categoryPrefix[2].trim();
+  }
+
+  const separators = ['｜', '|', '－', '-', ':', '：', '，', '、'];
+  const promoWords = /推薦|首選|排名|排行|清單|精選|主頁|服務範圍|課程|優惠|免費|最優質|人氣|專業|一對一|訂房|自由行|機票/;
+  for (const separator of separators) {
+    const index = text.indexOf(separator);
+    if (index <= 1) continue;
+    const prefix = text.slice(0, index).trim();
+    const suffix = text.slice(index + separator.length).trim();
+    if (prefix.length >= 2 && suffix.length >= 2 && promoWords.test(suffix)) {
+      text = prefix;
+      break;
+    }
+  }
+
+  text = text.replace(/\s+/g, ' ').replace(/[，、:：｜|－-]+$/g, '').trim();
+  return text || original;
+}
+
 export function isLikelyEditorialDirectoryName(name?: string | null): boolean {
   const text = (name || '').trim();
   if (!text) return false;
