@@ -7,6 +7,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 
 // More-specific patterns first so Claude-SearchBot wins over ClaudeBot.
 const AI_BOT_PATTERNS = [...AI_BOTS].sort((a, b) => b.uaPattern.length - a.uaPattern.length);
+const GONE_PATHS = new Set([
+  '/blog/cmn908gxe0-202604-sat-data-pulse-icfq',
+]);
 
 export function middleware(request: NextRequest) {
   if (request.nextUrl.hostname === 'geovault.app') {
@@ -18,6 +21,17 @@ export function middleware(request: NextRequest) {
   const response = NextResponse.next();
   const ua = request.headers.get('user-agent') || '';
   const pathname = request.nextUrl.pathname;
+
+  if (GONE_PATHS.has(pathname)) {
+    return new NextResponse('Gone', {
+      status: 410,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Robots-Tag': 'noindex, follow',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  }
 
   // ─── Link headers for AI crawlers ───
   response.headers.set(

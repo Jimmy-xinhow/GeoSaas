@@ -27,6 +27,7 @@ module.exports = withNextIntl({
       { source: '/cdn-cgi/l/email-protection', destination: '/', permanent: true },
       { source: '/api/llms.txt',      destination: '/llms.txt',      permanent: true },
       { source: '/api/llms-full.txt', destination: '/llms-full.txt', permanent: true },
+      { source: '/industry/:industry/:siteId', destination: '/directory/:siteId', permanent: true },
     ];
   },
   async headers() {

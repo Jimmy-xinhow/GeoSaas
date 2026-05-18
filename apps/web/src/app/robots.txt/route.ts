@@ -15,10 +15,6 @@ const PRIVATE_PATHS = [
   '/admin/',
   '/dashboard/',
   '/cdn-cgi/',
-  '/login',
-  '/register',
-  '/forgot-password',
-  '/reset-password',
 ];
 
 const AI_BOTS = [
