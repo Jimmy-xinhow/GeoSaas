@@ -24,6 +24,7 @@ module.exports = withNextIntl({
     // 301 these to the canonical root paths so Google consolidates index
     // signals onto the live URLs and stops reporting "blocked by 403".
     return [
+      { source: '/cdn-cgi/l/email-protection', destination: '/', permanent: true },
       { source: '/api/llms.txt',      destination: '/llms.txt',      permanent: true },
       { source: '/api/llms-full.txt', destination: '/llms-full.txt', permanent: true },
     ];

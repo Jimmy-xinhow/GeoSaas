@@ -1,9 +1,9 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
 import PublicNavbar from '@/components/layout/public-navbar';
+import EmailLink from '@/components/shared/email-link';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
-const CONTACT_EMAIL = 'service@xinhow.com.tw';
 
 export const metadata: Metadata = {
   title: 'Geovault 隱私權政策與資料保護說明',
@@ -28,7 +28,6 @@ const jsonLd = {
     '@type': 'Organization',
     name: 'Geovault',
     url: SITE_URL,
-    email: CONTACT_EMAIL,
   },
 };
 
@@ -118,7 +117,7 @@ export default function PrivacyPage() {
           <div className="bg-white/5 border border-white/10 border-l-2 border-l-blue-500 rounded-r-lg p-5 space-y-1 text-sm">
             <p><strong className="text-white">服務名稱：</strong>Geovault</p>
             <p><strong className="text-white">網站：</strong><a href="https://www.geovault.app" className="text-blue-400 hover:underline">www.geovault.app</a></p>
-            <p><strong className="text-white">聯絡信箱：</strong><a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-400 hover:underline">{CONTACT_EMAIL}</a></p>
+            <p><strong className="text-white">聯絡信箱：</strong><EmailLink className="text-blue-400 hover:underline" /></p>
           </div>
         </section>
 
@@ -190,7 +189,7 @@ export default function PrivacyPage() {
             <li className="flex gap-2.5"><span className="text-blue-400 font-semibold shrink-0">›</span><span><strong className="text-white">匯出：</strong>您可透過 API 匯出網站資料與掃描結果。</span></li>
           </ul>
           <div className="bg-white/5 border border-white/10 border-l-2 border-l-blue-500 rounded-r-lg p-4 mt-4 text-sm">
-            如需行使上述權利或有任何疑問，請聯絡 <a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-400 hover:underline">{CONTACT_EMAIL}</a>。
+            如需行使上述權利或有任何疑問，請聯絡 <EmailLink className="text-blue-400 hover:underline" />。
           </div>
         </section>
 
@@ -233,16 +232,16 @@ export default function PrivacyPage() {
         </section>
 
         {/* 09 */}
-        <section>
+        <section id="contact">
           <SectionHeader num="09" title="聯絡我們" />
           <p className="text-gray-400 text-sm mb-4">如對本隱私權政策有任何疑問，歡迎透過以下方式聯繫我們：</p>
           <div className="bg-white/5 border border-blue-500/20 rounded-lg p-6 flex items-center justify-between gap-4 flex-wrap">
             <div>
               <p className="text-white font-semibold mb-1">Geovault 隱私事務</p>
-              <a href={`mailto:${CONTACT_EMAIL}`} className="text-sm font-mono text-blue-400 hover:underline">{CONTACT_EMAIL}</a>
+              <EmailLink className="text-sm font-mono text-blue-400 hover:underline" />
             </div>
             <a
-              href={`mailto:${CONTACT_EMAIL}`}
+              href="/privacy#contact"
               className="inline-block text-xs font-mono bg-blue-500 text-black px-5 py-2.5 rounded font-medium hover:opacity-85 transition-opacity"
             >
               發送信件 →
@@ -258,7 +257,7 @@ export default function PrivacyPage() {
       {/* Footer */}
       <div className="border-t border-white/10 py-8 text-center">
         <p className="text-xs font-mono text-gray-600">
-          © {new Date().getFullYear()} Geovault · <a href="https://www.geovault.app" className="text-gray-500 hover:text-blue-400">geovault.app</a> · <a href={`mailto:${CONTACT_EMAIL}`} className="text-gray-500 hover:text-blue-400">{CONTACT_EMAIL}</a>
+          © {new Date().getFullYear()} Geovault · <a href="https://www.geovault.app" className="text-gray-500 hover:text-blue-400">geovault.app</a> · <EmailLink className="text-gray-500 hover:text-blue-400" />
         </p>
       </div>
     </div>

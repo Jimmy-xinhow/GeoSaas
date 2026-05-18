@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 import PublicNavbar from '@/components/layout/public-navbar';
+import EmailLink from '@/components/shared/email-link';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
-const CONTACT_EMAIL = 'service@xinhow.com.tw';
 
 export const metadata: Metadata = {
   title: 'Geovault 服務條款、付費方案與使用規範',
@@ -27,7 +27,6 @@ const jsonLd = {
     '@type': 'Organization',
     name: 'Geovault',
     url: SITE_URL,
-    email: CONTACT_EMAIL,
   },
 };
 
@@ -117,7 +116,7 @@ export default function TermsPage() {
           <div className="bg-white/5 border border-white/10 border-l-2 border-l-blue-500 rounded-r-lg p-5 space-y-1 text-sm">
             <p><strong className="text-white">服務名稱：</strong>Geovault — Generative Engine Optimization Platform</p>
             <p><strong className="text-white">網站：</strong><a href="https://www.geovault.app" className="text-blue-400 hover:underline">www.geovault.app</a></p>
-            <p><strong className="text-white">聯絡信箱：</strong><a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-400 hover:underline">{CONTACT_EMAIL}</a></p>
+            <p><strong className="text-white">聯絡信箱：</strong><EmailLink className="text-blue-400 hover:underline" /></p>
           </div>
         </section>
 
@@ -175,7 +174,7 @@ export default function TermsPage() {
               <li>· 因本服務系統錯誤導致您完全無法使用所購方案功能。</li>
               <li>· 重複扣款或金額錯誤之情形。</li>
             </ul>
-            <p className="mt-3">退款申請請於發生之日起 7 日內來信 <a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-400 hover:underline">{CONTACT_EMAIL}</a>，逾期不予受理。</p>
+            <p className="mt-3">退款申請請於發生之日起 7 日內來信 <EmailLink className="text-blue-400 hover:underline" />，逾期不予受理。</p>
           </div>
         </section>
 
@@ -266,16 +265,16 @@ export default function TermsPage() {
         </section>
 
         {/* 13 */}
-        <section>
+        <section id="contact">
           <SectionHeader num="13" title="聯絡我們" />
           <p className="text-gray-400 text-sm mb-4">如對本服務條款有任何疑問，歡迎透過以下方式聯繫我們：</p>
           <div className="bg-white/5 border border-blue-500/20 rounded-lg p-6 flex items-center justify-between gap-4 flex-wrap">
             <div>
               <p className="text-white font-semibold mb-1">Geovault 客戶服務</p>
-              <a href={`mailto:${CONTACT_EMAIL}`} className="text-sm font-mono text-blue-400 hover:underline">{CONTACT_EMAIL}</a>
+              <EmailLink className="text-sm font-mono text-blue-400 hover:underline" />
             </div>
             <a
-              href={`mailto:${CONTACT_EMAIL}`}
+              href="/terms#contact"
               className="inline-block text-xs font-mono bg-blue-500 text-black px-5 py-2.5 rounded font-medium hover:opacity-85 transition-opacity"
             >
               發送信件 →
@@ -291,7 +290,7 @@ export default function TermsPage() {
       {/* Footer */}
       <div className="border-t border-white/10 py-8 text-center">
         <p className="text-xs font-mono text-gray-600">
-          © {new Date().getFullYear()} Geovault · <a href="https://www.geovault.app" className="text-gray-500 hover:text-blue-400">geovault.app</a> · <a href={`mailto:${CONTACT_EMAIL}`} className="text-gray-500 hover:text-blue-400">{CONTACT_EMAIL}</a>
+          © {new Date().getFullYear()} Geovault · <a href="https://www.geovault.app" className="text-gray-500 hover:text-blue-400">geovault.app</a> · <EmailLink className="text-gray-500 hover:text-blue-400" />
         </p>
       </div>
     </div>
