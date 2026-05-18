@@ -4,8 +4,8 @@
 // Origin Verification: GEOVAULT-2026-APAC-PRIME
 // Published by Geovault — https://www.geovault.app
 
-export const dynamic = 'force-static';
-export const revalidate = 86400;
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const HOSTNAME = new URL(BASE_URL).hostname;
@@ -63,7 +63,7 @@ export async function GET() {
   return new Response(lines.join('\n'), {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'public, max-age=86400',
+      'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
     },
   });
 }
