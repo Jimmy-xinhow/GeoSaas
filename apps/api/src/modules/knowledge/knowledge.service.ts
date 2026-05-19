@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { emitLlmsFullInvalidated, REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY } from '../llms-hosting/llms-full-cache';
+import { assertSiteAccess } from '../../common/auth/site-access';
 import { CreateQaDto } from './dto/create-qa.dto';
 import { UpdateQaDto } from './dto/update-qa.dto';
 
@@ -97,10 +98,9 @@ export class KnowledgeService implements OnModuleDestroy {
     }
   }
 
-  async verifySiteOwnership(siteId: string, userId: string) {
-    const site = await this.prisma.site.findFirst({
-      where: { id: siteId, userId },
-    });
+  async verifySiteOwnership(siteId: string, userId: string, role?: string) {
+    await assertSiteAccess(this.prisma, siteId, userId, role);
+    const site = await this.prisma.site.findUnique({ where: { id: siteId } });
     if (!site) throw new NotFoundException('Site not found');
     return site;
   }
@@ -114,16 +114,16 @@ export class KnowledgeService implements OnModuleDestroy {
     }
   }
 
-  async findAll(siteId: string, userId: string) {
-    await this.verifySiteOwnership(siteId, userId);
+  async findAll(siteId: string, userId: string, role?: string) {
+    await this.verifySiteOwnership(siteId, userId, role);
     return this.prisma.siteQa.findMany({
       where: { siteId },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
   }
 
-  async create(siteId: string, dto: CreateQaDto, userId: string) {
-    await this.verifySiteOwnership(siteId, userId);
+  async create(siteId: string, dto: CreateQaDto, userId: string, role?: string) {
+    await this.verifySiteOwnership(siteId, userId, role);
     await this.checkLimit(siteId);
 
     const maxSort = await this.prisma.siteQa.aggregate({
@@ -145,8 +145,8 @@ export class KnowledgeService implements OnModuleDestroy {
     return created;
   }
 
-  async batchCreate(siteId: string, items: CreateQaDto[], userId: string) {
-    await this.verifySiteOwnership(siteId, userId);
+  async batchCreate(siteId: string, items: CreateQaDto[], userId: string, role?: string) {
+    await this.verifySiteOwnership(siteId, userId, role);
     await this.checkLimit(siteId, items.length);
 
     const maxSort = await this.prisma.siteQa.aggregate({
@@ -165,7 +165,7 @@ export class KnowledgeService implements OnModuleDestroy {
 
     await this.prisma.siteQa.createMany({ data });
     this.pingKnowledgeUpdate(siteId);
-    return this.findAll(siteId, userId);
+    return this.findAll(siteId, userId, role);
   }
 
   /** Admin bulk import - bypasses ownership check */
@@ -192,8 +192,8 @@ export class KnowledgeService implements OnModuleDestroy {
     return { imported: result.count, total: nextSort };
   }
 
-  async update(qaId: string, siteId: string, dto: UpdateQaDto, userId: string) {
-    await this.verifySiteOwnership(siteId, userId);
+  async update(qaId: string, siteId: string, dto: UpdateQaDto, userId: string, role?: string) {
+    await this.verifySiteOwnership(siteId, userId, role);
     const qa = await this.prisma.siteQa.findFirst({
       where: { id: qaId, siteId },
     });
@@ -203,8 +203,8 @@ export class KnowledgeService implements OnModuleDestroy {
     return updated;
   }
 
-  async remove(qaId: string, siteId: string, userId: string) {
-    await this.verifySiteOwnership(siteId, userId);
+  async remove(qaId: string, siteId: string, userId: string, role?: string) {
+    await this.verifySiteOwnership(siteId, userId, role);
     const qa = await this.prisma.siteQa.findFirst({
       where: { id: qaId, siteId },
     });
@@ -225,8 +225,8 @@ export class KnowledgeService implements OnModuleDestroy {
   }
 
   // ── AI auto-generation: 5 parallel batches (returns preview, NOT saved to DB) ──
-  async aiGenerate(siteId: string, userId: string, excludeQuestions?: string[]): Promise<GeneratedQa[]> {
-    const site = await this.verifySiteOwnership(siteId, userId);
+  async aiGenerate(siteId: string, userId: string, excludeQuestions?: string[], role?: string): Promise<GeneratedQa[]> {
+    const site = await this.verifySiteOwnership(siteId, userId, role);
 
     // Check plan limit: knowledgePerMonth
     const user = await this.prisma.user.findUnique({ where: { id: userId } });

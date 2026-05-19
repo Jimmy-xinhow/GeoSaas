@@ -50,18 +50,29 @@ export class ScanController {
   }
 
   @Post('sites/:siteId/scans')
-  triggerScan(@Param('siteId') siteId: string, @CurrentUser('userId') userId: string) {
-    return this.scanService.triggerScan(siteId, userId);
+  triggerScan(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.scanService.triggerScan(siteId, userId, role);
   }
 
   @Get('sites/:siteId/scans')
-  getScanHistory(@Param('siteId') siteId: string, @CurrentUser('userId') userId: string) {
-    return this.scanService.getScanHistory(siteId, userId);
+  getScanHistory(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.scanService.getScanHistory(siteId, userId, role);
   }
 
   @Get('scans/trend')
-  getScoreTrend(@CurrentUser('userId') userId: string) {
-    return this.scanService.getScoreTrend(userId);
+  getScoreTrend(
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.scanService.getScoreTrend(userId, role);
   }
 
   @Get('scans/:scanId')

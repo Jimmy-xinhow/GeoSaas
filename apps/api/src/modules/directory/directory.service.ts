@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { canAccessSite } from '../../common/auth/site-access';
 import { QueryDirectoryDto } from './dto/query-directory.dto';
 import { TogglePublicDto } from './dto/toggle-public.dto';
 import { IndexNowService } from '../indexnow/indexnow.service';
@@ -1137,7 +1138,7 @@ export class DirectoryService {
   async togglePublic(siteId: string, dto: TogglePublicDto, userId: string, role?: string) {
     const site = await this.prisma.site.findUnique({ where: { id: siteId } });
     if (!site) throw new NotFoundException('Site not found');
-    if (!this.isAdmin(role) && site.userId !== userId) {
+    if (!canAccessSite(site, userId, role)) {
       throw new ForbiddenException('You do not have access to this site');
     }
 

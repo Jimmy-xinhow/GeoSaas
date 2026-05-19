@@ -20,8 +20,9 @@ export class KnowledgeController {
   findAll(
     @Param('siteId') siteId: string,
     @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
   ) {
-    return this.knowledgeService.findAll(siteId, userId);
+    return this.knowledgeService.findAll(siteId, userId, role);
   }
 
   @Post()
@@ -30,8 +31,9 @@ export class KnowledgeController {
     @Param('siteId') siteId: string,
     @Body() dto: CreateQaDto,
     @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
   ) {
-    return this.knowledgeService.create(siteId, dto, userId);
+    return this.knowledgeService.create(siteId, dto, userId, role);
   }
 
   @Post('batch')
@@ -40,8 +42,9 @@ export class KnowledgeController {
     @Param('siteId') siteId: string,
     @Body() dto: BatchCreateQaDto,
     @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
   ) {
-    return this.knowledgeService.batchCreate(siteId, dto.items, userId);
+    return this.knowledgeService.batchCreate(siteId, dto.items, userId, role);
   }
 
   @Put(':qaId')
@@ -51,8 +54,9 @@ export class KnowledgeController {
     @Param('qaId') qaId: string,
     @Body() dto: UpdateQaDto,
     @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
   ) {
-    return this.knowledgeService.update(qaId, siteId, dto, userId);
+    return this.knowledgeService.update(qaId, siteId, dto, userId, role);
   }
 
   @Delete(':qaId')
@@ -61,8 +65,9 @@ export class KnowledgeController {
     @Param('siteId') siteId: string,
     @Param('qaId') qaId: string,
     @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
   ) {
-    return this.knowledgeService.remove(qaId, siteId, userId);
+    return this.knowledgeService.remove(qaId, siteId, userId, role);
   }
 
   @Post('ai-generate')
@@ -71,15 +76,16 @@ export class KnowledgeController {
     @Param('siteId') siteId: string,
     @Body() dto: AiGenerateQaDto,
     @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
   ) {
-    await this.knowledgeService.verifySiteOwnership(siteId, userId);
+    await this.knowledgeService.verifySiteOwnership(siteId, userId, role);
     const check = await this.credits.checkAndDeduct(
       userId,
       2,
       'AI knowledge Q&A generation',
     );
     if (!check.allowed) throw new ForbiddenException(check.message);
-    return this.knowledgeService.aiGenerate(siteId, userId, dto.excludeQuestions);
+    return this.knowledgeService.aiGenerate(siteId, userId, dto.excludeQuestions, role);
   }
 
   @Post('admin-import')

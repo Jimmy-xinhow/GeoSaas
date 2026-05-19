@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { canAccessSite } from '../../common/auth/site-access';
 
 interface BadgeDef {
   badge: string;
@@ -36,10 +37,6 @@ export class BadgeService {
   private readonly logger = new Logger(BadgeService.name);
 
   constructor(private readonly prisma: PrismaService) {}
-
-  private isAdmin(role?: string): boolean {
-    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
-  }
 
   /** Evaluate and award badges for a site after scan completion */
   async evaluateBadges(siteId: string): Promise<string[]> {
@@ -165,7 +162,7 @@ export class BadgeService {
   async getEmbedCode(siteId: string, userId?: string, role?: string) {
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
-      select: { bestScore: true, isPublic: true, userId: true },
+      select: { bestScore: true, isPublic: true, userId: true, isClient: true },
     });
 
     if (!site) {
@@ -176,7 +173,7 @@ export class BadgeService {
       };
     }
 
-    if (!this.isAdmin(role) && site.userId !== userId) {
+    if (!canAccessSite(site, userId, role)) {
       throw new ForbiddenException('You do not have access to this site');
     }
 

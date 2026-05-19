@@ -11,6 +11,7 @@ import { Cron } from '@nestjs/schedule';
 import pLimit from '@/common/utils/p-limit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
+import { assertSiteAccess, canAccessSite, siteAccessWhere } from '../../common/auth/site-access';
 import { ScanPipelineService } from './scan-pipeline.service';
 
 @Injectable()
@@ -24,15 +25,9 @@ export class ScanService {
     @Optional() @InjectQueue('scan') private readonly scanQueue?: Queue,
   ) {}
 
-  private isAdmin(role?: string): boolean {
-    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
-  }
-
-  async triggerScan(siteId: string, userId: string) {
-    // Verify the site belongs to the user
-    const site = await this.prisma.site.findFirst({
-      where: { id: siteId, userId },
-    });
+  async triggerScan(siteId: string, userId: string, role?: string) {
+    await assertSiteAccess(this.prisma, siteId, userId, role);
+    const site = await this.prisma.site.findUnique({ where: { id: siteId } });
     if (!site) throw new NotFoundException('Site not found');
 
     // Check plan limit: scans per site per month
@@ -71,11 +66,8 @@ export class ScanService {
     return scan;
   }
 
-  async getScanHistory(siteId: string, userId: string) {
-    const site = await this.prisma.site.findFirst({
-      where: { id: siteId, userId },
-    });
-    if (!site) throw new NotFoundException('Site not found');
+  async getScanHistory(siteId: string, userId: string, role?: string) {
+    await assertSiteAccess(this.prisma, siteId, userId, role);
 
     return this.prisma.scan.findMany({
       where: { siteId },
@@ -91,18 +83,18 @@ export class ScanService {
       include: { results: true, site: true },
     });
     if (!scan) throw new NotFoundException('Scan not found');
-    if (!this.isAdmin(role) && scan.site.userId !== userId) {
+    if (!canAccessSite(scan.site, userId, role)) {
       throw new NotFoundException('Scan not found');
     }
     return scan;
   }
 
   /** Get aggregated score trend across all user's sites (last 30 scans) */
-  async getScoreTrend(userId: string) {
+  async getScoreTrend(userId: string, role?: string) {
     const scans = await this.prisma.scan.findMany({
       where: {
         status: 'COMPLETED',
-        site: { userId },
+        site: siteAccessWhere(userId, role),
       },
       orderBy: { completedAt: 'asc' },
       take: 30,
@@ -123,10 +115,10 @@ export class ScanService {
   async getScanResults(scanId: string, userId: string, role?: string) {
     const scan = await this.prisma.scan.findUnique({
       where: { id: scanId },
-      select: { site: { select: { userId: true } } },
+      select: { site: { select: { userId: true, isClient: true } } },
     });
     if (!scan) throw new NotFoundException('Scan not found');
-    if (!this.isAdmin(role) && scan.site.userId !== userId) {
+    if (!canAccessSite(scan.site, userId, role)) {
       throw new NotFoundException('Scan not found');
     }
 

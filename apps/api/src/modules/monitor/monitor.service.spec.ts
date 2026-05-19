@@ -154,12 +154,26 @@ describe('MonitorService', () => {
 
   describe('create', () => {
     it('should create a monitor record', async () => {
-      prisma.site.findFirst.mockResolvedValue({ id: 's1', userId: 'u1' });
-      prisma.site.findUnique.mockResolvedValue({ userId: 'u1' });
+      prisma.site.findUnique
+        .mockResolvedValueOnce({ id: 's1', userId: 'u1', isClient: false })
+        .mockResolvedValueOnce({ userId: 'u1' });
       prisma.user.findUnique.mockResolvedValue({ id: 'u1', plan: 'FREE', role: 'USER' });
       prisma.monitor.create.mockResolvedValue({ id: 'm1', siteId: 's1', platform: 'CHATGPT', query: 'test query' });
 
       const result = await service.create({ siteId: 's1', platform: 'CHATGPT', query: 'test query' }, 'u1', 'USER');
+
+      expect(result.id).toBe('m1');
+      expect(prisma.monitor.create).toHaveBeenCalled();
+    });
+
+    it('should let staff create a monitor on a client-tagged site', async () => {
+      prisma.site.findUnique
+        .mockResolvedValueOnce({ id: 's1', userId: 'client-owner', isClient: true })
+        .mockResolvedValueOnce({ userId: 'client-owner' });
+      prisma.user.findUnique.mockResolvedValue({ id: 'client-owner', plan: 'PRO', role: 'USER' });
+      prisma.monitor.create.mockResolvedValue({ id: 'm1', siteId: 's1', platform: 'CHATGPT', query: 'test query' });
+
+      const result = await service.create({ siteId: 's1', platform: 'CHATGPT', query: 'test query' }, 'staff-1', 'STAFF');
 
       expect(result.id).toBe('m1');
       expect(prisma.monitor.create).toHaveBeenCalled();
@@ -169,7 +183,7 @@ describe('MonitorService', () => {
   describe('remove', () => {
     it('should delete a monitor record', async () => {
       prisma.monitor.findUnique.mockResolvedValue({ siteId: 's1' });
-      prisma.site.findFirst.mockResolvedValue({ id: 's1', userId: 'u1' });
+      prisma.site.findUnique.mockResolvedValue({ id: 's1', userId: 'u1', isClient: false });
       prisma.monitor.delete.mockResolvedValue({ id: 'm1' });
 
       await service.remove('m1', 'u1', 'USER');

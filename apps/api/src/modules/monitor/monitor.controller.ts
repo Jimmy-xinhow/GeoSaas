@@ -11,8 +11,11 @@ export class MonitorController {
   constructor(private monitorService: MonitorService) {}
 
   @Get('monitors/dashboard')
-  getDashboard(@CurrentUser('userId') userId: string) {
-    return this.monitorService.getDashboard(userId);
+  getDashboard(
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.monitorService.getDashboard(userId, role);
   }
 
   @Get('sites/:siteId/monitors')

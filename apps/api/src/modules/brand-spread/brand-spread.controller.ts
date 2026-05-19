@@ -3,7 +3,6 @@ import {
   Controller,
   ForbiddenException,
   Get,
-  NotFoundException,
   Param,
   Post,
   Query,
@@ -14,6 +13,7 @@ import { CreditService } from '../billing/credit.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PlanUsageService } from '../../common/guards/plan.guard';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertSiteAccess } from '../../common/auth/site-access';
 
 @ApiTags('Brand Spread')
 @ApiBearerAuth()
@@ -118,14 +118,6 @@ export class BrandSpreadController {
     userId?: string,
     role?: string,
   ) {
-    const site = await this.prisma.site.findUnique({
-      where: { id: siteId },
-      select: { userId: true },
-    });
-    if (!site) throw new NotFoundException('Site not found');
-    if (role === 'ADMIN' || role === 'SUPER_ADMIN') return;
-    if (!userId || site.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this site');
-    }
+    await assertSiteAccess(this.prisma, siteId, userId, role);
   }
 }

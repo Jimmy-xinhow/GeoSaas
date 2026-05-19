@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
+import { siteAccessWhere } from '../../common/auth/site-access';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
@@ -62,16 +63,11 @@ export class SitesService {
   /**
    * findAll — respects role-based data isolation:
    * - USER: own sites only
-   * - STAFF: only isClient=true sites (managed by their SUPER_ADMIN)
-   * - ADMIN/SUPER_ADMIN: own sites
+   * - STAFF: own sites plus client-tagged sites
+   * - ADMIN/SUPER_ADMIN: all sites
    */
   async findAll(userId: string, userRole?: string) {
-    let where: any = { userId };
-
-    if (userRole === 'STAFF') {
-      // STAFF sees only client-tagged sites
-      where = { isClient: true };
-    }
+    const where: any = siteAccessWhere(userId, userRole);
 
     return this.prisma.site.findMany({
       where,
@@ -84,13 +80,10 @@ export class SitesService {
   }
 
   async findOne(id: string, userId: string, userRole?: string) {
-    let where: any = { id, userId };
-
-    if (userRole === 'STAFF') {
-      where = { id, isClient: true };
-    } else if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') {
-      where = { id }; // Admin can access any site
-    }
+    const accessWhere: any = siteAccessWhere(userId, userRole);
+    const where: any = Object.keys(accessWhere).length === 0
+      ? { id }
+      : { id, ...accessWhere };
 
     const site = await this.prisma.site.findFirst({
       where,

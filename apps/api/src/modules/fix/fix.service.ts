@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
+import { assertSiteAccess, canAccessSite } from '../../common/auth/site-access';
 import { JsonLdGenerator } from './generators/json-ld.generator';
 import { LlmsTxtGenerator } from './generators/llms-txt.generator';
 import { OgTagsGenerator } from './generators/og-tags.generator';
@@ -50,24 +51,13 @@ export class FixService {
     }
   }
 
-  private isAdmin(role?: string): boolean {
-    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
-  }
-
   async assertSmartGenerateAccess(
     siteId: string,
     scanResultId: string,
     userId: string,
     role?: string,
   ): Promise<void> {
-    const site = await this.prisma.site.findUnique({
-      where: { id: siteId },
-      select: { userId: true },
-    });
-    if (!site) throw new NotFoundException('Site not found');
-    if (!this.isAdmin(role) && site.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this site');
-    }
+    await assertSiteAccess(this.prisma, siteId, userId, role);
 
     const scanResult = await this.prisma.scanResult.findUnique({
       where: { id: scanResultId },
@@ -82,10 +72,10 @@ export class FixService {
     if (!userId) return;
     const scanResult = await this.prisma.scanResult.findUnique({
       where: { id: scanResultId },
-      select: { scan: { select: { site: { select: { userId: true } } } } },
+      select: { scan: { select: { site: { select: { userId: true, isClient: true } } } } },
     });
     if (!scanResult) throw new NotFoundException(`ScanResult with id "${scanResultId}" not found`);
-    if (!this.isAdmin(role) && scanResult.scan.site.userId !== userId) {
+    if (!canAccessSite(scanResult.scan.site, userId, role)) {
       throw new NotFoundException(`ScanResult with id "${scanResultId}" not found`);
     }
   }

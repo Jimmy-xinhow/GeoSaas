@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nest
 import pLimit from '@/common/utils/p-limit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
+import { assertSiteAccess, siteAccessWhere } from '../../common/auth/site-access';
 import { ChatgptDetector } from './platforms/chatgpt.detector';
 import { ClaudeDetector } from './platforms/claude.detector';
 import { PerplexityDetector } from './platforms/perplexity.detector';
@@ -28,19 +29,13 @@ export class MonitorService {
     private copilotDetector: CopilotDetector,
   ) {}
 
-  private async assertSiteAccess(siteId: string, userId: string, role?: string) {
-    if (role === 'ADMIN' || role === 'SUPER_ADMIN') return;
-    const site = await this.prisma.site.findFirst({ where: { id: siteId, userId } });
-    if (!site) throw new NotFoundException('Site not found');
-  }
-
   async findBySite(siteId: string, userId: string, role?: string) {
-    await this.assertSiteAccess(siteId, userId, role);
+    await assertSiteAccess(this.prisma, siteId, userId, role);
     return this.prisma.monitor.findMany({ where: { siteId }, orderBy: { checkedAt: 'desc' } });
   }
 
   async create(data: { siteId: string; platform: string; query: string }, userId: string, role?: string) {
-    await this.assertSiteAccess(data.siteId, userId, role);
+    await assertSiteAccess(this.prisma, data.siteId, userId, role);
 
     // Check plan limit: monitorPerMonth
     const site = await this.prisma.site.findUnique({ where: { id: data.siteId }, select: { userId: true } });
@@ -81,7 +76,7 @@ export class MonitorService {
   async checkCitation(id: string, userId?: string, role?: string) {
     const monitor = await this.prisma.monitor.findUnique({ where: { id }, include: { site: true } });
     if (!monitor) throw new NotFoundException('Monitor not found');
-    if (userId) await this.assertSiteAccess(monitor.siteId, userId, role);
+    if (userId) await assertSiteAccess(this.prisma, monitor.siteId, userId, role);
 
     let result: { mentioned: boolean; position: number | null; response: string };
     switch (monitor.platform) {
@@ -109,8 +104,11 @@ export class MonitorService {
     });
   }
 
-  async getDashboard(userId: string) {
-    const sites = await this.prisma.site.findMany({ where: { userId }, select: { id: true } });
+  async getDashboard(userId: string, role?: string) {
+    const sites = await this.prisma.site.findMany({
+      where: siteAccessWhere(userId, role),
+      select: { id: true },
+    });
     const siteIds = sites.map((s: any) => s.id);
     const monitors = await this.prisma.monitor.findMany({
       where: { siteId: { in: siteIds } },
@@ -166,7 +164,7 @@ export class MonitorService {
       select: { siteId: true },
     });
     if (!monitor) throw new NotFoundException('Monitor not found');
-    await this.assertSiteAccess(monitor.siteId, userId, role);
+    await assertSiteAccess(this.prisma, monitor.siteId, userId, role);
     return this.prisma.monitor.delete({ where: { id } });
   }
 }

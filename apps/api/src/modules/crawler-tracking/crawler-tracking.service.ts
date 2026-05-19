@@ -4,6 +4,7 @@ import { RobotsParserService } from './robots-parser.service';
 import { SnippetGeneratorService } from './snippet-generator.service';
 import { ReportVisitDto } from './dto/report-visit.dto';
 import { QueryVisitsDto } from './dto/query-visits.dto';
+import { canAccessSite } from '../../common/auth/site-access';
 import { AI_BOTS, AiBotDefinition, matchAiBot } from '@geovault/shared';
 import { randomBytes } from 'crypto';
 
@@ -16,10 +17,6 @@ export class CrawlerTrackingService {
     private readonly robotsParser: RobotsParserService,
     private readonly snippetGen: SnippetGeneratorService,
   ) {}
-
-  private isAdmin(role?: string): boolean {
-    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
-  }
 
   private getBotDefinition(botName: string): AiBotDefinition {
     const botDef = AI_BOTS.find((b: AiBotDefinition) => b.name === botName);
@@ -52,10 +49,10 @@ export class CrawlerTrackingService {
   private async assertSiteAccess(siteId: string, userId: string, role?: string) {
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
-      select: { id: true, userId: true, crawlerToken: true },
+      select: { id: true, userId: true, isClient: true, crawlerToken: true },
     });
     if (!site) throw new NotFoundException('Site not found');
-    if (!this.isAdmin(role) && site.userId !== userId) {
+    if (!canAccessSite(site, userId, role)) {
       throw new ForbiddenException('You do not have access to this site');
     }
     return site;

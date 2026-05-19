@@ -93,9 +93,10 @@ export class SuccessCasesController {
   @ApiOperation({ summary: 'Submit a new success case' })
   create(
     @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
     @Body() dto: CreateSuccessCaseDto,
   ) {
-    return this.service.create(userId, dto);
+    return this.service.create(userId, dto, role);
   }
 
   @ApiBearerAuth()
@@ -104,9 +105,10 @@ export class SuccessCasesController {
   update(
     @Param('id') id: string,
     @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
     @Body() dto: CreateSuccessCaseDto,
   ) {
-    return this.service.update(id, userId, dto);
+    return this.service.update(id, userId, dto, role);
   }
 
   @ApiBearerAuth()

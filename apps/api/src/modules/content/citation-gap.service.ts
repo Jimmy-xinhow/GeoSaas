@@ -1,8 +1,9 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
+import { assertSiteAccess } from '../../common/auth/site-access';
 import OpenAI from 'openai';
 import pLimit from '@/common/utils/p-limit';
 
@@ -40,19 +41,8 @@ export class CitationGapService {
     if (apiKey) this.openai = new OpenAI({ apiKey });
   }
 
-  private isAdmin(role?: string): boolean {
-    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
-  }
-
   async assertSiteAccess(siteId: string, userId: string, role?: string): Promise<void> {
-    const site = await this.prisma.site.findUnique({
-      where: { id: siteId },
-      select: { userId: true },
-    });
-    if (!site) throw new NotFoundException('Site not found');
-    if (!this.isAdmin(role) && site.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this site');
-    }
+    await assertSiteAccess(this.prisma, siteId, userId, role);
   }
 
   /**

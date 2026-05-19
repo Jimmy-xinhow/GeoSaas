@@ -9,6 +9,7 @@ import {
   isPublicSafeSite,
   publicSuccessCaseWhere,
 } from '../../common/utils/public-data-filter';
+import { assertSiteAccess, isAdminRole } from '../../common/auth/site-access';
 
 @Injectable()
 export class SuccessCasesService {
@@ -21,22 +22,16 @@ export class SuccessCasesService {
   ) {}
 
   private isAdminRole(role: string) {
-    return role === 'ADMIN' || role === 'SUPER_ADMIN';
+    return isAdminRole(role);
   }
 
-  private async assertOwnsSite(userId: string, siteId?: string): Promise<void> {
+  private async assertOwnsSite(userId: string, siteId?: string, role?: string): Promise<void> {
     if (!siteId) return;
-    const site = await this.prisma.site.findUnique({
-      where: { id: siteId },
-      select: { userId: true },
-    });
-    if (!site || site.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this site');
-    }
+    await assertSiteAccess(this.prisma, siteId, userId, role);
   }
 
-  async create(userId: string, dto: CreateSuccessCaseDto) {
-    await this.assertOwnsSite(userId, dto.siteId);
+  async create(userId: string, dto: CreateSuccessCaseDto, role?: string) {
+    await this.assertOwnsSite(userId, dto.siteId, role);
     return this.prisma.geoSuccessCase.create({
       data: {
         userId,
@@ -225,12 +220,12 @@ export class SuccessCasesService {
     return item;
   }
 
-  async update(caseId: string, userId: string, dto: Partial<CreateSuccessCaseDto>) {
+  async update(caseId: string, userId: string, dto: Partial<CreateSuccessCaseDto>, role?: string) {
     const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
     if (!existing) throw new NotFoundException('Case not found');
     if (existing.userId !== userId) throw new ForbiddenException('You cannot edit this case');
     if (existing.status !== 'pending') throw new ForbiddenException('Only pending cases can be edited');
-    await this.assertOwnsSite(userId, dto.siteId);
+    await this.assertOwnsSite(userId, dto.siteId, role);
 
     return this.prisma.geoSuccessCase.update({
       where: { id: caseId },

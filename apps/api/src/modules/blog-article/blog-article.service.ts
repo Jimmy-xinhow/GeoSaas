@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -32,6 +32,7 @@ import {
   publicIndexableBlogArticleWhere,
   publicSiteWhere,
 } from '../../common/utils/public-data-filter';
+import { assertSiteAccess } from '../../common/auth/site-access';
 
 const ALL_TEMPLATE_TYPES: TemplateType[] = [
   'geo_overview',
@@ -88,10 +89,6 @@ export class BlogArticleService {
     private readonly brandFactService: BrandFactService,
   ) {}
 
-  private isAdmin(role?: string): boolean {
-    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
-  }
-
   async getBrandFactReadiness(siteId: string, userId?: string, role?: string) {
     await this.assertSiteAccess(siteId, userId, role);
     const graph = await this.brandFactService.buildForSite(siteId);
@@ -102,14 +99,7 @@ export class BlogArticleService {
   }
 
   private async assertSiteAccess(siteId: string, userId?: string, role?: string) {
-    const site = await this.prisma.site.findUnique({
-      where: { id: siteId },
-      select: { userId: true },
-    });
-    if (!site) throw new NotFoundException('Site not found');
-    if (!this.isAdmin(role) && site.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this site');
-    }
+    await assertSiteAccess(this.prisma, siteId, userId, role);
   }
 
   private getClientDailyDayType(keywords?: string[] | null): ClientDailyDay | null {

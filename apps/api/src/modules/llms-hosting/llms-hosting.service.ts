@@ -1,10 +1,11 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FixService } from '../fix/fix.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { emitLlmsFullInvalidated, llmsFullCacheEvents, REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY } from './llms-full-cache';
 import { publicBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
+import { assertSiteAccess } from '../../common/auth/site-access';
 
 const REDIS_TTL_SEC = 21600; // 6 hours
 
@@ -66,19 +67,8 @@ export class LlmsHostingService implements OnModuleDestroy {
       .catch((err) => this.logger.warn(`IndexNow ping failed for ${path}: ${err}`));
   }
 
-  private isAdmin(role?: string): boolean {
-    return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'super_admin';
-  }
-
   async assertSiteAccess(siteId: string, userId: string, role?: string): Promise<void> {
-    const site = await this.prisma.site.findUnique({
-      where: { id: siteId },
-      select: { userId: true },
-    });
-    if (!site) throw new NotFoundException('Site not found');
-    if (!this.isAdmin(role) && site.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this site');
-    }
+    await assertSiteAccess(this.prisma, siteId, userId, role);
   }
 
   async willUseAiForLlmsTxt(siteId: string): Promise<boolean> {

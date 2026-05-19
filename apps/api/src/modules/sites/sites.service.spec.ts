@@ -102,6 +102,18 @@ describe('SitesService', () => {
 
       expect(result).toEqual([]);
     });
+
+    it('should return owned and client-tagged sites for staff users', async () => {
+      prisma.site.findMany.mockResolvedValue([mockSite]);
+
+      await service.findAll(userId, 'STAFF');
+
+      expect(prisma.site.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { OR: [{ userId }, { isClient: true }] },
+        }),
+      );
+    });
   });
 
   describe('findOne', () => {
@@ -114,6 +126,18 @@ describe('SitesService', () => {
       expect(prisma.site.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: siteId, userId },
+        }),
+      );
+    });
+
+    it('should let staff open client-tagged sites', async () => {
+      prisma.site.findFirst.mockResolvedValue({ ...mockSite, userId: 'client-owner', isClient: true });
+
+      await service.findOne(siteId, userId, 'STAFF');
+
+      expect(prisma.site.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: siteId, OR: [{ userId }, { isClient: true }] },
         }),
       );
     });
