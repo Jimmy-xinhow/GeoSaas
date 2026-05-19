@@ -39,6 +39,12 @@ export default function PublicNavbar() {
               >
                 定價
               </a>
+              <a
+                href="#managed-service"
+                className="text-sm text-gray-400 hover:text-white transition-colors"
+              >
+                代營運
+              </a>
             </>
           )}
           {navLinks.map((link) => (

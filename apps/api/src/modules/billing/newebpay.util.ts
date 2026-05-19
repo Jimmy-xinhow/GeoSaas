@@ -17,6 +17,36 @@ export interface NewebPayTradeInfo {
   VACC?: 1 | 0;
 }
 
+export interface NewebPayPeriodInfo {
+  RespondType: 'JSON';
+  TimeStamp: string;
+  Version: '1.5';
+  LangType: 'zh-Tw';
+  MerOrderNo: string;
+  ProdDesc: string;
+  PeriodAmt: number;
+  PeriodType: 'M' | 'Y';
+  PeriodPoint: string;
+  PeriodStartType: '2';
+  PeriodTimes: string;
+  PayerEmail?: string;
+  PaymentInfo: 'Y' | 'N';
+  OrderInfo: 'Y' | 'N';
+  EmailModify: '0' | '1';
+  ReturnURL: string;
+  NotifyURL: string;
+  BackURL?: string;
+  PeriodMemo?: string;
+}
+
+export interface NewebPayPeriodAlterStatusInfo {
+  RespondType: 'JSON';
+  Version: '1.0';
+  MerOrderNo: string;
+  PeriodNo: string;
+  AlterType: 'suspend' | 'terminate' | 'restart';
+}
+
 function objectToQueryString(obj: Record<string, any>): string {
   return Object.entries(obj)
     .filter(([, v]) => v !== undefined && v !== null)
@@ -28,7 +58,7 @@ function objectToQueryString(obj: Record<string, any>): string {
  * AES-256-CBC 加密 TradeInfo
  */
 export function encryptTradeInfo(
-  data: NewebPayTradeInfo,
+  data: NewebPayTradeInfo | NewebPayPeriodInfo | NewebPayPeriodAlterStatusInfo,
   hashKey: string,
   hashIV: string,
 ): string {

@@ -61,20 +61,28 @@ export default function LoginPage() {
   }
 
   return (
-    <Card className="w-full max-w-md max-w-full shadow-lg overflow-hidden">
-      <CardHeader className="text-center space-y-2">
-        <div className="mb-2 flex justify-center"><GeovaultLogoCompact className="h-9 w-auto" /></div>
-        <CardTitle className="text-2xl">歡迎回來</CardTitle>
-        <CardDescription>登入您的帳號</CardDescription>
+    <Card className="w-full max-w-[380px] overflow-hidden rounded-2xl border-white/10 bg-white/[0.04] shadow-2xl shadow-black/30 backdrop-blur">
+      <CardHeader className="space-y-4 p-7 pb-5">
+        <div className="flex items-center gap-3">
+          <GeovaultLogoCompact className="h-8 w-auto" />
+          <span className="text-sm font-semibold text-blue-300">GEOvault</span>
+        </div>
+        <div>
+          <CardTitle className="text-2xl font-bold tracking-tight text-white">登入工作台</CardTitle>
+          <CardDescription className="mt-2 text-sm leading-6 text-gray-400">
+            管理品牌 AI 可見度、訂閱與代營運交付。
+          </CardDescription>
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-7">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">電子郵件</Label>
+            <Label htmlFor="email" className="text-gray-200">電子郵件</Label>
             <Input
               id="email"
               type="email"
               placeholder="name@example.com"
+              className="h-11 border-white/10 bg-gray-950/80 text-white placeholder:text-gray-600"
               {...register('email')}
             />
             {errors.email && (
@@ -84,10 +92,10 @@ export default function LoginPage() {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password">密碼</Label>
+              <Label htmlFor="password" className="text-gray-200">密碼</Label>
               <Link
                 href="/forgot-password"
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-blue-400 hover:text-blue-300"
               >
                 忘記密碼？
               </Link>
@@ -96,6 +104,7 @@ export default function LoginPage() {
               id="password"
               type="password"
               placeholder="請輸入密碼"
+              className="h-11 border-white/10 bg-gray-950/80 text-white placeholder:text-gray-600"
               {...register('password')}
             />
             {errors.password && (
@@ -105,29 +114,28 @@ export default function LoginPage() {
 
           <Button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            className="h-11 w-full bg-blue-600 text-white hover:bg-blue-700"
             disabled={loginMutation.isPending}
           >
             {loginMutation.isPending ? '登入中...' : '登入'}
           </Button>
         </form>
 
-        {/* Divider */}
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
+            <span className="w-full border-t border-white/10" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-white px-2 text-muted-foreground">或</span>
+            <span className="bg-[#111827] px-2 text-gray-500">或</span>
           </div>
         </div>
 
         <GoogleSignInButton text="signin_with" redirectTo={redirectTo} />
       </CardContent>
-      <CardFooter className="justify-center">
-        <p className="text-sm text-muted-foreground">
+      <CardFooter className="justify-center px-7 pb-7">
+        <p className="text-sm text-gray-400">
           還沒有帳號？{' '}
-          <Link href="/register" className="text-blue-600 hover:underline font-medium">
+          <Link href="/register" className="font-medium text-blue-400 hover:text-blue-300">
             立即註冊
           </Link>
         </p>

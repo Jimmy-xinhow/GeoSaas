@@ -34,8 +34,10 @@ import { cn } from '@/lib/utils'
 import { useGuestScan, useGuestScanStatus } from '@/hooks/use-guest-scan'
 import { useSubmitIndexNow } from '@/hooks/use-indexnow'
 import { useCrawlerFeed, usePlatformStats } from '@/hooks/use-directory'
+import { useManagedCheckout } from '@/hooks/use-settings'
 import PublicNavbar from '@/components/layout/public-navbar'
 import { GeovaultLogoCompact, GeovaultLogoCompactDark } from '@/components/logo'
+import { toast } from 'sonner'
 
 /* ─── Animated counter hook ─── */
 function useCountUp(target: number, duration = 2000) {
@@ -295,12 +297,160 @@ const pricingPlans = [
   },
 ]
 
+const managedPlans = [
+  {
+    name: 'GEO 入門代營運',
+    code: 'MANAGED_BASIC' as const,
+    englishName: 'GEOvault Managed Basic',
+    monthlyPrice: 7800,
+    yearlyMonthlyPrice: 7020,
+    positioning: '適合想先建立 AI 搜尋基準、由專人完成第一輪品牌資料整理與基礎佈局的品牌。',
+    features: [
+      '專人檢測 5 大 AI 平台初始可見度',
+      '專人設計 50 組核心 AI 搜尋問題庫',
+      '專人整理品牌定位、服務地區與適合客群',
+      '交付 AI 較容易理解的品牌敘述',
+      '每月發布 30 篇可提供 AI 引用的品牌內容文章',
+      '每月簡版可見度報告與解讀',
+      '未達約定方向時提供一次補強建議',
+    ],
+    exclusions: ['不含競品深度分析', '不含大量問題庫', '不含完整顧問月會', '不含退費保障'],
+    guarantee: '未達約定方向，提供一次補強建議。',
+    recommended: false,
+  },
+  {
+    name: 'GEO 完整代營運',
+    code: 'MANAGED_PRO' as const,
+    englishName: 'GEOvault Managed Pro',
+    monthlyPrice: 15000,
+    yearlyMonthlyPrice: 13500,
+    positioning: '適合把 AI 搜尋曝光當成每月營運項目，希望有人持續檢測、執行、追蹤與管理成果的品牌。',
+    features: [
+      '專人完整診斷品牌在 5 大 AI 平台的理解狀況',
+      '專人設計 100 組推薦、比較、需求、情境問題庫',
+      '專人建置品牌 AI 知識庫與 FAQ 回答方向',
+      '每月代執行 GEO 補強與內容訊號修正',
+      '每月發布 50 篇可提供 AI 引用的品牌內容文章',
+      '每月 1 到 3 個競品 AI 可見度簡析',
+      '完整月報、可見度變化紀錄與下月策略建議',
+      '未達約定成效時可申請退費或延長補強審核',
+    ],
+    exclusions: ['不保證每次 AI 都推薦品牌', '不以成交數或流量數作為退費依據', '不以單一 AI 回答認定成效'],
+    guarantee: '未達約定成效，符合條件可申請退費或延長補強。',
+    recommended: true,
+  },
+]
+
+const serviceComparison = [
+  ['適合對象', '想自己操作工具的人', '想交給專人處理的品牌'],
+  ['客戶要做什麼', '自己掃描、自己判斷、自己修正', '由專人檢測、判斷、執行、追蹤'],
+  ['核心價值', '功能權限', '專人策略與執行'],
+  ['報告', '系統產出', '專人解讀與下月建議'],
+  ['優化方式', '工具提供建議', '專人規劃補強方向'],
+  ['價格', 'NT$390 / NT$690', 'NT$7,800 / NT$15,000'],
+]
+
+const managedDifferentiators = [
+  {
+    title: '不是多開功能權限',
+    body: '自助方案給你工具；代營運由專人幫你判斷哪些問題該測、哪些品牌資料該補、哪些內容訊號會影響 AI 理解。',
+  },
+  {
+    title: '每月有明確交付物',
+    body: '交付問題庫、品牌知識庫、AI 可見度追蹤、報告解讀、補強建議與執行紀錄，而不是只丟一份系統報表。',
+  },
+  {
+    title: '用約定指標驗收',
+    body: '成效依事前約定的問題庫、平台範圍、檢測期間與可見度指標判斷，讓代營運成果可以被追蹤與審核。',
+  },
+]
+
+const managedDeliverables = [
+  ['自助訂閱', '工具權限', '客戶自己掃描、自己讀報告、自己修正'],
+  ['代營運', '專人交付', 'GEOvault 代為設計問題、整理知識庫、追蹤 AI 回答並提出補強'],
+]
+
+const managedComparison = [
+  ['核心定位', '初始檢測 + 基礎佈局', '持續代營運 + 成效追蹤'],
+  ['問題庫', '50 組', '100 組'],
+  ['AI 引用內容文章', '每月 30 篇', '每月 50 篇'],
+  ['AI 平台', '5 平台基礎檢測', '5 平台完整追蹤'],
+  ['品牌知識庫', '基礎整理', '完整建置'],
+  ['優化執行', '基礎建議', '每月代執行與補強'],
+  ['競品分析', '無', '1 到 3 個競品簡析'],
+  ['報告', '簡版月報', '完整月報'],
+  ['策略建議', '一次補強建議', '每月策略建議'],
+  ['保障', '補強建議', '符合條件可退費或延長補強'],
+]
+
+const managedProcess = [
+  '品牌初始檢測',
+  '問題庫設計',
+  '品牌知識庫建置',
+  'GEO 優化與補強',
+  '每月追蹤與報告',
+]
+
+const managedAudiences = [
+  '中小企業主',
+  '醫美診所',
+  '牙醫診所',
+  '律師事務所',
+  'B2B 公司',
+  '高客單價服務業',
+  '在地服務業',
+  '想搶先佈局 AI 搜尋曝光的品牌',
+]
+
+const faqItems = [
+  {
+    q: 'GEO 和 SEO 有什麼不同？',
+    a: 'SEO 優化的是 Google 搜尋排名，讓你出現在搜尋結果頁面上。GEO 優化的是 AI 搜尋引用，讓 ChatGPT、Claude 等 AI 在回答問題時主動推薦你的品牌。兩者可以同時進行，互不衝突。',
+  },
+  {
+    q: '多久能看到效果？',
+    a: '根據我們的案例數據，完成基礎優化（JSON-LD + llms.txt + FAQ Schema）後，通常 7-14 天內就能在部分 AI 平台看到改善。有些品牌在優化後 3 天即被 ChatGPT 推薦。',
+  },
+  {
+    q: '我不懂技術，能用 Geovault 嗎？',
+    a: '完全可以。Geovault 的自動修復工具會根據你的品牌資料直接生成需要的程式碼，你只需要複製貼上到你的網站即可。如果你使用 WordPress、Webflow 等平台，我們也提供安裝教學。',
+  },
+  {
+    q: '自助訂閱跟代營運方案有什麼不同？',
+    a: '自助訂閱提供工具功能，需要你自己操作、判斷與修正。代營運方案由專人協助你完成檢測、問題庫設計、品牌知識庫建置、優化方向判斷與每月報告解讀。',
+  },
+  {
+    q: '代營運是否保證 AI 一定推薦我的品牌？',
+    a: '不保證每次都被 AI 推薦。代營運目標是透過品牌知識庫、內容訊號與 AI 可讀性優化，提升品牌被 AI 正確理解、提及與推薦的機會。',
+  },
+  {
+    q: 'NT$7,800 跟 NT$15,000 差在哪裡？',
+    a: 'NT$7,800 是入門檢測與基礎佈局，包含 50 組問題庫與每月 30 篇 AI 引用內容文章。NT$15,000 是完整代營運，包含 100 組問題庫、每月 50 篇 AI 引用內容文章、競品簡析、完整月報與每月策略建議。',
+  },
+  {
+    q: '未達成效退費怎麼認定？',
+    a: '必須以雙方事前約定的問題庫、平台範圍、檢測期間與可見度指標作為依據。不以詢問數、成交數、單一 AI 回答或單一關鍵字結果作為退費依據。',
+  },
+  {
+    q: '免費方案有什麼限制？',
+    a: '免費方案可以掃描 1 個網站，每月 2 次掃描，查看完整的 GEO 報告和分數，還可以免費體驗 1 次 AI 修復建議。如果需要 AI 內容生成、知識庫、引用監控等完整功能，可以升級到 Starter 或 Pro 方案。',
+  },
+  {
+    q: '可以隨時取消訂閱嗎？',
+    a: '可以。所有付費方案都可以隨時取消，取消後仍可使用到當期結束。我們也提供年繳折扣方案。',
+  },
+]
+
 /* ─── Main Page ─── */
 export default function HomeClient() {
   const [scanUrl, setScanUrl] = useState('')
   const [scanId, setScanId] = useState<string | null>(null)
   const [isYearly, setIsYearly] = useState(false)
+  const [managedBillingCycle, setManagedBillingCycle] = useState<'monthly' | 'yearly'>('monthly')
+  const [selectedManagedPlan, setSelectedManagedPlan] = useState<(typeof managedPlans)[number] | null>(null)
+  const [modalTermsAccepted, setModalTermsAccepted] = useState(false)
   const guestScan = useGuestScan()
+  const managedCheckout = useManagedCheckout()
   const { data: stats } = usePlatformStats()
 
   const handleScan = () => {
@@ -310,10 +460,61 @@ export default function HomeClient() {
     guestScan.mutate(url, { onSuccess: (data: any) => setScanId(data.id) })
   }
 
+  const openManagedCheckout = (plan: (typeof managedPlans)[number]) => {
+    setSelectedManagedPlan(plan);
+    setModalTermsAccepted(false);
+  }
+
+  const handleManagedCheckout = () => {
+    if (!selectedManagedPlan) return;
+    if (!modalTermsAccepted) {
+      toast.error('請先勾選並同意代營運合約與退費審核條款');
+      return;
+    }
+    if (typeof window !== 'undefined' && !localStorage.getItem('token')) {
+      sessionStorage.setItem('pendingManagedPlan', selectedManagedPlan.code);
+      sessionStorage.setItem('pendingManagedBillingCycle', managedBillingCycle);
+      toast.message('請先登入，登入後可直接回到代營運方案付款');
+      window.location.href = `/login?redirect=${encodeURIComponent(`/?managedPlan=${selectedManagedPlan.code}&managedBillingCycle=${managedBillingCycle}#managed-service`)}`;
+      return;
+    }
+    managedCheckout.mutate({ plan: selectedManagedPlan.code, billingCycle: managedBillingCycle }, {
+      onError: (error: any) => {
+        const status = error?.response?.status;
+        if (status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        toast.error(error?.response?.data?.message || '無法建立付款訂單，請稍後再試');
+      },
+    });
+  }
+
   // Animated counters for stats section
   const brandCount = useCountUp(stats?.totalSites ?? 680)
   const articleCount = useCountUp(stats?.totalScans ? stats.totalScans * 3 : 2800)
   const industryCount = useCountUp(22)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const planCode =
+      params.get('managedPlan') ||
+      sessionStorage.getItem('pendingManagedPlan');
+    const billingCycle =
+      params.get('managedBillingCycle') ||
+      sessionStorage.getItem('pendingManagedBillingCycle');
+    if (planCode !== 'MANAGED_BASIC' && planCode !== 'MANAGED_PRO') return;
+
+    const plan = managedPlans.find((item) => item.code === planCode);
+    if (!plan) return;
+
+    setSelectedManagedPlan(plan);
+    if (billingCycle === 'yearly' || billingCycle === 'monthly') setManagedBillingCycle(billingCycle);
+    setModalTermsAccepted(false);
+    sessionStorage.removeItem('pendingManagedPlan');
+    sessionStorage.removeItem('pendingManagedBillingCycle');
+  }, []);
 
   return (
     <div className="min-h-screen bg-white">
@@ -1075,16 +1276,16 @@ export default function HomeClient() {
           SECTION 8 — PRICING with Monthly/Yearly Toggle
          ════════════════════════════════════════════════════════ */}
       <section id="pricing" className="py-20 lg:py-28 bg-gradient-to-b from-gray-900 to-gray-800 text-white">
-        <div className="max-w-5xl mx-auto px-6">
+        <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
             <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-blue-500/20 text-blue-400 mb-4">
-              方案定價
+              自助訂閱方案
             </span>
             <h2 className="text-3xl sm:text-4xl font-bold">
-              選擇適合你的方案
+              想自己操作工具，從 Free、Starter、Pro 開始
             </h2>
-            <p className="mt-4 text-lg text-gray-400">
-              免費開始，隨時升級。年繳享 9 折優惠。
+            <p className="mt-4 text-lg text-gray-400 max-w-2xl mx-auto">
+              自助方案適合自己掃描、自己看報告、自己依照 AI 修復建議執行的團隊。免費開始，隨時升級，年繳可享折扣優惠。
             </p>
 
             {/* Monthly/Yearly Toggle */}
@@ -1106,12 +1307,6 @@ export default function HomeClient() {
                 )}
               >
                 年繳
-                <span className={cn(
-                  'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-                  isYearly ? 'bg-white/20 text-white' : 'bg-green-100 text-green-700',
-                )}>
-                  省 10%
-                </span>
               </button>
             </div>
           </div>
@@ -1192,6 +1387,284 @@ export default function HomeClient() {
           <p className="text-center mt-8 text-sm text-gray-500">
             所有方案均可隨時取消。年繳方案按月計費，一次支付享折扣。
           </p>
+
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════════
+          SECTION 8B — MANAGED SERVICE
+         ════════════════════════════════════════════════════════ */}
+      <section id="managed-service" className="py-20 lg:py-28 bg-gradient-to-b from-gray-800 to-gray-900 text-white">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-10 lg:gap-14 items-start">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full bg-blue-500/20 px-4 py-1.5 text-sm font-medium text-blue-400">
+                GEOvault Managed Service
+              </span>
+              <h2 className="mt-6 text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
+                不想自己研究 GEO？
+                <span className="block bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
+                  交給專人做 AI 搜尋可見度代營運
+                </span>
+              </h2>
+              <p className="mt-5 text-lg leading-relaxed text-gray-400">
+                從品牌檢測、問題庫設計、AI 可見度追蹤到每月報告，由專人協助你提升在 ChatGPT、Gemini、Claude、Perplexity、Copilot 的曝光與提及機會。
+              </p>
+              <div className="mt-8 flex flex-col sm:flex-row gap-3">
+                <a href="#managed-plans" className="inline-flex h-14 items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-8 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:from-blue-700 hover:to-purple-700">
+                  查看代營運方案
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </a>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => openManagedCheckout(managedPlans[1])}
+                  className="h-14 rounded-xl border-white/15 bg-white/5 text-white hover:bg-white/10"
+                >
+                  直接選擇完整代營運
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-blue-950/20 backdrop-blur-sm">
+              <h3 className="text-sm font-bold uppercase text-blue-300">代營運買的是營運責任</h3>
+              <div className="mt-5 space-y-3">
+                {managedDeliverables.map(([type, value, detail]) => (
+                  <div key={type} className={cn(
+                    'rounded-xl border p-4',
+                    type === '代營運' ? 'border-blue-400/30 bg-blue-500/10' : 'border-white/10 bg-gray-950/20',
+                  )}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-gray-200">{type}</span>
+                      <span className={cn(
+                        'rounded-full px-3 py-1 text-xs font-bold',
+                        type === '代營運' ? 'bg-blue-500 text-white' : 'bg-white/10 text-gray-400',
+                      )}>
+                        {value}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm leading-relaxed text-gray-400">{detail}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-5 border-t border-white/10 pt-4 text-sm leading-relaxed text-gray-400">
+                工具只是底層系統，真正交付的是策略、判斷、執行與結果管理；因此不會把 Pro 功能包裝成高價訂閱升級。
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {managedDifferentiators.map((item) => (
+              <div key={item.title} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+                <h3 className="text-base font-bold text-white">{item.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-gray-400">{item.body}</p>
+              </div>
+            ))}
+          </div>
+
+          <div id="managed-plans" className="mt-14 scroll-mt-24">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-2xl font-bold">選擇代營運付款週期</h3>
+                <p className="mt-2 text-sm text-gray-400">年繳以訂閱制每年扣款一次，系統會直接套用折扣後金額。</p>
+              </div>
+              <div className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
+                {[
+                  ['monthly', '月繳'] as const,
+                  ['yearly', '年繳'] as const,
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setManagedBillingCycle(value)}
+                    className={cn(
+                      'h-10 rounded-lg px-4 text-sm font-semibold transition-colors',
+                      managedBillingCycle === value ? 'bg-white text-gray-950' : 'text-gray-400 hover:text-white',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-6">
+            {managedPlans.map((plan) => {
+              const monthlyEquivalent = managedBillingCycle === 'yearly' ? plan.yearlyMonthlyPrice : plan.monthlyPrice;
+              const total = managedBillingCycle === 'yearly' ? plan.yearlyMonthlyPrice * 12 : plan.monthlyPrice;
+              const yearlySavings = (plan.monthlyPrice - plan.yearlyMonthlyPrice) * 12;
+              return (
+              <div
+                key={plan.name}
+                className={cn(
+                  'relative rounded-2xl border bg-white/5 p-6 sm:p-8 backdrop-blur-sm transition-all hover:shadow-xl',
+                  plan.recommended ? 'border-blue-500 bg-white/10 shadow-lg shadow-blue-500/20' : 'border-white/10',
+                )}
+              >
+                {plan.recommended && (
+                  <span className="absolute right-6 top-6 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-1 text-xs font-bold text-white shadow-lg">
+                    最推薦
+                  </span>
+                )}
+                <p className="text-sm font-semibold text-blue-300">{plan.englishName}</p>
+                <h3 className="mt-2 text-2xl font-bold">{plan.name}</h3>
+                <div className="mt-5 flex items-end gap-1">
+                  <span className="text-4xl font-black tracking-tight">NT${monthlyEquivalent.toLocaleString()}</span>
+                  <span className="pb-1 text-gray-400">/ 月</span>
+                </div>
+                {managedBillingCycle === 'yearly' && (
+                  <p className="mt-2 text-sm font-medium text-green-300">
+                    年繳 NT${total.toLocaleString()}，省 NT${yearlySavings.toLocaleString()}
+                  </p>
+                )}
+                {managedBillingCycle === 'monthly' && (
+                  <p className="mt-2 text-sm text-gray-500">按月自動扣款，可依服務條款取消。</p>
+                )}
+                <p className="mt-4 text-sm leading-relaxed text-gray-400">{plan.positioning}</p>
+
+                <ul className="mt-6 space-y-3">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2.5 text-sm text-gray-300">
+                      <Check className="h-4 w-4 text-green-400 shrink-0 mt-0.5" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-6 rounded-xl bg-white/5 p-4">
+                  <p className="text-xs font-bold text-gray-500">不包含</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {plan.exclusions.map((item) => (
+                      <span key={item} className="rounded-full bg-gray-950/40 px-3 py-1 text-xs text-gray-400 ring-1 ring-white/10">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-semibold text-amber-200">
+                  {plan.guarantee}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => openManagedCheckout(plan)}
+                  disabled={managedCheckout.isPending}
+                  className={cn(
+                    'mt-6 inline-flex h-12 w-full items-center justify-center rounded-xl text-sm font-semibold transition-all',
+                    plan.recommended
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-600/20 hover:from-blue-700 hover:to-purple-700'
+                      : 'bg-white text-gray-900 hover:bg-gray-100',
+                    managedCheckout.isPending && 'opacity-60 cursor-wait',
+                  )}
+                >
+                  {managedCheckout.isPending ? '建立付款中...' : '選擇方案'}
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </button>
+              </div>
+            )})}
+            </div>
+          </div>
+
+          <div className="mt-14 overflow-x-auto rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/5 text-left">
+                  <th className="py-4 px-5 font-semibold text-gray-400">項目</th>
+                  <th className="py-4 px-5 font-semibold text-white">GEO 入門代營運</th>
+                  <th className="py-4 px-5 font-semibold text-blue-200">GEO 完整代營運</th>
+                </tr>
+              </thead>
+              <tbody>
+                {managedComparison.map(([label, basic, pro]) => (
+                  <tr key={label} className="border-b border-white/5">
+                    <td className="py-3.5 px-5 font-medium text-gray-500">{label}</td>
+                    <td className="py-3.5 px-5 text-gray-300">{basic}</td>
+                    <td className="py-3.5 px-5 text-blue-100">{pro}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-14 grid lg:grid-cols-[1fr_0.9fr] gap-8">
+            <div>
+              <h3 className="text-2xl font-bold">服務流程</h3>
+              <div className="mt-6 grid sm:grid-cols-5 gap-3">
+                {managedProcess.map((step, index) => (
+                  <div key={step} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                      {index + 1}
+                    </div>
+                    <p className="mt-4 text-sm font-semibold leading-snug text-gray-200">{step}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-2xl font-bold">適合對象</h3>
+              <div className="mt-6 flex flex-wrap gap-2">
+                {managedAudiences.map((item) => (
+                  <span key={item} className="rounded-full bg-white/5 px-4 py-2 text-sm font-medium text-gray-300 ring-1 ring-white/10">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-14 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 sm:p-8">
+            <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+              <Shield className="h-8 w-8 text-amber-300 shrink-0" />
+              <div>
+                <h3 className="text-xl font-bold text-amber-100">退費或延長補強條款原則</h3>
+                <p className="mt-2 text-sm leading-relaxed text-amber-200/90">
+                  未達約定成效時，必須以雙方事前約定的問題庫、AI 平台範圍、檢測期間與可見度指標作為依據；不以成交數、詢問數、流量數、單一平台、單一問題或單次回答作為認定依據。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-8">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+              <div>
+                <span className="inline-flex items-center rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-300">
+                  自助版 vs 代營運版
+                </span>
+                <h3 className="mt-4 text-2xl sm:text-3xl font-bold">價格差異不是功能加價，而是執行深度不同</h3>
+                <p className="mt-3 max-w-2xl text-sm sm:text-base leading-relaxed text-gray-400">
+                  自助版是工具，代營運是專人幫你完成策略、判斷、執行與追蹤。GEOvault Managed Service 使用平台作為底層系統，但客戶購買的是專人交付成果。
+                </p>
+              </div>
+              <a href="#managed-service" className="inline-flex h-11 items-center justify-center rounded-xl bg-amber-500 px-5 text-sm font-semibold text-gray-950 transition-colors hover:bg-amber-400">
+                回到代營運方案
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </a>
+            </div>
+
+            <div className="mt-8 overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-left">
+                    <th className="py-3 pr-4 font-semibold text-gray-400">類型</th>
+                    <th className="py-3 px-4 font-semibold text-white">自助訂閱</th>
+                    <th className="py-3 pl-4 font-semibold text-amber-200">代營運方案</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {serviceComparison.map(([label, selfService, managed]) => (
+                    <tr key={label} className="border-b border-white/5">
+                      <td className="py-3 pr-4 text-gray-500">{label}</td>
+                      <td className="py-3 px-4 text-gray-300">{selfService}</td>
+                      <td className="py-3 pl-4 text-amber-100">{managed}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -1207,28 +1680,7 @@ export default function HomeClient() {
           </div>
 
           <div className="space-y-4">
-            {[
-              {
-                q: 'GEO 和 SEO 有什麼不同？',
-                a: 'SEO 優化的是 Google 搜尋排名，讓你出現在搜尋結果頁面上。GEO 優化的是 AI 搜尋引用，讓 ChatGPT、Claude 等 AI 在回答問題時主動推薦你的品牌。兩者可以同時進行，互不衝突。',
-              },
-              {
-                q: '多久能看到效果？',
-                a: '根據我們的案例數據，完成基礎優化（JSON-LD + llms.txt + FAQ Schema）後，通常 7-14 天內就能在部分 AI 平台看到改善。有些品牌在優化後 3 天即被 ChatGPT 推薦。',
-              },
-              {
-                q: '我不懂技術，能用 Geovault 嗎？',
-                a: '完全可以。Geovault 的自動修復工具會根據你的品牌資料直接生成需要的程式碼，你只需要複製貼上到你的網站即可。如果你使用 WordPress、Webflow 等平台，我們也提供安裝教學。',
-              },
-              {
-                q: '免費方案有什麼限制？',
-                a: '免費方案可以掃描 1 個網站，每月 2 次掃描，查看完整的 GEO 報告和分數，還可以免費體驗 1 次 AI 修復建議。如果需要 AI 內容生成、知識庫、引用監控等完整功能，可以升級到 Starter 或 Pro 方案。',
-              },
-              {
-                q: '可以隨時取消訂閱嗎？',
-                a: '可以。所有付費方案都可以隨時取消，取消後仍可使用到當期結束。我們也提供年繳方案享 9 折優惠。',
-              },
-            ].map((item) => (
+            {faqItems.map((item) => (
               <details key={item.q} className="group bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                 <summary className="flex items-center justify-between p-6 cursor-pointer list-none hover:bg-white/5 transition-colors">
                   <span className="font-semibold pr-4">{item.q}</span>
@@ -1320,6 +1772,74 @@ export default function HomeClient() {
           </div>
         </div>
       </section>
+
+      {selectedManagedPlan && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-gray-950/80 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-gray-900 p-6 shadow-2xl shadow-blue-950/40">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-blue-300">確認代營運訂閱</p>
+                <h3 className="mt-2 text-2xl font-bold text-white">{selectedManagedPlan.name}</h3>
+                <p className="mt-2 text-sm text-gray-400">
+                  {managedBillingCycle === 'yearly'
+                    ? `年繳 NT${(selectedManagedPlan.yearlyMonthlyPrice * 12).toLocaleString()}，將前往藍新金流建立每年定期定額付款。`
+                    : `NT${selectedManagedPlan.monthlyPrice.toLocaleString()} / 月，將前往藍新金流建立每月定期定額付款。`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedManagedPlan(null)}
+                className="rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white"
+                aria-label="關閉"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100">
+              請確認：問題庫、AI 平台範圍、檢測期間與可見度指標需事前約定；未達成效時可線上申請退費審核或延長補強，但不以成交數、詢問數、流量數、單一平台、單一問題或單次 AI 回答作為審核依據。
+            </div>
+
+            <div className="mt-3 rounded-xl border border-blue-400/20 bg-blue-500/10 p-4 text-sm leading-relaxed text-blue-100">
+              <p className="font-semibold">訂閱期數與終止說明</p>
+              <ul className="mt-2 space-y-1.5">
+                <li>{managedBillingCycle === 'yearly' ? '年繳方案為 4 期，每年扣款一次，最多四年。' : '月繳方案為 48 期，每月扣款一次，最多四年。'}</li>
+                <li>你可以在後台設定頁隨時終止訂閱，終止後不會再繼續扣款。</li>
+                <li>終止扣款不等同自動退費；退費仍依代營運條款與審核條件處理。</li>
+              </ul>
+            </div>
+
+            <label className="mt-5 flex items-start gap-3 text-sm text-gray-300">
+              <input
+                type="checkbox"
+                checked={modalTermsAccepted}
+                onChange={(e) => setModalTermsAccepted(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-white/20 bg-gray-900"
+              />
+              <span>我已閱讀並同意 GEOvault Managed Service 合約條款與退費/延長補強審核條款。</span>
+            </label>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSelectedManagedPlan(null)}
+                className="h-11 rounded-xl border-white/15 bg-white/5 text-white hover:bg-white/10"
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                onClick={handleManagedCheckout}
+                disabled={managedCheckout.isPending}
+                className="h-11 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 text-white hover:from-blue-700 hover:to-purple-700"
+              >
+                {managedCheckout.isPending ? '建立付款中...' : '確認並前往付款'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ════════════════════════════════════════════════════════
           FOOTER

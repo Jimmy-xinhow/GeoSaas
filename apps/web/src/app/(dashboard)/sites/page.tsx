@@ -194,7 +194,7 @@ export default function SitesPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_30%),rgba(255,255,255,0.04)] p-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">我的網站</h1>
           <p className="text-muted-foreground mt-1">管理和監控您的網站 GEO 分數</p>
@@ -209,7 +209,7 @@ export default function SitesPage() {
       </div>
 
       {/* Search */}
-      <div className="relative">
+      <div className="relative rounded-xl border border-white/10 bg-white/5 p-3">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
           placeholder="搜尋網站名稱、網址或行業..."
@@ -271,7 +271,7 @@ export default function SitesPage() {
 
       {/* Sites grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <SiteCardSkeleton key={i} />
           ))}
@@ -298,15 +298,15 @@ export default function SitesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filteredSites.map((site: any) => {
             const { score, status, scanDate } = getSiteLatestScan(site)
             const isSiteScanning = activeScanSiteIds.has(site.id)
             const isTriggeringThis = triggerScanMutation.isPending && triggerScanMutation.variables === site.id
 
             return (
-              <Card key={site.id} className={`bg-white/5 border-white/10 hover:shadow-lg hover:shadow-blue-500/5 transition-shadow ${isSiteScanning ? 'ring-2 ring-blue-200' : ''}`}>
-                <CardHeader>
+              <Card key={site.id} className={`overflow-hidden transition-all ${isSiteScanning ? 'ring-2 ring-blue-300/60' : ''}`}>
+                <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -333,7 +333,7 @@ export default function SitesPage() {
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent className="flex items-center justify-center py-4">
+                <CardContent className="flex items-center justify-center py-5">
                   {isSiteScanning ? (
                     <div className="flex flex-col items-center gap-2">
                       <Loader2 className="h-10 w-10 text-blue-500 animate-spin" />

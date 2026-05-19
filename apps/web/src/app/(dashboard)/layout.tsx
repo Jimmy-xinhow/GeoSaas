@@ -50,7 +50,7 @@ export default function DashboardLayout({
       <Sidebar />
       <main className="flex-1 min-w-0 flex flex-col">
         <Header />
-        <div className="flex-1 min-w-0 overflow-auto overflow-x-hidden p-4 sm:p-6 bg-gray-900 text-white">
+        <div className="dashboard-main flex-1 min-w-0 overflow-auto overflow-x-hidden p-4 sm:p-6 bg-gray-900 text-white">
           <ErrorBoundary>{children}</ErrorBoundary>
         </div>
       </main>

@@ -5,9 +5,9 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const HOME_URL = SITE_URL.endsWith('/') ? SITE_URL : `${SITE_URL}/`;
 
 export const metadata: Metadata = {
-  title: 'Geovault — 讓 AI 主動推薦你的品牌 | APAC #1 GEO 優化平台',
+  title: 'Geovault — AI 搜尋優化平台與代營運服務',
   description:
-    '70% 消費者已用 AI 取代 Google 搜尋。Geovault 幫助品牌被 ChatGPT、Claude、Perplexity、Gemini、Copilot 主動推薦。提供 9 項 AI 可讀性掃描、自動修復、品牌知識庫、AI 引用監控。',
+    'Geovault 提供 AI 可讀性掃描、自動修復、品牌知識庫、AI 引用監控與 GEOvault Managed Service 代營運方案，協助品牌提升 ChatGPT、Claude、Perplexity、Gemini、Copilot 可見度。',
   keywords: [
     'GEO',
     'AI SEO',
@@ -19,6 +19,9 @@ export const metadata: Metadata = {
     'AI 引用',
     'Geovault',
     'AI 品牌推薦',
+    'GEO 代營運',
+    'AI 搜尋可見度代營運',
+    'GEOvault Managed Service',
   ],
   alternates: {
     canonical: HOME_URL,
@@ -29,9 +32,9 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: 'Geovault — 讓 AI 主動推薦你的品牌',
+    title: 'Geovault — AI 搜尋優化平台與代營運服務',
     description:
-      'APAC 領先的 AI 搜尋優化平台。掃描、修復、監控，讓你的品牌被 5 大 AI 平台主動引用。',
+      '自助 SaaS 工具加上專人代營運服務，協助品牌完成 AI 可見度檢測、問題庫設計、知識庫建置與每月追蹤報告。',
     url: SITE_URL,
     type: 'website',
     locale: 'zh_TW',
@@ -40,8 +43,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Geovault — 讓 AI 主動推薦你的品牌',
-    description: 'APAC 領先的 AI 搜尋優化平台。讓你的品牌被 5 大 AI 平台主動引用。',
+    title: 'Geovault — AI 搜尋優化平台與代營運服務',
+    description: '提供自助 GEO 工具與 GEOvault Managed Service 代營運，協助品牌提升 5 大 AI 平台可見度。',
     images: [`${SITE_URL}/opengraph-image`],
   },
 };
@@ -123,10 +126,34 @@ const jsonLdFaq = {
     },
     {
       '@type': 'Question',
+      name: '自助訂閱跟代營運方案有什麼不同？',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: '自助訂閱提供工具功能，需要客戶自己操作、判斷與修正。代營運方案由專人協助完成檢測、問題庫設計、品牌知識庫建置、優化方向判斷與每月報告解讀。',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: '代營運是否保證 AI 一定推薦我的品牌？',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: '不保證每次都被 AI 推薦。代營運目標是透過品牌知識庫、內容訊號與 AI 可讀性優化，提升品牌被 AI 正確理解、提及與推薦的機會。',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: '未達成效退費怎麼認定？',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: '必須以雙方事前約定的問題庫、平台範圍、檢測期間與可見度指標作為依據。不以詢問數、成交數、單一 AI 回答或單一關鍵字結果作為退費依據。',
+      },
+    },
+    {
+      '@type': 'Question',
       name: '可以隨時取消訂閱嗎？',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: '可以。所有付費方案都可以隨時取消，取消後仍可使用到當期結束。我們也提供年繳方案享 9 折優惠。',
+        text: '可以。所有付費方案都可以隨時取消，取消後仍可使用到當期結束。我們也提供年繳折扣方案。',
       },
     },
   ],
@@ -164,6 +191,22 @@ const jsonLdApp = {
       priceCurrency: 'TWD',
       description:
         '3 個網站、每站 10 次掃描/月、AI 修復 50 次、AI 內容 50 次、引用監控 30 題、多平台發佈、自動排程',
+    },
+    {
+      '@type': 'Offer',
+      name: 'GEOvault Managed Basic',
+      price: '7800',
+      priceCurrency: 'TWD',
+      description:
+        'GEO 入門代營運，包含品牌 AI 可見度初始診斷、50 組核心 AI 搜尋問題設計、每月 30 篇 AI 引用內容文章、品牌基礎定位整理、基礎 GEO 優化執行建議與每月簡版可見度報告。',
+    },
+    {
+      '@type': 'Offer',
+      name: 'GEOvault Managed Pro',
+      price: '15000',
+      priceCurrency: 'TWD',
+      description:
+        'GEO 完整代營運，包含 100 組 AI 搜尋問題庫、每月 50 篇 AI 引用內容文章、品牌 AI 知識庫建置、GEO 優化代執行、競品 AI 可見度簡析、5 大 AI 平台追蹤、完整月報與每月策略建議。',
     },
   ],
   featureList: [

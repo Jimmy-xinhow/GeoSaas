@@ -12,10 +12,11 @@ jest.mock('./newebpay.util');
 describe('BillingService', () => {
   let service: BillingService;
   let prisma: {
-    user: { findUnique: jest.Mock; update: jest.Mock };
+    user: { findUnique: jest.Mock; findMany: jest.Mock; update: jest.Mock };
     scan: { count: jest.Mock };
     site: { count: jest.Mock };
-    order: { create: jest.Mock; findUnique: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
+    order: { create: jest.Mock; findUnique: jest.Mock; findFirst: jest.Mock; findMany: jest.Mock; update: jest.Mock };
+    notification: { create: jest.Mock; createMany: jest.Mock };
   };
   let creditService: { addCredits: jest.Mock };
 
@@ -23,10 +24,11 @@ describe('BillingService', () => {
 
   beforeEach(async () => {
     prisma = {
-      user: { findUnique: jest.fn(), update: jest.fn() },
+      user: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
       scan: { count: jest.fn() },
       site: { count: jest.fn() },
-      order: { create: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+      order: { create: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
+      notification: { create: jest.fn(), createMany: jest.fn() },
     };
     creditService = { addCredits: jest.fn().mockResolvedValue({}) };
 
@@ -66,19 +68,24 @@ describe('BillingService', () => {
   afterEach(() => jest.restoreAllMocks());
 
   describe('createOrder', () => {
-    it('should create order and return encrypted form data', async () => {
+    it('should create monthly self-service subscription using NewebPay period payment fields', async () => {
       prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
       prisma.order.create.mockResolvedValue({});
-      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('encrypted_data');
-      (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('SHA_HASH');
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('period_post_data');
 
       const result = await service.createOrder('PRO', userId);
 
       expect(newebpayUtil.encryptTradeInfo).toHaveBeenCalledWith(
         expect.objectContaining({
-          ReturnURL: 'http://localhost:4000/api/billing/return',
-          NotifyURL: 'http://localhost:4000/api/billing/notify',
-          ClientBackURL: 'http://localhost:3001/settings',
+          MerOrderNo: expect.stringMatching(/^GEO/),
+          ProdDesc: 'Geovault Pro 方案 月繳訂閱',
+          PeriodAmt: 690,
+          PeriodType: 'M',
+          PeriodStartType: '2',
+          PeriodTimes: '48',
+          ReturnURL: 'http://localhost:4000/api/billing/period/return',
+          NotifyURL: 'http://localhost:4000/api/billing/period/notify',
+          BackURL: 'http://localhost:3001/settings',
         }),
         '12345678901234567890123456789012',
         '1234567890123456',
@@ -89,33 +96,178 @@ describe('BillingService', () => {
         }),
       );
       expect(result).toEqual({
-        paymentUrl: 'https://ccore.newebpay.com/MPG/mpg_gateway',
-        MerchantID: 'TestMerchant',
-        TradeInfo: 'encrypted_data',
-        TradeSha: 'SHA_HASH',
-        Version: '2.0',
+        paymentUrl: 'https://ccore.newebpay.com/MPG/period',
+        MerchantID_: 'TestMerchant',
+        PostData_: 'period_post_data',
+        paymentType: 'PERIOD',
       });
+    });
+
+    it('should create yearly self-service subscription with 4 yearly periods', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
+      prisma.order.create.mockResolvedValue({});
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('period_post_data');
+
+      await service.createOrder('STARTER', userId, 'yearly');
+
+      expect(prisma.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId,
+            plan: 'STARTER',
+            amount: 4212,
+            rawResponse: expect.objectContaining({
+              billingCycle: 'yearly',
+              periodTimes: '4',
+            }),
+          }),
+        }),
+      );
+      expect(newebpayUtil.encryptTradeInfo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ProdDesc: 'Geovault Starter 方案 年繳訂閱',
+          PeriodAmt: 4212,
+          PeriodType: 'Y',
+          PeriodPoint: expect.stringMatching(/^\d{4}$/),
+          PeriodTimes: '4',
+        }),
+        '12345678901234567890123456789012',
+        '1234567890123456',
+      );
     });
 
     it('should throw for invalid plan', async () => {
       await expect(service.createOrder('INVALID', userId)).rejects.toThrow(BadRequestException);
     });
 
-    it('should reject missing NewebPay gateway URL in production', async () => {
-      jest.clearAllMocks();
-      (service as any).config.get = jest.fn((key: string) => {
-        const map: Record<string, string> = {
-          NODE_ENV: 'production',
-          FRONTEND_URL: 'https://geovault.app',
-        };
-        return map[key] || '';
-      });
+    it('should create managed order using NewebPay period payment fields', async () => {
       prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
       prisma.order.create.mockResolvedValue({});
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('period_post_data');
 
-      await expect(service.createOrder('PRO', userId)).rejects.toThrow(BadRequestException);
-      expect(prisma.order.create).not.toHaveBeenCalled();
-      expect(newebpayUtil.encryptTradeInfo).not.toHaveBeenCalled();
+      const result = await service.createManagedOrder({
+        plan: 'MANAGED_PRO',
+        acceptedTerms: true,
+        termsVersion: 'managed-service-2026-05-19',
+      }, userId);
+
+      expect(newebpayUtil.encryptTradeInfo).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          MerOrderNo: expect.stringMatching(/^MNG/),
+          ProdDesc: 'GEOvault Managed Pro 代營運方案 月繳',
+          PeriodAmt: 15000,
+          PeriodType: 'M',
+          PeriodStartType: '2',
+          PeriodTimes: '48',
+          ReturnURL: 'http://localhost:4000/api/billing/period/return',
+          NotifyURL: 'http://localhost:4000/api/billing/period/notify',
+        }),
+        '12345678901234567890123456789012',
+        '1234567890123456',
+      );
+      expect(result).toEqual({
+        paymentUrl: 'https://ccore.newebpay.com/MPG/period',
+        MerchantID_: 'TestMerchant',
+        PostData_: 'period_post_data',
+        paymentType: 'PERIOD',
+      });
+    });
+
+    it('should create yearly managed subscription with annual discounted amount', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
+      prisma.order.create.mockResolvedValue({});
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('period_post_data');
+
+      await service.createManagedOrder({
+        plan: 'MANAGED_BASIC',
+        billingCycle: 'yearly',
+        acceptedTerms: true,
+        termsVersion: 'managed-service-2026-05-19',
+      }, userId);
+
+      expect(prisma.order.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            plan: 'MANAGED_BASIC',
+            amount: 84240,
+            rawResponse: expect.objectContaining({ billingCycle: 'yearly' }),
+          }),
+        }),
+      );
+      expect(newebpayUtil.encryptTradeInfo).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          ProdDesc: 'GEOvault Managed Basic 代營運方案 年繳',
+          PeriodAmt: 84240,
+          PeriodType: 'Y',
+          PeriodPoint: expect.stringMatching(/^\d{4}$/),
+          PeriodTimes: '4',
+        }),
+        '12345678901234567890123456789012',
+        '1234567890123456',
+      );
+    });
+
+    it('should use production NewebPay period gateway when NEWEBPAY_MODE is production', async () => {
+      const productionConfig = {
+        get: jest.fn((key: string) => {
+          const map: Record<string, string> = {
+            NEWEBPAY_MERCHANT_ID: 'TestMerchant',
+            NEWEBPAY_HASH_KEY: '12345678901234567890123456789012',
+            NEWEBPAY_HASH_IV: '1234567890123456',
+            NEWEBPAY_MODE: 'production',
+            API_PUBLIC_URL: 'https://api.geovault.app',
+            FRONTEND_URL: 'https://geovault.app',
+          };
+          return map[key] || '';
+        }),
+      };
+      const productionService = new BillingService(
+        prisma as any,
+        productionConfig as any,
+        { getUsageSummary: jest.fn() } as any,
+        creditService as any,
+      );
+      prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
+      prisma.order.create.mockResolvedValue({});
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('period_post_data');
+
+      const result = await productionService.createManagedOrder({
+        plan: 'MANAGED_BASIC',
+        acceptedTerms: true,
+        termsVersion: 'managed-service-2026-05-19',
+      }, userId);
+
+      expect(result.paymentUrl).toBe('https://core.newebpay.com/MPG/period');
+    });
+
+    it('should use production NewebPay period gateway for self-service subscriptions', async () => {
+      jest.clearAllMocks();
+      const productionConfig = {
+        get: jest.fn((key: string) => {
+          const map: Record<string, string> = {
+            NEWEBPAY_MERCHANT_ID: 'TestMerchant',
+            NEWEBPAY_HASH_KEY: '12345678901234567890123456789012',
+            NEWEBPAY_HASH_IV: '1234567890123456',
+            NEWEBPAY_MODE: 'production',
+            API_PUBLIC_URL: 'https://api.geovault.app',
+            FRONTEND_URL: 'https://geovault.app',
+          };
+          return map[key] || '';
+        }),
+      };
+      const productionService = new BillingService(
+        prisma as any,
+        productionConfig as any,
+        { getUsageSummary: jest.fn() } as any,
+        creditService as any,
+      );
+      prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
+      prisma.order.create.mockResolvedValue({});
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('period_post_data');
+
+      const result = await productionService.createOrder('PRO', userId);
+
+      expect(result.paymentUrl).toBe('https://core.newebpay.com/MPG/period');
     });
 
     it('should reject localhost callback URLs in production', async () => {
@@ -180,6 +332,150 @@ describe('BillingService', () => {
       expect(firstOrderNo).toMatch(/^CRD1778803000000/);
       expect(secondOrderNo).toMatch(/^CRD1778803000000/);
       expect(firstOrderNo).not.toBe(secondOrderNo);
+    });
+  });
+
+  describe('handlePeriodNotify', () => {
+    it('should upgrade user plan after self-service period payment succeeds', async () => {
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: { MerOrderNo: 'GEO123', PeriodNo: 'PERIOD123', PeriodAmt: 690 },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'GEO123',
+        userId,
+        plan: 'PRO',
+        amount: 690,
+        status: 'PENDING',
+      });
+      prisma.order.update.mockResolvedValue({});
+      prisma.user.update.mockResolvedValue({});
+      prisma.notification.create.mockResolvedValue({});
+
+      const result = await service.handlePeriodNotify('period_encrypted');
+
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { merchantOrderNo: 'GEO123' },
+        data: expect.objectContaining({
+          status: 'PAID',
+          tradeNo: 'PERIOD123',
+          paymentType: 'PERIOD',
+        }),
+      });
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: userId },
+        data: { plan: 'PRO' },
+      });
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId,
+          type: 'subscription_paid',
+        }),
+      });
+      expect(result).toEqual({ message: 'OK' });
+    });
+
+    it('should accept managed period payment without changing self-service plan', async () => {
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: { MerOrderNo: 'MNG123', PeriodNo: 'PERIOD456', PeriodAmt: 15000 },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'MNG123',
+        userId,
+        plan: 'MANAGED_PRO',
+        amount: 15000,
+        status: 'PENDING',
+      });
+      prisma.order.update.mockResolvedValue({});
+      prisma.notification.create.mockResolvedValue({});
+
+      await service.handlePeriodNotify('period_encrypted');
+
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId,
+          type: 'managed_service_paid',
+        }),
+      });
+    });
+  });
+
+  describe('cancelSubscription', () => {
+    it('should terminate self-service period subscription and downgrade when no other active plan exists', async () => {
+      prisma.order.findFirst.mockResolvedValue({
+        id: 'order-1',
+        merchantOrderNo: 'GEO123',
+        tradeNo: 'PERIOD123',
+        userId,
+        plan: 'PRO',
+        amount: 690,
+        rawResponse: { Status: 'SUCCESS' },
+      });
+      prisma.order.update.mockResolvedValue({});
+      prisma.order.findMany.mockResolvedValue([]);
+      prisma.user.update.mockResolvedValue({});
+      prisma.notification.create.mockResolvedValue({});
+      jest.spyOn(global, 'fetch' as any).mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ Status: 'SUCCESS', Message: 'OK' })),
+      } as any);
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('alter_post_data');
+
+      const result = await service.cancelSubscription('GEO123', userId, true);
+
+      expect(newebpayUtil.encryptTradeInfo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          Version: '1.0',
+          MerOrderNo: 'GEO123',
+          PeriodNo: 'PERIOD123',
+          AlterType: 'terminate',
+        }),
+        '12345678901234567890123456789012',
+        '1234567890123456',
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://ccore.newebpay.com/MPG/period/AlterStatus',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      );
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { merchantOrderNo: 'GEO123' },
+        data: expect.objectContaining({
+          rawResponse: expect.objectContaining({
+            subscriptionStatus: 'terminated',
+            terminateResponse: expect.objectContaining({ Status: 'SUCCESS' }),
+          }),
+        }),
+      });
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: userId },
+        data: { plan: 'FREE' },
+      });
+      expect(result.message).toContain('已終止');
+    });
+
+    it('should reject cancel when NewebPay terminate API fails', async () => {
+      prisma.order.findFirst.mockResolvedValue({
+        id: 'order-1',
+        merchantOrderNo: 'GEO123',
+        tradeNo: 'PERIOD123',
+        userId,
+        plan: 'PRO',
+        amount: 690,
+        rawResponse: {},
+      });
+      jest.spyOn(global, 'fetch' as any).mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ Status: 'ERROR', Message: 'not enabled' })),
+      } as any);
+      (newebpayUtil.encryptTradeInfo as jest.Mock).mockReturnValue('alter_post_data');
+
+      await expect(service.cancelSubscription('GEO123', userId, true)).rejects.toThrow(BadRequestException);
+      expect(prisma.order.update).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 
@@ -348,7 +644,50 @@ describe('BillingService', () => {
         plan: 'PRO',
         role: undefined,
         usage: { scansThisMonth: 15, sitesCount: 3 },
+        activeSubscriptions: [],
+        managedSubscriptions: [],
       });
+    });
+
+    it('should include paid managed subscriptions for dashboard-only review requests', async () => {
+      const paidAt = new Date('2026-05-19T08:00:00.000Z');
+      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'PRO', role: 'USER' });
+      prisma.order.findMany.mockResolvedValue([
+        {
+          merchantOrderNo: 'MNG123',
+          plan: 'MANAGED_PRO',
+          amount: 15000,
+          paidAt,
+        },
+      ]);
+
+      const result = await service.getSubscription(userId);
+
+      expect(prisma.order.findMany).toHaveBeenNthCalledWith(2, {
+        where: {
+          userId,
+          status: 'PAID',
+          plan: { in: ['MANAGED_BASIC', 'MANAGED_PRO'] },
+        },
+        orderBy: { paidAt: 'desc' },
+        select: {
+          merchantOrderNo: true,
+          plan: true,
+          amount: true,
+          paidAt: true,
+          rawResponse: true,
+        },
+      });
+      expect(result?.activeSubscriptions).toEqual([]);
+      expect(result?.managedSubscriptions).toEqual([
+        {
+          orderNo: 'MNG123',
+          plan: 'MANAGED_PRO',
+          planLabel: 'GEOvault Managed Pro 代營運方案',
+          amount: 15000,
+          paidAt,
+        },
+      ]);
     });
 
     it('should return undefined plan when user not found', async () => {

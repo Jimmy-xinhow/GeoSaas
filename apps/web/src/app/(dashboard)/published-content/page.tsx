@@ -65,7 +65,7 @@ export default function PublishedContentPage() {
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-hidden">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.15),transparent_30%),rgba(255,255,255,0.04)] p-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <FileText className="h-6 w-6" />
@@ -128,8 +128,8 @@ export default function PublishedContentPage() {
       ) : (
         <>
           {/* Stats summary */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <Card>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Card className="overflow-hidden">
               <CardContent className="p-4 text-center">
                 <p className="text-3xl font-bold text-green-400">
                   {statsLoading ? '—' : stats?.monthCount ?? 0}
@@ -137,7 +137,7 @@ export default function PublishedContentPage() {
                 <p className="text-xs text-muted-foreground mt-1">本月已發布</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="overflow-hidden">
               <CardContent className="p-4 text-center">
                 <p className="text-3xl font-bold text-blue-300">
                   {statsLoading ? '—' : stats?.weekCount ?? 0}
@@ -146,7 +146,7 @@ export default function PublishedContentPage() {
                 <p className="text-xs text-muted-foreground mt-1">本週進度</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="overflow-hidden">
               <CardContent className="p-4 text-center">
                 <p className="text-3xl font-bold text-white">
                   {statsLoading ? '—' : stats?.totalCount ?? 0}
@@ -154,7 +154,7 @@ export default function PublishedContentPage() {
                 <p className="text-xs text-muted-foreground mt-1">歷史總數</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="overflow-hidden">
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold text-blue-200">
                   {statsLoading ? '—' : stats?.plan ?? 'FREE'}

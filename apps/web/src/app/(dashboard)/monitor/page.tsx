@@ -154,7 +154,7 @@ export default function MonitorPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.16),transparent_30%),rgba(255,255,255,0.04)] p-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">AI 引用監控</h1>
           <p className="text-muted-foreground mt-1">
@@ -219,7 +219,7 @@ export default function MonitorPage() {
       )}
 
       {/* Platform cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {isLoading ? (
           [1, 2, 3, 4].map((i) => <PlatformCardSkeleton key={i} />)
         ) : platforms.length === 0 ? (
@@ -236,7 +236,7 @@ export default function MonitorPage() {
           platforms.map((platform: any) => {
             const meta = platformMeta[platform.name] || defaultPlatformMeta
             return (
-              <Card key={platform.name}>
+              <Card key={platform.name} className="overflow-hidden">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-2xl">{meta.icon}</span>
@@ -269,7 +269,7 @@ export default function MonitorPage() {
       </div>
 
       {/* Monitoring queries */}
-      <Card className="bg-white/5 border-white/10">
+      <Card>
         <CardHeader>
           <CardTitle>監控查詢列表</CardTitle>
           <CardDescription>點擊查詢可展開查看 AI 完整回應內容</CardDescription>
@@ -286,7 +286,7 @@ export default function MonitorPage() {
               <p className="text-sm text-muted-foreground mt-1">點擊「新增查詢」開始追蹤 AI 引用狀態</p>
             </div>
           ) : (
-            <div className="border border-white/10 rounded-lg overflow-hidden divide-y divide-white/5">
+            <div className="overflow-hidden rounded-xl border border-white/10 divide-y divide-white/5">
               {queries.map((q: any) => {
                 const isExpanded = expandedId === q.id
                 const meta = platformMeta[q.platform] || defaultPlatformMeta

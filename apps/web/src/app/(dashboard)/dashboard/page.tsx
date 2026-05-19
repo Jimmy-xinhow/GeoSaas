@@ -1,17 +1,32 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import Link from 'next/link'
+import { useMemo, useState } from 'react'
 import {
-  Globe,
-  TrendingUp,
-  MessageSquareQuote,
+  Activity,
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  ClipboardList,
   FileText,
-  Search,
+  Globe,
   Loader2,
+  MessageSquareQuote,
+  Search,
+  Sparkles,
+  TrendingUp,
 } from 'lucide-react'
+import {
+  Area,
+  AreaChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { toast } from 'sonner'
+
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   Card,
   CardContent,
@@ -19,68 +34,117 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
-import { useSites, useCreateSite } from '@/hooks/use-sites'
-import { useTriggerScan, useScoreTrend } from '@/hooks/use-scan'
 import { useContents } from '@/hooks/use-content'
-import { useMonitorDashboard } from '@/hooks/use-monitor'
 import { useClientDailyStats } from '@/hooks/use-client-reports'
+import { useMonitorDashboard } from '@/hooks/use-monitor'
+import { useScoreTrend, useTriggerScan } from '@/hooks/use-scan'
+import { useCreateSite, useSites } from '@/hooks/use-sites'
+import { cn } from '@/lib/utils'
 
-function getScoreStatus(score: number): string {
-  if (score >= 80) return '優秀'
-  if (score >= 60) return '良好'
-  if (score >= 40) return '需改善'
-  return '低分'
+type ScoreTone = 'excellent' | 'good' | 'warning' | 'danger'
+
+function getScoreTone(score: number): ScoreTone {
+  if (score >= 80) return 'excellent'
+  if (score >= 60) return 'good'
+  if (score >= 40) return 'warning'
+  return 'danger'
 }
 
-function getStatusColor(status: string) {
-  switch (status) {
-    case '優秀':
-      return 'text-green-600 bg-green-500/20'
-    case '良好':
-      return 'text-blue-600 bg-blue-500/20'
-    case '需改善':
-      return 'text-yellow-600 bg-yellow-500/20'
-    case '低分':
-      return 'text-red-600 bg-red-500/20'
-    default:
-      return 'text-gray-400 bg-white/5'
-  }
+function getScoreStatus(score: number): string {
+  const tone = getScoreTone(score)
+  if (tone === 'excellent') return '優秀'
+  if (tone === 'good') return '良好'
+  if (tone === 'warning') return '需改善'
+  return '待補強'
+}
+
+const scoreToneClass: Record<ScoreTone, string> = {
+  excellent: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200',
+  good: 'border-sky-400/30 bg-sky-400/10 text-sky-200',
+  warning: 'border-amber-400/30 bg-amber-400/10 text-amber-200',
+  danger: 'border-rose-400/30 bg-rose-400/10 text-rose-200',
+}
+
+const scoreBarClass: Record<ScoreTone, string> = {
+  excellent: 'bg-emerald-400',
+  good: 'bg-sky-400',
+  warning: 'bg-amber-400',
+  danger: 'bg-rose-400',
 }
 
 function formatTimeAgo(dateStr: string): string {
   const date = new Date(dateStr)
   const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
+  const diffMs = Math.max(0, now.getTime() - date.getTime())
   const diffMinutes = Math.floor(diffMs / (1000 * 60))
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
+  if (diffMinutes < 1) return '剛剛'
   if (diffMinutes < 60) return `${diffMinutes} 分鐘前`
   if (diffHours < 24) return `${diffHours} 小時前`
   return `${diffDays} 天前`
 }
 
+function clampScore(score: number): number {
+  return Math.max(0, Math.min(100, Math.round(score || 0)))
+}
+
+function SectionTitle({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof Activity
+  title: string
+  description?: string
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/8">
+        <Icon className="h-4 w-4 text-blue-200" />
+      </div>
+      <div>
+        <CardTitle className="text-lg font-bold leading-tight text-white">{title}</CardTitle>
+        {description && (
+          <CardDescription className="mt-1 text-sm leading-relaxed text-slate-400">
+            {description}
+          </CardDescription>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function StatusChip({ score }: { score: number }) {
+  const tone = getScoreTone(score)
+  return (
+    <span
+      className={cn(
+        'inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold',
+        scoreToneClass[tone],
+      )}
+    >
+      <span className={cn('h-1.5 w-1.5 rounded-full', scoreBarClass[tone])} />
+      {getScoreStatus(score)}
+    </span>
+  )
+}
+
 function StatCardSkeleton() {
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
+    <Card className="border-white/10 bg-white/5">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-3">
             <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-12" />
+            <Skeleton className="h-8 w-14" />
           </div>
-          <Skeleton className="h-12 w-12 rounded-lg" />
+          <Skeleton className="h-11 w-11 rounded-lg" />
         </div>
+        <Skeleton className="mt-5 h-2 w-full rounded-full" />
       </CardContent>
     </Card>
   )
@@ -89,12 +153,15 @@ function StatCardSkeleton() {
 function TableSkeleton() {
   return (
     <div className="space-y-3">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="flex gap-4">
-          <Skeleton className="h-5 w-32" />
-          <Skeleton className="h-5 w-12" />
-          <Skeleton className="h-5 w-16" />
-          <Skeleton className="h-5 w-20" />
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="h-7 w-16 rounded-full" />
+          </div>
         </div>
       ))}
     </div>
@@ -110,19 +177,21 @@ export default function DashboardPage() {
   const createSiteMutation = useCreateSite()
   const triggerScanMutation = useTriggerScan()
 
-  // Show errors as toast
   if (sitesError) {
     toast.error('無法載入網站資料', { id: 'sites-error' })
   }
 
-  // Compute stats from real data
   const stats = useMemo(() => {
     const sitesCount = sites?.length ?? 0
-    const avgScore = sites && sites.length > 0
-      ? Math.round(
-          sites.reduce((sum: number, s: any) => sum + (s.overallScore ?? s.score ?? 0), 0) / sites.length
-        )
-      : 0
+    const avgScore =
+      sites && sites.length > 0
+        ? Math.round(
+            sites.reduce(
+              (sum: number, s: any) => sum + (s.overallScore ?? s.score ?? 0),
+              0,
+            ) / sites.length,
+          )
+        : 0
     const citationCount = monitorData?.queries
       ? monitorData.queries.filter((q: any) => q.cited).length
       : 0
@@ -130,48 +199,57 @@ export default function DashboardPage() {
 
     return [
       {
-        label: '已掃描網站',
+        label: '監控品牌',
         value: String(sitesCount),
+        hint: '已加入追蹤',
         icon: Globe,
-        color: 'text-blue-600',
-        bg: 'bg-blue-500/20',
+        accent: 'from-blue-400 to-cyan-300',
+        progress: Math.min(100, sitesCount * 18),
       },
       {
         label: '平均 GEO 分數',
         value: String(avgScore),
+        hint: getScoreStatus(avgScore),
         icon: TrendingUp,
-        color: 'text-green-600',
-        bg: 'bg-green-500/20',
+        accent: 'from-emerald-400 to-lime-300',
+        progress: clampScore(avgScore),
       },
       {
-        label: 'AI 引用次數',
+        label: 'AI 引用命中',
         value: String(citationCount),
+        hint: '本期監測',
         icon: MessageSquareQuote,
-        color: 'text-purple-600',
-        bg: 'bg-purple-500/20',
+        accent: 'from-violet-400 to-fuchsia-300',
+        progress: Math.min(100, citationCount * 12),
       },
       {
-        label: '已發布內容',
+        label: '內容資產',
         value: String(contentCount),
+        hint: '已建立素材',
         icon: FileText,
-        color: 'text-orange-600',
-        bg: 'bg-orange-500/20',
+        accent: 'from-amber-300 to-orange-400',
+        progress: Math.min(100, contentCount * 10),
       },
     ]
   }, [sites, contents, monitorData])
 
-  // Build recent scans from sites data (sorted by updatedAt)
   const recentScans = useMemo(() => {
     if (!sites || sites.length === 0) return []
     return [...sites]
-      .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      )
       .slice(0, 5)
-      .map((site: any) => ({
-        name: site.name || site.url,
-        score: site.overallScore ?? site.score ?? 0,
-        status: getScoreStatus(site.overallScore ?? site.score ?? 0),
-        time: formatTimeAgo(site.updatedAt),
-      }))
+      .map((site: any) => {
+        const score = clampScore(site.overallScore ?? site.score ?? 0)
+        return {
+          name: site.name || site.url,
+          url: site.url,
+          score,
+          time: formatTimeAgo(site.updatedAt),
+        }
+      })
   }, [sites])
 
   const { data: scoreTrend } = useScoreTrend()
@@ -182,24 +260,23 @@ export default function DashboardPage() {
         month: 'short',
         day: 'numeric',
       }),
-      score: t.score,
+      score: clampScore(t.score),
     }))
   }, [scoreTrend])
 
   const handleQuickScan = async () => {
     if (!url.trim()) {
-      toast.error('請輸入網址')
+      toast.error('請輸入網站網址')
       return
     }
 
     try {
-      // First create the site, then trigger a scan
       const site = await createSiteMutation.mutateAsync({
         url: url.trim(),
         name: url.trim(),
       })
       await triggerScanMutation.mutateAsync(site.id)
-      toast.success('掃描已啟動')
+      toast.success('已建立網站並開始掃描')
       setUrl('')
     } catch (err: any) {
       toast.error(err?.response?.data?.message || '掃描失敗，請稍後再試')
@@ -210,148 +287,191 @@ export default function DashboardPage() {
   const isLoading = sitesLoading || contentsLoading || monitorLoading
 
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">總覽</h1>
-        <p className="text-muted-foreground mt-1">歡迎回來，以下是您的 GEO 概況</p>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_34%),rgba(255,255,255,0.04)] p-5 sm:p-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1 text-xs font-semibold text-blue-100">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI 搜尋可見度工作台
+          </div>
+          <h1 className="text-2xl font-bold tracking-normal text-white sm:text-3xl">
+            Dashboard 總覽
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+            集中查看品牌 GEO 分數、AI 引用、內容資產與近期掃描狀態。
+          </p>
+        </div>
+        <Link
+          href="/monitor/reports"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-blue-400/30 bg-blue-500/15 px-4 text-sm font-semibold text-blue-100 transition-colors hover:bg-blue-500/25"
+        >
+          查看成效報告
+          <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
 
-      {/* Geovault 為您發布的內容 — transparency banner. Picks the first
-          isClient site so paid users immediately see what their subscription
-          delivered this month, without having to dig into a sub-page. */}
       <PublishedContentBanner sites={sites as any[]} />
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {isLoading
           ? [1, 2, 3, 4].map((i) => <StatCardSkeleton key={i} />)
           : stats.map((stat) => (
-              <Card key={stat.label} className="bg-white/5 border-white/10">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
+              <Card key={stat.label} className="overflow-hidden border-white/10 bg-white/5">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm text-muted-foreground">{stat.label}</p>
-                      <p className="text-3xl font-bold mt-1">{stat.value}</p>
+                      <p className="text-sm font-semibold text-slate-300">{stat.label}</p>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <p className="text-3xl font-bold text-white">{stat.value}</p>
+                        <span className="text-xs font-medium text-slate-500">{stat.hint}</span>
+                      </div>
                     </div>
-                    <div className={cn('p-3 rounded-lg', stat.bg)}>
-                      <stat.icon className={cn('h-6 w-6', stat.color)} />
+                    <div
+                      className={cn(
+                        'flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br shadow-lg',
+                        stat.accent,
+                      )}
+                    >
+                      <stat.icon className="h-5 w-5 text-slate-950" />
                     </div>
+                  </div>
+                  <div className="mt-5 h-2 rounded-full bg-white/8">
+                    <div
+                      className={cn('h-full rounded-full bg-gradient-to-r', stat.accent)}
+                      style={{ width: `${stat.progress}%` }}
+                    />
                   </div>
                 </CardContent>
               </Card>
             ))}
       </div>
 
-      {/* Quick scan */}
-      <Card className="bg-white/5 border-white/10">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            快速掃描
-          </CardTitle>
-          <CardDescription>輸入網址，立即分析您的網站 GEO 分數</CardDescription>
+      <Card className="border-white/10 bg-white/5">
+        <CardHeader className="pb-4">
+          <SectionTitle
+            icon={Search}
+            title="快速新增掃描"
+            description="輸入品牌官網網址，立即建立網站並產生 GEO 掃描任務。"
+          />
         </CardHeader>
         <CardContent>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <Input
-              placeholder="輸入網址開始掃描..."
+              placeholder="https://example.com"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              className="flex-1"
               onKeyDown={(e) => e.key === 'Enter' && handleQuickScan()}
               disabled={isScanning}
+              className="h-11 flex-1 border-white/10 bg-slate-950/60"
             />
             <Button
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="h-11 min-w-[128px] bg-blue-600 text-white hover:bg-blue-700"
               onClick={handleQuickScan}
               disabled={isScanning}
             >
               {isScanning ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  掃描中...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  掃描中
                 </>
               ) : (
-                '開始掃描'
+                <>
+                  開始掃描
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
               )}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent scans */}
-        <Card className="bg-white/5 border-white/10">
-          <CardHeader>
-            <CardTitle>最近掃描</CardTitle>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader className="pb-4">
+            <SectionTitle
+              icon={Activity}
+              title="近期掃描狀態"
+              description="用進度條快速判斷哪些品牌需要優先補強。"
+            />
           </CardHeader>
           <CardContent>
             {sitesLoading ? (
               <TableSkeleton />
             ) : recentScans.length === 0 ? (
-              <div className="text-center py-8">
-                <Globe className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground">尚無掃描記錄</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  使用上方快速掃描開始分析您的網站
-                </p>
+              <div className="rounded-xl border border-dashed border-white/15 py-10 text-center">
+                <Globe className="mx-auto mb-3 h-10 w-10 text-slate-500" />
+                <p className="font-semibold text-white">尚未建立網站</p>
+                <p className="mt-1 text-sm text-slate-500">先新增一個品牌官網開始追蹤。</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-white/10 text-left">
-                      <th className="pb-3 font-medium text-muted-foreground">網站名稱</th>
-                      <th className="pb-3 font-medium text-muted-foreground">分數</th>
-                      <th className="pb-3 font-medium text-muted-foreground">狀態</th>
-                      <th className="pb-3 font-medium text-muted-foreground">時間</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentScans.map((scan) => (
-                      <tr key={scan.name} className="border-b border-white/10 last:border-0">
-                        <td className="py-3 font-medium">{scan.name}</td>
-                        <td className="py-3 font-semibold">{scan.score}</td>
-                        <td className="py-3">
-                          <span
-                            className={cn(
-                              'px-2 py-1 rounded-full text-xs font-medium',
-                              getStatusColor(scan.status)
-                            )}
-                          >
-                            {scan.status}
-                          </span>
-                        </td>
-                        <td className="py-3 text-muted-foreground">{scan.time}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-3">
+                {recentScans.map((scan) => {
+                  const tone = getScoreTone(scan.score)
+                  return (
+                    <div
+                      key={`${scan.name}-${scan.time}`}
+                      className="rounded-xl border border-white/10 bg-slate-950/35 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-white">
+                            {scan.name}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-slate-500">{scan.url}</p>
+                        </div>
+                        <StatusChip score={scan.score} />
+                      </div>
+                      <div className="mt-4 flex items-center gap-3">
+                        <span className="w-10 text-right text-lg font-bold text-white">
+                          {scan.score}
+                        </span>
+                        <div className="h-2 flex-1 rounded-full bg-white/8">
+                          <div
+                            className={cn('h-full rounded-full', scoreBarClass[tone])}
+                            style={{ width: `${scan.score}%` }}
+                          />
+                        </div>
+                        <span className="w-16 text-right text-xs text-slate-500">
+                          {scan.time}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Score trend chart */}
-        <Card className="bg-white/5 border-white/10">
-          <CardHeader>
-            <CardTitle>分數趨勢</CardTitle>
-            <CardDescription>過去 6 個月的平均 GEO 分數變化</CardDescription>
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader className="pb-4">
+            <SectionTitle
+              icon={BarChart3}
+              title="GEO 分數趨勢"
+              description="追蹤分數變化，判斷優化後是否穩定提升。"
+            />
           </CardHeader>
           <CardContent>
             {sitesLoading ? (
-              <div className="h-[280px] flex items-center justify-center">
-                <Skeleton className="h-full w-full" />
+              <div className="h-[300px]">
+                <Skeleton className="h-full w-full rounded-xl" />
+              </div>
+            ) : trendData.length === 0 ? (
+              <div className="flex h-[300px] items-center justify-center rounded-xl border border-dashed border-white/15 text-center">
+                <div>
+                  <BarChart3 className="mx-auto mb-3 h-10 w-10 text-slate-500" />
+                  <p className="font-semibold text-white">尚無趨勢資料</p>
+                  <p className="mt-1 text-sm text-slate-500">完成多次掃描後會顯示走勢。</p>
+                </div>
               </div>
             ) : (
-              <div className="h-[280px]">
+              <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trendData}>
+                  <AreaChart data={trendData} margin={{ left: -16, right: 8, top: 8 }}>
                     <defs>
-                      <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <linearGradient id="dashboardScoreGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <XAxis
@@ -359,20 +479,30 @@ export default function DashboardPage() {
                       axisLine={false}
                       tickLine={false}
                       fontSize={12}
+                      tick={{ fill: '#94a3b8' }}
                     />
                     <YAxis
                       axisLine={false}
                       tickLine={false}
                       fontSize={12}
                       domain={[0, 100]}
+                      tick={{ fill: '#94a3b8' }}
                     />
-                    <Tooltip />
+                    <Tooltip
+                      cursor={{ stroke: 'rgba(148, 163, 184, 0.2)' }}
+                      contentStyle={{
+                        background: '#0f172a',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        borderRadius: 10,
+                        color: '#fff',
+                      }}
+                    />
                     <Area
                       type="monotone"
                       dataKey="score"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      fill="url(#colorScore)"
+                      stroke="#38bdf8"
+                      strokeWidth={3}
+                      fill="url(#dashboardScoreGradient)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -382,36 +512,81 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Monthly Task Checklist */}
-      <Card className="bg-white/5 border-white/10">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            📋 本月待辦
-          </CardTitle>
-          <CardDescription>每月完成這些步驟，持續提升 AI 能見度</CardDescription>
+      <Card className="border-white/10 bg-white/5">
+        <CardHeader className="pb-4">
+          <SectionTitle
+            icon={ClipboardList}
+            title="本月優化待辦"
+            description="把例行工作改成可掃描的任務卡，降低後台閱讀負擔。"
+          />
         </CardHeader>
         <CardContent>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {[
-              { label: '掃描網站確認分數', desc: '確認指標沒有退步', href: '/sites', frequency: '每月 1-2 次' },
-              { label: '補充知識庫 Q&A', desc: '新增產品/服務/活動相關問題', href: '/sites', frequency: '每月 1 次' },
-              { label: '生成新內容', desc: '用內容引擎產出新文章', href: '/content', frequency: '每月 2-3 篇' },
-              { label: '跑 AI 引用監控', desc: '看哪些問法 AI 會推薦你', href: '/monitor', frequency: '每月 1-2 次' },
-              { label: '品牌擴散發文', desc: '把新內容發佈到各平台', href: '/brand-spread', frequency: '每週 1-2 篇' },
-              { label: '查看驗收報告', desc: '追蹤引用率是否提升', href: '/monitor/reports', frequency: '每月 1 次' },
+              {
+                label: '重新掃描品牌分數',
+                desc: '確認近期網站調整是否反映在 GEO 指標。',
+                href: '/sites',
+                frequency: '每月 1-2 次',
+                icon: Activity,
+              },
+              {
+                label: '補齊品牌 Q&A',
+                desc: '增加 AI 更容易引用的問答與服務說明。',
+                href: '/sites',
+                frequency: '每月 1 次',
+                icon: MessageSquareQuote,
+              },
+              {
+                label: '檢查內容資產',
+                desc: '確認已發布內容是否覆蓋核心服務與地區。',
+                href: '/content',
+                frequency: '每月 2-3 篇',
+                icon: FileText,
+              },
+              {
+                label: '追蹤 AI 引用',
+                desc: '查看品牌是否出現在 ChatGPT、Gemini 等回答。',
+                href: '/monitor',
+                frequency: '每月 1-2 次',
+                icon: Search,
+              },
+              {
+                label: '檢查品牌擴散',
+                desc: '整理外部可見訊號，避免 AI 資料不足。',
+                href: '/brand-spread',
+                frequency: '每 1-2 週',
+                icon: Sparkles,
+              },
+              {
+                label: '匯出成效報告',
+                desc: '用月報檢查分數、引用與內容資產變化。',
+                href: '/monitor/reports',
+                frequency: '每月 1 次',
+                icon: BarChart3,
+              },
             ].map((task) => (
-              <a
+              <Link
                 key={task.label}
                 href={task.href}
-                className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/10 hover:border-blue-500/30 hover:bg-white/10 transition-all group"
+                className="group flex min-h-[116px] items-start gap-3 rounded-xl border border-white/10 bg-slate-950/35 p-4 transition-colors hover:border-blue-400/35 hover:bg-blue-400/10"
               >
-                <div className="w-5 h-5 rounded-md border-2 border-white/20 shrink-0 mt-0.5 group-hover:border-blue-400" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white group-hover:text-blue-400 transition-colors">{task.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{task.desc}</p>
-                  <p className="text-[10px] text-gray-600 mt-1">{task.frequency}</p>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/8 text-blue-200 transition-colors group-hover:bg-blue-400/20">
+                  <task.icon className="h-5 w-5" />
                 </div>
-              </a>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-bold text-white group-hover:text-blue-100">
+                      {task.label}
+                    </p>
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-600 group-hover:text-blue-300" />
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-slate-400">{task.desc}</p>
+                  <p className="mt-3 inline-flex h-6 items-center rounded-full border border-white/10 px-2 text-[11px] font-semibold text-slate-400">
+                    {task.frequency}
+                  </p>
+                </div>
+              </Link>
             ))}
           </div>
         </CardContent>
@@ -420,15 +595,6 @@ export default function DashboardPage() {
   )
 }
 
-/**
- * Compact summary card on the Dashboard home that surfaces the count of
- * client_daily articles Geovault has published on the user's behalf this
- * month / week, with a CTA into the full /published-content listing.
- *
- * Self-hides when the user has neither plan entitlement nor history — keeps
- * Dashboard clean for FREE users while making the value visible to paid
- * subscribers from the first screen.
- */
 function PublishedContentBanner({ sites }: { sites: any[] | undefined }) {
   const firstClientSite = useMemo(() => {
     if (!sites || sites.length === 0) return null
@@ -438,46 +604,44 @@ function PublishedContentBanner({ sites }: { sites: any[] | undefined }) {
   const { data: stats } = useClientDailyStats(firstClientSite?.id ?? '')
 
   if (!firstClientSite || !stats) return null
-  // Hide when user has no entitlement AND no history.
   if (stats.activeDaysPerWeek === 0 && stats.totalCount === 0) return null
 
   return (
-    <a
-      href="/published-content"
-      className="block group"
-    >
-      <Card className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border-blue-500/20 hover:border-blue-400/40 transition-colors">
+    <Link href="/published-content" className="block group">
+      <Card className="overflow-hidden border-blue-400/20 bg-gradient-to-r from-blue-500/12 via-cyan-500/8 to-emerald-500/10 transition-colors hover:border-blue-300/45">
         <CardContent className="p-5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="p-3 rounded-lg bg-blue-500/20 shrink-0">
-                <FileText className="h-6 w-6 text-blue-300" />
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-400/18">
+                <FileText className="h-6 w-6 text-blue-200" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm text-blue-200 font-medium">Geovault 為您發布的 AI 可引用內容</p>
-                <p className="text-xs text-gray-400 mt-0.5 truncate">
-                  {firstClientSite.name} · {stats.plan} 方案 · 每週自動 {stats.activeDaysPerWeek} 篇
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-bold text-white">GEOvault 代發布內容資產</p>
+                  <span className="rounded-full border border-blue-300/20 bg-blue-300/10 px-2 py-0.5 text-[11px] font-semibold text-blue-100">
+                    {stats.plan}
+                  </span>
+                </div>
+                <p className="mt-1 truncate text-sm text-slate-400">
+                  {firstClientSite.name} 目前每週發布 {stats.activeDaysPerWeek} 天，持續補強 AI 可引用內容。
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-6 shrink-0">
-              <div className="text-right">
-                <p className="text-2xl font-bold text-green-400">{stats.monthCount}</p>
-                <p className="text-[10px] text-gray-400">本月</p>
-              </div>
-              <div className="text-right hidden sm:block">
-                <p className="text-2xl font-bold text-blue-300">{stats.weekCount}</p>
-                <p className="text-[10px] text-gray-400">本週</p>
-              </div>
-              <div className="text-right hidden md:block">
-                <p className="text-2xl font-bold text-white">{stats.totalCount}</p>
-                <p className="text-[10px] text-gray-400">總數</p>
-              </div>
-              <span className="text-blue-300 text-sm group-hover:translate-x-0.5 transition-transform">查看全部 →</span>
+            <div className="grid grid-cols-3 gap-3 lg:min-w-[360px]">
+              {[
+                { label: '本月', value: stats.monthCount, className: 'text-emerald-300' },
+                { label: '本週', value: stats.weekCount, className: 'text-blue-200' },
+                { label: '累計', value: stats.totalCount, className: 'text-white' },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-white/10 bg-slate-950/35 p-3 text-center">
+                  <p className={cn('text-2xl font-bold', item.className)}>{item.value}</p>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">{item.label}</p>
+                </div>
+              ))}
             </div>
           </div>
         </CardContent>
       </Card>
-    </a>
+    </Link>
   )
 }

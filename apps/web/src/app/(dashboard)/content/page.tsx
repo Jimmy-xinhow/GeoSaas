@@ -122,7 +122,7 @@ export default function ContentPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.16),transparent_30%),rgba(255,255,255,0.04)] p-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">內容引擎</h1>
           <p className="text-muted-foreground mt-1">管理和生成 AI 優化內容</p>
@@ -137,13 +137,13 @@ export default function ContentPage() {
 
       {/* Content cards */}
       {isLoading ? (
-        <div className="space-y-4">
+        <div className="grid gap-4">
           {[1, 2, 3, 4].map((i) => (
             <ContentCardSkeleton key={i} />
           ))}
         </div>
       ) : !contents || contents.length === 0 ? (
-        <Card>
+        <Card className="border-dashed">
           <CardContent className="p-12">
             <div className="text-center">
               <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -163,14 +163,14 @@ export default function ContentPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="grid gap-4">
           {contents.map((item: any) => (
-            <Card key={item.id} className="bg-white/5 border-white/10 hover:shadow-lg hover:shadow-blue-500/5 transition-shadow">
+            <Card key={item.id} className="overflow-hidden transition-all">
               <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-white">{item.title}</h3>
-                    <div className="flex items-center gap-3 mt-2">
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
                       <span
                         className={cn(
                           'px-2.5 py-0.5 rounded-full text-xs font-medium',
@@ -194,7 +194,7 @@ export default function ContentPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
                     <Link href={`/content/${item.id}`}>
                       <Button variant="ghost" size="icon">
                         <Edit className="h-4 w-4 text-gray-400" />

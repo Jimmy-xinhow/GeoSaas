@@ -6,7 +6,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 
 export const metadata: Metadata = {
   title: 'Geovault 服務條款、付費方案與使用規範',
-  description: '閱讀 Geovault 服務條款，了解帳號註冊、GEO 掃描、AI 內容生成、成功案例、付費方案、退款政策、資料授權與使用限制。',
+  description: '閱讀 Geovault 服務條款，了解帳號註冊、GEO 掃描、AI 內容生成、成功案例、自助訂閱、代營運方案、退款政策、資料授權與使用限制。',
   alternates: { canonical: `${SITE_URL}/terms` },
   robots: { index: true, follow: true },
 };
@@ -147,18 +147,21 @@ export default function TermsPage() {
         {/* 04 */}
         <section>
           <SectionHeader num="04" title="付費方案與計費" />
-          <p className="text-gray-400 text-sm mb-2">本服務採訂閱制，方案規格如下：</p>
+          <p className="text-gray-400 text-sm mb-2">本服務包含自助訂閱方案與專人代營運方案，方案規格如下：</p>
           <Table
             headers={['方案', '月費（NTD）', '主要規格']}
             rows={[
               ['Free', '0', '1 個網站、2 次掃描/月、1 次修復體驗'],
               ['Starter', '390', '1 個網站、6 次掃描、30 次修復/內容、10 次 QA、20 次監控、2 份報告'],
               ['Pro', '690', '3 個網站、10 次掃描、50 次修復/內容、15 次 QA、30 次監控、3 份報告、多平台支援、自動排程'],
+              ['GEO 入門代營運', '7,800', '5 大 AI 平台基礎檢測、50 組問題庫、每月 30 篇 AI 引用內容文章、品牌基礎定位、簡版月報、一次補強建議'],
+              ['GEO 完整代營運', '15,000', '100 組問題庫、每月 50 篇 AI 引用內容文章、品牌 AI 知識庫、每月優化代執行、競品簡析、完整月報、每月策略建議'],
             ]}
           />
           <ul className="space-y-3 text-sm mt-4">
-            <li className="flex gap-2.5"><span className="text-blue-400 font-semibold shrink-0">›</span><span><strong className="text-white">年繳優惠：</strong>年繳享 9 折優惠（相當於 12 個月支付 10.8 個月費用）。</span></li>
+            <li className="flex gap-2.5"><span className="text-blue-400 font-semibold shrink-0">›</span><span><strong className="text-white">年繳優惠：</strong>年繳方案依付款頁顯示的折扣後金額收費。</span></li>
             <li className="flex gap-2.5"><span className="text-blue-400 font-semibold shrink-0">›</span><span><strong className="text-white">自動續訂：</strong>訂閱於到期前自動以原方案續扣，您可隨時於帳號設定取消。</span></li>
+            <li className="flex gap-2.5"><span className="text-blue-400 font-semibold shrink-0">›</span><span><strong className="text-white">代營運方案：</strong>GEOvault Managed Service 屬專人服務，實際服務範圍、交付項目、問題庫與驗收指標以雙方確認之報價單或服務約定為準。</span></li>
             <li className="flex gap-2.5"><span className="text-blue-400 font-semibold shrink-0">›</span><span><strong className="text-white">付款方式：</strong>本服務透過藍新金流（NewebPay）受理信用卡付款，Geovault 不儲存信用卡資料。</span></li>
             <li className="flex gap-2.5"><span className="text-blue-400 font-semibold shrink-0">›</span><span><strong className="text-white">配額重設：</strong>各項用量配額於每月扣款日重置，未使用部分不累積至下期。</span></li>
           </ul>
@@ -173,7 +176,9 @@ export default function TermsPage() {
             <ul className="space-y-2 mt-2 ml-4">
               <li>· 因本服務系統錯誤導致您完全無法使用所購方案功能。</li>
               <li>· 重複扣款或金額錯誤之情形。</li>
+              <li>· 代營運方案未達雙方事前約定之問題庫、平台範圍、檢測期間與可見度指標，且符合服務約定之退費或延長補強條件。</li>
             </ul>
+            <p>代營運方案不以成交數、詢問數、流量數、單一平台、單一問題或單次 AI 回答作為退費依據。</p>
             <p className="mt-3">退款申請請於發生之日起 7 日內來信 <EmailLink className="text-blue-400 hover:underline" />，逾期不予受理。</p>
           </div>
         </section>

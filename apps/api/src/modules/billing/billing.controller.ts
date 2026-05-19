@@ -5,7 +5,12 @@ import { BillingService } from './billing.service';
 import { CreditService } from './credit.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
-import { CreateCheckoutDto } from './dto/create-checkout.dto';
+import {
+  CreateCheckoutDto,
+  CreateManagedCheckoutDto,
+  CancelSubscriptionDto,
+  ManagedRefundRequestDto,
+} from './dto/create-checkout.dto';
 import { CreateCreditCheckoutDto } from './dto/create-credit-checkout.dto';
 
 @ApiTags('Billing')
@@ -19,7 +24,26 @@ export class BillingController {
   @ApiBearerAuth()
   @Post('checkout')
   createCheckout(@Body() dto: CreateCheckoutDto, @CurrentUser('userId') userId: string) {
-    return this.billingService.createOrder(dto.plan, userId);
+    return this.billingService.createOrder(dto.plan, userId, dto.billingCycle);
+  }
+
+  @ApiBearerAuth()
+  @Post('managed/checkout')
+  createManagedCheckout(
+    @Body() dto: CreateManagedCheckoutDto,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.billingService.createManagedOrder(dto, userId);
+  }
+
+  @ApiBearerAuth()
+  @Post('managed/refund-request')
+  @ApiOperation({ summary: 'Submit a managed service refund or extension review request' })
+  submitManagedRefundRequest(
+    @Body() dto: ManagedRefundRequestDto,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.billingService.submitManagedRefundRequest(dto, userId);
   }
 
   @Public()
@@ -50,10 +74,44 @@ export class BillingController {
     res.redirect(302, `${frontendUrl}/settings/billing/result?${params.toString()}`);
   }
 
+  @Public()
+  @Post('period/notify')
+  @HttpCode(200)
+  handlePeriodNotify(@Body('Period') period: string) {
+    return this.billingService.handlePeriodNotify(period);
+  }
+
+  @Public()
+  @Post('period/return')
+  @HttpCode(200)
+  async handlePeriodReturn(
+    @Body('Period') period: string,
+    @Res() res: Response,
+  ) {
+    const result = await this.billingService.handlePeriodReturn(period);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const params = new URLSearchParams({
+      success: result.success.toString(),
+      orderNo: result.orderNo || '',
+      message: result.message,
+    });
+    res.redirect(302, `${frontendUrl}/settings/billing/result?${params.toString()}`);
+  }
+
   @ApiBearerAuth()
   @Get('subscription')
   getSubscription(@CurrentUser('userId') userId: string) {
     return this.billingService.getSubscription(userId);
+  }
+
+  @ApiBearerAuth()
+  @Post('subscription/cancel')
+  @ApiOperation({ summary: 'Terminate a NewebPay recurring subscription' })
+  cancelSubscription(
+    @Body() dto: CancelSubscriptionDto,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.billingService.cancelSubscription(dto.orderNo, userId, dto.acceptedTerminationNotice);
   }
 
   @ApiBearerAuth()
