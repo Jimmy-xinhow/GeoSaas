@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Plus,
   TrendingUp,
@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Globe,
   MapPin,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -106,6 +107,59 @@ export default function MonitorPage() {
 
   const platforms = monitorData?.platforms ?? []
   const queries = monitorData?.queries ?? []
+  type MonitorQuery = (typeof queries)[number]
+  const siteLookup = useMemo(() => {
+    return new Map((sites ?? []).map((site: any) => [site.id, site]))
+  }, [sites])
+
+  const groupedQueries = useMemo(() => {
+    const groups = new Map<string, {
+      siteId: string
+      siteName: string
+      siteUrl: string
+      queries: MonitorQuery[]
+      total: number
+      checked: number
+      mentioned: number
+      pending: number
+      errorCount: number
+      platformCount: number
+    }>()
+
+    queries.forEach((query) => {
+      const siteId = query.siteId || 'unknown'
+      const site = siteLookup.get(siteId) as any
+      const siteName = query.siteName || site?.name || site?.url || '未指定網站'
+      const siteUrl = query.siteUrl || site?.url || ''
+      const existing = groups.get(siteId) ?? {
+        siteId,
+        siteName,
+        siteUrl,
+        queries: [] as MonitorQuery[],
+        total: 0,
+        checked: 0,
+        mentioned: 0,
+        pending: 0,
+        errorCount: 0,
+        platformCount: 0,
+      }
+
+      existing.queries.push(query)
+      existing.total += 1
+      if (query.status === 'checked') existing.checked += 1
+      if (query.cited) existing.mentioned += 1
+      if (query.status === 'pending') existing.pending += 1
+      if (query.status === 'error') existing.errorCount += 1
+      existing.platformCount = new Set(existing.queries.map((item) => item.platform)).size
+      groups.set(siteId, existing)
+    })
+
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.errorCount !== b.errorCount) return b.errorCount - a.errorCount
+      if (a.pending !== b.pending) return b.pending - a.pending
+      return a.siteName.localeCompare(b.siteName, 'zh-Hant')
+    })
+  }, [queries, siteLookup])
 
   const handleCreateMonitor = async () => {
     if (!selectedSiteId) { toast.error('請選擇一個網站'); return }
@@ -286,8 +340,43 @@ export default function MonitorPage() {
               <p className="text-sm text-muted-foreground mt-1">點擊「新增查詢」開始追蹤 AI 引用狀態</p>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-white/10 divide-y divide-white/5">
-              {queries.map((q: any) => {
+            <div className="space-y-4">
+              {groupedQueries.map((group) => (
+                <section
+                  key={group.siteId}
+                  className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/30"
+                >
+                  <div className="flex flex-col gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-400/30 bg-blue-500/15 text-blue-200">
+                        <Globe className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-semibold text-white">{group.siteName}</h3>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {group.siteUrl || '未設定網站網址'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline" className="border-white/15 bg-white/5 text-white">
+                        {group.total} 個問題
+                      </Badge>
+                      <Badge variant="outline" className="border-blue-300/30 bg-blue-500/10 text-blue-200">
+                        {group.platformCount} 個平台
+                      </Badge>
+                      <Badge variant="outline" className="border-green-300/30 bg-green-500/10 text-green-200">
+                        已引用 {group.mentioned}/{group.checked || group.total}
+                      </Badge>
+                      {group.errorCount > 0 && (
+                        <Badge variant="outline" className="border-amber-300/30 bg-amber-500/10 text-amber-200">
+                          {group.errorCount} 個異常
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="divide-y divide-white/5">
+                    {group.queries.map((q: any) => {
                 const isExpanded = expandedId === q.id
                 const meta = platformMeta[q.platform] || defaultPlatformMeta
                 return (
@@ -399,7 +488,10 @@ export default function MonitorPage() {
                     )}
                   </div>
                 )
-              })}
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
           )}
         </CardContent>

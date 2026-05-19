@@ -113,6 +113,15 @@ export class MonitorService {
     const monitors = await this.prisma.monitor.findMany({
       where: { siteId: { in: siteIds } },
       orderBy: { checkedAt: 'desc' },
+      include: {
+        site: {
+          select: {
+            id: true,
+            name: true,
+            url: true,
+          },
+        },
+      },
     });
 
     const platformNames: Record<string, string> = {
@@ -144,6 +153,9 @@ export class MonitorService {
       const notChecked = !m.response;
       return {
         id: m.id,
+        siteId: m.siteId,
+        siteName: m.site?.name || m.site?.url || '未命名網站',
+        siteUrl: m.site?.url || '',
         query: m.query,
         platform: platformNames[m.platform.toUpperCase()] || m.platform,
         cited: m.mentioned,

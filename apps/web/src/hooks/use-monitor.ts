@@ -10,10 +10,17 @@ interface MonitorDashboard {
   }>;
   queries: Array<{
     id: string;
+    siteId: string;
+    siteName: string;
+    siteUrl: string;
     query: string;
     platform: string;
     cited: boolean;
-    lastCheck: string;
+    position?: number | null;
+    status?: 'error' | 'pending' | 'checked';
+    errorMessage?: string;
+    response?: string;
+    lastCheck: string | null;
   }>;
 }
 
