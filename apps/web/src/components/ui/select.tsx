@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +18,7 @@ interface SelectContextValue {
   getLabel: (value: string) => string | undefined
   disabled?: boolean
   contentId: string
+  triggerRef: React.RefObject<HTMLButtonElement>
 }
 
 const SelectContext = React.createContext<SelectContextValue>({
@@ -26,6 +28,7 @@ const SelectContext = React.createContext<SelectContextValue>({
   getLabel: () => undefined,
   disabled: false,
   contentId: '',
+  triggerRef: { current: null },
 })
 
 /* ------------------------------------------------------------------ */
@@ -45,6 +48,7 @@ function Select({ children, value, onValueChange, defaultValue, disabled }: Sele
   const [internalValue, setInternalValue] = React.useState(defaultValue)
   const itemLabels = React.useRef<Map<string, string>>(new Map())
   const contentId = React.useId()
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
 
   const currentValue = value ?? internalValue
   const handleChange = React.useCallback(
@@ -65,7 +69,7 @@ function Select({ children, value, onValueChange, defaultValue, disabled }: Sele
 
   return (
     <SelectContext.Provider
-      value={{ value: currentValue, onValueChange: handleChange, open, setOpen, registerItem, getLabel, disabled, contentId }}
+      value={{ value: currentValue, onValueChange: handleChange, open, setOpen, registerItem, getLabel, disabled, contentId, triggerRef }}
     >
       <div className="relative">{children}</div>
     </SelectContext.Provider>
@@ -81,11 +85,16 @@ interface SelectTriggerProps
 
 const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
   ({ className, children, ...props }, ref) => {
-    const { open, setOpen, disabled, contentId } = React.useContext(SelectContext)
+    const { open, setOpen, disabled, contentId, triggerRef } = React.useContext(SelectContext)
 
     return (
       <button
-        ref={ref}
+        ref={(node) => {
+          const mutableTriggerRef = triggerRef as React.MutableRefObject<HTMLButtonElement | null>
+          mutableTriggerRef.current = node
+          if (typeof ref === 'function') ref(node)
+          else if (ref) (ref as React.MutableRefObject<HTMLButtonElement | null>).current = node
+        }}
         type="button"
         role="combobox"
         disabled={disabled}
@@ -131,15 +140,44 @@ function SelectValue({ placeholder }: SelectValueProps) {
 interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
-  ({ className, children, ...props }, ref) => {
-    const { open, setOpen, contentId } = React.useContext(SelectContext)
+  ({ className, children, style, ...props }, ref) => {
+    const { open, setOpen, contentId, triggerRef } = React.useContext(SelectContext)
     const contentRef = React.useRef<HTMLDivElement>(null)
+    const [mounted, setMounted] = React.useState(false)
+    const [position, setPosition] = React.useState<React.CSSProperties>({})
+
+    React.useEffect(() => {
+      setMounted(true)
+    }, [])
+
+    const updatePosition = React.useCallback(() => {
+      const trigger = triggerRef.current
+      if (!trigger) return
+      const rect = trigger.getBoundingClientRect()
+      setPosition({
+        left: rect.left,
+        top: rect.bottom + 4,
+        width: rect.width,
+      })
+    }, [triggerRef])
+
+    React.useEffect(() => {
+      if (!open) return
+      updatePosition()
+      window.addEventListener('resize', updatePosition)
+      window.addEventListener('scroll', updatePosition, true)
+      return () => {
+        window.removeEventListener('resize', updatePosition)
+        window.removeEventListener('scroll', updatePosition, true)
+      }
+    }, [open, updatePosition])
 
     // Close when clicking outside
     React.useEffect(() => {
       if (!open) return
 
       function handleClick(e: MouseEvent) {
+        if (triggerRef.current?.contains(e.target as Node)) return
         if (
           contentRef.current &&
           !contentRef.current.contains(e.target as Node)
@@ -151,11 +189,11 @@ const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
 
       document.addEventListener('mousedown', handleClick)
       return () => document.removeEventListener('mousedown', handleClick)
-    }, [open, setOpen])
+    }, [open, setOpen, triggerRef])
 
-    if (!open) return null
+    if (!open || !mounted) return null
 
-    return (
+    return createPortal(
       <div
         id={contentId}
         ref={(node) => {
@@ -163,14 +201,16 @@ const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
           if (typeof ref === 'function') ref(node)
           else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node
         }}
+        style={{ ...position, ...style }}
         className={cn(
-          'absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95',
+          'fixed z-[1000] max-h-60 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95',
           className
         )}
         {...props}
       >
         <div className="p-1">{children}</div>
-      </div>
+      </div>,
+      document.body,
     )
   }
 )
