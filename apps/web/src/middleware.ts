@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import type { NextFetchEvent, NextRequest } from 'next/server';
 import { AI_BOTS } from '@geovault/shared';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
@@ -11,7 +11,7 @@ const GONE_PATHS = new Set([
   '/blog/cmn908gxe0-202604-sat-data-pulse-icfq',
 ]);
 
-export function middleware(request: NextRequest) {
+export function middleware(request: NextRequest, event: NextFetchEvent) {
   if (request.nextUrl.hostname === 'geovault.app') {
     const url = request.nextUrl.clone();
     url.hostname = 'www.geovault.app';
@@ -79,9 +79,10 @@ export function middleware(request: NextRequest) {
   const detectedBot = AI_BOT_PATTERNS.find((bot) => ua.includes(bot.uaPattern));
 
   if (detectedBot) {
-    // Fire-and-forget: report to API (non-blocking)
+    // Keep the response non-blocking, but bind the report to the middleware
+    // lifecycle so Edge/Next runtimes do not cancel it before it reaches API.
     try {
-      fetch(`${API_URL}/api/crawler/report-platform`, {
+      event.waitUntil(fetch(`${API_URL}/api/crawler/report-platform`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -92,7 +93,7 @@ export function middleware(request: NextRequest) {
           statusCode: 200,
           source: 'middleware',
         }),
-      }).catch(() => {}); // ignore errors
+      }).catch(() => {}));
     } catch {}
   }
 

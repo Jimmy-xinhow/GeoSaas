@@ -50,7 +50,7 @@ export class BadgeService {
         _count: {
           select: {
             scans: { where: { status: 'COMPLETED' } },
-            crawlerVisits: true,
+            crawlerVisits: { where: { isSeeded: false } },
           },
         },
         badges: { select: { badge: true } },

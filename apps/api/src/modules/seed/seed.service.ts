@@ -398,6 +398,10 @@ export class SeedService {
    */
   @Cron('*/10 * * * *')
   async simulateLiveCrawlerActivity(): Promise<{ created: number }> {
+    if (process.env.ENABLE_CRAWLER_SIMULATION !== '1') {
+      return { created: 0 };
+    }
+
     const sites = await this.prisma.site.findMany({
       where: { isPublic: true, bestScore: { gt: 0 } },
       select: { id: true, url: true, bestScore: true },

@@ -19,6 +19,15 @@ const indexableBlogTemplateTypes = [
   'industry_top10',
   'buyer_guide',
   'industry_current_state',
+  // Conservative GEO analysis templates: these are brand/site-specific pages
+  // with durable crawl value. Keep experimental or thin operational templates
+  // out of sitemap/blog indexes so SEO crawl budget is not flooded.
+  'geo_overview',
+  'score_breakdown',
+  'competitor_comparison',
+  'improvement_tips',
+  'industry_benchmark',
+  'brand_reputation',
 ];
 
 type DirectorySeoSite = {
@@ -38,6 +47,7 @@ type PublicBlogSeoArticle = {
   title?: string | null;
   description?: string | null;
   slug?: string | null;
+  templateType?: string | null;
   site?: { name?: string | null; url?: string | null } | null;
 };
 
@@ -232,6 +242,8 @@ export function publicIndexableBlogArticleWhere(where: Record<string, unknown> =
 export function getPublicBlogArticleSeoIssues(article: PublicBlogSeoArticle): string[] {
   const issues: string[] = [];
   if (!isPublicSafeArticle(article)) issues.push('unsafe-test-article');
+  if (!article.title || article.title.trim().length < 10) issues.push('short-title');
+  if (!article.description || article.description.trim().length < 80) issues.push('thin-description');
   if (isLikelyEditorialDirectoryName(article.site?.name)) issues.push('editorial-site-name');
   return issues;
 }

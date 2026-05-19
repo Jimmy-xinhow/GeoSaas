@@ -73,7 +73,7 @@ export class BrandFactService {
           take: 1,
           select: { totalScore: true, completedAt: true },
         },
-        _count: { select: { crawlerVisits: true } },
+        _count: { select: { crawlerVisits: { where: { isSeeded: false } } } },
       },
     });
     if (!site) throw new NotFoundException('Site not found');

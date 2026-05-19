@@ -656,6 +656,7 @@ export class DirectoryService {
       by: ['siteId'],
       where: {
         site: publicSiteWhere({ isPublic: true }),
+        isSeeded: false,
         visitedAt: { gte: oneDayAgo },
       },
       _count: true,
@@ -684,6 +685,7 @@ export class DirectoryService {
       by: ['siteId'],
       where: {
         site: publicSiteWhere({ isPublic: true }),
+        isSeeded: false,
       },
       _count: true,
       orderBy: { _count: { siteId: 'desc' } },
@@ -883,11 +885,11 @@ export class DirectoryService {
     ] = await Promise.all([
       this.prisma.site.count({ where: publicSiteWhere({ isPublic: true }) }),
       this.prisma.scan.count({ where: { status: 'COMPLETED' } }),
-      this.prisma.crawlerVisit.count(),
-      this.prisma.crawlerVisit.count({ where: { visitedAt: { gte: oneDayAgo } } }),
+      this.prisma.crawlerVisit.count({ where: { isSeeded: false } }),
+      this.prisma.crawlerVisit.count({ where: { isSeeded: false, visitedAt: { gte: oneDayAgo } } }),
       this.prisma.crawlerVisit.groupBy({
         by: ['botName'],
-        where: { visitedAt: { gte: oneDayAgo } },
+        where: { isSeeded: false, visitedAt: { gte: oneDayAgo } },
       }).then((r: any) => r.length),
     ]);
 
@@ -910,6 +912,7 @@ export class DirectoryService {
     const recentVisits = await this.prisma.crawlerVisit.findMany({
       where: {
         site: publicSiteWhere({ isPublic: true }),
+        isSeeded: false,
       },
       select: {
         id: true,
@@ -936,6 +939,7 @@ export class DirectoryService {
       this.prisma.crawlerVisit.count({
         where: {
           site: publicSiteWhere({ isPublic: true }),
+          isSeeded: false,
           visitedAt: { gte: oneDayAgo },
         },
       }),
@@ -943,6 +947,7 @@ export class DirectoryService {
         by: ['botName'],
         where: {
           site: publicSiteWhere({ isPublic: true }),
+          isSeeded: false,
           visitedAt: { gte: oneDayAgo },
         },
         _count: true,
@@ -955,6 +960,7 @@ export class DirectoryService {
         site: this.withPublicDisplayName(visit.site),
       })),
       stats: {
+        metricScope: 'real',
         last24h: last24hCount,
         activeBots: activeBots.map((b: any) => ({
           name: b.botName,
@@ -1031,11 +1037,11 @@ export class DirectoryService {
       }),
       this.prisma.crawlerVisit.groupBy({
         by: ['botName', 'botOrg'],
-        where: { siteId },
+        where: { siteId, isSeeded: false },
         _count: true,
         _max: { visitedAt: true },
       }),
-      this.prisma.crawlerVisit.count({ where: { siteId } }),
+      this.prisma.crawlerVisit.count({ where: { siteId, isSeeded: false } }),
     ]);
 
     const { scans, badges, _count, ...rawSiteData } = site;
@@ -1179,7 +1185,7 @@ export class DirectoryService {
         id: true,
         bestScore: true,
         bestScoreAt: true,
-        _count: { select: { crawlerVisits: true } },
+        _count: { select: { crawlerVisits: { where: { isSeeded: false } } } },
       },
     });
 

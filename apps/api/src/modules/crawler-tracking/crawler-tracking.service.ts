@@ -228,18 +228,18 @@ export class CrawlerTrackingService {
     const oneDayAgo = new Date(now.getTime() - 86400000);
 
     const [totalVisits, last24h, botCounts, recentVisits] = await Promise.all([
-      this.prisma.crawlerVisit.count({ where: { siteId } }),
+      this.prisma.crawlerVisit.count({ where: { siteId, isSeeded: false } }),
       this.prisma.crawlerVisit.count({
-        where: { siteId, visitedAt: { gte: oneDayAgo } },
+        where: { siteId, isSeeded: false, visitedAt: { gte: oneDayAgo } },
       }),
       this.prisma.crawlerVisit.groupBy({
         by: ['botName'],
-        where: { siteId },
+        where: { siteId, isSeeded: false },
         _count: true,
         _max: { visitedAt: true },
       }),
       this.prisma.crawlerVisit.findMany({
-        where: { siteId },
+        where: { siteId, isSeeded: false },
         orderBy: { visitedAt: 'desc' },
         take: 20,
         select: {
@@ -283,7 +283,7 @@ export class CrawlerTrackingService {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const visits = await this.prisma.crawlerVisit.findMany({
-      where: { siteId, visitedAt: { gte: thirtyDaysAgo } },
+      where: { siteId, isSeeded: false, visitedAt: { gte: thirtyDaysAgo } },
       select: { visitedAt: true, botName: true },
       orderBy: { visitedAt: 'asc' },
     });
@@ -377,8 +377,11 @@ export class CrawlerTrackingService {
 
       if (res.ok) {
         const html = await res.text();
-        // Check if our tracking token appears in the page
-        if (html.includes(site.crawlerToken) && html.includes('crawler/report')) {
+        // Check if our tracking token appears in the page.
+        if (
+          html.includes(site.crawlerToken) &&
+          (html.includes('crawler/report') || html.includes('crawler/pixel'))
+        ) {
           results.snippetFound = true;
         } else if (html.includes('geo-saas') || html.includes('geovault')) {
           results.details = '偵測到 Geovault 相關代碼，但追蹤碼的 Token 不正確或不完整。';
@@ -394,13 +397,13 @@ export class CrawlerTrackingService {
 
     // Step 2: Check if any reports have been received
     const reportsCount = await this.prisma.crawlerVisit.count({
-      where: { siteId },
+      where: { siteId, isSeeded: false },
     });
     results.reportsReceived = reportsCount;
 
     if (reportsCount > 0) {
       const latest = await this.prisma.crawlerVisit.findFirst({
-        where: { siteId },
+        where: { siteId, isSeeded: false },
         orderBy: { visitedAt: 'desc' },
         select: { visitedAt: true },
       });

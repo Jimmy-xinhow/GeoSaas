@@ -136,7 +136,7 @@ export class SitesService {
       select: {
         profile: true,
         llmsTxt: true,
-        _count: { select: { qas: true, crawlerVisits: true } },
+        _count: { select: { qas: true, crawlerVisits: { where: { isSeeded: false } } } },
       },
     });
     if (!site) throw new NotFoundException('Site not found');
