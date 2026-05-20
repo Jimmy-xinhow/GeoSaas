@@ -1,4 +1,4 @@
-import { canAccessSite, siteAccessWhere } from './site-access';
+import { canAccessSite, siteAccessWhere, workspaceSiteWhere } from './site-access';
 
 describe('site access helpers', () => {
   const clientSite = { userId: 'owner-1', isClient: true };
@@ -19,6 +19,17 @@ describe('site access helpers', () => {
 
   it('uses owned-or-client filtering for staff list endpoints', () => {
     expect(siteAccessWhere('staff-1', 'STAFF')).toEqual({
+      OR: [{ userId: 'staff-1' }, { isClient: true }],
+    });
+  });
+
+  it('keeps admin workspace dashboards scoped to owned sites', () => {
+    expect(workspaceSiteWhere('admin-1', 'SUPER_ADMIN')).toEqual({ userId: 'admin-1' });
+    expect(workspaceSiteWhere('admin-2', 'ADMIN')).toEqual({ userId: 'admin-2' });
+  });
+
+  it('keeps staff workspace dashboards scoped to owned-or-client sites', () => {
+    expect(workspaceSiteWhere('staff-1', 'STAFF')).toEqual({
       OR: [{ userId: 'staff-1' }, { isClient: true }],
     });
   });

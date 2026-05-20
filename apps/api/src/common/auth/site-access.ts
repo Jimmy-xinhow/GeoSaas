@@ -29,6 +29,11 @@ export function siteAccessWhere(userId: string, role?: string | null) {
   return { userId };
 }
 
+export function workspaceSiteWhere(userId: string, role?: string | null) {
+  if (isStaffRole(role)) return { OR: [{ userId }, { isClient: true }] };
+  return { userId };
+}
+
 export async function assertSiteAccess(
   prisma: PrismaService,
   siteId: string,

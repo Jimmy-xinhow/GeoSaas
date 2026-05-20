@@ -11,7 +11,7 @@ import { Cron } from '@nestjs/schedule';
 import pLimit from '@/common/utils/p-limit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
-import { assertSiteAccess, canAccessSite, siteAccessWhere } from '../../common/auth/site-access';
+import { assertSiteAccess, canAccessSite, workspaceSiteWhere } from '../../common/auth/site-access';
 import { ScanPipelineService } from './scan-pipeline.service';
 
 @Injectable()
@@ -94,7 +94,7 @@ export class ScanService {
     const scans = await this.prisma.scan.findMany({
       where: {
         status: 'COMPLETED',
-        site: siteAccessWhere(userId, role),
+        site: workspaceSiteWhere(userId, role),
       },
       orderBy: { completedAt: 'asc' },
       take: 30,

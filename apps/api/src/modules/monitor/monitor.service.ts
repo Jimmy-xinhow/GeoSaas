@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nest
 import pLimit from '@/common/utils/p-limit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
-import { assertSiteAccess, siteAccessWhere } from '../../common/auth/site-access';
+import { assertSiteAccess, workspaceSiteWhere } from '../../common/auth/site-access';
 import { ChatgptDetector } from './platforms/chatgpt.detector';
 import { ClaudeDetector } from './platforms/claude.detector';
 import { PerplexityDetector } from './platforms/perplexity.detector';
@@ -106,7 +106,7 @@ export class MonitorService {
 
   async getDashboard(userId: string, role?: string) {
     const sites = await this.prisma.site.findMany({
-      where: siteAccessWhere(userId, role),
+      where: workspaceSiteWhere(userId, role),
       select: { id: true },
     });
     const siteIds = sites.map((s: any) => s.id);

@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
-import { siteAccessWhere } from '../../common/auth/site-access';
+import { siteAccessWhere, workspaceSiteWhere } from '../../common/auth/site-access';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
@@ -64,10 +64,10 @@ export class SitesService {
    * findAll — respects role-based data isolation:
    * - USER: own sites only
    * - STAFF: own sites plus client-tagged sites
-   * - ADMIN/SUPER_ADMIN: all sites
+   * - ADMIN/SUPER_ADMIN: own sites only; all-site management uses admin endpoints
    */
   async findAll(userId: string, userRole?: string) {
-    const where: any = siteAccessWhere(userId, userRole);
+    const where: any = workspaceSiteWhere(userId, userRole);
 
     return this.prisma.site.findMany({
       where,

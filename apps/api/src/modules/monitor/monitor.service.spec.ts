@@ -150,6 +150,18 @@ describe('MonitorService', () => {
       expect(result.platforms.every((s: any) => s.total === 0)).toBe(true);
       expect(result.queries).toHaveLength(0);
     });
+
+    it('should keep admin dashboard monitors scoped to owned sites', async () => {
+      prisma.site.findMany.mockResolvedValue([]);
+      prisma.monitor.findMany.mockResolvedValue([]);
+
+      await service.getDashboard('admin-1', 'SUPER_ADMIN');
+
+      expect(prisma.site.findMany).toHaveBeenCalledWith({
+        where: { userId: 'admin-1' },
+        select: { id: true },
+      });
+    });
   });
 
   describe('create', () => {

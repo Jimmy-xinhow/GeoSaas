@@ -114,6 +114,18 @@ describe('SitesService', () => {
         }),
       );
     });
+
+    it('should keep admin workspace lists scoped to owned sites', async () => {
+      prisma.site.findMany.mockResolvedValue([mockSite]);
+
+      await service.findAll(userId, 'SUPER_ADMIN');
+
+      expect(prisma.site.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId },
+        }),
+      );
+    });
   });
 
   describe('findOne', () => {
