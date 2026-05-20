@@ -9,9 +9,10 @@ import { PerplexityDetector } from './platforms/perplexity.detector';
 import { GeminiDetector } from './platforms/gemini.detector';
 import { CopilotDetector } from './platforms/copilot.detector';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, BillingModule],
   controllers: [MonitorController],
   providers: [MonitorService, MonitorSchedulerService, PlanUsageService, ChatgptDetector, ClaudeDetector, PerplexityDetector, GeminiDetector, CopilotDetector],
   exports: [MonitorService, MonitorSchedulerService, ChatgptDetector, ClaudeDetector, PerplexityDetector, GeminiDetector, CopilotDetector],

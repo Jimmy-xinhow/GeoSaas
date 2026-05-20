@@ -8,6 +8,7 @@ import { ClaudeDetector } from './platforms/claude.detector';
 import { PerplexityDetector } from './platforms/perplexity.detector';
 import { GeminiDetector } from './platforms/gemini.detector';
 import { CopilotDetector } from './platforms/copilot.detector';
+import { CreditService } from '../billing/credit.service';
 
 describe('MonitorService', () => {
   let service: MonitorService;
@@ -58,6 +59,13 @@ describe('MonitorService', () => {
         { provide: PerplexityDetector, useValue: perplexityDetector },
         { provide: GeminiDetector, useValue: geminiDetector },
         { provide: CopilotDetector, useValue: copilotDetector },
+        {
+          provide: CreditService,
+          useValue: {
+            checkAndDeduct: jest.fn().mockResolvedValue({ allowed: true, source: 'free' }),
+            assertAllowed: jest.fn(),
+          },
+        },
       ],
     }).compile();
 

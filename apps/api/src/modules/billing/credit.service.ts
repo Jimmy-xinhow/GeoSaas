@@ -9,8 +9,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 export const PLAN_MONTHLY_INCLUDED_CREDITS: Record<string, number> = {
   FREE: 0,
-  STARTER: 30,
-  PRO: 80,
+  STARTER: 20,
+  PRO: 40,
 };
 
 export interface CreditCheckResult {
@@ -123,7 +123,7 @@ export class CreditService {
 
     const freeMsg =
       includedCredits > 0
-        ? `本月方案贈送點數已用完（${includedCredits}/${includedCredits}）`
+        ? `本月方案 AI 額度已用完（${includedCredits}/${includedCredits} 點）`
         : '免費方案不含 AI 生成點數';
 
     return {

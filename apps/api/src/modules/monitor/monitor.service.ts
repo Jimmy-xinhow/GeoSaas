@@ -8,6 +8,7 @@ import { ClaudeDetector } from './platforms/claude.detector';
 import { PerplexityDetector } from './platforms/perplexity.detector';
 import { GeminiDetector } from './platforms/gemini.detector';
 import { CopilotDetector } from './platforms/copilot.detector';
+import { CreditService } from '../billing/credit.service';
 
 @Injectable()
 export class MonitorService {
@@ -27,6 +28,7 @@ export class MonitorService {
     private perplexityDetector: PerplexityDetector,
     private geminiDetector: GeminiDetector,
     private copilotDetector: CopilotDetector,
+    private credits: CreditService,
   ) {}
 
   async findBySite(siteId: string, userId: string, role?: string) {
@@ -50,6 +52,13 @@ export class MonitorService {
         }
       }
     }
+
+    const creditCheck = await this.credits.checkAndDeduct(
+      userId,
+      1,
+      `AI citation monitor check (${data.platform})`,
+    );
+    this.credits.assertAllowed(creditCheck);
 
     const monitor = await this.prisma.monitor.create({
       data: { ...data, platform: data.platform.toUpperCase(), checkedAt: new Date() },
@@ -76,7 +85,15 @@ export class MonitorService {
   async checkCitation(id: string, userId?: string, role?: string) {
     const monitor = await this.prisma.monitor.findUnique({ where: { id }, include: { site: true } });
     if (!monitor) throw new NotFoundException('Monitor not found');
-    if (userId) await assertSiteAccess(this.prisma, monitor.siteId, userId, role);
+    if (userId) {
+      await assertSiteAccess(this.prisma, monitor.siteId, userId, role);
+      const creditCheck = await this.credits.checkAndDeduct(
+        userId,
+        1,
+        `AI citation monitor recheck (${monitor.platform})`,
+      );
+      this.credits.assertAllowed(creditCheck);
+    }
 
     let result: { mentioned: boolean; position: number | null; response: string };
     switch (monitor.platform) {

@@ -50,8 +50,8 @@ import {
 
 const PLAN_LIMITS: Record<string, { scans: number; sites: number; label: string; description: string }> = {
   FREE: { scans: 2, sites: 1, label: 'Free 方案', description: '每站 2 次掃描/月 | 1 個網站 | 1 次修復體驗' },
-  STARTER: { scans: 6, sites: 1, label: 'Starter 方案 NT$390/月', description: '每站 6 次掃描/月 | 1 個網站 | 每月贈送 30 點 AI 生成點數 | 引用監控 20 題 | 每週 2 篇 Geovault 專屬內容' },
-  PRO: { scans: 10, sites: 3, label: 'Pro 方案 NT$690/月', description: '每站 10 次掃描/月 | 3 個網站 | 每月贈送 80 點 AI 生成點數 | 引用監控 30 題 | 多平台 | 自動排程 | 每週 6 篇 Geovault 專屬內容' },
+  STARTER: { scans: 6, sites: 1, label: 'Starter 方案 NT$390/月', description: '每站 6 次掃描/月 | 1 個網站 | 每月 20 點方案 AI 額度 | 引用監控 20 題 | 每週 2 篇 Geovault 專屬內容' },
+  PRO: { scans: 10, sites: 3, label: 'Pro 方案 NT$690/月', description: '每站 10 次掃描/月 | 3 個網站 | 每月 40 點方案 AI 額度 | 引用監控 30 題 | 多平台 | 自動排程 | 每週 6 篇 Geovault 專屬內容' },
 }
 
 const SUBSCRIPTION_OPTIONS = [
@@ -62,18 +62,18 @@ const SUBSCRIPTION_OPTIONS = [
     yearlyMonthlyPrice: 351,
     icon: Wrench,
     accent: 'from-blue-500 to-cyan-400',
-    metrics: ['1 網站', '6 掃描/月', '30 點/月', '20 題監控'],
+    metrics: ['1 網站', '6 掃描/月', '20 點/月', '20 題監控'],
     description: '適合單一網站的基礎 GEO 自助優化。',
     features: [
       '1 個網站',
       '每站 6 次掃描/月',
       '基礎 GEO 報告',
       'llms.txt 託管',
-      'AI 修復建議 30 次/月',
-      'AI 內容生成 30 次/月',
-      '每月贈送 30 點 AI 生成點數',
+      '每月 20 點方案 AI 額度',
+      'AI 修復、llms.txt、內容生成共用點數',
+      '額度用完後可加購點數',
       '知識庫 Q&A 10 次/月',
-      'AI 引用監控 20 題/月 + 報告 2 次',
+      'AI 引用監控 20 題/月（檢查扣 1 點/題）',
       '每週 2 篇 AI 專屬內容（Geovault 發布）',
     ],
   },
@@ -84,18 +84,18 @@ const SUBSCRIPTION_OPTIONS = [
     yearlyMonthlyPrice: 621,
     icon: Sparkles,
     accent: 'from-indigo-500 to-blue-400',
-    metrics: ['3 網站', '10 掃描/月', '80 點/月', '30 題監控'],
+    metrics: ['3 網站', '10 掃描/月', '40 點/月', '30 題監控'],
     description: '適合需要多網站與進階監控的品牌。',
     features: [
       '3 個網站',
       '每站 10 次掃描/月',
       '完整 GEO 報告',
       'llms.txt 託管',
-      'AI 修復建議 50 次/月',
-      'AI 內容生成 50 次/月',
-      '每月贈送 80 點 AI 生成點數',
+      '每月 40 點方案 AI 額度',
+      'AI 修復、llms.txt、內容生成共用點數',
+      '額度用完後可加購點數',
       '知識庫 Q&A 15 次/月',
-      'AI 引用監控 30 題/月 + 報告 3 次',
+      'AI 引用監控 30 題/月（檢查扣 1 點/題）',
       '每週 6 篇 AI 專屬內容（Geovault 發布）',
       '多平台發佈',
       '自動排程',
@@ -998,7 +998,7 @@ export default function SettingsPage() {
             <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.07] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-blue-300/80">方案贈送點數</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-blue-300/80">方案 AI 額度</p>
                   <p className="mt-1 text-3xl font-bold text-white">
                     {creditData?.freeGenerations.remaining ?? 0}/{creditData?.freeGenerations.total ?? 0}
                   </p>
@@ -1098,8 +1098,8 @@ export default function SettingsPage() {
 
           {/* Pricing info */}
           <div className="text-xs text-muted-foreground border-t border-white/5 pt-3 space-y-1">
-            <p>方案每月贈送點數：Starter 30 點、Pro 80 點；月底未使用完會隨下月重置。</p>
-            <p>扣點：AI 內容/知識庫/缺口填補 = 2 點，修復/llms.txt = 1 點，品牌擴散 = 2 點/平台</p>
+            <p>方案每月 AI 額度：Starter 20 點、Pro 40 點；月底未使用完會隨下月重置。</p>
+            <p>扣點：修復/llms.txt/引用監控 = 1 點，AI 內容/知識庫/缺口填補 = 2 點，品牌擴散 = 2 點/平台</p>
           </div>
         </CardContent>
       </Card>
