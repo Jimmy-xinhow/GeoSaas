@@ -20,17 +20,28 @@ import {
 import useAuthStore from '@/stores/auth-store';
 
 const statusLabel: Record<string, string> = {
-  waiting_admin: '等待客服',
+  waiting_admin: '等待客服回覆',
   waiting_user: '等待你回覆',
-  open: '進行中',
-  closed: '已結案',
+  open: '處理中',
+  closed: '已關閉',
 };
 
 const channelLabel: Record<string, string> = {
   ticket: '工單',
   message: '站內訊息',
-  realtime: '即時優先',
+  realtime: '即時處理',
 };
+
+const categoryOptions = [
+  { value: 'scan', label: '掃描 / GEO 分數' },
+  { value: 'llms', label: 'llms.txt / AI 引用' },
+  { value: 'content', label: '內容引擎' },
+  { value: 'billing', label: '方案 / 點數 / 付款' },
+  { value: 'crawler', label: 'AI 爬蟲' },
+  { value: 'integration', label: '整合 / 發布 / Badge' },
+  { value: 'affiliate', label: '聯盟行銷' },
+  { value: 'general', label: '其他問題' },
+];
 
 function ConversationList({
   items,
@@ -98,11 +109,11 @@ export default function SupportPage() {
     const trimmedSubject = subject.trim();
     const trimmedMessage = message.trim();
     if (!trimmedSubject) {
-      toast.error('請先填寫問題標題');
+      toast.error('請填寫問題標題');
       return;
     }
     if (!trimmedMessage) {
-      toast.error('請先填寫問題內容');
+      toast.error('請描述你遇到的狀況');
       return;
     }
     createMutation.mutate(
@@ -119,6 +130,7 @@ export default function SupportPage() {
           setMessage('');
           toast.success('已建立客服對話');
         },
+        onError: (error: any) => toast.error(error?.response?.data?.message || '送出失敗'),
       },
     );
   };
@@ -130,6 +142,7 @@ export default function SupportPage() {
       onSuccess: () => {
         setReply('');
       },
+      onError: (error: any) => toast.error(error?.response?.data?.message || '送出失敗'),
     });
   };
 
@@ -138,7 +151,7 @@ export default function SupportPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">客服中心</h1>
         <p className="mt-1 text-sm text-gray-400">
-          你的方案：{user?.plan || 'FREE'}。PRO 會標記為即時優先，STARTER 使用站內訊息，FREE 以工單處理。
+          你的方案：{user?.plan || 'FREE'}。PRO 會優先由工作人員接手，其他方案會先由 AI 協助整理與排查。
         </p>
       </div>
 
@@ -163,11 +176,11 @@ export default function SupportPage() {
                   onChange={(event) => setCategory(event.target.value)}
                   className="h-10 w-full rounded-md border border-white/10 bg-gray-950 px-3 text-sm text-white"
                 >
-                  <option value="scan">掃描 / 分數</option>
-                  <option value="llms">llms.txt / AI 爬蟲</option>
-                  <option value="content">文章 / 內容品質</option>
-                  <option value="billing">帳務 / 方案</option>
-                  <option value="general">其他</option>
+                  {categoryOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
                 <select
                   value={siteId}
@@ -184,7 +197,7 @@ export default function SupportPage() {
                 <Textarea
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
-                  placeholder="請描述你遇到的狀況、網址、錯誤畫面或想確認的內容。"
+                  placeholder="請描述你遇到的狀況、操作步驟、錯誤畫面或想確認的內容。"
                   rows={5}
                 />
                 <Button
@@ -226,7 +239,7 @@ export default function SupportPage() {
           <CardContent className="flex min-h-[540px] flex-col">
             {!activeConversation ? (
               <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
-                建立或選擇一個客服對話。
+                建立或選擇左側對話後，就能在這裡即時溝通。
               </div>
             ) : (
               <>
@@ -254,7 +267,7 @@ export default function SupportPage() {
                   <Textarea
                     value={reply}
                     onChange={(event) => setReply(event.target.value)}
-                    placeholder={activeConversation.status === 'closed' ? '此對話已結案' : '輸入回覆'}
+                    placeholder={activeConversation.status === 'closed' ? '此對話已關閉' : '輸入回覆'}
                     rows={2}
                     disabled={activeConversation.status === 'closed'}
                   />

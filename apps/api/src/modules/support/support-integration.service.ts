@@ -10,18 +10,18 @@ export class SupportIntegrationService {
 
   async notifyNewUserMessage(conversation: SupportConversationRow, body: string): Promise<void> {
     const message = [
-      'Geovault 新客服訊息',
+      'Geovault 新客服對話',
       `ID: ${conversation.id}`,
-      `主旨: ${conversation.subject}`,
+      `標題: ${conversation.subject}`,
       `方案: ${conversation.planSnapshot}`,
-      `優先度: ${conversation.priority}`,
-      `使用者: ${conversation.userName || conversation.userEmail || conversation.userId}`,
+      `優先級: ${conversation.priority}`,
+      `用戶: ${conversation.userName || conversation.userEmail || conversation.userId}`,
       conversation.siteName ? `網站: ${conversation.siteName}` : undefined,
       '',
       body.slice(0, 1200),
       '',
-      `回覆格式: /reply ${conversation.id} 回覆內容`,
-      `替代格式: #${conversation.id} 回覆內容`,
+      `Telegram 回覆: /reply ${conversation.id} 回覆內容`,
+      `Lark 回覆: #${conversation.id} 回覆內容`,
     ].filter((line) => line !== undefined).join('\n');
 
     await Promise.allSettled([
@@ -34,7 +34,7 @@ export class SupportIntegrationService {
     const message = [
       'Geovault 客服已回覆',
       `ID: ${conversation.id}`,
-      `主旨: ${conversation.subject}`,
+      `標題: ${conversation.subject}`,
       '',
       body.slice(0, 1200),
     ].join('\n');

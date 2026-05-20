@@ -20,10 +20,17 @@ import {
 import { SupportKnowledgePanel } from './support-knowledge-panel';
 
 const statusLabel: Record<string, string> = {
-  waiting_admin: '待客服回覆',
-  waiting_user: '待使用者回覆',
-  open: '進行中',
-  closed: '已結案',
+  waiting_admin: '等待客服回覆',
+  waiting_user: '等待用戶回覆',
+  open: '處理中',
+  closed: '已關閉',
+};
+
+const priorityLabel: Record<string, string> = {
+  urgent: '緊急',
+  high: '高',
+  normal: '一般',
+  low: '低',
 };
 
 const priorityClass: Record<string, string> = {
@@ -60,11 +67,11 @@ function AdminConversationList({
           <div className="flex items-center gap-2">
             <p className="line-clamp-1 text-sm font-semibold text-white">{item.subject}</p>
             <Badge className={`ml-auto ${priorityClass[item.priority] || priorityClass.normal}`}>
-              {item.priority}
+              {priorityLabel[item.priority] || item.priority}
             </Badge>
           </div>
           <p className="mt-1 text-xs text-gray-400">
-            {item.userName || item.userEmail || '使用者'} · {item.planSnapshot} · {statusLabel[item.status] || item.status}
+            {item.userName || item.userEmail || '用戶'} · {item.planSnapshot} · {statusLabel[item.status] || item.status}
           </p>
           <p className="mt-2 line-clamp-2 text-xs text-gray-500">{item.latestMessage || '尚無訊息'}</p>
         </button>
@@ -103,6 +110,7 @@ export default function AdminSupportPage() {
         setReply('');
         toast.success('已送出客服回覆');
       },
+      onError: (error: any) => toast.error(error?.response?.data?.message || '送出失敗'),
     });
   };
 
@@ -110,7 +118,9 @@ export default function AdminSupportPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">客服管理</h1>
-        <p className="mt-1 text-sm text-gray-400">依方案優先級處理客服對話，PRO 會被標示為高優先。</p>
+        <p className="mt-1 text-sm text-gray-400">
+          查看用戶對話、人工回覆、產生客服記憶摘要，並維護 AI 客服知識庫。
+        </p>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
@@ -126,9 +136,9 @@ export default function AdminSupportPage() {
                 className="h-10 rounded-md border border-white/10 bg-gray-950 px-3 text-sm text-white"
               >
                 <option value="">全部狀態</option>
-                <option value="waiting_admin">待客服</option>
-                <option value="waiting_user">待使用者</option>
-                <option value="closed">已結案</option>
+                <option value="waiting_admin">等待客服</option>
+                <option value="waiting_user">等待用戶</option>
+                <option value="closed">已關閉</option>
               </select>
               <select
                 value={priority}
@@ -136,16 +146,17 @@ export default function AdminSupportPage() {
                 className="h-10 rounded-md border border-white/10 bg-gray-950 px-3 text-sm text-white"
               >
                 <option value="">全部優先級</option>
-                <option value="high">high</option>
-                <option value="normal">normal</option>
-                <option value="low">low</option>
+                <option value="urgent">緊急</option>
+                <option value="high">高</option>
+                <option value="normal">一般</option>
+                <option value="low">低</option>
               </select>
             </CardContent>
           </Card>
 
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
-              <CardTitle className="text-base">對話佇列</CardTitle>
+              <CardTitle className="text-base">客服對話</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -160,7 +171,7 @@ export default function AdminSupportPage() {
         <Card className="min-h-[680px] border-white/10 bg-white/5">
           <CardHeader>
             <div className="flex flex-wrap items-center gap-3">
-              <CardTitle className="text-lg">{activeConversation?.subject || '選擇客服對話'}</CardTitle>
+              <CardTitle className="text-lg">{activeConversation?.subject || '選擇一個客服對話'}</CardTitle>
               {activeConversation && (
                 <>
                   <Badge variant="outline" className="ml-auto">
@@ -177,20 +188,20 @@ export default function AdminSupportPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => closeMutation.mutate(undefined, { onSuccess: () => toast.success('已結案') })}
+                    onClick={() => closeMutation.mutate(undefined, { onSuccess: () => toast.success('已關閉對話') })}
                     disabled={closeMutation.isPending || activeConversation.status === 'closed'}
                   >
-                    結案
+                    關閉
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() =>
-                      summarizeMutation.mutate(undefined, { onSuccess: () => toast.success('已更新對話摘要') })
+                      summarizeMutation.mutate(undefined, { onSuccess: () => toast.success('已更新客服記憶') })
                     }
                     disabled={summarizeMutation.isPending}
                   >
-                    更新摘要
+                    更新記憶
                   </Button>
                 </>
               )}
@@ -205,7 +216,7 @@ export default function AdminSupportPage() {
           <CardContent className="flex min-h-[560px] flex-col">
             {!activeConversation ? (
               <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
-                選擇左側對話開始處理。
+                請先選擇左側的客服對話。
               </div>
             ) : (
               <>
@@ -220,7 +231,7 @@ export default function AdminSupportPage() {
                           }`}
                         >
                           <p className="mb-1 text-xs opacity-70">
-                            {item.senderRole === 'ai' ? 'AI 助手' : isAdmin ? '客服' : item.senderName || '使用者'}
+                            {item.senderRole === 'ai' ? 'AI 助手' : isAdmin ? '客服' : item.senderName || '用戶'}
                           </p>
                           <p className="whitespace-pre-wrap leading-6">{item.body}</p>
                         </div>
@@ -234,7 +245,7 @@ export default function AdminSupportPage() {
                     value={reply}
                     onChange={(event) => setReply(event.target.value)}
                     rows={2}
-                    placeholder={activeConversation.status === 'closed' ? '此對話已結案' : '輸入客服回覆'}
+                    placeholder={activeConversation.status === 'closed' ? '此對話已關閉' : '輸入客服回覆'}
                     disabled={activeConversation.status === 'closed'}
                   />
                   <Button

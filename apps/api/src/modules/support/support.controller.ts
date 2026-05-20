@@ -153,6 +153,12 @@ export class AdminSupportController {
     return this.support.listKnowledgeItems(includeDisabled === '1' || includeDisabled === 'true');
   }
 
+  @Post('knowledge/seed-defaults')
+  @ApiOperation({ summary: 'Seed or refresh default support AI knowledge items' })
+  seedDefaultKnowledge(@CurrentUser('userId') adminId: string) {
+    return this.support.seedDefaultKnowledge(adminId);
+  }
+
   @Post('knowledge')
   @ApiOperation({ summary: 'Create support AI knowledge item' })
   createKnowledge(

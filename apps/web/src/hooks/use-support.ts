@@ -236,6 +236,22 @@ export function useCreateSupportKnowledge() {
   });
 }
 
+export function useSeedDefaultSupportKnowledge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.post<{ created: number; updated: number; total: number }>(
+        '/admin/support/knowledge/seed-defaults',
+        {},
+      );
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-support', 'knowledge'] });
+    },
+  });
+}
+
 export function useUpdateSupportKnowledge(id?: string) {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Loader2, Pencil, Plus, Power } from 'lucide-react';
+import { Loader2, Pencil, Plus, Power, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,17 +14,20 @@ import {
   UpsertSupportKnowledgePayload,
   useAdminSupportKnowledge,
   useCreateSupportKnowledge,
+  useSeedDefaultSupportKnowledge,
   useToggleSupportKnowledge,
   useUpdateSupportKnowledge,
 } from '@/hooks/use-support';
 
 const categoryOptions = [
   { value: 'general', label: '一般問題' },
-  { value: 'scan', label: '掃描與分數' },
-  { value: 'llms', label: 'llms.txt / AI 爬蟲' },
-  { value: 'content', label: '內容與引用' },
-  { value: 'billing', label: '方案與付款' },
-  { value: 'integration', label: '整合串接' },
+  { value: 'scan', label: '掃描 / GEO 分數' },
+  { value: 'llms', label: 'llms.txt / AI 引用' },
+  { value: 'content', label: '內容引擎' },
+  { value: 'billing', label: '方案 / 點數 / 付款' },
+  { value: 'crawler', label: 'AI 爬蟲' },
+  { value: 'integration', label: '整合 / 發布 / Badge' },
+  { value: 'affiliate', label: '聯盟行銷' },
 ];
 
 const emptyForm = {
@@ -73,6 +76,7 @@ export function SupportKnowledgePanel() {
   const createMutation = useCreateSupportKnowledge();
   const updateMutation = useUpdateSupportKnowledge(editingId);
   const toggleMutation = useToggleSupportKnowledge();
+  const seedMutation = useSeedDefaultSupportKnowledge();
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
@@ -89,31 +93,56 @@ export function SupportKnowledgePanel() {
     if (editingId) {
       updateMutation.mutate(payload, {
         onSuccess: () => {
-          toast.success('已更新客服 AI 記憶');
+          toast.success('已更新客服 AI 知識');
           resetForm();
         },
+        onError: (error: any) => toast.error(error?.response?.data?.message || '更新失敗'),
       });
       return;
     }
 
     createMutation.mutate(payload, {
       onSuccess: () => {
-        toast.success('已新增客服 AI 記憶');
+        toast.success('已新增客服 AI 知識');
         resetForm();
       },
+      onError: (error: any) => toast.error(error?.response?.data?.message || '新增失敗'),
+    });
+  };
+
+  const syncDefaults = () => {
+    seedMutation.mutate(undefined, {
+      onSuccess: (result) => {
+        toast.success(`預設知識庫已同步：新增 ${result.created} 筆，更新 ${result.updated} 筆`);
+      },
+      onError: (error: any) => toast.error(error?.response?.data?.message || '同步預設知識庫失敗'),
     });
   };
 
   return (
     <Card className="border-white/10 bg-white/5">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Plus className="h-4 w-4" />
-          客服 AI 記憶庫
-        </CardTitle>
-        <p className="text-sm text-gray-400">
-          這裡放的是平台規則、常見處理方式與客服話術。AI 回覆前會先讀這些內容，再看使用者網站資料與過往摘要。
-        </p>
+        <div className="flex flex-wrap items-start gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Plus className="h-4 w-4" />
+              客服 AI 知識庫
+            </CardTitle>
+            <p className="mt-2 text-sm text-gray-400">
+              這些內容會提供給 AI 客服檢索。請寫成可直接回答用戶的事實、規則與處理步驟。
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="ml-auto"
+            onClick={syncDefaults}
+            disabled={seedMutation.isPending}
+          >
+            {seedMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            同步預設知識庫
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="grid gap-5 lg:grid-cols-[420px_1fr]">
         <form onSubmit={submit} className="space-y-3 rounded-lg border border-white/10 bg-gray-950/60 p-4">
@@ -123,7 +152,7 @@ export function SupportKnowledgePanel() {
               id="support-kb-title"
               value={form.title}
               onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-              placeholder="例如：llms.txt 判斷規則"
+              placeholder="例如：內容生成前資料不足"
             />
           </div>
 
@@ -155,23 +184,23 @@ export function SupportKnowledgePanel() {
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="support-kb-question">適用問題</Label>
+            <Label htmlFor="support-kb-question">常見問法</Label>
             <Input
               id="support-kb-question"
               value={form.question}
               onChange={(event) => setForm((current) => ({ ...current, question: event.target.value }))}
-              placeholder="使用者可能會怎麼問"
+              placeholder="用戶可能會怎麼問？"
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="support-kb-answer">客服判斷與回覆依據</Label>
+            <Label htmlFor="support-kb-answer">AI 可使用的答案</Label>
             <Textarea
               id="support-kb-answer"
               rows={7}
               value={form.answer}
               onChange={(event) => setForm((current) => ({ ...current, answer: event.target.value }))}
-              placeholder="把 AI 應該依循的規則、例外狀況、不能亂承諾的事項寫在這裡。"
+              placeholder="寫清楚條件、處理步驟、需要人工接手的邊界。"
             />
           </div>
 
@@ -181,7 +210,7 @@ export function SupportKnowledgePanel() {
               id="support-kb-tags"
               value={form.tags}
               onChange={(event) => setForm((current) => ({ ...current, tags: event.target.value }))}
-              placeholder="用逗號分隔，例如：llms.txt, crawler, seo"
+              placeholder="用逗號分隔，例如 llms.txt, credits, crawler"
             />
           </div>
 
@@ -192,12 +221,12 @@ export function SupportKnowledgePanel() {
               onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))}
               className="h-4 w-4 rounded border-white/20 bg-gray-950"
             />
-            啟用這筆記憶
+            啟用這筆知識
           </label>
 
           <div className="flex gap-2">
             <Button type="submit" disabled={isSaving || !form.title.trim() || !form.answer.trim()}>
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? '更新記憶' : '新增記憶'}
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? '更新知識' : '新增知識'}
             </Button>
             {editingId && (
               <Button type="button" variant="outline" onClick={resetForm}>
@@ -212,7 +241,7 @@ export function SupportKnowledgePanel() {
             <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
           ) : items.length === 0 ? (
             <p className="rounded-lg border border-white/10 bg-gray-950/60 p-4 text-sm text-gray-400">
-              目前還沒有客服 AI 記憶。
+              目前還沒有客服 AI 知識。可以先同步預設知識庫。
             </p>
           ) : (
             items.map((item) => (
