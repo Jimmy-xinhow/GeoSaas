@@ -34,8 +34,9 @@ export class ContentController {
     @CurrentUser('userId') userId: string,
     @CurrentUser('role') role: string,
   ) {
-    this.contentService.assertAiConfigured();
     await this.contentService.assertGenerateAccess(dto, userId, role);
+    await this.contentService.assertGenerateReadiness(dto);
+    this.contentService.assertAiConfigured();
 
     const balance = await this.credits.getBalance(userId);
     const hasAvailableQuota =

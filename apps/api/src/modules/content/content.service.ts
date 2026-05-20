@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { assertSiteAccess } from '../../common/auth/site-access';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiService } from './ai/ai.service';
@@ -33,8 +33,20 @@ export class ContentService {
     await assertSiteAccess(this.prisma, dto.siteId, userId, role);
   }
 
+  async assertGenerateReadiness(dto: GenerateContentDto) {
+    const readiness = await this.getGenerateReadiness(dto.siteId);
+    if (readiness.ready) return readiness;
+
+    throw new BadRequestException({
+      message: '品牌資料或知識庫不足，請先補齊後再生成內容；本次不會扣點，也不會呼叫 AI。',
+      missingFields: readiness.missingFields,
+      requiredFields: readiness.requiredFields,
+    });
+  }
+
   async generate(dto: GenerateContentDto, userId: string, role?: string) {
     await this.assertGenerateAccess(dto, userId, role);
+    await this.assertGenerateReadiness(dto);
 
     const context = await this.buildPromptContext(dto);
     const language = dto.language || 'zh-TW';
@@ -70,6 +82,65 @@ export class ContentService {
   async remove(id: string, userId: string) {
     await this.findOne(id, userId);
     return this.prisma.content.delete({ where: { id } });
+  }
+
+  private async getGenerateReadiness(siteId: string) {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        industry: true,
+        profile: true,
+        qas: {
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          take: 5,
+          select: { question: true, answer: true },
+        },
+      },
+    });
+
+    if (!site) throw new NotFoundException('Site not found');
+
+    const profile = this.asProfile(site.profile);
+    const industry = site.industry || this.stringValue(profile.industry);
+    const description = this.stringValue(profile.description);
+    const services = this.stringValue(profile.services);
+    const positioning = this.stringValue(profile.positioning) || this.stringValue(profile.uniqueValue);
+    const targetAudiences = this.cleanStrings([
+      ...this.arrayValue(profile.targetAudiences),
+      this.stringValue(profile.targetAudience),
+    ]);
+    const validQaCount = site.qas.filter((qa) =>
+      qa.question.trim().length >= 5 && qa.answer.trim().length >= 20,
+    ).length;
+
+    const missingFields = [
+      !site.name.trim() && '品牌名稱',
+      !site.url.trim() && '官方網站',
+      !industry && '產業分類',
+      !description && '品牌描述',
+      !services && '服務或產品說明',
+      !positioning && '品牌定位或差異化',
+      targetAudiences.length === 0 && '目標客群',
+      validQaCount < 2 && '至少 2 組有效知識庫 Q&A',
+    ].filter(Boolean) as string[];
+
+    return {
+      ready: missingFields.length === 0,
+      missingFields,
+      requiredFields: [
+        '品牌名稱',
+        '官方網站',
+        '產業分類',
+        '品牌描述',
+        '服務或產品說明',
+        '品牌定位或差異化',
+        '目標客群',
+        '至少 2 組有效知識庫 Q&A',
+      ],
+    };
   }
 
   private async buildPromptContext(dto: GenerateContentDto): Promise<ContentPromptContext> {

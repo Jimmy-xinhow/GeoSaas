@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiService } from './ai/ai.service';
@@ -49,6 +49,8 @@ describe('ContentService', () => {
     profile: {
       description: 'AI visibility platform',
       services: 'GEO audits and content',
+      positioning: 'Helps brands become easier for AI assistants to cite.',
+      targetAudiences: ['B2B marketing teams'],
       keywords: ['GEO', 'SEO'],
     },
     qas: [
@@ -56,6 +58,11 @@ describe('ContentService', () => {
         question: 'What does Acme do?',
         answer: 'Acme helps brands improve AI search visibility.',
         category: 'brand',
+      },
+      {
+        question: 'Who is Acme for?',
+        answer: 'Acme is for marketing teams that need verified brand facts for AI search.',
+        category: 'audience',
       },
     ],
     scans: [{ totalScore: 82 }],
@@ -92,7 +99,10 @@ describe('ContentService', () => {
   });
 
   function mockSiteAccess(site = siteWithKnowledge) {
-    prisma.site.findUnique.mockResolvedValueOnce(siteAccess).mockResolvedValueOnce(site);
+    prisma.site.findUnique
+      .mockResolvedValueOnce(siteAccess)
+      .mockResolvedValueOnce(site)
+      .mockResolvedValueOnce(site);
   }
 
   describe('assertAiConfigured', () => {
@@ -194,12 +204,15 @@ describe('ContentService', () => {
       expect(result.type).toBe('ARTICLE');
     });
 
-    it('uses derived GEO keywords when the user leaves focus blank', async () => {
+    it('uses derived brand keywords when the user leaves focus blank', async () => {
       mockSiteAccess({
         ...siteWithKnowledge,
-        profile: {},
-        industry: null,
-        qas: [],
+        profile: {
+          description: 'AI visibility platform',
+          services: 'GEO audits and content',
+          positioning: 'Helps brands become easier for AI assistants to cite.',
+          targetAudiences: ['B2B marketing teams'],
+        },
       });
       aiService.generateArticle.mockResolvedValue('body');
       prisma.content.create.mockResolvedValue(mockContent);
@@ -208,9 +221,34 @@ describe('ContentService', () => {
 
       expect(prisma.content.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          title: 'Acme Corp - GEO 優化',
+          title: 'Acme Corp - brand',
         }),
       });
+    });
+
+    it('blocks generation before calling AI when brand facts are incomplete', async () => {
+      prisma.site.findUnique
+        .mockResolvedValueOnce(siteAccess)
+        .mockResolvedValueOnce({
+          ...siteWithKnowledge,
+          industry: null,
+          profile: {},
+          qas: [],
+        });
+
+      try {
+        await service.generate({ type: 'ARTICLE', siteId, keywords: [] }, userId, 'USER');
+        throw new Error('Expected generation to be blocked');
+      } catch (error) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect((error as BadRequestException).getResponse()).toMatchObject({
+          message: '品牌資料或知識庫不足，請先補齊後再生成內容；本次不會扣點，也不會呼叫 AI。',
+          missingFields: expect.arrayContaining(['產業分類', '品牌描述', '至少 2 組有效知識庫 Q&A']),
+        });
+      }
+
+      expect(aiService.generateArticle).not.toHaveBeenCalled();
+      expect(prisma.content.create).not.toHaveBeenCalled();
     });
   });
 

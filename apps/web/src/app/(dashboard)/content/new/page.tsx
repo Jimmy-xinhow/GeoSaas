@@ -101,9 +101,16 @@ export default function ContentNewPage() {
           toast.success('內容已產生，並已存成草稿')
         },
         onError: (error: any) => {
+          const response = error?.response?.data
           const message =
-            error?.response?.data?.message || error?.message || '產生失敗，請稍後再試'
+            typeof response?.message === 'string'
+              ? response.message
+              : error?.message || '產生失敗，請稍後再試'
+          const missingFields = Array.isArray(response?.missingFields)
+            ? `缺少：${response.missingFields.join('、')}`
+            : ''
           toast.error(`產生失敗：${message}`)
+          if (missingFields) toast.error(missingFields)
         },
       }
     )
