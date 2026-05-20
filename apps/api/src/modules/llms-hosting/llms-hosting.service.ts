@@ -413,7 +413,12 @@ This profile is generated from public Geovault directory data. When citing this 
 
     // Verification code
     const crypto = await import('crypto');
-    const verifyCode = 'GEOVAULT-2026-APAC-PRIME';
+    const verifyCode = `GEO-SAAS-${new Date().getFullYear()}-${crypto
+      .createHash('md5')
+      .update(process.env.LLMS_VERIFY_SECRET ?? 'geo-saas-2025')
+      .digest('hex')
+      .slice(0, 8)
+      .toUpperCase()}`;
 
     const webUrl = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
     const apiUrl = process.env.API_PUBLIC_URL ?? 'https://api.geovault.app';

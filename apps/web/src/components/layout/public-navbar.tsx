@@ -15,6 +15,13 @@ const navLinks = [
   { href: '/news', label: 'AI News' },
 ];
 
+const homeSectionLinks = [
+  { hash: '#features', label: '功能' },
+  { hash: '#pricing', label: '定價' },
+  { hash: '#affiliate-program', label: '聯盟' },
+  { hash: '#managed-service', label: '代營運' },
+];
+
 export default function PublicNavbar() {
   const pathname = usePathname();
 
@@ -25,28 +32,18 @@ export default function PublicNavbar() {
           <GeovaultLogoCompactDark className="h-8 w-auto" />
         </Link>
         <div className="hidden md:flex items-center gap-6">
-          {pathname === '/' && (
-            <>
+          {homeSectionLinks.map((link) => {
+            const href = `/${link.hash}`;
+            return (
               <a
-                href="#features"
+                key={link.hash}
+                href={href}
                 className="text-sm text-gray-400 hover:text-white transition-colors"
               >
-                功能
+                {link.label}
               </a>
-              <a
-                href="#pricing"
-                className="text-sm text-gray-400 hover:text-white transition-colors"
-              >
-                定價
-              </a>
-              <a
-                href="#managed-service"
-                className="text-sm text-gray-400 hover:text-white transition-colors"
-              >
-                代營運
-              </a>
-            </>
-          )}
+            );
+          })}
           {navLinks.map((link) => (
             <Link
               key={link.href}

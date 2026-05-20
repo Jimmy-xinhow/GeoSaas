@@ -1,4 +1,5 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { canAccessSite } from '../../common/auth/site-access';
 
@@ -33,10 +34,54 @@ const BADGE_DEFINITIONS: BadgeDef[] = [
 ];
 
 @Injectable()
-export class BadgeService {
+export class BadgeService implements OnModuleDestroy {
   private readonly logger = new Logger(BadgeService.name);
+  private readonly redis: Redis | null;
+  private redisAvailable = true;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {
+    try {
+      this.redis = new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        password: process.env.REDIS_PASSWORD || undefined,
+        tls: process.env.REDIS_TLS === 'true' ? {} : undefined,
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false,
+        retryStrategy: () => null,
+      });
+      this.redis.on('error', (err) => {
+        this.logger.warn(`Redis badge cache unavailable: ${err.message}`);
+        this.redisAvailable = false;
+        this.redis?.disconnect();
+      });
+    } catch (err) {
+      this.logger.warn(`Redis badge cache init failed: ${err}`);
+      this.redis = null;
+    }
+  }
+
+  async onModuleDestroy() {
+    try {
+      await this.redis?.quit();
+    } catch {
+      // Process is exiting; ignore Redis shutdown errors.
+    }
+  }
+
+  private badgeCacheKey(siteId: string): string {
+    return `badge:svg:${siteId}`;
+  }
+
+  async invalidateSvgBadge(siteId: string): Promise<void> {
+    if (!this.redis || !this.redisAvailable) return;
+    try {
+      await this.redis.del(this.badgeCacheKey(siteId));
+    } catch (err) {
+      this.logger.warn(`Redis badge delete failed for site ${siteId}: ${err}`);
+    }
+  }
 
   /** Evaluate and award badges for a site after scan completion */
   async evaluateBadges(siteId: string): Promise<string[]> {
@@ -117,6 +162,16 @@ export class BadgeService {
 
   /** Generate an SVG badge image for a site */
   async generateSvgBadge(siteId: string): Promise<string | null> {
+    const cacheKey = this.badgeCacheKey(siteId);
+    if (this.redis && this.redisAvailable) {
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached) return cached;
+      } catch (err) {
+        this.logger.warn(`Redis badge read failed for site ${siteId}: ${err}`);
+      }
+    }
+
     const site = await this.prisma.site.findFirst({
       where: { id: siteId, isPublic: true },
       select: { name: true, bestScore: true, tier: true },
@@ -137,7 +192,7 @@ export class BadgeService {
     };
     const color = colors[level] ?? { bg: '#374151' };
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="148" height="20" role="img" aria-label="GEO Score: ${score}">
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="148" height="20" role="img" aria-label="GEO Score: ${score}">
   <title>GEO Score: ${score}</title>
   <linearGradient id="s" x2="0" y2="100%">
     <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
@@ -156,6 +211,16 @@ export class BadgeService {
     <text x="1175" y="140" transform="scale(.1)" textLength="500" lengthAdjust="spacing">${score}</text>
   </g>
 </svg>`;
+
+    if (this.redis && this.redisAvailable) {
+      try {
+        await this.redis.set(cacheKey, svg, 'EX', 3600);
+      } catch (err) {
+        this.logger.warn(`Redis badge write failed for site ${siteId}: ${err}`);
+      }
+    }
+
+    return svg;
   }
 
   /** Get embed code snippets for a site badge */
@@ -190,8 +255,9 @@ export class BadgeService {
     const score = site.bestScore;
 
     const imgTag = `<a href="${webUrl}/directory/${siteId}" target="_blank" rel="noopener">\n  <img src="${apiUrl}/api/badge/${siteId}.svg" alt="GEO Score: ${score} | Verified by Geovault" width="148" height="20">\n</a>`;
+    const iframeTag = imgTag;
     const markdownBadge = `[![GEO Score: ${score}](${apiUrl}/api/badge/${siteId}.svg)](${webUrl}/directory/${siteId})`;
 
-    return { available: true, imgTag, markdownBadge, svgUrl: `${apiUrl}/api/badge/${siteId}.svg` };
+    return { available: true, imgTag, iframeTag, markdownBadge, svgUrl: `${apiUrl}/api/badge/${siteId}.svg` };
   }
 }

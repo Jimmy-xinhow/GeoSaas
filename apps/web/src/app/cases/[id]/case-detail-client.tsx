@@ -2,18 +2,20 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Award, Clock, Eye, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useSuccessCase, type SuccessCase } from '@/hooks/use-cases';
+import { useSuccessCase, type SuccessCase, type SimilarSuccessCase } from '@/hooks/use-cases';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
-  chatgpt: { label: 'ChatGPT', color: 'bg-green-500/20 text-green-400' },
-  claude: { label: 'Claude', color: 'bg-orange-500/20 text-orange-400' },
-  perplexity: { label: 'Perplexity', color: 'bg-blue-500/20 text-blue-400' },
-  gemini: { label: 'Gemini', color: 'bg-purple-500/20 text-purple-400' },
-  copilot: { label: 'Copilot', color: 'bg-cyan-500/20 text-cyan-400' },
-  other: { label: '其他', color: 'bg-gray-500/20 text-gray-400' },
+  chatgpt: { label: 'ChatGPT', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+  claude: { label: 'Claude', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  Codex: { label: 'Codex', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  codex: { label: 'Codex', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  perplexity: { label: 'Perplexity', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  gemini: { label: 'Gemini', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  copilot: { label: 'Copilot', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+  other: { label: '其他 AI', color: 'bg-gray-500/20 text-gray-300 border-gray-500/30' },
 };
 
 function markdownToHtml(md: string): string {
@@ -31,6 +33,33 @@ function markdownToHtml(md: string): string {
     .replace(/<p><\/p>/g, '');
 }
 
+function getPlatformConfig(platform: string) {
+  return PLATFORM_CONFIG[platform] || PLATFORM_CONFIG.other;
+}
+
+function SimilarCaseCard({ item }: { item: SimilarSuccessCase }) {
+  const platformCfg = getPlatformConfig(item.aiPlatform);
+  const hasScore = item.beforeGeoScore != null && item.afterGeoScore != null;
+
+  return (
+    <Link
+      href={`/cases/${item.id}`}
+      className="block rounded-xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-blue-400/40 hover:bg-white/[0.07]"
+    >
+      <div className="mb-3 flex items-center gap-2">
+        <Badge className={platformCfg.color}>{platformCfg.label}</Badge>
+        {item.industry && <span className="text-xs text-gray-400">{item.industry}</span>}
+      </div>
+      <h3 className="line-clamp-2 text-sm font-semibold text-white">{item.title}</h3>
+      <p className="mt-2 line-clamp-2 text-xs text-gray-400">「{item.queryUsed}」</p>
+      <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
+        <span>{hasScore ? `${item.beforeGeoScore} → ${item.afterGeoScore}` : '案例詳情'}</span>
+        <ArrowRight className="h-3.5 w-3.5" />
+      </div>
+    </Link>
+  );
+}
+
 export default function CaseDetailClient({ initialCase }: { initialCase?: SuccessCase }) {
   const params = useParams();
   const id = params.id as string;
@@ -39,7 +68,7 @@ export default function CaseDetailClient({ initialCase }: { initialCase?: Succes
 
   if (isLoading && !resolvedCase) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-gray-950">
         <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
       </div>
     );
@@ -47,91 +76,86 @@ export default function CaseDetailClient({ initialCase }: { initialCase?: Succes
 
   if (!resolvedCase) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center flex-col gap-4">
-        <h2 className="text-xl font-bold text-white">找不到案例</h2>
-        <Link href="/cases" className="text-blue-400">返回案例列表</Link>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-950 px-6 text-center">
+        <h2 className="text-xl font-bold text-white">找不到這個案例</h2>
+        <Link href="/cases" className="text-blue-400 hover:text-blue-300">
+          回到成功案例列表
+        </Link>
       </div>
     );
   }
 
   const caseView = { ...resolvedCase, tags: resolvedCase.tags || [] };
-  const platformCfg = PLATFORM_CONFIG[caseView.aiPlatform] || PLATFORM_CONFIG.other;
-  const scoreSummary =
-    caseView.beforeGeoScore != null && caseView.afterGeoScore != null
-      ? `GEO 分數從 ${caseView.beforeGeoScore} 提升到 ${caseView.afterGeoScore}，增加 ${caseView.afterGeoScore - caseView.beforeGeoScore} 分`
-      : 'GEO 優化後，品牌在 AI 搜尋中的可讀性與可引用性獲得提升';
-  const daysSummary = caseView.improvementDays
-    ? `，改善週期約 ${caseView.improvementDays} 天`
-    : '';
-  const tagSummary = caseView.tags.length > 0
-    ? caseView.tags.join('、')
-    : '結構化資料、品牌知識庫、AI 可讀內容與引用監控';
-  const industrySummary = caseView.industry ? `${caseView.industry} 行業` : '同類品牌';
+  const similarCases = caseView.similarCases || [];
+  const platformCfg = getPlatformConfig(caseView.aiPlatform);
+  const hasScore = caseView.beforeGeoScore != null && caseView.afterGeoScore != null;
+  const scoreGain = hasScore ? caseView.afterGeoScore! - caseView.beforeGeoScore! : null;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gray-950 text-white">
       <PublicNavbar />
 
-      <article className="max-w-3xl mx-auto px-6 py-12">
-        <Link href="/cases" className="inline-flex items-center gap-1 text-sm text-yellow-200/60 hover:text-gray-300 mb-6">
+      <article className="mx-auto max-w-3xl px-6 py-12">
+        <Link
+          href="/cases"
+          className="mb-6 inline-flex items-center gap-1 text-sm text-gray-400 hover:text-gray-200"
+        >
           <ArrowLeft className="h-3.5 w-3.5" />
-          返回案例列表
+          回到成功案例列表
         </Link>
 
-        <div className="flex items-center gap-3 mb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           <Badge className={platformCfg.color}>{platformCfg.label}</Badge>
-          {caseView.tags.map((t) => (
-            <Badge key={t} variant="outline">{t}</Badge>
+          {caseView.tags.map((tag) => (
+            <Badge key={tag} variant="outline" className="border-white/15 text-gray-300">
+              {tag}
+            </Badge>
           ))}
-          <span className="flex items-center gap-1 text-xs text-gray-400 ml-auto">
+          <span className="ml-auto flex items-center gap-1 text-xs text-gray-500">
             <Eye className="h-3 w-3" />
             {caseView.viewCount}
           </span>
         </div>
 
-        <h1 className="text-3xl font-bold text-white mb-4">{caseView.title}</h1>
+        <h1 className="mb-5 text-3xl font-bold leading-tight text-white md:text-4xl">{caseView.title}</h1>
 
-        {/* Score change */}
-        {caseView.beforeGeoScore != null && caseView.afterGeoScore != null && (
-          <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-red-500/10 to-green-500/10 rounded-xl mb-6">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-red-400">{caseView.beforeGeoScore}</p>
-              <p className="text-xs text-yellow-200/60">優化前</p>
+        {hasScore && (
+          <div className="mb-6 grid grid-cols-3 gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <div>
+              <p className="text-xs text-gray-500">優化前</p>
+              <p className="mt-1 text-2xl font-bold text-red-300">{caseView.beforeGeoScore}</p>
             </div>
-            <span className="text-gray-400 text-xl">→</span>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-green-400">{caseView.afterGeoScore}</p>
-              <p className="text-xs text-yellow-200/60">優化後</p>
+            <div>
+              <p className="text-xs text-gray-500">優化後</p>
+              <p className="mt-1 text-2xl font-bold text-green-300">{caseView.afterGeoScore}</p>
             </div>
-            <div className="text-center ml-auto">
-              <p className="text-xl font-bold text-green-400">+{caseView.afterGeoScore - caseView.beforeGeoScore}</p>
+            <div>
+              <p className="text-xs text-gray-500">提升幅度</p>
+              <p className="mt-1 text-2xl font-bold text-blue-300">+{scoreGain}</p>
               {caseView.improvementDays && (
-                <p className="text-xs text-yellow-200/60">{caseView.improvementDays} 天達成</p>
+                <p className="mt-1 text-xs text-gray-500">{caseView.improvementDays} 天達成</p>
               )}
             </div>
           </div>
         )}
 
-        {/* Query */}
-        <div className="bg-white/5 rounded-xl p-4 mb-6">
-          <p className="text-xs text-yellow-200/60 mb-1">AI 搜尋問題</p>
-          <p className="text-white font-medium">「{caseView.queryUsed}」</p>
+        <div className="mb-6 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="mb-1 text-xs text-gray-500">AI 查詢問題</p>
+          <p className="font-medium text-white">「{caseView.queryUsed}」</p>
         </div>
 
-        {/* AI Response */}
         {caseView.aiResponse && (
-          <div className="bg-blue-500/10 rounded-xl p-4 mb-8">
-            <p className="text-xs text-blue-400 mb-1">{platformCfg.label} 回應</p>
-            <p className="text-gray-300 text-sm whitespace-pre-wrap">{caseView.aiResponse}</p>
+          <div className="mb-8 rounded-xl border border-blue-400/20 bg-blue-500/10 p-4">
+            <p className="mb-2 text-xs font-medium text-blue-300">{platformCfg.label} 回應摘要</p>
+            <p className="whitespace-pre-wrap text-sm leading-6 text-gray-300">{caseView.aiResponse}</p>
           </div>
         )}
 
-        {/* Generated article */}
         {caseView.generatedArticle?.content && (
           <>
             <hr className="mb-8 border-white/10" />
             <div
-              className="prose prose-invert prose-lg max-w-none prose-headings:text-white prose-p:text-gray-300"
+              className="prose prose-invert prose-lg max-w-none prose-headings:text-white prose-p:text-gray-300 prose-li:text-gray-300"
               dangerouslySetInnerHTML={{ __html: markdownToHtml(caseView.generatedArticle.content) }}
             />
           </>
@@ -139,52 +163,52 @@ export default function CaseDetailClient({ initialCase }: { initialCase?: Succes
 
         <section className="mt-10 space-y-6 text-gray-300">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-3">案例重點拆解</h2>
-            <p>
-              這個案例記錄了品牌如何讓 {platformCfg.label} 在回答「{caseView.queryUsed}」時具備可引用的內容線索。
-              {scoreSummary}{daysSummary}。對 {industrySummary} 來說，這代表網站內容不只是被搜尋引擎收錄，
-              還需要能被 AI 模型快速理解品牌定位、服務範圍、專業證據與使用者常問問題。
+            <h2 className="mb-3 text-2xl font-bold text-white">案例重點</h2>
+            <p className="leading-7">
+              這個案例記錄品牌如何讓 {platformCfg.label} 在回答「{caseView.queryUsed}」時具備可引用的內容線索。
+              {hasScore
+                ? ` GEO 分數從 ${caseView.beforeGeoScore} 提升到 ${caseView.afterGeoScore}，增加 ${scoreGain} 分。`
+                : ' 即使沒有完整分數紀錄，仍可從查詢語句、AI 回應與技術標籤看出可複製的優化路徑。'}
             </p>
           </div>
 
           <div>
-            <h3 className="text-lg font-semibold text-white mb-2">AI 真的引用了什麼</h3>
-            <p>
-              本案例的關鍵不是單純追求排名，而是讓 AI 回答中出現可驗證的品牌資訊。使用者提出具體問題後，
-              AI 需要找到品牌名稱、服務情境、改善依據與可比對的內容來源。當網站具備清楚的知識庫、
-              FAQ、結構化資料與機器可讀說明時，AI 較容易把品牌放進回答脈絡，而不是只引用大型平台或通用百科資料。
-            </p>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-2">GEO 改善重點</h3>
-            <p>
-              這次案例涉及的核心做法包含：{tagSummary}。這些內容會共同補足 AI 判斷品牌可信度時需要的訊號：
-              第一，讓頁面主題與服務項目更明確；第二，讓 FAQ 與專業說明可以直接被摘要；第三，讓 llms.txt、
-              JSON-LD 與公開目錄頁提供一致的機器可讀資料；第四，透過後續引用監測確認 AI 回答是否真的開始採用品牌內容。
-            </p>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-2">可複製的行動建議</h3>
-            <ul className="list-disc space-y-2 pl-5">
-              <li>先整理品牌最常被詢問的搜尋問題，並把答案寫成可直接引用的段落。</li>
-              <li>補齊品牌介紹、服務範圍、聯絡方式、FAQ、案例證據與結構化資料。</li>
-              <li>定期用 ChatGPT、Claude、Perplexity、Gemini 與 Copilot 測試實際提問，追蹤品牌是否被引用。</li>
+            <h3 className="mb-2 text-lg font-semibold text-white">可複製的做法</h3>
+            <ul className="list-disc space-y-2 pl-5 leading-7">
+              <li>把品牌事實、服務範圍與常見問題整理成 AI 容易引用的內容。</li>
+              <li>補齊 llms.txt、JSON-LD、FAQ Schema、OG Tags 等機器可讀訊號。</li>
+              <li>用真實查詢題目反覆驗證 AI 是否能穩定理解品牌定位。</li>
             </ul>
           </div>
         </section>
 
-        {/* CTA */}
-        <div className="mt-12 p-8 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl text-center">
-          <h3 className="text-xl font-bold text-white">你的品牌也被 AI 引用了嗎？</h3>
-          <p className="mt-2 text-gray-400">分享你的成功故事，獲得更多曝光</p>
-          <Link href="/register" className="inline-block mt-4 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700">
-            提交我的案例
+        {similarCases.length > 0 && (
+          <section className="mt-12">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">相似案例</h2>
+              <Link href="/cases" className="text-sm text-blue-300 hover:text-blue-200">
+                查看全部
+              </Link>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {similarCases.slice(0, 3).map((item) => (
+                <SimilarCaseCard key={item.id} item={item} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        <div className="mt-12 rounded-2xl border border-white/10 bg-white/[0.04] p-8 text-center">
+          <h3 className="text-xl font-bold text-white">也想讓品牌被 AI 引用？</h3>
+          <p className="mt-2 text-gray-400">提交你的案例或先建立網站掃描，讓平台整理可被 AI 理解的品牌資料。</p>
+          <Link
+            href="/dashboard/submit-case"
+            className="mt-4 inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+          >
+            提交成功案例
           </Link>
         </div>
       </article>
     </div>
   );
 }
-

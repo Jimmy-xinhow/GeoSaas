@@ -12,6 +12,7 @@ import {
   NewebPayTradeInfo,
 } from './newebpay.util';
 import { PlanUsageService } from '../../common/guards/plan.guard';
+import { AffiliateService } from '../affiliate/affiliate.service';
 import {
   CreateManagedCheckoutDto,
   ManagedRefundRequestDto,
@@ -136,6 +137,7 @@ export class BillingService {
     private config: ConfigService,
     private planUsage: PlanUsageService,
     private creditService: CreditService,
+    private affiliateService: AffiliateService,
   ) {
     const gatewayMode = (this.config.get('NEWEBPAY_MODE') || '').toLowerCase();
     const useProductionGateway = gatewayMode === 'production' || this.config.get('NODE_ENV') === 'production';
@@ -414,6 +416,11 @@ export class BillingService {
             title: '訂閱方案付款成功',
             message: `${PLAN_DESC[order.plan]} 已建立定期定額付款。訂單編號：${merchantOrderNo}`,
           },
+        });
+      }
+      if (!order.plan.startsWith('CREDITS_')) {
+        await this.affiliateService.calculateCommission(order.id).catch((error) => {
+          this.logger.warn(`Affiliate commission skipped for ${merchantOrderNo}: ${error?.message ?? error}`);
         });
       }
     } else {
@@ -758,6 +765,11 @@ export class BillingService {
           data: { plan: order.plan as any },
         });
         this.logger.log(`用戶 ${order.userId} 升級為 ${order.plan}`);
+      }
+      if (!order.plan.startsWith('CREDITS_')) {
+        await this.affiliateService.calculateCommission(order.id).catch((error) => {
+          this.logger.warn(`Affiliate commission skipped for ${merchantOrderNo}: ${error?.message ?? error}`);
+        });
       }
     } else {
       await this.prisma.order.update({

@@ -31,7 +31,7 @@ export class AuthController {
   @Public()
   @Post('google')
   loginWithGoogle(@Body() dto: GoogleLoginDto) {
-    return this.authService.loginWithGoogle(dto.idToken);
+    return this.authService.loginWithGoogle(dto.idToken, dto.affiliateCode, dto.affiliateVisitorId);
   }
 
   @Public()

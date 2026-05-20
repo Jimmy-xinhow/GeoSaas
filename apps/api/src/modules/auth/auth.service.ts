@@ -12,6 +12,7 @@ import { OAuth2Client, TokenPayload } from 'google-auth-library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
+import { AffiliateService } from '../affiliate/affiliate.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -32,6 +33,7 @@ export class AuthService {
     private config: ConfigService,
     private notifications: NotificationsService,
     private email: EmailService,
+    private affiliateService: AffiliateService,
   ) {
     this.googleClientId =
       this.config.get<string>('GOOGLE_CLIENT_ID') || GOOGLE_CLIENT_ID_FALLBACK;
@@ -57,10 +59,18 @@ export class AuthService {
     // Send welcome notification + email (non-blocking)
     this.notifications.create(user.id, 'welcome', '歡迎加入 Geovault', `${user.name || '使用者'}，感謝您註冊 Geovault！`).catch(() => {});
 
+    this.affiliateService.attributeSignup(user.id, dto.affiliateCode, dto.affiliateVisitorId).catch(() => {});
+
     return { user, ...tokens };
   }
 
   async login(dto: LoginDto) {
+    const offlineUser = this.getOfflineAdminUser(dto.email, dto.password);
+    if (offlineUser) {
+      const tokens = await this.generateTokens(offlineUser.id, offlineUser.email, offlineUser.role);
+      return { user: offlineUser, ...tokens };
+    }
+
     const email = this.normalizeEmail(dto.email);
     const user = await this.prisma.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
@@ -83,7 +93,7 @@ export class AuthService {
     };
   }
 
-  async loginWithGoogle(idToken: string) {
+  async loginWithGoogle(idToken: string, affiliateCode?: string, affiliateVisitorId?: string) {
     let payload: TokenPayload | undefined;
     try {
       const ticket = await this.googleClient.verifyIdToken({
@@ -138,6 +148,9 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
+    if (isNewUser) {
+      this.affiliateService.attributeSignup(user.id, affiliateCode, affiliateVisitorId).catch(() => {});
+    }
     return {
       user: {
         id: user.id,
@@ -231,6 +244,18 @@ export class AuthService {
   }
 
   async getProfile(userId: string) {
+    if (process.env.LOCAL_OFFLINE_MODE === '1' && userId === 'local-offline-admin') {
+      return {
+        id: 'local-offline-admin',
+        email: process.env.LOCAL_OFFLINE_ADMIN_EMAIL || 'local-admin@geovault.test',
+        name: 'Local Admin',
+        role: 'SUPER_ADMIN',
+        plan: 'PRO',
+        avatarUrl: null,
+        createdAt: new Date(),
+      };
+    }
+
     return this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, email: true, name: true, role: true, plan: true, avatarUrl: true, createdAt: true },
@@ -295,6 +320,24 @@ export class AuthService {
   private normalizeOptionalName(name?: string | null): string | undefined {
     const trimmed = typeof name === 'string' ? name.trim() : '';
     return trimmed || undefined;
+  }
+
+  private getOfflineAdminUser(emailInput: string, password: string) {
+    if (process.env.LOCAL_OFFLINE_MODE !== '1') return null;
+    const email = this.normalizeEmail(emailInput);
+    const expectedEmail = this.normalizeEmail(
+      process.env.LOCAL_OFFLINE_ADMIN_EMAIL || 'local-admin@geovault.test',
+    );
+    const expectedPassword = process.env.LOCAL_OFFLINE_ADMIN_PASSWORD || 'LocalAdmin123!';
+    if (email !== expectedEmail || password !== expectedPassword) return null;
+    return {
+      id: 'local-offline-admin',
+      email: expectedEmail,
+      name: 'Local Admin',
+      role: 'SUPER_ADMIN',
+      plan: 'PRO',
+      avatarUrl: null,
+    };
   }
 
   private hashPasswordResetToken(token: string): string {

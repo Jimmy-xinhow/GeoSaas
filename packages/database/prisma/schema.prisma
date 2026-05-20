@@ -71,6 +71,7 @@ model User {
   role             UserRole  @default(USER)
   plan             Plan      @default(FREE)
   managedBy        String?   // SUPER_ADMIN userId who manages this client
+  affiliateReferrerId String? @map("affiliate_referrer_id")
   credits          Int       @default(0)
   freeGenUsed      Int       @default(0)    // monthly free generation counter
   freeGenResetAt   DateTime? // when to reset freeGenUsed (start of next month)
@@ -80,12 +81,23 @@ model User {
   sites              Site[]
   contents           Content[]
   notifications      Notification[]
+  supportConversations SupportConversation[] @relation("SupportConversationUser")
+  assignedSupportConversations SupportConversation[] @relation("SupportConversationAssignee")
+  supportMessages    SupportMessage[] @relation("SupportMessageSender")
+  supportKnowledgeItems SupportKnowledgeItem[] @relation("SupportKnowledgeAuthor")
+  supportConversationSummaries SupportConversationSummary[] @relation("SupportConversationSummaryUser")
   orders             Order[]
   successCases       GeoSuccessCase[]
   creditTransactions CreditTransaction[]
   passwordResetTokens PasswordResetToken[]
+  affiliateProfile   Affiliate? @relation("AffiliateOwner")
+  affiliateReferrer  Affiliate? @relation("AffiliateAttributedUsers", fields: [affiliateReferrerId], references: [id], onDelete: SetNull)
+  affiliateCommissions AffiliateCommission[] @relation("AffiliateCommissionAffiliateUser")
+  referredAffiliateCommissions AffiliateCommission[] @relation("AffiliateCommissionReferredUser")
+  affiliateWithdrawals AffiliateWithdrawal[] @relation("AffiliateWithdrawalUser")
 
   @@index([managedBy])
+  @@index([affiliateReferrerId])
   @@map("users")
 }
 
@@ -161,6 +173,8 @@ model Site {
   blogArticles        BlogArticle[]
   badges              SiteBadge[]
   successCases        GeoSuccessCase[]
+  supportConversations SupportConversation[]
+  supportConversationSummaries SupportConversationSummary[]
   seedSource          SeedSource?
   clientQuerySets     ClientQuerySet[]
   monitorReports      MonitorReport[]
@@ -274,8 +288,123 @@ model Order {
   rawResponse     Json?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+  affiliateCommissions AffiliateCommission[]
 
   @@map("orders")
+}
+
+model Affiliate {
+  id                  String   @id @default(cuid())
+  userId              String   @unique @map("user_id")
+  user                User     @relation("AffiliateOwner", fields: [userId], references: [id], onDelete: Cascade)
+  status              String   @default("pending") // pending | approved | rejected | suspended
+  realName            String   @map("real_name")
+  contactEmail        String?  @map("contact_email")
+  websiteUrl          String?  @map("website_url")
+  promotionChannel    String?  @map("promotion_channel")
+  audienceDescription String?  @db.Text @map("audience_description")
+  payoutMethod        String   @default("bank_transfer") @map("payout_method")
+  bankName            String?  @map("bank_name")
+  bankBranch          String?  @map("bank_branch")
+  bankAccountNumber   String?  @map("bank_account_number")
+  bankAccountName     String?  @map("bank_account_name")
+  affiliateCode       String   @unique @map("affiliate_code")
+  tier                String   @default("standard")
+  commissionRate      Int      @default(20) @map("commission_rate")
+  reviewedById        String?  @map("reviewed_by_id")
+  reviewedAt          DateTime? @map("reviewed_at")
+  reviewNote          String?  @db.Text @map("review_note")
+  rejectionReason     String?  @db.Text @map("rejection_reason")
+  totalClicks         Int      @default(0) @map("total_clicks")
+  totalSignups        Int      @default(0) @map("total_signups")
+  totalConversions    Int      @default(0) @map("total_conversions")
+  totalCommissionEarned Int    @default(0) @map("total_commission_earned")
+  totalCommissionPaid Int      @default(0) @map("total_commission_paid")
+  pendingCommission   Int      @default(0) @map("pending_commission")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  attributedUsers User[] @relation("AffiliateAttributedUsers")
+  clicks          AffiliateClick[]
+  commissions     AffiliateCommission[]
+  withdrawals     AffiliateWithdrawal[]
+
+  @@index([status])
+  @@map("affiliates")
+}
+
+model AffiliateClick {
+  id              String   @id @default(cuid())
+  affiliateId     String   @map("affiliate_id")
+  affiliate       Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  affiliateCode   String   @map("affiliate_code")
+  visitorId       String   @map("visitor_id")
+  ipHash          String?  @map("ip_hash")
+  userAgent       String?  @db.Text @map("user_agent")
+  landingPage     String?  @db.Text @map("landing_page")
+  convertedUserId String?  @map("converted_user_id")
+  convertedAt     DateTime? @map("converted_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([affiliateId, createdAt])
+  @@index([affiliateCode, visitorId, createdAt])
+  @@index([convertedUserId])
+  @@map("affiliate_clicks")
+}
+
+model AffiliateCommission {
+  id               String   @id @default(cuid())
+  affiliateId      String   @map("affiliate_id")
+  affiliate        Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  affiliateUserId  String   @map("affiliate_user_id")
+  affiliateUser    User     @relation("AffiliateCommissionAffiliateUser", fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  referredUserId   String   @map("referred_user_id")
+  referredUser     User     @relation("AffiliateCommissionReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  orderId          String   @unique @map("order_id")
+  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  paymentAmount    Int      @map("payment_amount")
+  commissionRate   Int      @map("commission_rate")
+  commissionAmount Int      @map("commission_amount")
+  status           String   @default("pending") // pending | approved | paid | clawed_back
+  lockedUntil      DateTime @map("locked_until")
+  withdrawalId     String?  @map("withdrawal_id")
+  withdrawal       AffiliateWithdrawal? @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
+  clawbackReason   String?  @db.Text @map("clawback_reason")
+  clawbackAt       DateTime? @map("clawback_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([affiliateId, createdAt])
+  @@index([affiliateUserId, status])
+  @@index([referredUserId])
+  @@index([status, affiliateId])
+  @@map("affiliate_commissions")
+}
+
+model AffiliateWithdrawal {
+  id             String   @id @default(cuid())
+  affiliateId    String   @map("affiliate_id")
+  affiliate      Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  affiliateUserId String  @map("affiliate_user_id")
+  affiliateUser  User     @relation("AffiliateWithdrawalUser", fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  amount         Int
+  type           String   @default("bank_transfer") // bank_transfer | platform_credits
+  status         String   @default("pending") // pending | processing | completed | rejected
+  bankSnapshot   Json?    @map("bank_snapshot")
+  processedById  String?  @map("processed_by_id")
+  processedAt    DateTime? @map("processed_at")
+  processNote    String?  @db.Text @map("process_note")
+  rejectionReason String? @db.Text @map("rejection_reason")
+  taxYear        Int      @map("tax_year")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  commissions AffiliateCommission[]
+
+  @@index([affiliateId, createdAt])
+  @@index([status])
+  @@index([taxYear, affiliateUserId])
+  @@map("affiliate_withdrawals")
 }
 
 model SiteQa {
@@ -333,6 +462,94 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@map("notifications")
+}
+
+model SupportConversation {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  user            User      @relation("SupportConversationUser", fields: [userId], references: [id], onDelete: Cascade)
+  siteId          String?   @map("site_id")
+  site            Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  assignedAdminId String?   @map("assigned_admin_id")
+  assignedAdmin   User?     @relation("SupportConversationAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+
+  subject         String
+  category        String    @default("general")
+  status          String    @default("open") // open | waiting_admin | waiting_user | closed
+  priority        String    @default("normal") // low | normal | high | urgent
+  channel         String    @default("ticket") // ticket | message | realtime
+  planSnapshot    String    @default("FREE") @map("plan_snapshot")
+
+  lastMessageAt   DateTime  @default(now()) @map("last_message_at")
+  closedAt        DateTime? @map("closed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  messages        SupportMessage[]
+  summary         SupportConversationSummary?
+
+  @@index([userId, status, lastMessageAt])
+  @@index([status, priority, lastMessageAt])
+  @@index([assignedAdminId, status])
+  @@index([siteId])
+  @@map("support_conversations")
+}
+
+model SupportKnowledgeItem {
+  id          String   @id @default(cuid())
+  title       String
+  category    String   @default("general")
+  question    String?
+  answer      String   @db.Text
+  tags        String[] @default([])
+  enabled     Boolean  @default(true)
+  priority    Int      @default(0)
+  createdById String?  @map("created_by_id")
+  createdBy   User?    @relation("SupportKnowledgeAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled, category, priority])
+  @@index([tags])
+  @@map("support_knowledge_items")
+}
+
+model SupportConversationSummary {
+  id             String              @id @default(cuid())
+  conversationId String              @unique @map("conversation_id")
+  conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String              @map("user_id")
+  user           User                @relation("SupportConversationSummaryUser", fields: [userId], references: [id], onDelete: Cascade)
+  siteId         String?             @map("site_id")
+  site           Site?               @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  category       String              @default("general")
+  summary        String              @db.Text
+  resolution     String?             @db.Text
+  tags           String[]            @default([])
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt])
+  @@index([siteId, createdAt])
+  @@index([category, createdAt])
+  @@map("support_conversation_summaries")
+}
+
+model SupportMessage {
+  id             String              @id @default(cuid())
+  conversationId String              @map("conversation_id")
+  conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String?             @map("sender_id")
+  sender         User?               @relation("SupportMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  senderRole     String              @default("user") @map("sender_role") // user | admin | ai | system
+  body           String              @db.Text
+  isAi           Boolean             @default(false) @map("is_ai")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+  @@map("support_messages")
 }
 
 model BlogArticle {

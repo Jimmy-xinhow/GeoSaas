@@ -1,7 +1,8 @@
-import { BadRequestException, Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
+import { LongTailArticleQaService } from './long-tail-article-qa.service';
 
 interface TemplateAggregate {
   templateType: string;
@@ -36,7 +37,10 @@ interface PromptVersionRow {
 @Roles('ADMIN', 'SUPER_ADMIN')
 @Controller('admin/content-quality')
 export class ContentQualityController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly longTailQa: LongTailArticleQaService,
+  ) {}
 
   private parsePositiveInt(
     value: string | undefined,
@@ -245,5 +249,15 @@ export class ContentQualityController {
       },
     });
     return { count: rows.length, rows };
+  }
+
+  @Post('long-tail-qa/run')
+  @ApiOperation({
+    summary:
+      'Run queued long-tail BlogArticle QA. Processes unchecked articles, repairs safe issues, and performs second-pass review.',
+  })
+  async runLongTailQa(@Query('limit') limit?: string) {
+    const take = this.parsePositiveInt(limit, 'limit', 25, 100);
+    return this.longTailQa.runQueuedQa({ limit: take });
   }
 }

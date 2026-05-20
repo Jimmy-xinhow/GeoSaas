@@ -1669,6 +1669,84 @@ export default function HomeClient() {
       </section>
 
       {/* ════════════════════════════════════════════════════════
+          SECTION 8C — AFFILIATE PROGRAM
+         ════════════════════════════════════════════════════════ */}
+      <section id="affiliate-program" className="py-20 lg:py-28 bg-slate-950 text-white">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-4 py-1.5 text-sm font-semibold text-emerald-300">
+                <Share2 className="h-4 w-4" />
+                聯盟行銷計畫
+              </span>
+              <h2 className="mt-6 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+                把你信任的 GEO 工具推薦出去，
+                <span className="block text-emerald-300">最高取得 20% 佣金</span>
+              </h2>
+              <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-300 sm:text-lg">
+                如果你是顧問、網站製作公司、SEO 服務商或經營 AI / 行銷社群，可以把 Geovault 推薦給需要 AI 搜尋能見度的品牌。客戶完成付費後，你依聯盟級距取得分潤。
+              </p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Link href="/affiliate" prefetch={false}>
+                  <Button size="lg" className="h-12 rounded-xl bg-emerald-400 px-7 font-semibold text-slate-950 hover:bg-emerald-300">
+                    申請成為聯盟夥伴
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+                <Link href="/register" prefetch={false}>
+                  <Button size="lg" variant="outline" className="h-12 rounded-xl border-white/15 bg-white/5 px-7 text-white hover:bg-white/10">
+                    先建立帳號
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-emerald-950/30 sm:p-6">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  ['標準', '10%', '通過審核後啟用', '適合新聯盟夥伴。完成申請審核、推廣管道合法透明，即可使用標準級距。'],
+                  ['金牌', '15%', '穩定帶來付費客戶', '近 30 天達 3 筆有效付費訂單，或累積有效佣金達 NT$ 3,000，且無退款或違規紀錄。'],
+                  ['白金', '20%', '高品質長期合作夥伴', '近 60 天達 10 筆有效付費訂單，或累積有效佣金達 NT$ 15,000，適合代理商與長期合作夥伴。'],
+                ].map(([name, rate, desc, condition]) => (
+                  <div key={name} className="rounded-xl border border-white/10 bg-slate-950/70 p-4">
+                    <p className="text-sm font-semibold text-slate-300">{name}</p>
+                    <p className="mt-3 text-4xl font-bold text-emerald-300">{rate}</p>
+                    <p className="mt-3 text-xs leading-relaxed text-slate-500">{desc}</p>
+                    <p className="mt-3 border-t border-white/10 pt-3 text-xs leading-relaxed text-slate-300">
+                      {condition}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {[
+                  '30 天 Cookie 歸因期，推薦來源可被追蹤',
+                  '後台可查看點擊、註冊、成交與佣金',
+                  '銀行轉帳或平台點數提領可由後台管理',
+                  '適合顧問、代理商、內容創作者與社群主',
+                ].map((item) => (
+                  <div key={item} className="flex gap-3 rounded-xl bg-white/[0.03] p-3 text-sm text-slate-300">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+                <div className="flex items-start gap-3">
+                  <TrendingUp className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+                  <p className="text-sm leading-relaxed text-emerald-50">
+                    目前佣金規劃為標準 10%、金牌 15%、白金 20%。金牌與白金採每月人工審核升級，會以有效付費訂單、有效佣金、退款率與推廣品質作為判斷。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════════
           SECTION 9 — FAQ
          ════════════════════════════════════════════════════════ */}
       <section className="py-20 lg:py-28 bg-gray-900 text-white">

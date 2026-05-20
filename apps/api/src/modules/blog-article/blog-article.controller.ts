@@ -89,13 +89,34 @@ export class BlogArticleController {
     @Query('limit') limit?: string,
     @Query('category') category?: string,
     @Query('locale') locale?: string,
+    @Query('industry') industry?: string,
+    @Query('type') type?: string,
   ) {
     return this.service.listArticles({
       page: parsePositiveInt(page, 'page', 1, 10000),
       limit: parsePositiveInt(limit, 'limit', 12, 50),
       category: normalizeOptionalText(category, 'category', 80),
       locale: normalizeLocale(locale),
+      industry: normalizeOptionalText(industry, 'industry', 80),
+      type: normalizeOptionalText(type, 'type', 80),
     });
+  }
+
+  @Public()
+  @Get('articles/site/:siteSlug')
+  @ApiOperation({ summary: 'List published blog articles for one site' })
+  listBySite(
+    @Param('siteSlug') siteSlug: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.listArticlesForSite(
+      normalizeRequiredText(siteSlug, 'siteSlug', 220),
+      {
+        page: parsePositiveInt(page, 'page', 1, 10000),
+        limit: parsePositiveInt(limit, 'limit', 12, 50),
+      },
+    );
   }
 
   @Public()
@@ -456,5 +477,29 @@ export class BlogArticleController {
       console.error('Insight generation failed:', err);
     });
     return { message: 'Insight generation started' };
+  }
+}
+
+@ApiTags('Admin Blog')
+@ApiBearerAuth()
+@Controller('admin/blog')
+@UseGuards(RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN')
+export class AdminBlogController {
+  constructor(private readonly service: BlogArticleService) {}
+
+  @Post('generate-bulk')
+  @ApiOperation({ summary: 'Trigger bulk template article generation' })
+  async generateBulk() {
+    this.service.scheduledBulkGeneration().catch((err) => {
+      console.error('Admin bulk blog generation failed:', err);
+    });
+    return { message: 'Bulk generation started' };
+  }
+
+  @Post('generate-site/:siteId')
+  @ApiOperation({ summary: 'Generate missing template articles for one site' })
+  generateSite(@Param('siteId') siteId: string) {
+    return this.service.generateArticlesForSite(normalizeRequiredText(siteId, 'siteId', 220));
   }
 }

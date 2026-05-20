@@ -18,6 +18,8 @@ import {
   BookOpen,
   BarChart3,
   Zap,
+  MessageSquare,
+  HandCoins,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -37,6 +39,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/dashboard', icon: LayoutDashboard, label: '總覽' },
       { href: '/sites', icon: Globe, label: '我的網站' },
+      { href: '/support', icon: MessageSquare, label: '客服中心' },
     ],
   },
   {
@@ -54,6 +57,7 @@ const navGroups: NavGroup[] = [
     defaultOpen: false,
     items: [
       { href: '/brand-spread', icon: Zap, label: '品牌擴散' },
+      { href: '/affiliate', icon: HandCoins, label: '聯盟行銷' },
       { href: '/publish', icon: Share2, label: '多平台發佈' },
       { href: '/directory', icon: Trophy, label: '公開目錄' },
       { href: '/dashboard/submit-case', icon: Trophy, label: '提交成功案例' },
@@ -115,7 +119,7 @@ export default function Sidebar() {
   const user = useAuthStore((s) => s.user)
 
   return (
-    <aside className="hidden w-60 shrink-0 h-screen bg-gray-900 text-white md:flex flex-col sticky top-0 border-r border-white/5">
+    <aside className="hidden w-60 shrink-0 self-stretch h-dvh min-h-screen overflow-hidden bg-gray-900 text-white md:flex flex-col sticky top-0 border-r border-white/5">
       {/* Logo */}
       <div className="p-4 pb-2">
         <Link href="/dashboard" prefetch={false}>
@@ -124,7 +128,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
+      <nav className="min-h-0 flex-1 px-3 py-2 space-y-1 overflow-y-auto bg-gray-900">
         {navGroups.map((group) => (
           <NavSection key={group.label} group={group} />
         ))}
@@ -165,6 +169,24 @@ export default function Sidebar() {
           </div>
         )}
 
+        {user?.role === 'STAFF' && (
+          <div className="pt-2">
+            <Link
+              href="/admin/support"
+              prefetch={false}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors border border-red-800/30',
+                pathname?.startsWith('/admin/support')
+                  ? 'bg-red-900/30 text-red-400'
+                  : 'text-red-400/70 hover:text-red-400 hover:bg-red-900/20',
+              )}
+            >
+              <Shield className="h-4.5 w-4.5 shrink-0" />
+              客服處理台
+            </Link>
+          </div>
+        )}
+
         {/* Admin */}
         {(user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
           <div className="pt-2">
@@ -186,17 +208,19 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom — Plan info */}
-      <div className="p-3 mx-3 mb-3 bg-gray-800 rounded-lg">
-        <p className="text-xs text-gray-400 mb-1.5">
-          {user?.plan === 'PRO' ? 'Pro 方案' : user?.plan === 'STARTER' ? 'Starter 方案' : 'Free 方案'}
-        </p>
-        {user?.plan === 'FREE' && (
-          <Link href="/settings" prefetch={false}>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs h-8">
-              升級方案
-            </Button>
-          </Link>
-        )}
+      <div className="mt-auto bg-gray-900 px-3 pb-3 pt-2">
+        <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+          <p className="text-xs text-gray-400 mb-1.5">
+            {user?.plan === 'PRO' ? 'Pro 方案' : user?.plan === 'STARTER' ? 'Starter 方案' : 'Free 方案'}
+          </p>
+          {user?.plan === 'FREE' && (
+            <Link href="/settings" prefetch={false}>
+              <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs h-8">
+                升級方案
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
     </aside>
   )

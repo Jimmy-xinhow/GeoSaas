@@ -18,4 +18,9 @@ export class PublishController {
   findAll(@CurrentUser('userId') userId: string) {
     return this.publishService.findAll(userId);
   }
+
+  @Get('publications/platforms')
+  platformStatuses() {
+    return this.publishService.getPlatformStatuses();
+  }
 }

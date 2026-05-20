@@ -6,6 +6,7 @@ import { getLocale, getMessages } from 'next-intl/server';
 import './globals.css';
 import QueryProvider from '@/providers/query-provider';
 import GoogleAuthProvider from '@/providers/google-oauth-provider';
+import AffiliateTracker from '@/components/affiliate/affiliate-tracker';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -67,7 +68,10 @@ export default async function RootLayout({
       <body className={inter.className}>
         <NextIntlClientProvider messages={messages}>
           <QueryProvider>
-            <GoogleAuthProvider>{children}</GoogleAuthProvider>
+            <GoogleAuthProvider>
+              <AffiliateTracker />
+              {children}
+            </GoogleAuthProvider>
           </QueryProvider>
         </NextIntlClientProvider>
         <Toaster richColors position="top-right" />

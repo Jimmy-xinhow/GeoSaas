@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useGoogleLogin } from '@/hooks/use-auth';
+import { clearStoredAffiliateRef, getStoredAffiliateRef } from '@/components/affiliate/affiliate-tracker';
 
 interface GoogleCredentialResponse {
   credential?: string;
@@ -92,9 +93,15 @@ export default function GoogleSignInButton({ text = 'continue_with', redirectTo 
               toast.error('Google 登入失敗：未取得憑證');
               return;
             }
-            googleLogin.mutate(resp.credential, {
+            const affiliateRef = getStoredAffiliateRef();
+            googleLogin.mutate(affiliateRef ? {
+              idToken: resp.credential,
+              affiliateCode: affiliateRef.code,
+              affiliateVisitorId: affiliateRef.visitorId,
+            } : resp.credential, {
               onSuccess: () => {
                 toast.success('登入成功');
+                clearStoredAffiliateRef();
                 router.push(redirectTo);
               },
               onError: (err: unknown) => {

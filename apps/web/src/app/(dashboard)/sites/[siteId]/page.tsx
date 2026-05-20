@@ -327,6 +327,7 @@ interface BadgeEmbedCode {
   available: boolean
   message?: string
   imgTag?: string
+  iframeTag?: string
   markdownBadge?: string
   svgUrl?: string
 }

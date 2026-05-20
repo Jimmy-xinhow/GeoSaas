@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { GeovaultLogoCompact } from '@/components/logo'
 import { useRegister } from '@/hooks/use-auth'
+import { clearStoredAffiliateRef, getStoredAffiliateRef } from '@/components/affiliate/affiliate-tracker'
 import GoogleSignInButton from '@/components/auth/google-sign-in-button'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,9 +50,14 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterForm) => {
     const { confirmPassword, ...payload } = data
-    registerMutation.mutate(payload, {
+    const affiliateRef = getStoredAffiliateRef()
+    const registerPayload = affiliateRef
+      ? { ...payload, affiliateCode: affiliateRef.code, affiliateVisitorId: affiliateRef.visitorId }
+      : payload
+    registerMutation.mutate(registerPayload, {
       onSuccess: () => {
         toast.success('註冊成功，歡迎加入！')
+        clearStoredAffiliateRef()
         router.push('/dashboard')
       },
       onError: (error: any) => {

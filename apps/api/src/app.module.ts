@@ -37,6 +37,8 @@ import { IndustryAiModule } from './modules/industry-ai/industry-ai.module';
 import { BrandSpreadModule } from './modules/brand-spread/brand-spread.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ContentQualityModule } from './modules/content-quality/content-quality.module';
+import { SupportModule } from './modules/support/support.module';
+import { AffiliateModule } from './modules/affiliate/affiliate.module';
 
 @Module({
   imports: [
@@ -85,6 +87,8 @@ import { ContentQualityModule } from './modules/content-quality/content-quality.
     BrandSpreadModule,
     UploadModule,
     ContentQualityModule,
+    SupportModule,
+    AffiliateModule,
   ],
   controllers: [HealthController],
   providers: [

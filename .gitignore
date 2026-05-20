@@ -10,3 +10,12 @@ coverage
 *.tsbuildinfo
 *.db
 .DS_Store
+
+# Codex/local QA artifacts
+.codex/
+tmp/
+apps/api/tmp/
+apps/web/tmp/
+CODEX_RESTART_HANDOFF.md
+AGENTS.md
+restart-backup.zip

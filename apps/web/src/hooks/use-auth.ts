@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 import useAuthStore from '@/stores/auth-store';
+import { clearStoredAffiliateRef } from '@/components/affiliate/affiliate-tracker';
 
 interface LoginPayload {
   email: string;
@@ -11,6 +12,14 @@ interface RegisterPayload {
   name: string;
   email: string;
   password: string;
+  affiliateCode?: string;
+  affiliateVisitorId?: string;
+}
+
+interface GoogleLoginPayload {
+  idToken: string;
+  affiliateCode?: string;
+  affiliateVisitorId?: string;
 }
 
 interface AuthResponse {
@@ -48,12 +57,16 @@ export function useGoogleLogin() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (idToken: string) => {
-      const { data } = await apiClient.post<AuthResponse>('/auth/google', { idToken });
+    mutationFn: async (payload: string | GoogleLoginPayload) => {
+      const body = typeof payload === 'string' ? { idToken: payload } : payload;
+      const { data } = await apiClient.post<AuthResponse>('/auth/google', body);
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       login(data.user, data.token, data.refreshToken);
+      if (typeof variables !== 'string' && variables.affiliateCode) {
+        clearStoredAffiliateRef();
+      }
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
   });
@@ -71,8 +84,11 @@ export function useRegister() {
       );
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       login(data.user, data.token, data.refreshToken);
+      if (variables.affiliateCode) {
+        clearStoredAffiliateRef();
+      }
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
   });

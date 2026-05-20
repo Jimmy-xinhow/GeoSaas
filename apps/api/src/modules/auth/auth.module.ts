@@ -9,6 +9,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../email/email.module';
+import { AffiliateModule } from '../affiliate/affiliate.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { EmailModule } from '../email/email.module';
     }),
     NotificationsModule,
     EmailModule,
+    AffiliateModule,
   ],
   controllers: [AuthController, AdminUsersController],
   providers: [AuthService, JwtStrategy, JwtRefreshStrategy],

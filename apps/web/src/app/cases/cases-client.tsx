@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { useSuccessCases, useFeaturedCases } from '@/hooks/use-cases';
 import useAuthStore from '@/stores/auth-store';
 import PublicNavbar from '@/components/layout/public-navbar';
+import { INDUSTRIES } from '@geovault/shared';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
   chatgpt: { label: 'ChatGPT', color: 'bg-green-500/20 text-green-400' },
@@ -125,8 +126,9 @@ function FeaturedCarousel({ items }: { items: any[] }) {
 export default function CasesClient() {
   const [page, setPage] = useState(1);
   const [platform, setPlatform] = useState<string | undefined>();
+  const [industry, setIndustry] = useState<string | undefined>();
   const { data: featured } = useFeaturedCases();
-  const { data: cases, isLoading } = useSuccessCases({ page, aiPlatform: platform });
+  const { data: cases, isLoading } = useSuccessCases({ page, aiPlatform: platform, industry });
   const { isAuthenticated } = useAuthStore();
   const submitHref = isAuthenticated
     ? '/dashboard/submit-case'
@@ -157,18 +159,35 @@ export default function CasesClient() {
 
       {/* Filter + List */}
       <section className="max-w-4xl mx-auto px-6 py-8">
-        <div className="flex flex-wrap gap-2 mb-6">
-          {[{ key: undefined, label: '全部' }, ...Object.entries(PLATFORM_CONFIG).map(([k, v]) => ({ key: k, label: v.label }))].map((p) => (
-            <button
-              key={p.key ?? 'all'}
-              onClick={() => { setPlatform(p.key); setPage(1); }}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                platform === p.key ? 'bg-white text-gray-900' : 'bg-white/10 text-gray-400 hover:bg-white/15'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {[{ key: undefined, label: '全部' }, ...Object.entries(PLATFORM_CONFIG).map(([k, v]) => ({ key: k, label: v.label }))].map((p) => (
+              <button
+                key={p.key ?? 'all'}
+                onClick={() => { setPlatform(p.key); setPage(1); }}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  platform === p.key ? 'bg-white text-gray-900' : 'bg-white/10 text-gray-400 hover:bg-white/15'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={industry ?? 'all'}
+            onChange={(event) => {
+              setIndustry(event.target.value === 'all' ? undefined : event.target.value);
+              setPage(1);
+            }}
+            className="h-10 rounded-lg border border-white/10 bg-gray-950 px-3 text-sm text-white outline-none focus:border-blue-500"
+          >
+            <option value="all">全部行業</option>
+            {INDUSTRIES.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {isLoading ? (

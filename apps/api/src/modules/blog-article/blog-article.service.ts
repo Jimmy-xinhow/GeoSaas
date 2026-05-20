@@ -166,13 +166,24 @@ export class BlogArticleService {
   }
 
   /** List published articles (paginated) */
-  async listArticles(params: { page?: number; limit?: number; category?: string; locale?: string }) {
-    const { page = 1, limit = 12, category, locale } = params;
+  async listArticles(params: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    locale?: string;
+    industry?: string;
+    type?: string;
+    siteId?: string;
+  }) {
+    const { page = 1, limit = 12, category, locale, industry, type, siteId } = params;
     const skip = (page - 1) * limit;
 
     const where: any = publicIndexableBlogArticleWhere({ published: true });
     if (category) where.category = category;
     if (locale) where.locale = locale;
+    if (industry) where.industrySlug = industry;
+    if (type) where.templateType = type;
+    if (siteId) where.siteId = siteId;
 
     const [items] = await Promise.all([
       this.prisma.blogArticle.findMany({
@@ -190,7 +201,7 @@ export class BlogArticleService {
           templateType: true,
           industrySlug: true,
           createdAt: true,
-          site: { select: { name: true, url: true, bestScore: true } },
+          site: { select: { id: true, name: true, url: true, bestScore: true, industry: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: 2000,
@@ -205,6 +216,51 @@ export class BlogArticleService {
       limit,
       totalPages: Math.ceil(filtered.length / limit),
     };
+  }
+
+  async listArticlesForSite(siteRef: string, params: { page?: number; limit?: number }) {
+    const site = await this.findPublicSiteByRef(siteRef);
+    if (!site) return { items: [], total: 0, page: params.page ?? 1, limit: params.limit ?? 12, totalPages: 0 };
+
+    return this.listArticles({
+      page: params.page,
+      limit: params.limit,
+      siteId: site.id,
+    });
+  }
+
+  private async findPublicSiteByRef(siteRef: string): Promise<{ id: string } | null> {
+    const direct = await this.prisma.site.findFirst({
+      where: publicSiteWhere({ id: siteRef, isPublic: true }),
+      select: { id: true },
+    });
+    if (direct) return direct;
+
+    const sites = await this.prisma.site.findMany({
+      where: publicSiteWhere({ isPublic: true }),
+      select: { id: true, name: true, url: true },
+      take: 3000,
+    });
+    const normalized = this.slugifySiteRef(siteRef);
+    const found = sites.find((site) => {
+      let host = '';
+      try {
+        host = new URL(site.url).hostname.replace(/^www\./, '');
+      } catch {
+        host = site.url;
+      }
+      return this.slugifySiteRef(site.name) === normalized || this.slugifySiteRef(host) === normalized;
+    });
+    return found ? { id: found.id } : null;
+  }
+
+  private slugifySiteRef(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
   }
 
   /** Get a single article by slug.

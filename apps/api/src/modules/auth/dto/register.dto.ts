@@ -18,4 +18,16 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   name?: string;
+
+  @ApiProperty({ example: 'GV12AB34CD', required: false })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @IsOptional()
+  affiliateCode?: string;
+
+  @ApiProperty({ example: 'visitor-uuid', required: false })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @IsOptional()
+  affiliateVisitorId?: string;
 }

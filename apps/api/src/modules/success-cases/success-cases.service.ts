@@ -217,7 +217,38 @@ export class SuccessCasesService {
       data: { viewCount: { increment: 1 } },
     });
 
-    return item;
+    const similarRows = await this.prisma.geoSuccessCase.findMany({
+      where: publicSuccessCaseWhere({
+        status: 'approved',
+        id: { not: item.id },
+        OR: [
+          { aiPlatform: item.aiPlatform },
+          ...(item.industry ? [{ industry: item.industry }] : []),
+        ],
+      }),
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        title: true,
+        aiPlatform: true,
+        queryUsed: true,
+        aiResponse: true,
+        beforeGeoScore: true,
+        afterGeoScore: true,
+        industry: true,
+        tags: true,
+        createdAt: true,
+        site: { select: { name: true, url: true, isPublic: true } },
+      },
+    });
+
+    const similarCases = similarRows
+      .filter((row) => isIndexablePublicSuccessCase(row))
+      .slice(0, 3)
+      .map(({ aiResponse, ...row }) => row);
+
+    return { ...item, similarCases };
   }
 
   async update(caseId: string, userId: string, dto: Partial<CreateSuccessCaseDto>, role?: string) {

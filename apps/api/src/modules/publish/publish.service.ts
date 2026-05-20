@@ -28,6 +28,20 @@ export class PublishService {
     'facebook',
     'google_business',
   ]);
+  private readonly platformRequirements: Record<string, { name: string; required: string[] }> = {
+    medium: { name: 'Medium', required: ['MEDIUM_ACCESS_TOKEN'] },
+    linkedin: { name: 'LinkedIn', required: ['LINKEDIN_ACCESS_TOKEN'] },
+    wordpress: {
+      name: 'WordPress',
+      required: ['WORDPRESS_SITE_URL', 'WORDPRESS_USERNAME', 'WORDPRESS_APP_PASSWORD'],
+    },
+    vocus: { name: '方格子', required: ['VOCUS_ACCESS_TOKEN'] },
+    facebook: { name: 'Facebook', required: ['FACEBOOK_ACCESS_TOKEN', 'FACEBOOK_PAGE_ID'] },
+    google_business: {
+      name: 'Google 商家檔案',
+      required: ['GOOGLE_BUSINESS_TOKEN', 'GOOGLE_BUSINESS_ACCOUNT_ID', 'GOOGLE_BUSINESS_LOCATION_ID'],
+    },
+  };
 
   constructor(
     private prisma: PrismaService,
@@ -110,6 +124,17 @@ export class PublishService {
       throw new BadRequestException(`Invalid platform: ${invalid.join(', ')}`);
     }
 
+    const unavailable = normalized
+      .map((platform) => this.getPlatformStatus(platform))
+      .filter((status) => !status.configured);
+    if (unavailable.length > 0) {
+      throw new BadRequestException(
+        `以下平台尚未完成串接，不能直接發布：${unavailable
+          .map((item) => `${item.name}（缺少 ${item.missingEnv.join(', ')}）`)
+          .join('、')}`,
+      );
+    }
+
     return [...new Set(normalized)];
   }
 
@@ -158,6 +183,21 @@ export class PublishService {
       default:
         return {};
     }
+  }
+
+  getPlatformStatuses() {
+    return [...this.allowedPlatforms].map((platform) => this.getPlatformStatus(platform));
+  }
+
+  private getPlatformStatus(platform: string) {
+    const meta = this.platformRequirements[platform];
+    const missingEnv = meta.required.filter((key) => !this.config.get<string>(key));
+    return {
+      key: platform,
+      name: meta.name,
+      configured: missingEnv.length === 0,
+      missingEnv,
+    };
   }
 
   async findAll(userId: string) {

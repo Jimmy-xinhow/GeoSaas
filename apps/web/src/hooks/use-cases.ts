@@ -18,6 +18,23 @@ export interface SuccessCase {
   user?: { name: string };
   site?: { name: string; url: string; bestScore?: number };
   generatedArticle?: { slug: string; title: string; content: string } | null;
+  similarCases?: SimilarSuccessCase[];
+}
+
+export interface SimilarSuccessCase {
+  id: string;
+  title: string;
+  aiPlatform: string;
+  queryUsed: string;
+  beforeGeoScore?: number;
+  afterGeoScore?: number;
+  improvementDays?: number;
+  industry?: string;
+  tags: string[];
+  viewCount: number;
+  createdAt: string;
+  user?: { name: string };
+  site?: { name: string; url: string; bestScore?: number };
 }
 
 export interface CaseListResult {

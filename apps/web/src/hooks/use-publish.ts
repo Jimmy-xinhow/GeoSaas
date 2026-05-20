@@ -19,11 +19,28 @@ interface PublishPayload {
   platforms: string[];
 }
 
+export interface PublishPlatformStatus {
+  key: string;
+  name: string;
+  configured: boolean;
+  missingEnv: string[];
+}
+
 export function usePublications() {
   return useQuery({
     queryKey: ['publications'],
     queryFn: async () => {
       const { data } = await apiClient.get<Publication[]>('/publications');
+      return data;
+    },
+  });
+}
+
+export function usePublishPlatforms() {
+  return useQuery({
+    queryKey: ['publications', 'platforms'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<PublishPlatformStatus[]>('/publications/platforms');
       return data;
     },
   });

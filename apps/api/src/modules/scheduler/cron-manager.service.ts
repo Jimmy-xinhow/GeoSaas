@@ -138,6 +138,10 @@ export class CronManagerService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
+    if (process.env.LOCAL_OFFLINE_MODE === '1') {
+      this.logger.warn('LOCAL_OFFLINE_MODE=1: skipping scheduler DB seed');
+      return;
+    }
     await this.seedDefaultTasks();
     this.logger.log('CronManager initialized — checking tasks every 60s');
   }
@@ -151,6 +155,7 @@ export class CronManagerService implements OnModuleInit {
   /** Every 60 seconds, check which tasks are due */
   @Interval(60_000)
   async checkAndRunTasks() {
+    if (process.env.LOCAL_OFFLINE_MODE === '1') return;
     if (this.isChecking) return;
     this.isChecking = true;
 

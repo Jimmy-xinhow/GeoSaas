@@ -7,11 +7,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
 
   async onModuleInit() {
+    if (process.env.LOCAL_OFFLINE_MODE === '1') {
+      this.logger.warn('LOCAL_OFFLINE_MODE=1: skipping Prisma database connection');
+      return;
+    }
     await this.$connect();
     await this.ensureAdminUser();
   }
 
   async onModuleDestroy() {
+    if (process.env.LOCAL_OFFLINE_MODE === '1') return;
     await this.$disconnect();
   }
 

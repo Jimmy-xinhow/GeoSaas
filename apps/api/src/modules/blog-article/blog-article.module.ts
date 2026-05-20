@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { BlogArticleController } from './blog-article.controller';
+import { AdminBlogController, BlogArticleController } from './blog-article.controller';
 import { BlogArticleService } from './blog-article.service';
 import { BlogTemplateService } from './blog-template.service';
 import { BrandFactService } from './brand-fact.service';
@@ -10,7 +10,7 @@ import { ContentQualityModule } from '../content-quality/content-quality.module'
 
 @Module({
   imports: [IndexNowModule, SitesModule, ContentQualityModule],
-  controllers: [BlogArticleController],
+  controllers: [BlogArticleController, AdminBlogController],
   providers: [BlogArticleService, BlogTemplateService, BrandFactService, IndustryInsightService],
   exports: [BlogArticleService, BrandFactService, IndustryInsightService],
 })

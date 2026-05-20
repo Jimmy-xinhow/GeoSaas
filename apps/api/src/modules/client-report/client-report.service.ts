@@ -36,6 +36,11 @@ export class ClientReportService implements OnModuleInit {
 
   /** On startup, recover orphaned "running" reports */
   async onModuleInit() {
+    if (process.env.LOCAL_OFFLINE_MODE === '1') {
+      this.logger.warn('LOCAL_OFFLINE_MODE=1: skipping monitor report recovery');
+      return;
+    }
+
     const orphaned = await this.prisma.monitorReport.findMany({
       where: { status: { in: ['running', 'failed'] } },
       include: { querySet: { select: { queries: true } } },

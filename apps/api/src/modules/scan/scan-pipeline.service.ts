@@ -15,6 +15,7 @@ import { RobotsAiIndicator } from './indicators/robots-ai.indicator';
 import { IIndicatorAnalyzer, IndicatorResult, AnalysisInput } from './indicators/indicator.interface';
 import { BadgeService } from '../badge/badge.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
+import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
 
 @Injectable()
 export class ScanPipelineService {
@@ -37,6 +38,7 @@ export class ScanPipelineService {
     private readonly robotsAi: RobotsAiIndicator,
     private readonly badgeService: BadgeService,
     private readonly indexNowService: IndexNowService,
+    private readonly llmsHostingService: LlmsHostingService,
   ) {
     this.indicators = [
       this.jsonLd,
@@ -168,6 +170,10 @@ export class ScanPipelineService {
         this.badgeService.evaluateBadges(siteId).catch((err) => {
           this.logger.warn(`Badge evaluation failed for site ${siteId}: ${err}`);
         });
+        this.badgeService.invalidateSvgBadge(siteId).catch((err) => {
+          this.logger.warn(`Badge SVG cache invalidation failed for site ${siteId}: ${err}`);
+        });
+        this.llmsHostingService.invalidatePlatformLlmsFull(siteId);
 
         // 2. Auto-submit to IndexNow (if public site)
         const siteForIndexNow = await this.prisma.site.findUnique({
