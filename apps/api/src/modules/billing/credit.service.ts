@@ -1,7 +1,17 @@
-import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
-const FREE_MONTHLY_GENERATIONS = 10;
+export const PLAN_MONTHLY_INCLUDED_CREDITS: Record<string, number> = {
+  FREE: 0,
+  STARTER: 30,
+  PRO: 80,
+};
 
 export interface CreditCheckResult {
   allowed: boolean;
@@ -19,12 +29,7 @@ export class CreditService {
 
   /**
    * Check if user can generate, and deduct accordingly.
-   * Priority: free monthly quota → purchased credits → denied
-   *
-   * @param userId - user ID
-   * @param points - points to deduct (1 or 2)
-   * @param description - what this charge is for
-   * @returns CreditCheckResult
+   * Priority: included monthly plan credits -> purchased credits -> denied.
    */
   async checkAndDeduct(
     userId: string,
@@ -34,50 +39,47 @@ export class CreditService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
-        id: true, plan: true, role: true,
-        credits: true, freeGenUsed: true, freeGenResetAt: true,
+        id: true,
+        plan: true,
+        role: true,
+        credits: true,
+        freeGenUsed: true,
+        freeGenResetAt: true,
       },
     });
 
     if (!user) throw new ForbiddenException('User not found');
 
-    // STAFF/ADMIN bypass all limits
-    if (user.role === 'STAFF' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
+    if (['STAFF', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
       return { allowed: true, source: 'free' };
     }
 
-    // Reset monthly free counter if needed
     await this.resetMonthlyIfNeeded(userId, user);
 
-    // Reload after potential reset
     const freshUser = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { credits: true, freeGenUsed: true, plan: true },
     });
     if (!freshUser) throw new ForbiddenException('User not found');
 
-    // 1. Check free monthly quota (paid users only)
-    const isPaid = freshUser.plan === 'STARTER' || freshUser.plan === 'PRO';
-    if (isPaid && freshUser.freeGenUsed < FREE_MONTHLY_GENERATIONS) {
+    const includedCredits = PLAN_MONTHLY_INCLUDED_CREDITS[freshUser.plan] ?? 0;
+    if (includedCredits > 0 && freshUser.freeGenUsed + points <= includedCredits) {
       await this.prisma.user.update({
         where: { id: userId },
-        data: { freeGenUsed: { increment: 1 } },
+        data: { freeGenUsed: { increment: points } },
       });
 
       return {
         allowed: true,
         source: 'free',
-        freeRemaining: FREE_MONTHLY_GENERATIONS - freshUser.freeGenUsed - 1,
+        freeRemaining: includedCredits - freshUser.freeGenUsed - points,
         creditsRemaining: freshUser.credits,
       };
     }
 
-    // 2. Check purchased credits
     if (freshUser.credits >= points) {
-      // Expire old credits first
       await this.expireCredits(userId);
 
-      // Re-check after expiration
       const afterExpire = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { credits: true },
@@ -88,17 +90,15 @@ export class CreditService {
           allowed: false,
           source: 'denied',
           creditsRemaining: afterExpire?.credits || 0,
-          message: `點數不足（需要 ${points} 點，剩餘 ${afterExpire?.credits || 0} 點）。部分點數可能已過期，請充值。`,
+          message: `點數不足（需要 ${points} 點，剩餘 ${afterExpire?.credits || 0} 點）。部分點數可能已過期，請先購買點數或升級方案。`,
         };
       }
 
-      // Deduct credits
       await this.prisma.user.update({
         where: { id: userId },
         data: { credits: { decrement: points } },
       });
 
-      // Record transaction
       const newBalance = (afterExpire?.credits || 0) - points;
       await this.prisma.creditTransaction.create({
         data: {
@@ -110,7 +110,9 @@ export class CreditService {
         },
       });
 
-      this.logger.log(`Credit deducted: ${userId} -${points} (${description}), balance: ${newBalance}`);
+      this.logger.log(
+        `Credit deducted: ${userId} -${points} (${description}), balance: ${newBalance}`,
+      );
 
       return {
         allowed: true,
@@ -119,24 +121,33 @@ export class CreditService {
       };
     }
 
-    // 3. Denied
-    const freeMsg = isPaid
-      ? `本月免費額度已用完（${FREE_MONTHLY_GENERATIONS}/${FREE_MONTHLY_GENERATIONS}）`
-      : '免費用戶無每月免費額度';
+    const freeMsg =
+      includedCredits > 0
+        ? `本月方案贈送點數已用完（${includedCredits}/${includedCredits}）`
+        : '免費方案不含 AI 生成點數';
 
     return {
       allowed: false,
       source: 'denied',
       freeRemaining: 0,
       creditsRemaining: freshUser.credits,
-      message: `${freeMsg}，點數不足（需要 ${points} 點，剩餘 ${freshUser.credits} 點）。請先充值點數。`,
+      message: `${freeMsg}，點數不足（需要 ${points} 點，剩餘 ${freshUser.credits} 點）。請先購買點數或升級方案。`,
     };
   }
 
-  /**
-   * Refund a deduction when a paid AI operation fails after quota was reserved.
-   * Admin/staff bypasses are reported as source "free" but do not need a refund.
-   */
+  assertAllowed(check: CreditCheckResult): asserts check is CreditCheckResult & { allowed: true } {
+    if (check.allowed) return;
+    throw new HttpException(
+      {
+        code: 'INSUFFICIENT_CREDITS',
+        message: check.message || 'AI 生成點數不足，請先購買點數或升級方案。',
+        freeRemaining: check.freeRemaining ?? 0,
+        creditsRemaining: check.creditsRemaining ?? 0,
+      },
+      HttpStatus.PAYMENT_REQUIRED,
+    );
+  }
+
   async refundDeduction(
     userId: string,
     points: number,
@@ -151,14 +162,14 @@ export class CreditService {
     });
     if (!user) return;
 
-    if (user.role === 'STAFF' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') return;
+    if (['STAFF', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) return;
 
     if (deduction.source === 'free') {
       await this.prisma.user.updateMany({
         where: { id: userId },
-        data: { freeGenUsed: { decrement: user.freeGenUsed > 0 ? 1 : 0 } },
+        data: { freeGenUsed: { decrement: Math.min(points, user.freeGenUsed) } },
       });
-      this.logger.log(`Free generation refunded: ${userId} (${description})`);
+      this.logger.log(`Included plan credits refunded: ${userId} (${description})`);
       return;
     }
 
@@ -177,13 +188,12 @@ export class CreditService {
           description,
         },
       });
-      this.logger.log(`Credit refunded: ${userId} +${points} (${description}), balance: ${newBalance}`);
+      this.logger.log(
+        `Credit refunded: ${userId} +${points} (${description}), balance: ${newBalance}`,
+      );
     }
   }
 
-  /**
-   * Add credits after payment
-   */
   async addCredits(userId: string, points: number, orderId?: string): Promise<{ balance: number }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -205,37 +215,48 @@ export class CreditService {
         type: 'topup',
         amount: points,
         balance: newBalance,
-        description: `充值 ${points} 點`,
+        description: `購買 ${points} 點`,
         orderId,
         expiresAt,
       },
     });
 
-    this.logger.log(`Credits added: ${userId} +${points}, balance: ${newBalance}, expires: ${expiresAt.toISOString().slice(0, 10)}`);
+    this.logger.log(
+      `Credits added: ${userId} +${points}, balance: ${newBalance}, expires: ${expiresAt.toISOString().slice(0, 10)}`,
+    );
     return { balance: newBalance };
   }
 
-  /**
-   * Get user's credit balance and usage info
-   */
   async getBalance(userId: string) {
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { credits: true, freeGenUsed: true, freeGenResetAt: true, plan: true },
     });
     if (!user) return null;
 
-    const isPaid = user.plan === 'STARTER' || user.plan === 'PRO';
+    await this.resetMonthlyIfNeeded(userId, user);
+    user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { credits: true, freeGenUsed: true, freeGenResetAt: true, plan: true },
+    });
+    if (!user) return null;
 
-    // Get recent transactions
+    const includedCredits = PLAN_MONTHLY_INCLUDED_CREDITS[user.plan] ?? 0;
+
     const transactions = await this.prisma.creditTransaction.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 20,
-      select: { type: true, amount: true, balance: true, description: true, expiresAt: true, createdAt: true },
+      select: {
+        type: true,
+        amount: true,
+        balance: true,
+        description: true,
+        expiresAt: true,
+        createdAt: true,
+      },
     });
 
-    // Calculate expiring soon (within 30 days)
     const thirtyDaysLater = new Date();
     thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
     const expiringSoon = await this.prisma.creditTransaction.aggregate({
@@ -250,9 +271,9 @@ export class CreditService {
     return {
       credits: user.credits,
       freeGenerations: {
-        used: isPaid ? user.freeGenUsed : 0,
-        total: isPaid ? FREE_MONTHLY_GENERATIONS : 0,
-        remaining: isPaid ? Math.max(0, FREE_MONTHLY_GENERATIONS - user.freeGenUsed) : 0,
+        used: includedCredits > 0 ? user.freeGenUsed : 0,
+        total: includedCredits,
+        remaining: Math.max(0, includedCredits - user.freeGenUsed),
         resetsAt: user.freeGenResetAt,
       },
       expiringSoon: expiringSoon._sum.amount || 0,
@@ -260,13 +281,13 @@ export class CreditService {
     };
   }
 
-  /**
-   * Reset monthly free generation counter if past reset date
-   */
-  private async resetMonthlyIfNeeded(userId: string, user: { freeGenResetAt: Date | null; freeGenUsed: number }) {
+  private async resetMonthlyIfNeeded(
+    userId: string,
+    user: { freeGenResetAt: Date | null; freeGenUsed: number },
+  ) {
     const now = new Date();
     if (!user.freeGenResetAt || now >= user.freeGenResetAt) {
-      const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1); // 1st of next month
+      const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       await this.prisma.user.update({
         where: { id: userId },
         data: { freeGenUsed: 0, freeGenResetAt: nextReset },
@@ -274,9 +295,6 @@ export class CreditService {
     }
   }
 
-  /**
-   * Expire credits older than 12 months
-   */
   private async expireCredits(userId: string) {
     const now = new Date();
     const expiredTopups = await this.prisma.creditTransaction.findMany({
@@ -290,11 +308,9 @@ export class CreditService {
 
     if (expiredTopups.length === 0) return;
 
-    // Calculate total expired points (only unexpired portion)
     let totalExpired = 0;
     for (const topup of expiredTopups) {
       totalExpired += topup.amount;
-      // Mark as expired by changing type
       await this.prisma.creditTransaction.update({
         where: { id: topup.id },
         data: { type: 'expired' },
@@ -302,8 +318,10 @@ export class CreditService {
     }
 
     if (totalExpired > 0) {
-      // Deduct expired credits from user balance
-      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { credits: true },
+      });
       const newBalance = Math.max(0, (user?.credits || 0) - totalExpired);
       await this.prisma.user.update({
         where: { id: userId },
@@ -316,7 +334,7 @@ export class CreditService {
           type: 'expire',
           amount: -totalExpired,
           balance: newBalance,
-          description: `${totalExpired} 點已到期（購買超過 12 個月）`,
+          description: `${totalExpired} 點已過期（購買後 12 個月）`,
         },
       });
 

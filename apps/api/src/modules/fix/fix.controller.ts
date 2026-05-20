@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Param, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreditService } from '../billing/credit.service';
@@ -55,7 +55,7 @@ export class FixController {
     this.fixService.assertSmartIndicatorSupported(dto.indicator);
     await this.fixService.assertSmartGenerateAccess(dto.siteId, dto.scanResultId, userId, role);
     const check = await this.credits.checkAndDeduct(userId, 1, 'Smart fix generation');
-    if (!check.allowed) throw new ForbiddenException(check.message);
+    this.credits.assertAllowed(check);
     return this.fixService.smartGenerate(dto.siteId, dto.indicator, dto.scanResultId, userId, role);
   }
 

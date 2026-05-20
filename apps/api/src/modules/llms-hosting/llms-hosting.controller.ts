@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Put, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
@@ -157,7 +157,7 @@ export class LlmsHostingController {
     await this.service.assertSiteAccess(siteId, userId, role);
     if (await this.service.willUseAiForLlmsTxt(siteId)) {
       const check = await this.credits.checkAndDeduct(userId, 1, 'Generate llms.txt');
-      if (!check.allowed) throw new ForbiddenException(check.message);
+      this.credits.assertAllowed(check);
     }
     return this.service.generateLlmsTxt(siteId, userId, role);
   }

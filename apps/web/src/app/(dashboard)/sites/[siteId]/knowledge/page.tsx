@@ -52,6 +52,7 @@ import {
   type QaItem,
   type GeneratedQa,
 } from '@/hooks/use-knowledge'
+import { isBillingRequiredError } from '@/lib/billing-error'
 
 const MAX_QA = 200
 const PAGE_SIZE = 20
@@ -1173,6 +1174,7 @@ export default function KnowledgePage() {
       setCompletedCount(results.length)
       setShowCompleteBanner(true)
     } catch (err: any) {
+      if (isBillingRequiredError(err)) return
       toast.error(err?.response?.data?.message || 'AI 生成失敗')
     }
   }
@@ -1192,6 +1194,7 @@ export default function KnowledgePage() {
       setCompletedCount(newResults.length)
       setShowCompleteBanner(true)
     } catch (err: any) {
+      if (isBillingRequiredError(err)) return
       toast.error(err?.response?.data?.message || '繼續生成失敗')
     } finally {
       setIsContinuing(false)

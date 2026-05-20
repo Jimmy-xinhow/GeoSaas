@@ -38,6 +38,7 @@ import { IndicatorCard } from '@/components/scan/indicator-card'
 import ScanHistoryChart from '@/components/scan/scan-history-chart'
 import { CodeSnippetViewer } from '@/components/fix/code-snippet-viewer'
 import apiClient from '@/lib/api-client'
+import { isBillingRequiredError } from '@/lib/billing-error'
 import { useBrandFactReadiness, useSite, useUpdateSiteProfile, type BrandFactReadiness, type SiteProfile } from '@/hooks/use-sites'
 import {
   useTriggerScan,
@@ -116,6 +117,7 @@ function GenerateFixButton({
       onGenerated(result.code, result.language)
       toast.success('AI 已根據網站內容生成修復程式碼')
     } catch (err: any) {
+      if (isBillingRequiredError(err)) return
       toast.error(err?.response?.data?.message || '生成修復失敗，請稍後再試')
     }
   }
@@ -506,15 +508,15 @@ function BrandFactReadinessSection({
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <p className="text-xs text-muted-foreground">Fact Confidence</p>
+            <p className="text-xs text-muted-foreground">資料可信度</p>
             <p className={`mt-1 text-3xl font-bold ${confidenceColor}`}>{readiness.confidenceScore}</p>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <p className="text-xs text-muted-foreground">Verified Facts</p>
+            <p className="text-xs text-muted-foreground">已驗證資料</p>
             <p className="mt-1 text-3xl font-bold text-white">{readiness.verifiedFacts.length}</p>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <p className="text-xs text-muted-foreground">Q&A</p>
+            <p className="text-xs text-muted-foreground">問答數量</p>
             <p className="mt-1 text-3xl font-bold text-white">{readiness.qaPairs.length}</p>
           </div>
         </div>

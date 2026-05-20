@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { KnowledgeService } from './knowledge.service';
 import { CreditService } from '../billing/credit.service';
@@ -84,7 +84,7 @@ export class KnowledgeController {
       2,
       'AI knowledge Q&A generation',
     );
-    if (!check.allowed) throw new ForbiddenException(check.message);
+    this.credits.assertAllowed(check);
     return this.knowledgeService.aiGenerate(siteId, userId, dto.excludeQuestions, role);
   }
 

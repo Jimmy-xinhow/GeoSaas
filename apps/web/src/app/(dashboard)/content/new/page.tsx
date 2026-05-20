@@ -25,6 +25,7 @@ import ContentTypeSelector from '@/components/content/content-type-selector'
 import { useGenerateContent } from '@/hooks/use-content'
 import { useBrandFactReadiness, useSites } from '@/hooks/use-sites'
 import { useKnowledge } from '@/hooks/use-knowledge'
+import { isBillingRequiredError } from '@/lib/billing-error'
 
 export default function ContentNewPage() {
   const router = useRouter()
@@ -101,6 +102,7 @@ export default function ContentNewPage() {
           toast.success('內容已產生，並已存成草稿')
         },
         onError: (error: any) => {
+          if (isBillingRequiredError(error)) return
           const response = error?.response?.data
           const message =
             typeof response?.message === 'string'

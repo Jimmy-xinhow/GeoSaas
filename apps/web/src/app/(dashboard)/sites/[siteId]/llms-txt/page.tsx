@@ -30,6 +30,7 @@ import {
   useUpdateLlmsTxt,
   useGenerateLlmsTxtHosting,
 } from '@/hooks/use-llms-hosting'
+import { isBillingRequiredError } from '@/lib/billing-error'
 
 export default function LlmsTxtPage() {
   const params = useParams()
@@ -67,6 +68,7 @@ export default function LlmsTxtPage() {
       setContent(result.content)
       toast.success('AI 已自動生成 llms.txt 內容')
     } catch (err: any) {
+      if (isBillingRequiredError(err)) return
       toast.error(err?.response?.data?.message || '生成失敗')
     }
   }

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import apiClient from '@/lib/api-client';
 import { useSites } from '@/hooks/use-sites';
+import { isBillingRequiredError } from '@/lib/billing-error';
 import {
   Zap, Copy, CheckCircle2, Loader2, Globe, ChevronDown,
   ExternalLink, FileText, Hash,
@@ -106,7 +107,10 @@ export default function BrandSpreadPage() {
       setResult(data);
       toast.success(`已生成 ${data.platforms?.length || 0} 個平台的內容`);
     },
-    onError: () => toast.error('生成失敗，請稍後再試'),
+    onError: (error: any) => {
+      if (isBillingRequiredError(error)) return;
+      toast.error('生成失敗，請稍後再試');
+    },
   });
 
   const weeklyMutation = useMutation({
@@ -118,7 +122,10 @@ export default function BrandSpreadPage() {
       setWeeklyPlan(data);
       toast.success(`已生成本週 ${data.items?.length || 0} 篇內容`);
     },
-    onError: () => toast.error('生成失敗，請稍後再試'),
+    onError: (error: any) => {
+      if (isBillingRequiredError(error)) return;
+      toast.error('生成失敗，請稍後再試');
+    },
   });
 
   const [weeklyPlan, setWeeklyPlan] = useState<any>(null);

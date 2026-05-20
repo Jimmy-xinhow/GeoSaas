@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles, RolesGuard } from '../../common/guards/roles.guard';
@@ -43,12 +43,21 @@ export class ContentController {
       role === 'STAFF' ||
       role === 'ADMIN' ||
       role === 'SUPER_ADMIN' ||
-      (balance?.freeGenerations.remaining ?? 0) > 0 ||
+      (balance?.freeGenerations.remaining ?? 0) >= 2 ||
       (balance?.credits ?? 0) >= 2;
-    if (!hasAvailableQuota) throw new ForbiddenException('點數不足，無法產生內容');
+
+    if (!hasAvailableQuota) {
+      this.credits.assertAllowed({
+        allowed: false,
+        source: 'denied',
+        freeRemaining: balance?.freeGenerations.remaining ?? 0,
+        creditsRemaining: balance?.credits ?? 0,
+        message: 'AI 生成點數不足，請先購買點數或升級方案。',
+      });
+    }
 
     const check = await this.credits.checkAndDeduct(userId, 2, 'AI content generation');
-    if (!check.allowed) throw new ForbiddenException(check.message);
+    this.credits.assertAllowed(check);
 
     try {
       return await this.contentService.generate(dto, userId, role);
@@ -92,7 +101,7 @@ export class ContentController {
   ) {
     await this.citationGap.assertSiteAccess(siteId, userId, role);
     const check = await this.credits.checkAndDeduct(userId, 2, 'citation gap fill');
-    if (!check.allowed) throw new ForbiddenException(check.message);
+    this.credits.assertAllowed(check);
     return this.citationGap.runForSite(siteId);
   }
 

@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Controller,
-  ForbiddenException,
   Get,
   Param,
   Post,
@@ -66,7 +65,7 @@ export class BrandSpreadController {
         totalPoints,
         `Generate brand spread content (${platformList.length} platforms, ${totalPoints} credits)`,
       );
-      if (!check.allowed) throw new ForbiddenException(check.message);
+      this.credits.assertAllowed(check);
     }
 
     return this.service.generateAll(siteId, platformList);
@@ -87,7 +86,7 @@ export class BrandSpreadController {
         2,
         'Generate weekly brand spread plan',
       );
-      if (!check.allowed) throw new ForbiddenException(check.message);
+      this.credits.assertAllowed(check);
     }
 
     return this.service.generateWeeklyPlan(siteId);

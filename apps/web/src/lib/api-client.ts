@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { toast } from 'sonner';
+import { isBillingRequiredError, showBillingRequiredToast } from './billing-error';
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -60,7 +61,9 @@ apiClient.interceptors.response.use(
       const suppressGlobalErrorToast = Boolean(originalRequest?.suppressGlobalErrorToast);
 
       // Auto-refresh on 401
-      if (status === 401 && !originalRequest._retry) {
+      if (isBillingRequiredError(error) && !suppressGlobalErrorToast) {
+        showBillingRequiredToast(error);
+      } else if (status === 401 && !originalRequest._retry) {
         const refreshToken = localStorage.getItem('refreshToken');
 
         if (refreshToken) {

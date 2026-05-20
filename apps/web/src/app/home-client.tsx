@@ -88,6 +88,36 @@ function IndexNowButton({ url }: { url: string }) {
   const submitIndexNow = useSubmitIndexNow()
   const successCount = submitIndexNow.data?.results?.filter((r: any) => r.success).length ?? 0
   const totalCount = submitIndexNow.data?.results?.length ?? 0
+  const isGeovaultUrl = (() => {
+    try {
+      const host = new URL(url).hostname.toLowerCase()
+      return ['geovault.app', 'www.geovault.app', 'geosaas.com', 'www.geosaas.com'].includes(host)
+    } catch {
+      return false
+    }
+  })()
+
+  if (!isGeovaultUrl) {
+    return (
+      <div className="rounded-2xl border border-orange-300/20 bg-orange-500/10 p-4 text-left text-orange-100">
+        <div className="flex items-start gap-3">
+          <Send className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold">IndexNow 會在收錄後自動處理</p>
+            <p className="mt-1 text-xs leading-relaxed text-orange-100/80">
+              這個功能是把 Geovault 的公開目錄頁、AI Wiki 和 llms-full 更新通知 Bing / Yandex。
+              訪客掃描的是你的原網站 URL，尚未建立 Geovault 收錄頁，所以不會手動送出。
+            </p>
+            <Link href="/register" prefetch={false}>
+              <Button size="sm" className="mt-3 h-9 bg-orange-400 text-gray-950 hover:bg-orange-300">
+                建立品牌資料並啟用自動通知
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
