@@ -59,6 +59,7 @@ const indicatorNames: Record<string, string> = {
   'title_optimization': '標題最佳化',
   'contact_info': '聯絡資訊',
   'image_alt': '圖片 Alt 文字',
+  'robots_ai': 'AI 爬蟲存取設定',
 }
 
 // ── Which indicators can generate fixes ──

@@ -1937,8 +1937,8 @@ export class BlogArticleService {
   // Each isClient=true site gets one article per weekday (Mon-Sat, 6 types,
   // Sun skipped for cron quiet day). Plan gates how many days are active:
   //   FREE:    0/week  (feature locked)
-  //   STARTER: 2/week  (Tue Q&A + Fri comparison)
-  //   PRO:     6/week  (all weekday types)
+  //   STARTER: 1/week  (Tue Q&A)
+  //   PRO:     3/week  (Tue Q&A + Fri comparison + Sat data pulse)
 
   private readonly daySequence: ClientDailyDay[] = [
     'mon_topical', 'tue_qa_deepdive', 'wed_service',
@@ -1961,8 +1961,8 @@ export class BlogArticleService {
    * the most crawler-friendly unique content per client.
    */
   private activeDaysForPlan(plan: string): ClientDailyDay[] {
-    if (plan === 'PRO') return this.daySequence;
-    if (plan === 'STARTER') return ['tue_qa_deepdive', 'fri_comparison'];
+    if (plan === 'PRO') return ['tue_qa_deepdive', 'fri_comparison', 'sat_data_pulse'];
+    if (plan === 'STARTER') return ['tue_qa_deepdive'];
     return [];
   }
 

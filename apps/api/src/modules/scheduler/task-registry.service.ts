@@ -219,8 +219,8 @@ export class TaskRegistryService implements OnModuleInit {
       const dayType = dayMap[dow];
 
       const planActiveDays: Record<string, string[]> = {
-        PRO: ['mon_topical', 'tue_qa_deepdive', 'wed_service', 'thu_audience', 'fri_comparison', 'sat_data_pulse'],
-        STARTER: ['tue_qa_deepdive', 'fri_comparison'],
+        PRO: ['tue_qa_deepdive', 'fri_comparison', 'sat_data_pulse'],
+        STARTER: ['tue_qa_deepdive'],
       };
 
       const clients = await this.prisma.site.findMany({

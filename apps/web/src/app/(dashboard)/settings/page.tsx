@@ -50,8 +50,8 @@ import {
 
 const PLAN_LIMITS: Record<string, { scans: number; sites: number; label: string; description: string }> = {
   FREE: { scans: 2, sites: 1, label: 'Free 方案', description: '每站 2 次掃描/月 | 1 個網站 | 1 次修復體驗' },
-  STARTER: { scans: 6, sites: 1, label: 'Starter 方案 NT$390/月', description: '每站 6 次掃描/月 | 1 個網站 | 每月 20 點方案 AI 額度 | 引用監控 20 題 | 每週 2 篇 Geovault 專屬內容' },
-  PRO: { scans: 10, sites: 3, label: 'Pro 方案 NT$690/月', description: '每站 10 次掃描/月 | 3 個網站 | 每月 40 點方案 AI 額度 | 引用監控 30 題 | 多平台 | 自動排程 | 每週 6 篇 Geovault 專屬內容' },
+  STARTER: { scans: 6, sites: 1, label: 'Starter 方案 NT$390/月', description: '每站 6 次掃描/月 | 1 個網站 | 每月 20 點方案 AI 額度 | 引用監控 20 題 | 每週 1 篇 Geovault 專屬內容' },
+  PRO: { scans: 10, sites: 3, label: 'Pro 方案 NT$690/月', description: '每站 10 次掃描/月 | 3 個網站 | 每月 40 點方案 AI 額度 | 引用監控 30 題 | 多平台 | 自動排程 | 每週 3 篇 Geovault 專屬內容' },
 }
 
 const SUBSCRIPTION_OPTIONS = [
@@ -74,7 +74,7 @@ const SUBSCRIPTION_OPTIONS = [
       '額度用完後可加購點數',
       '知識庫 Q&A 10 次/月',
       'AI 引用監控 20 題/月（檢查扣 1 點/題）',
-      '每週 2 篇 AI 專屬內容（Geovault 發布）',
+      '每週 1 篇 AI 專屬內容（Geovault 發布）',
     ],
   },
   {
@@ -96,7 +96,7 @@ const SUBSCRIPTION_OPTIONS = [
       '額度用完後可加購點數',
       '知識庫 Q&A 15 次/月',
       'AI 引用監控 30 題/月（檢查扣 1 點/題）',
-      '每週 6 篇 AI 專屬內容（Geovault 發布）',
+      '每週 3 篇 AI 專屬內容（Geovault 發布）',
       '多平台發佈',
       '自動排程',
     ],

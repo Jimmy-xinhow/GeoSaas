@@ -45,7 +45,10 @@ const indicatorNames: Record<string, string> = {
   'title_optimization': '標題最佳化',
   'contact_info': '聯絡資訊',
   'image_alt': '圖片 Alt 文字',
+  'robots_ai': 'AI 爬蟲存取設定',
 }
+
+const PASSING_SCORE = 70
 
 // ── Severity mapping from indicator status ──
 function getSeverity(
@@ -55,6 +58,10 @@ function getSeverity(
   if (status === 'fail' || score < 40) return 'high'
   if (status === 'warning' || score < 70) return 'medium'
   return 'low'
+}
+
+function needsAttention(result: ScanResultItem) {
+  return result.status !== 'pass' || result.score < PASSING_SCORE
 }
 
 function getSeverityStyle(severity: string) {
@@ -116,7 +123,7 @@ function FixItemCard({
 
   const displayName = indicatorNames[result.indicator] || result.indicator
   const severity = getSeverity(result.status, result.score)
-  const canGenerate = fixableIndicators.has(result.indicator)
+  const canGenerate = result.autoFixable && fixableIndicators.has(result.indicator)
 
   const handleGenerate = async () => {
     try {
@@ -230,6 +237,9 @@ function FixItemCard({
               </div>
             ) : (
               <div className="space-y-4">
+                <div className="p-3 bg-amber-500/20 border border-amber-500/30 rounded-lg text-sm text-amber-200">
+                  此項目目前不支援一鍵生成修復程式碼，但它仍會影響 GEO 分數。請依照下方指引手動調整後，再回到網站詳情頁重新掃描。
+                </div>
                 <FixGuide
                   indicator={result.indicator}
                   siteName={site.name}
@@ -298,16 +308,15 @@ export default function FixPage() {
     }
   }, [scanResults, resultsLoading, latestScanId, scanIdx, completedScans.length])
 
-  // Filter to only fixable / actionable items (not passing)
-  const fixableResults = useMemo(() => {
+  // Show every indicator that affects the score, even when it is not auto-fixable.
+  const attentionResults = useMemo(() => {
     if (!scanResults || scanResults.length === 0) return []
-    // Show ALL items — fail first, then warning, then pass
     return [...scanResults]
-      .filter((r) => r.status !== 'pass' || r.autoFixable)
+      .filter(needsAttention)
       .sort((a, b) => {
-        const order = { fail: 0, warning: 1, pass: 2 }
-        const aOrder = order[a.status as keyof typeof order] ?? 3
-        const bOrder = order[b.status as keyof typeof order] ?? 3
+        const order = { high: 0, medium: 1, low: 2 }
+        const aOrder = order[getSeverity(a.status, a.score)]
+        const bOrder = order[getSeverity(b.status, b.score)]
         if (aOrder !== bOrder) return aOrder - bOrder
         return a.score - b.score
       })
@@ -317,17 +326,15 @@ export default function FixPage() {
   const counts = useMemo(() => {
     if (!scanResults) return { high: 0, medium: 0, passed: 0 }
     return {
-      high: scanResults.filter(
-        (r) => r.status === 'fail' || r.score < 40,
-      ).length,
-      medium: scanResults.filter(
-        (r) => r.status === 'warning' && r.score >= 40,
-      ).length,
-      passed: scanResults.filter((r) => r.status === 'pass').length,
+      high: scanResults.filter((r) => getSeverity(r.status, r.score) === 'high').length,
+      medium: scanResults.filter((r) => getSeverity(r.status, r.score) === 'medium').length,
+      passed: scanResults.filter((r) => !needsAttention(r)).length,
     }
   }, [scanResults])
 
   const isLoading = siteLoading || scansLoading || resultsLoading
+  const hasCompletedScans = completedScans.length > 0
+  const hasScanResults = Boolean(scanResults && scanResults.length > 0)
 
   if (isLoading) {
     return <FixPageSkeleton />
@@ -397,7 +404,45 @@ export default function FixPage() {
       </div>
 
       {/* Fix items list */}
-      {fixableResults.length === 0 ? (
+      {!hasCompletedScans ? (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-white mb-1">
+                尚未有可用的掃描結果
+              </h3>
+              <p className="text-muted-foreground">
+                目前還沒有完整掃描明細，因此無法判斷要修復哪些項目。請先回到網站詳情頁執行掃描。
+              </p>
+              <Link href={`/sites/${siteId}`}>
+                <Button variant="outline" className="mt-4">
+                  返回網站詳情
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : !hasScanResults ? (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-white mb-1">
+                這次掃描沒有指標明細
+              </h3>
+              <p className="text-muted-foreground">
+                系統找到了掃描紀錄，但沒有可用的修復明細，不能判定為表現良好。請重新掃描一次取得最新指標。
+              </p>
+              <Link href={`/sites/${siteId}`}>
+                <Button variant="outline" className="mt-4">
+                  返回網站詳情重新掃描
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : attentionResults.length === 0 ? (
         <Card>
           <CardContent className="py-12">
             <div className="text-center">
@@ -413,7 +458,7 @@ export default function FixPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {fixableResults.map((result) => (
+          {attentionResults.map((result) => (
             <FixItemCard
               key={result.id}
               result={result}

@@ -371,6 +371,78 @@ function ImageAltGuide({ siteName, siteUrl, details }: GuideProps) {
   )
 }
 
+// ── AI robots / robots.txt Guide ──
+function RobotsAiGuide({ siteUrl, details }: GuideProps) {
+  const blockedBots: string[] = details?.blockedBots ?? []
+  const isCloudflareManaged = Boolean(details?.cloudflareManaged)
+  const sitemapUrl = (() => {
+    try {
+      return `${new URL(siteUrl).origin}/sitemap.xml`
+    } catch {
+      return 'https://example.com/sitemap.xml'
+    }
+  })()
+
+  const robotsCode = `User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: *
+Allow: /
+
+Sitemap: ${sitemapUrl}`
+
+  return (
+    <div className="space-y-4">
+      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <p className="text-sm font-medium text-blue-900">什麼是 AI 爬蟲存取設定？</p>
+        <p className="text-sm text-blue-700 mt-1">
+          robots.txt 會告訴搜尋引擎和 AI 爬蟲哪些內容可以讀取。若 GPTBot、ClaudeBot、PerplexityBot 等爬蟲被擋住，AI 較難理解並引用您的網站。
+        </p>
+      </div>
+
+      {blockedBots.length > 0 && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+          <p className="font-medium">目前疑似被阻擋的 AI 爬蟲：</p>
+          <p className="mt-1">{blockedBots.join('、')}</p>
+        </div>
+      )}
+
+      {isCloudflareManaged ? (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <p className="font-medium">Cloudflare 設定提醒</p>
+          <p className="mt-1">
+            這個網站可能使用 Cloudflare 管理 robots.txt 或 Bot 設定。請到 Cloudflare Dashboard 檢查 AI bot / crawler 存取規則，確認沒有封鎖主要 AI 爬蟲。
+          </p>
+        </div>
+      ) : (
+        <Step number={1} title="檢查網站根目錄的 robots.txt">
+          <p>
+            開啟 <code className="bg-gray-100 px-1 rounded">/robots.txt</code>，確認沒有對 AI 爬蟲設定 <code className="bg-gray-100 px-1 rounded">Disallow: /</code>。
+          </p>
+        </Step>
+      )}
+
+      <Step number={2} title="明確允許主要 AI 爬蟲">
+        <p>可將以下規則加入 robots.txt，讓 AI 更容易讀取網站內容。</p>
+        <CodeBlock code={robotsCode} language="txt" />
+      </Step>
+
+      <Step number={3} title="重新掃描確認">
+        <p>更新 robots.txt 或 Cloudflare 設定後，回到 Geovault 重新掃描，確認 AI 爬蟲存取設定是否通過。</p>
+      </Step>
+    </div>
+  )
+}
+
 // ── JSON-LD Guide (for already auto-fixable indicators) ──
 function JsonLdGuide({ siteName, siteUrl }: GuideProps) {
   return (
@@ -457,6 +529,8 @@ const guideComponents: Record<string, React.FC<GuideProps>> = {
   'contact_info': ContactInfoGuide,
   'image-alt': ImageAltGuide,
   'image_alt': ImageAltGuide,
+  'robots-ai': RobotsAiGuide,
+  'robots_ai': RobotsAiGuide,
 }
 
 export function FixGuide({
