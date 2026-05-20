@@ -99,8 +99,10 @@ function Step({
         {number}
       </div>
       <div className="flex-1 space-y-2">
-        <p className="text-sm font-medium text-gray-900">{title}</p>
-        <div className="text-sm text-gray-600">{children}</div>
+        <p className="text-sm font-medium text-slate-100">{title}</p>
+        <div className="text-sm text-slate-300 [&_code]:border [&_code]:border-white/10 [&_code]:bg-slate-950/80 [&_code]:text-slate-100">
+          {children}
+        </div>
       </div>
     </div>
   )
