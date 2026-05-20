@@ -34,6 +34,9 @@ export class ContentController {
     @CurrentUser('userId') userId: string,
     @CurrentUser('role') role: string,
   ) {
+    this.contentService.assertAiConfigured();
+    await this.contentService.assertGenerateAccess(dto, userId, role);
+
     const balance = await this.credits.getBalance(userId);
     const hasAvailableQuota =
       role === 'STAFF' ||
@@ -41,12 +44,17 @@ export class ContentController {
       role === 'SUPER_ADMIN' ||
       (balance?.freeGenerations.remaining ?? 0) > 0 ||
       (balance?.credits ?? 0) >= 2;
-    if (!hasAvailableQuota) throw new ForbiddenException('點數不足');
+    if (!hasAvailableQuota) throw new ForbiddenException('點數不足，無法產生內容');
 
-    this.contentService.assertAiConfigured();
     const check = await this.credits.checkAndDeduct(userId, 2, 'AI content generation');
     if (!check.allowed) throw new ForbiddenException(check.message);
-    return this.contentService.generate(dto, userId);
+
+    try {
+      return await this.contentService.generate(dto, userId, role);
+    } catch (error) {
+      await this.credits.refundDeduction(userId, 2, check, 'AI content generation failed refund');
+      throw error;
+    }
   }
 
   @Put(':id')

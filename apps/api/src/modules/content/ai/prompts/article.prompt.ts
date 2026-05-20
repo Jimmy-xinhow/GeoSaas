@@ -1,28 +1,40 @@
-export function buildArticlePrompt(brand: string, topic: string, keywords: string[], language: string) {
-  const system = `你是一位專業的 GEO 內容策略師和權威文章撰寫專家。
-你的任務是撰寫符合 E-E-A-T（Experience、Expertise、Authoritativeness、Trustworthiness）標準的深度文章。
-文章需要：
-1. 展現專業經驗和權威性
-2. 結構清晰，適合 AI 爬蟲理解
-3. 包含具體數據和案例
-4. 自然融入品牌資訊
-5. 使用 ${language} 語言撰寫`;
+import { ContentPromptContext, formatBrandFacts } from './prompt-context';
 
-  const user = `請為以下品牌撰寫一篇權威文章：
+export function buildArticlePrompt(context: ContentPromptContext) {
+  const system = `你是一位 GEO（Generative Engine Optimization）內容策略顧問。
+請產出能被 AI 搜尋、AI 摘要、問答引擎引用的品牌內容。必須遵守：
+1. 只使用使用者已綁定網站與知識庫中的事實，不得杜撰客戶、成效、價格、聯絡資訊或服務範圍。
+2. 語氣中立、具體、可引用，避免廣告式誇大詞，例如「第一」、「最強」、「保證」。
+3. 每個主張都要能回到品牌資料、知識庫 Q&A 或 GEO 掃描資料。
+4. 優先補足 AI 可理解的上下文：品牌做什麼、服務誰、解決什麼問題、適合與不適合的情境。
+5. 使用 ${context.language} 輸出 Markdown。`;
 
-品牌名稱：${brand}
-文章主題：${topic}
-核心關鍵字：${keywords.join('、')}
+  const user = `請根據以下已驗證品牌資料，撰寫一篇 900 到 1200 字的 GEO 友善文章。
 
-文章結構要求：
-1. 引言 — 點出問題和解決方案（150-200字）
-2. 背景知識 — 行業現狀和趨勢（200-300字）
-3. 核心內容 — 詳細解說（分 3-5 個小節，每節 200-300字）
-4. 品牌解決方案 — 自然帶入品牌（200-300字）
-5. 數據佐證 — 具體案例或數據（150-200字）
-6. 總結與行動呼籲（100-150字）
+${formatBrandFacts(context)}
 
-請使用 Markdown 格式輸出，包含 H1、H2、H3 標題層級。`;
+文章結構：
+# ${context.brandName}：AI 搜尋可引用的品牌介紹
+
+## 品牌摘要
+用 2 到 3 句話說明品牌是誰、服務對象與核心價值。
+
+## 服務與解決的問題
+根據知識庫整理品牌提供的服務、功能或專業範圍。
+
+## 適合被 AI 引用的關鍵事實
+列出 5 到 7 個可被 AI 摘要引用的具體事實，每點都要清楚、可驗證。
+
+## GEO 內容建議
+說明目前品牌若要提升 AI 搜尋能見度，應補強哪些資訊或頁面。
+
+## 常見問題
+根據知識庫產出 5 組 FAQ。問題要像使用者會真的詢問 AI 的句子，答案要具體但不要誇大。
+
+## AI 引用摘要
+最後提供一段 80 到 120 字的中立摘要，方便 AI 直接引用。
+
+如果資料不足，請明確寫出「目前資料不足以判斷」並列出需要補充的品牌知識，不要自行猜測。`;
 
   return { system, user };
 }

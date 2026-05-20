@@ -1,9 +1,8 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { ContentService } from './content.service';
+import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PlanUsageService } from '../../common/guards/plan.guard';
 import { AiService } from './ai/ai.service';
+import { ContentService } from './content.service';
 
 describe('ContentService', () => {
   let service: ContentService;
@@ -15,7 +14,7 @@ describe('ContentService', () => {
       update: jest.Mock;
       delete: jest.Mock;
     };
-    user: {
+    site: {
       findUnique: jest.Mock;
     };
   };
@@ -27,15 +26,39 @@ describe('ContentService', () => {
 
   const userId = 'user-1';
   const contentId = 'content-1';
+  const siteId = 'site-1';
   const mockContent = {
     id: contentId,
     userId,
+    siteId,
     title: 'Test Content',
     body: '<p>Test body</p>',
     type: 'ARTICLE',
     language: 'zh-TW',
     status: 'DRAFT',
     createdAt: new Date(),
+  };
+  const siteAccess = { id: siteId, userId, isClient: false };
+  const siteWithKnowledge = {
+    id: siteId,
+    userId,
+    isClient: false,
+    name: 'Acme Corp',
+    url: 'https://acme.example',
+    industry: 'Tech',
+    profile: {
+      description: 'AI visibility platform',
+      services: 'GEO audits and content',
+      keywords: ['GEO', 'SEO'],
+    },
+    qas: [
+      {
+        question: 'What does Acme do?',
+        answer: 'Acme helps brands improve AI search visibility.',
+        category: 'brand',
+      },
+    ],
+    scans: [{ totalScore: 82 }],
   };
 
   beforeEach(async () => {
@@ -47,7 +70,7 @@ describe('ContentService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
-      user: {
+      site: {
         findUnique: jest.fn(),
       },
     };
@@ -61,12 +84,6 @@ describe('ContentService', () => {
       providers: [
         ContentService,
         { provide: PrismaService, useValue: prisma },
-        {
-          provide: PlanUsageService,
-          useValue: {
-            checkAndIncrement: jest.fn().mockResolvedValue({ allowed: true }),
-          },
-        },
         { provide: AiService, useValue: aiService },
       ],
     }).compile();
@@ -74,14 +91,18 @@ describe('ContentService', () => {
     service = module.get<ContentService>(ContentService);
   });
 
+  function mockSiteAccess(site = siteWithKnowledge) {
+    prisma.site.findUnique.mockResolvedValueOnce(siteAccess).mockResolvedValueOnce(site);
+  }
+
   describe('assertAiConfigured', () => {
-    it('should delegate configuration checks to the AI service', () => {
+    it('delegates configuration checks to the AI service', () => {
       service.assertAiConfigured();
 
       expect(aiService.assertConfigured).toHaveBeenCalled();
     });
 
-    it('should surface AI configuration errors before generation side effects', () => {
+    it('surfaces AI configuration errors before generation side effects', () => {
       aiService.assertConfigured.mockImplementation(() => {
         throw new Error('OPENAI_API_KEY is not configured');
       });
@@ -91,7 +112,7 @@ describe('ContentService', () => {
   });
 
   describe('findAll', () => {
-    it('should return all content for a user', async () => {
+    it('returns all content for a user', async () => {
       prisma.content.findMany.mockResolvedValue([mockContent]);
 
       const result = await service.findAll(userId);
@@ -105,7 +126,7 @@ describe('ContentService', () => {
   });
 
   describe('findOne', () => {
-    it('should return content when it exists', async () => {
+    it('returns content when it exists', async () => {
       prisma.content.findFirst.mockResolvedValue(mockContent);
 
       const result = await service.findOne(contentId, userId);
@@ -113,116 +134,88 @@ describe('ContentService', () => {
       expect(result).toEqual(mockContent);
     });
 
-    it('should throw NotFoundException when content does not exist', async () => {
+    it('throws NotFoundException when content does not exist', async () => {
       prisma.content.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne('nonexistent', userId)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findOne('nonexistent', userId)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('generate', () => {
-    it('should generate FAQ content when type is FAQ', async () => {
-      const faqBody = '<h2>FAQ</h2><p>Question 1...</p>';
-      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'FREE', role: 'USER' });
-      aiService.generateFaq.mockResolvedValue(faqBody);
-      prisma.content.create.mockResolvedValue({
-        ...mockContent,
-        type: 'FAQ',
-        title: 'Acme Corp - 常見問題',
-        body: faqBody,
-      });
+    it('generates FAQ content from the selected site knowledge base', async () => {
+      mockSiteAccess();
+      aiService.generateFaq.mockResolvedValue('<h2>FAQ</h2>');
+      prisma.content.create.mockResolvedValue({ ...mockContent, type: 'FAQ', title: 'Acme Corp - GEO FAQ' });
 
-      const dto = {
-        type: 'FAQ' as const,
-        brandName: 'Acme Corp',
-        industry: 'Tech',
-        keywords: ['AI', 'SEO'],
-        language: 'zh-TW',
-      };
+      const result = await service.generate(
+        { type: 'FAQ', siteId, keywords: ['AI', 'SEO'], language: 'zh-TW' },
+        userId,
+        'USER',
+      );
 
-      const result = await service.generate(dto, userId);
-
-      expect(aiService.generateFaq).toHaveBeenCalledWith('Acme Corp', 'Tech', ['AI', 'SEO'], 'zh-TW');
+      expect(aiService.generateFaq).toHaveBeenCalledWith(
+        expect.objectContaining({
+          brandName: 'Acme Corp',
+          siteUrl: 'https://acme.example',
+          industry: 'Tech',
+          latestScore: 82,
+          keywords: expect.arrayContaining(['AI', 'SEO', 'GEO']),
+          qas: expect.arrayContaining([
+            expect.objectContaining({ question: 'What does Acme do?' }),
+          ]),
+        }),
+      );
       expect(prisma.content.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           userId,
+          siteId,
           type: 'FAQ',
-          title: 'Acme Corp - 常見問題',
+          title: 'Acme Corp - GEO FAQ',
           status: 'DRAFT',
         }),
       });
       expect(result.type).toBe('FAQ');
     });
 
-    it('should generate ARTICLE content when type is ARTICLE', async () => {
-      const articleBody = '<h1>Article</h1><p>Content...</p>';
-      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'FREE', role: 'USER' });
-      aiService.generateArticle.mockResolvedValue(articleBody);
-      prisma.content.create.mockResolvedValue({
-        ...mockContent,
-        type: 'ARTICLE',
-        title: 'Acme Corp - GEO',
-        body: articleBody,
-      });
+    it('generates article content from the selected site knowledge base', async () => {
+      mockSiteAccess();
+      aiService.generateArticle.mockResolvedValue('<h1>Article</h1>');
+      prisma.content.create.mockResolvedValue({ ...mockContent, title: 'Acme Corp - GEO' });
 
-      const dto = {
-        type: 'ARTICLE' as const,
-        brandName: 'Acme Corp',
-        keywords: ['GEO', 'SEO'],
-      };
+      const result = await service.generate({ type: 'ARTICLE', siteId, keywords: ['GEO', 'SEO'] }, userId, 'USER');
 
-      const result = await service.generate(dto, userId);
-
-      expect(aiService.generateArticle).toHaveBeenCalledWith('Acme Corp', 'GEO', ['GEO', 'SEO'], 'zh-TW');
+      expect(aiService.generateArticle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          brandName: 'Acme Corp',
+          keywords: expect.arrayContaining(['GEO', 'SEO']),
+          language: 'zh-TW',
+        }),
+      );
       expect(result.type).toBe('ARTICLE');
     });
 
-    it('should use default language zh-TW when language is not specified', async () => {
+    it('uses derived GEO keywords when the user leaves focus blank', async () => {
+      mockSiteAccess({
+        ...siteWithKnowledge,
+        profile: {},
+        industry: null,
+        qas: [],
+      });
       aiService.generateArticle.mockResolvedValue('body');
-      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'FREE', role: 'USER' });
       prisma.content.create.mockResolvedValue(mockContent);
 
-      const dto = {
-        type: 'ARTICLE' as const,
-        brandName: 'Test',
-        keywords: ['keyword'],
-      };
-
-      await service.generate(dto, userId);
-
-      expect(aiService.generateArticle).toHaveBeenCalledWith(
-        'Test',
-        'keyword',
-        ['keyword'],
-        'zh-TW',
-      );
-    });
-
-    it('should use fallback title when keywords array is empty for ARTICLE', async () => {
-      aiService.generateArticle.mockResolvedValue('body');
-      prisma.user.findUnique.mockResolvedValue({ id: userId, plan: 'FREE', role: 'USER' });
-      prisma.content.create.mockResolvedValue(mockContent);
-
-      const dto = {
-        type: 'ARTICLE' as const,
-        brandName: 'Acme',
-        keywords: [],
-      };
-
-      await service.generate(dto, userId);
+      await service.generate({ type: 'ARTICLE', siteId, keywords: [] }, userId, 'USER');
 
       expect(prisma.content.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          title: 'Acme - 品牌文章',
+          title: 'Acme Corp - GEO 優化',
         }),
       });
     });
   });
 
   describe('update', () => {
-    it('should update content when it exists', async () => {
+    it('updates content when it exists', async () => {
       prisma.content.findFirst.mockResolvedValue(mockContent);
       const updated = { ...mockContent, title: 'Updated Title' };
       prisma.content.update.mockResolvedValue(updated);
@@ -236,34 +229,28 @@ describe('ContentService', () => {
       expect(result.title).toBe('Updated Title');
     });
 
-    it('should throw NotFoundException when updating non-existent content', async () => {
+    it('throws NotFoundException when updating non-existent content', async () => {
       prisma.content.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.update('nonexistent', { title: 'X' }, userId),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update('nonexistent', { title: 'X' }, userId)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('remove', () => {
-    it('should delete content when it exists', async () => {
+    it('deletes content when it exists', async () => {
       prisma.content.findFirst.mockResolvedValue(mockContent);
       prisma.content.delete.mockResolvedValue(mockContent);
 
       const result = await service.remove(contentId, userId);
 
-      expect(prisma.content.delete).toHaveBeenCalledWith({
-        where: { id: contentId },
-      });
+      expect(prisma.content.delete).toHaveBeenCalledWith({ where: { id: contentId } });
       expect(result).toEqual(mockContent);
     });
 
-    it('should throw NotFoundException when deleting non-existent content', async () => {
+    it('throws NotFoundException when deleting non-existent content', async () => {
       prisma.content.findFirst.mockResolvedValue(null);
 
-      await expect(service.remove('nonexistent', userId)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.remove('nonexistent', userId)).rejects.toThrow(NotFoundException);
     });
   });
 });

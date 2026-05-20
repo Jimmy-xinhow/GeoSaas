@@ -1,24 +1,30 @@
-import { IsString, IsEnum, IsArray, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { ArrayMaxSize, IsArray, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class GenerateContentDto {
   @ApiProperty({ enum: ['FAQ', 'ARTICLE'] })
   @IsEnum(['FAQ', 'ARTICLE'])
   type: 'FAQ' | 'ARTICLE';
 
-  @ApiProperty({ example: 'Acme Corp' })
+  @ApiProperty({
+    example: 'clx_site_id',
+    description: 'The owned site whose brand profile and knowledge base should ground the generated content.',
+  })
   @IsString()
-  brandName: string;
+  siteId: string;
 
-  @ApiProperty({ example: '電子商務', required: false })
-  @IsString()
+  @ApiProperty({
+    example: ['GEO 優化', 'AI 搜尋能見度'],
+    type: [String],
+    required: false,
+    description: 'Optional content focus. Brand facts are loaded from the selected site knowledge base.',
+  })
   @IsOptional()
-  industry?: string;
-
-  @ApiProperty({ example: ['GEO 優化', 'AI 搜尋'], type: [String] })
   @IsArray()
   @IsString({ each: true })
-  keywords: string[];
+  @ArrayMaxSize(8)
+  @MaxLength(80, { each: true })
+  keywords?: string[];
 
   @ApiProperty({ example: 'zh-TW', required: false })
   @IsString()

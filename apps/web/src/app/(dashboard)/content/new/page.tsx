@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Sparkles, Loader2, ArrowLeft, Copy, RefreshCw, FileText } from 'lucide-react'
+import { ArrowLeft, Copy, FileText, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,18 +23,18 @@ import {
 } from '@/components/ui/select'
 import ContentTypeSelector from '@/components/content/content-type-selector'
 import { useGenerateContent } from '@/hooks/use-content'
+import { useBrandFactReadiness, useSites } from '@/hooks/use-sites'
+import { useKnowledge } from '@/hooks/use-knowledge'
 
 export default function ContentNewPage() {
   const router = useRouter()
   const generateContent = useGenerateContent()
+  const { data: sites = [], isLoading: isSitesLoading } = useSites()
 
   const [contentType, setContentType] = useState('faq')
   const [language, setLanguage] = useState('zh-TW')
-  const [brandName, setBrandName] = useState('')
-  const [industry, setIndustry] = useState('')
+  const [selectedSiteId, setSelectedSiteId] = useState('')
   const [keywords, setKeywords] = useState('')
-
-  // Store the generated content result
   const [generatedResult, setGeneratedResult] = useState<{
     id: string
     title: string
@@ -42,7 +42,19 @@ export default function ContentNewPage() {
     type: string
   } | null>(null)
 
-  // Map frontend content type values to backend enum
+  const selectedSite = useMemo(
+    () => sites.find((site) => site.id === selectedSiteId),
+    [selectedSiteId, sites]
+  )
+  const { data: knowledge = [] } = useKnowledge(selectedSiteId)
+  const { data: readiness } = useBrandFactReadiness(selectedSiteId)
+
+  useEffect(() => {
+    if (!selectedSiteId && sites.length > 0) {
+      setSelectedSiteId(sites[0].id)
+    }
+  }, [selectedSiteId, sites])
+
   const mapContentType = (frontendType: string): 'FAQ' | 'ARTICLE' => {
     switch (frontendType) {
       case 'faq':
@@ -54,31 +66,27 @@ export default function ContentNewPage() {
     }
   }
 
+  const keywordArray = useMemo(
+    () =>
+      keywords
+        .split(/[,，、\n]/)
+        .map((keyword) => keyword.trim())
+        .filter(Boolean),
+    [keywords]
+  )
+
   const handleGenerate = () => {
-    // Validate required fields
-    if (!brandName.trim()) {
-      toast.error('請輸入品牌名稱')
+    if (!selectedSiteId) {
+      toast.error('請先選擇要產生內容的品牌網站')
       return
     }
 
-    const keywordArray = keywords
-      .split(/[,，]/)
-      .map((k) => k.trim())
-      .filter(Boolean)
-
-    if (keywordArray.length === 0) {
-      toast.error('請至少輸入一個關鍵字')
-      return
-    }
-
-    // Clear previous result
     setGeneratedResult(null)
 
     generateContent.mutate(
       {
         type: mapContentType(contentType),
-        brandName: brandName.trim(),
-        industry: industry.trim() || undefined,
+        siteId: selectedSiteId,
         keywords: keywordArray,
         language,
       },
@@ -90,12 +98,12 @@ export default function ContentNewPage() {
             body: data.body || '',
             type: data.type,
           })
-          toast.success('內容生成完成！')
+          toast.success('內容已產生，並已存成草稿')
         },
         onError: (error: any) => {
           const message =
-            error?.response?.data?.message || error?.message || '生成失敗，請稍後再試'
-          toast.error(`生成失敗：${message}`)
+            error?.response?.data?.message || error?.message || '產生失敗，請稍後再試'
+          toast.error(`產生失敗：${message}`)
         },
       }
     )
@@ -105,40 +113,31 @@ export default function ContentNewPage() {
     if (!generatedResult?.body) return
     try {
       await navigator.clipboard.writeText(generatedResult.body)
-      toast.success('已複製到剪貼簿')
+      toast.success('內容已複製')
     } catch {
       toast.error('複製失敗')
     }
   }
 
-  const handleNavigateToDetail = () => {
-    if (generatedResult?.id) {
-      router.push(`/content`)
-    }
-  }
-
   const resultDescription =
     contentType === 'faq'
-      ? 'FAQ JSON-LD 結構化資料'
-      : contentType === 'article'
-        ? 'Markdown 權威文章'
-        : '品牌知識庫內容'
+      ? '根據品牌知識庫產生的 GEO FAQ'
+      : '根據品牌知識庫產生的 GEO 友善文章'
+
+  const profile = selectedSite?.profile
+  const readinessFacts = readiness?.verifiedFacts?.slice(0, 3) || []
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-white">AI 內容生成</h1>
         <p className="text-muted-foreground mt-1">
-          使用 AI 自動生成 GEO 優化的品牌內容
+          內容會綁定你的品牌網站與知識庫，不需要手動填品牌資料。
         </p>
       </div>
 
-      {/* Two-column layout: form on the left, live preview on the right */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        {/* Left column — Steps 1 & 2 */}
         <div className="space-y-6 min-w-0">
-          {/* Step 1: Content type selector */}
           <div>
             <h3 className="text-sm font-medium text-muted-foreground mb-3">
               步驟 1：選擇內容類型
@@ -146,51 +145,85 @@ export default function ContentNewPage() {
             <ContentTypeSelector value={contentType} onChange={setContentType} />
           </div>
 
-          {/* Step 2: Form */}
           <div>
             <h3 className="text-sm font-medium text-muted-foreground mb-3">
-              步驟 2：填寫品牌資訊
+              步驟 2：綁定品牌知識庫
             </h3>
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle>品牌資訊</CardTitle>
+                <CardTitle>品牌資料來源</CardTitle>
                 <CardDescription>
-                  提供品牌相關資訊，AI 將根據這些資訊生成優化內容
+                  AI 只會使用你已建立的網站、品牌設定與知識庫 Q&A 產生內容。
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="brand">品牌名稱</Label>
-                    <Input
-                      id="brand"
-                      placeholder="例如：TechFlow"
-                      value={brandName}
-                      onChange={(e) => setBrandName(e.target.value)}
-                      disabled={generateContent.isPending}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="industry">行業</Label>
-                    <Input
-                      id="industry"
-                      placeholder="例如：科技 / SaaS"
-                      value={industry}
-                      onChange={(e) => setIndustry(e.target.value)}
-                      disabled={generateContent.isPending}
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label>選擇品牌網站</Label>
+                  <Select
+                    value={selectedSiteId}
+                    onValueChange={setSelectedSiteId}
+                    disabled={generateContent.isPending || isSitesLoading || sites.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={isSitesLoading ? '載入網站中...' : '選擇網站'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sites.map((site) => (
+                        <SelectItem key={site.id} value={site.id}>
+                          {site.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
+                {selectedSite ? (
+                  <div className="rounded-md border border-white/10 bg-black/20 p-4 text-sm text-gray-300 space-y-2">
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-400">品牌</span>
+                      <span className="text-right text-white">{selectedSite.name}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-400">網站</span>
+                      <span className="text-right break-all">{selectedSite.url}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-400">產業</span>
+                      <span className="text-right">{profile?.industry || '尚未設定'}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-400">知識庫</span>
+                      <span className="text-right">{knowledge.length} 組 Q&A</span>
+                    </div>
+                    {readinessFacts.length > 0 && (
+                      <div className="pt-2 border-t border-white/10">
+                        <p className="text-gray-400 mb-2">已驗證事實</p>
+                        <ul className="space-y-1">
+                          {readinessFacts.map((fact) => (
+                            <li key={fact}>- {fact}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+                    目前沒有可用網站。請先新增網站與品牌知識庫，再使用內容引擎。
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  <Label htmlFor="keywords">關鍵字（逗號分隔）</Label>
+                  <Label htmlFor="keywords">生成重點（選填）</Label>
                   <Input
                     id="keywords"
-                    placeholder="例如：AI, 數位轉型, 雲端服務, SaaS"
+                    placeholder="例如：GEO 優化、AI 搜尋能見度、品牌 FAQ"
                     value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
+                    onChange={(event) => setKeywords(event.target.value)}
                     disabled={generateContent.isPending}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    不填也可以，系統會從品牌設定與知識庫自動整理重點。
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -204,8 +237,8 @@ export default function ContentNewPage() {
                       <SelectValue placeholder="選擇語言" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="zh-TW">中文（繁體）</SelectItem>
-                      <SelectItem value="zh-CN">中文（簡體）</SelectItem>
+                      <SelectItem value="zh-TW">繁體中文</SelectItem>
+                      <SelectItem value="zh-CN">簡體中文</SelectItem>
                       <SelectItem value="en">英文</SelectItem>
                       <SelectItem value="ja">日文</SelectItem>
                     </SelectContent>
@@ -214,18 +247,18 @@ export default function ContentNewPage() {
 
                 <Button
                   onClick={handleGenerate}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
-                  disabled={generateContent.isPending}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={generateContent.isPending || !selectedSiteId}
                 >
                   {generateContent.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      AI 正在生成內容...
+                      AI 正在產生內容...
                     </>
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      開始生成
+                      產生內容
                     </>
                   )}
                 </Button>
@@ -234,13 +267,12 @@ export default function ContentNewPage() {
           </div>
         </div>
 
-        {/* Right column — preview / loading / empty state */}
         <div className="lg:sticky lg:top-6 min-w-0">
           {generatedResult ? (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-purple-400" />
+                  <Sparkles className="h-5 w-5 text-blue-400" />
                   AI 生成結果
                 </CardTitle>
                 <CardDescription>{resultDescription}</CardDescription>
@@ -249,16 +281,16 @@ export default function ContentNewPage() {
                 <div className="mb-2 text-sm text-muted-foreground">
                   標題：{generatedResult.title}
                 </div>
-                <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm leading-relaxed max-h-[60vh] overflow-y-auto">
+                <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm leading-relaxed max-h-[60vh] overflow-y-auto whitespace-pre-wrap">
                   <code>{generatedResult.body}</code>
                 </pre>
                 <div className="flex flex-wrap gap-2 mt-4">
                   <Button
-                    onClick={handleNavigateToDetail}
+                    onClick={() => router.push('/content')}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />
-                    返回內容列表
+                    回內容列表
                   </Button>
                   <Button variant="outline" onClick={handleCopyToClipboard}>
                     <Copy className="h-4 w-4 mr-2" />
@@ -280,9 +312,9 @@ export default function ContentNewPage() {
               <CardContent className="flex flex-col items-center justify-center text-center gap-4 min-h-[60vh] py-10">
                 <Loader2 className="h-12 w-12 text-blue-400 animate-spin" />
                 <div>
-                  <p className="font-medium text-blue-300">AI 正在生成內容…</p>
+                  <p className="font-medium text-blue-300">AI 正在整理品牌知識庫</p>
                   <p className="text-sm text-blue-400 mt-1">
-                    通常需要 10–30 秒，請稍候
+                    生成會以已選網站的資料為依據，通常需要 10 到 30 秒。
                   </p>
                 </div>
               </CardContent>
@@ -292,9 +324,9 @@ export default function ContentNewPage() {
               <CardContent className="flex flex-col items-center justify-center text-center gap-3 min-h-[60vh] py-10 text-gray-400">
                 <FileText className="h-12 w-12 text-gray-600" />
                 <div>
-                  <p className="font-medium">生成結果會出現在這裡</p>
+                  <p className="font-medium">生成結果會顯示在這裡</p>
                   <p className="text-sm text-gray-500 mt-1">
-                    在左側填寫品牌資訊後按「開始生成」
+                    選擇品牌網站後，系統會自動帶入知識庫內容。
                   </p>
                 </div>
               </CardContent>

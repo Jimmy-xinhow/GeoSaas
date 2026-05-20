@@ -13,9 +13,8 @@ interface ContentItem {
 
 interface GenerateContentPayload {
   type: 'FAQ' | 'ARTICLE';
-  brandName: string;
-  industry?: string;
-  keywords: string[];
+  siteId: string;
+  keywords?: string[];
   language?: string;
 }
 

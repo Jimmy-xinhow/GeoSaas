@@ -1,6 +1,6 @@
 'use client'
 
-import { HelpCircle, FileText, Database, Check } from 'lucide-react'
+import { Check, Database, FileText, HelpCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ContentTypeSelectorProps {
@@ -14,7 +14,6 @@ interface TypeDef {
   label: string
   description: string
   badge: string
-  // Tailwind gradient + glow palette per type
   gradientFrom: string
   gradientTo: string
   iconText: string
@@ -27,7 +26,7 @@ const contentTypes: TypeDef[] = [
     id: 'faq',
     icon: HelpCircle,
     label: '常見問題',
-    description: 'FAQ JSON-LD 結構化資料',
+    description: '產生適合 AI 引用的 FAQ',
     badge: 'JSON-LD',
     gradientFrom: 'from-cyan-500/30',
     gradientTo: 'to-sky-500/10',
@@ -38,8 +37,8 @@ const contentTypes: TypeDef[] = [
   {
     id: 'article',
     icon: FileText,
-    label: '權威文章',
-    description: 'SEO 優化的 Markdown 長文',
+    label: '品牌文章',
+    description: '產生 GEO 友善 Markdown 文章',
     badge: 'Markdown',
     gradientFrom: 'from-violet-500/30',
     gradientTo: 'to-purple-500/10',
@@ -50,8 +49,8 @@ const contentTypes: TypeDef[] = [
   {
     id: 'knowledge',
     icon: Database,
-    label: '品牌知識庫',
-    description: '完整品牌知識庫條目',
+    label: '知識庫整理',
+    description: '把品牌知識整理成可引用內容',
     badge: 'Knowledge',
     gradientFrom: 'from-amber-500/30',
     gradientTo: 'to-orange-500/10',
@@ -78,15 +77,10 @@ export default function ContentTypeSelector({
               'group relative overflow-hidden rounded-xl border text-left p-4 transition-all duration-200',
               'bg-white/5 backdrop-blur-sm hover:-translate-y-0.5',
               isActive
-                ? cn(
-                    'border-transparent ring-2 shadow-lg',
-                    type.ring,
-                    type.glow,
-                  )
+                ? cn('border-transparent ring-2 shadow-lg', type.ring, type.glow)
                 : 'border-white/10 hover:border-white/20 hover:bg-white/[0.07]',
             )}
           >
-            {/* Animated gradient background — only on active */}
             <div
               className={cn(
                 'absolute inset-0 bg-gradient-to-br opacity-0 transition-opacity duration-300 pointer-events-none',
@@ -96,7 +90,6 @@ export default function ContentTypeSelector({
               )}
             />
 
-            {/* Subtle gradient hint on hover (when inactive) */}
             <div
               className={cn(
                 'absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-40 transition-opacity duration-300 pointer-events-none',
@@ -106,7 +99,6 @@ export default function ContentTypeSelector({
               )}
             />
 
-            {/* Active checkmark — top right */}
             <div
               className={cn(
                 'absolute top-3 right-3 h-5 w-5 rounded-full bg-white/90 flex items-center justify-center transition-all duration-200',
@@ -116,7 +108,6 @@ export default function ContentTypeSelector({
               <Check className="h-3 w-3 text-gray-900 stroke-[3]" />
             </div>
 
-            {/* Body */}
             <div className="relative flex items-start gap-3">
               <div
                 className={cn(

@@ -134,6 +134,54 @@ export class CreditService {
   }
 
   /**
+   * Refund a deduction when a paid AI operation fails after quota was reserved.
+   * Admin/staff bypasses are reported as source "free" but do not need a refund.
+   */
+  async refundDeduction(
+    userId: string,
+    points: number,
+    deduction: CreditCheckResult,
+    description: string,
+  ): Promise<void> {
+    if (!deduction.allowed || deduction.source === 'denied') return;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, credits: true, freeGenUsed: true },
+    });
+    if (!user) return;
+
+    if (user.role === 'STAFF' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') return;
+
+    if (deduction.source === 'free') {
+      await this.prisma.user.updateMany({
+        where: { id: userId },
+        data: { freeGenUsed: { decrement: user.freeGenUsed > 0 ? 1 : 0 } },
+      });
+      this.logger.log(`Free generation refunded: ${userId} (${description})`);
+      return;
+    }
+
+    if (deduction.source === 'credits') {
+      const newBalance = user.credits + points;
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { credits: newBalance },
+      });
+      await this.prisma.creditTransaction.create({
+        data: {
+          userId,
+          type: 'refund',
+          amount: points,
+          balance: newBalance,
+          description,
+        },
+      });
+      this.logger.log(`Credit refunded: ${userId} +${points} (${description}), balance: ${newBalance}`);
+    }
+  }
+
+  /**
    * Add credits after payment
    */
   async addCredits(userId: string, points: number, orderId?: string): Promise<{ balance: number }> {

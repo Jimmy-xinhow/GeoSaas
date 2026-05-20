@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { buildFaqPrompt } from './prompts/faq.prompt';
 import { buildArticlePrompt } from './prompts/article.prompt';
+import { ContentPromptContext } from './prompts/prompt-context';
 
 @Injectable()
 export class AiService {
@@ -55,9 +56,9 @@ export class AiService {
     throw new BadRequestException(`AI 生成失敗: ${errMsg.substring(0, 200)}`);
   }
 
-  async generateFaq(brand: string, industry: string, keywords: string[], language: string = 'zh-TW'): Promise<string> {
+  async generateFaq(context: ContentPromptContext): Promise<string> {
     this.assertConfigured();
-    const { system, user } = buildFaqPrompt(brand, industry, keywords, language);
+    const { system, user } = buildFaqPrompt(context);
 
     try {
       const response = await this.client!.chat.completions.create({
@@ -75,9 +76,9 @@ export class AiService {
     }
   }
 
-  async generateArticle(brand: string, topic: string, keywords: string[], language: string = 'zh-TW'): Promise<string> {
+  async generateArticle(context: ContentPromptContext): Promise<string> {
     this.assertConfigured();
-    const { system, user } = buildArticlePrompt(brand, topic, keywords, language);
+    const { system, user } = buildArticlePrompt(context);
 
     try {
       const response = await this.client!.chat.completions.create({
