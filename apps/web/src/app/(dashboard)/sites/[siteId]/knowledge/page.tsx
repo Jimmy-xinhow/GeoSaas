@@ -458,7 +458,7 @@ function AddQaForm({
             aria-label="回答"
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
-            placeholder="例：我們提供免費方案和 Pro 方案，Pro 方案每月 NT$990..."
+            placeholder="例：我們提供免費方案和 Pro 方案，Pro 方案每月 NT$1090..."
             className="mt-1 bg-white/5 text-sm"
             rows={3}
           />

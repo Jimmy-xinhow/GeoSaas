@@ -20,6 +20,9 @@ import {
   BookOpen,
   FileText,
   Bot,
+  PlugZap,
+  SearchCheck,
+  LockKeyhole,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
@@ -42,8 +45,10 @@ import { isBillingRequiredError } from '@/lib/billing-error'
 import { useBrandFactReadiness, useSite, useUpdateSiteProfile, type BrandFactReadiness, type SiteProfile } from '@/hooks/use-sites'
 import {
   useTriggerScan,
+  useRunDeepAnalysis,
   useScanHistory,
   useScanResults,
+  type DeepAnalysisResult,
   type Scan,
   type ScanResultItem,
 } from '@/hooks/use-scan'
@@ -441,6 +446,137 @@ function BadgeSection({ siteId }: { siteId: string }) {
 }
 
 // ── Main page component ──
+function DeepAnalysisSection({ siteId }: { siteId: string }) {
+  const runDeepAnalysis = useRunDeepAnalysis()
+  const [analysis, setAnalysis] = useState<DeepAnalysisResult | null>(null)
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null)
+
+  const run = async () => {
+    setUpgradeMessage(null)
+    try {
+      const result = await runDeepAnalysis.mutateAsync(siteId)
+      setAnalysis(result)
+      toast.success('站內深度分析完成')
+    } catch (err: any) {
+      const payload = err?.response?.data?.message
+      const message =
+        typeof payload === 'object'
+          ? payload.message
+          : err?.response?.data?.message
+      if (err?.response?.status === 403) {
+        setUpgradeMessage(message || '站內深度分析需要 Pro 方案。')
+        return
+      }
+      toast.error(message || '站內深度分析失敗，請稍後再試')
+    }
+  }
+
+  return (
+    <Card className="bg-white/5 border-white/10">
+      <CardHeader>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <SearchCheck className="h-5 w-5 text-blue-400" />
+              站內深度分析
+              <Badge className="bg-blue-500/20 text-blue-200">Pro</Badge>
+            </CardTitle>
+            <CardDescription>
+              抽樣掃描首頁與內頁，判斷 FAQ Schema、Article Schema 與問答型內容是否真的出現在公開 HTML。
+            </CardDescription>
+          </div>
+          <Button onClick={run} disabled={runDeepAnalysis.isPending}>
+            {runDeepAnalysis.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <SearchCheck className="h-4 w-4 mr-2" />
+            )}
+            執行深度分析
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {upgradeMessage && (
+          <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
+            <div className="flex items-start gap-3">
+              <LockKeyhole className="mt-0.5 h-5 w-5 text-blue-300" />
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-blue-100">需要升級 Pro 才能使用</p>
+                <p className="text-sm text-blue-100/80">{upgradeMessage}</p>
+                <Link href="/settings#pricing">
+                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                    查看 Pro 方案
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!analysis && !upgradeMessage && (
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-muted-foreground">
+            此功能會檢查多個內頁，適合判斷「首頁沒有，但文章內是否有 FAQ Schema」這類情境。
+          </div>
+        )}
+
+        {analysis && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <p className="text-sm font-medium text-white">{analysis.interpretation}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                分析時間：{new Date(analysis.analyzedAt).toLocaleString('zh-TW')}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+              <div className="rounded-lg border border-white/10 bg-gray-950/50 p-3">
+                <p className="text-xs text-muted-foreground">分析頁數</p>
+                <p className="mt-1 text-2xl font-bold text-white">{analysis.summary.pagesAnalyzed}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-gray-950/50 p-3">
+                <p className="text-xs text-muted-foreground">JSON-LD 頁面</p>
+                <p className="mt-1 text-2xl font-bold text-white">{analysis.summary.jsonLdPages}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-gray-950/50 p-3">
+                <p className="text-xs text-muted-foreground">FAQ Schema</p>
+                <p className="mt-1 text-2xl font-bold text-white">{analysis.summary.faqSchemaPages}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-gray-950/50 p-3">
+                <p className="text-xs text-muted-foreground">FAQ 題數</p>
+                <p className="mt-1 text-2xl font-bold text-white">{analysis.summary.faqQuestionCount}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-gray-950/50 p-3">
+                <p className="text-xs text-muted-foreground">問答型文字</p>
+                <p className="mt-1 text-2xl font-bold text-white">{analysis.summary.visibleQuestionTextPages}</p>
+              </div>
+            </div>
+            <div className="max-h-72 overflow-auto rounded-lg border border-white/10">
+              {analysis.pages.map((page) => (
+                <div key={page.url} className="border-b border-white/10 p-3 last:border-b-0">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">{page.title || page.url}</p>
+                      <a href={page.url} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-blue-300 hover:underline">
+                        {page.url}
+                      </a>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {page.hasFaqSchema && <Badge className="bg-green-500/20 text-green-200">FAQPage</Badge>}
+                      {page.hasArticleSchema && <Badge className="bg-blue-500/20 text-blue-200">Article</Badge>}
+                      {page.jsonLdScripts > 0 && <Badge variant="outline">JSON-LD {page.jsonLdScripts}</Badge>}
+                      {page.hasVisibleQuestionText && <Badge variant="outline">問答文字</Badge>}
+                      {page.status === 'failed' && <Badge className="bg-red-500/20 text-red-200">失敗</Badge>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 const missingFactLabels: Record<string, string> = {
   location: '品牌所在地或服務區域',
   services: '具體服務/產品項目',
@@ -872,6 +1008,12 @@ export default function SiteDetailPage() {
                 修復工具
               </Button>
             </Link>
+            <Link href={`/sites/${siteId}/cms-fix`}>
+              <Button variant="outline">
+                <PlugZap className="h-4 w-4 mr-2" />
+                CMS 一鍵修復
+              </Button>
+            </Link>
             <Link href={`/sites/${siteId}/llms-txt`}>
               <Button variant="outline">
                 <FileText className="h-4 w-4 mr-2" />
@@ -1004,6 +1146,8 @@ export default function SiteDetailPage() {
       </div>
 
       <BadgeSection siteId={siteId} />
+
+      <DeepAnalysisSection siteId={siteId} />
 
       {/* Scan history chart */}
       <Card className="bg-white/5 border-white/10">

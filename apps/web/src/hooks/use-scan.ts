@@ -23,6 +23,38 @@ export interface Scan {
   results?: ScanResultItem[];
 }
 
+export interface DeepAnalysisPage {
+  url: string;
+  status: 'ok' | 'failed';
+  statusCode?: number;
+  title?: string;
+  jsonLdScripts: number;
+  schemaTypes: string[];
+  hasFaqSchema: boolean;
+  faqQuestionCount: number;
+  hasArticleSchema: boolean;
+  hasVisibleQuestionText: boolean;
+  error?: string;
+}
+
+export interface DeepAnalysisResult {
+  analyzedAt: string;
+  requiredPlan: 'PRO';
+  pageLimit: number;
+  site: { id: string; name: string; url: string };
+  summary: {
+    pagesAnalyzed: number;
+    pagesFailed: number;
+    jsonLdPages: number;
+    faqSchemaPages: number;
+    faqQuestionCount: number;
+    articleSchemaPages: number;
+    visibleQuestionTextPages: number;
+  };
+  pages: DeepAnalysisPage[];
+  interpretation: string;
+}
+
 export function useTriggerScan() {
   const queryClient = useQueryClient();
 
@@ -46,6 +78,19 @@ export function useTriggerScan() {
       queryClient.invalidateQueries({
         queryKey: ['scan-results'],
       });
+    },
+  });
+}
+
+export function useRunDeepAnalysis() {
+  return useMutation({
+    mutationFn: async (siteId: string) => {
+      const { data } = await apiClient.post<DeepAnalysisResult>(
+        `/sites/${siteId}/deep-analysis`,
+        undefined,
+        { suppressGlobalErrorToast: true },
+      );
+      return data;
     },
   });
 }

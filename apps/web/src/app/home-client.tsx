@@ -291,8 +291,8 @@ const pricingPlans = [
   },
   {
     name: 'Starter',
-    monthlyPrice: 390,
-    yearlyPrice: 351,
+    monthlyPrice: 690,
+    yearlyPrice: 621,
     features: [
       { text: '1 個網站', included: true },
       { text: '每站 6 次掃描/月', included: true },
@@ -301,6 +301,7 @@ const pricingPlans = [
       { text: '知識庫 Q&A（10 次/月）', included: true },
       { text: 'AI 引用監控（20 題/月，檢查扣 1 點/題）', included: true },
       { text: '每週 1 篇 AI 專屬內容（Geovault 發布）', included: true },
+      { text: '站內深度分析（多頁 FAQ/Schema 偵測）', included: false },
       { text: '多平台發佈', included: false },
       { text: '自動排程', included: false },
     ],
@@ -309,8 +310,8 @@ const pricingPlans = [
   },
   {
     name: 'Pro',
-    monthlyPrice: 690,
-    yearlyPrice: 621,
+    monthlyPrice: 1090,
+    yearlyPrice: 981,
     features: [
       { text: '3 個網站', included: true },
       { text: '每站 10 次掃描/月', included: true },
@@ -318,6 +319,7 @@ const pricingPlans = [
       { text: 'AI 修復、llms.txt、內容生成共用點數', included: true },
       { text: '知識庫 Q&A（15 次/月）', included: true },
       { text: 'AI 引用監控（30 題/月，檢查扣 1 點/題）', included: true },
+      { text: '站內深度分析（多頁 FAQ/Schema 偵測）', included: true },
       { text: '每週 3 篇 AI 專屬內容（Geovault 發布）', included: true },
       { text: '多平台發佈', included: true },
       { text: '自動排程', included: true },
@@ -377,7 +379,7 @@ const serviceComparison = [
   ['核心價值', '功能權限', '專人策略與執行'],
   ['報告', '系統產出', '專人解讀與下月建議'],
   ['優化方式', '工具提供建議', '專人規劃補強方向'],
-  ['價格', 'NT$390 / NT$690', 'NT$7,800 / NT$15,000'],
+  ['價格', 'NT$690 / NT$1,090', 'NT$7,800 / NT$15,000'],
 ]
 
 const managedDifferentiators = [
@@ -1230,17 +1232,17 @@ export default function HomeClient() {
               <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-4">
                 <TrendingUp className="h-6 w-6 text-blue-400" />
               </div>
-              <p className="text-3xl font-bold">NT$23</p>
+              <p className="text-3xl font-bold">NT$36</p>
               <p className="text-sm text-gray-400 mt-2">每天不到一杯咖啡<br />換取持續 AI 曝光</p>
             </div>
           </div>
 
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 max-w-2xl mx-auto text-center">
             <p className="text-lg leading-relaxed">
-              每月 <span className="text-3xl font-bold text-blue-400">NT$690</span> 的 Pro 方案
+              每月 <span className="text-3xl font-bold text-blue-400">NT$1,090</span> 的 Pro 方案
             </p>
             <p className="mt-3 text-gray-400">
-              = 每天 NT$23 = 讓你的品牌在 <strong className="text-gray-200">ChatGPT、Claude、Perplexity、Gemini、Copilot</strong> 上被主動推薦
+              = 每天約 NT$36 = 讓你的品牌在 <strong className="text-gray-200">ChatGPT、Claude、Perplexity、Gemini、Copilot</strong> 上被主動推薦
             </p>
             <p className="mt-4 text-sm text-gray-500">
               一個 AI 推薦帶來的高意願客戶，遠比 10 次 Google Ads 點擊更有價值

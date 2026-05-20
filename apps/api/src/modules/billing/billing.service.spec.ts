@@ -5,6 +5,7 @@ import { BillingService } from './billing.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
 import { CreditService } from './credit.service';
+import { AffiliateService } from '../affiliate/affiliate.service';
 import * as newebpayUtil from './newebpay.util';
 
 jest.mock('./newebpay.util');
@@ -19,6 +20,7 @@ describe('BillingService', () => {
     notification: { create: jest.Mock; createMany: jest.Mock };
   };
   let creditService: { addCredits: jest.Mock };
+  let affiliateService: { calculateCommission: jest.Mock };
 
   const userId = 'user-1';
 
@@ -31,6 +33,7 @@ describe('BillingService', () => {
       notification: { create: jest.fn(), createMany: jest.fn() },
     };
     creditService = { addCredits: jest.fn().mockResolvedValue({}) };
+    affiliateService = { calculateCommission: jest.fn().mockResolvedValue(null) };
 
     const configGet = jest.fn((key: string) => {
       const map: Record<string, string> = {
@@ -59,6 +62,10 @@ describe('BillingService', () => {
           provide: CreditService,
           useValue: creditService,
         },
+        {
+          provide: AffiliateService,
+          useValue: affiliateService,
+        },
       ],
     }).compile();
 
@@ -79,7 +86,7 @@ describe('BillingService', () => {
         expect.objectContaining({
           MerOrderNo: expect.stringMatching(/^GEO/),
           ProdDesc: 'Geovault Pro 方案 月繳訂閱',
-          PeriodAmt: 690,
+          PeriodAmt: 1090,
           PeriodType: 'M',
           PeriodStartType: '2',
           PeriodTimes: '48',
@@ -92,7 +99,7 @@ describe('BillingService', () => {
       );
       expect(prisma.order.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ userId, plan: 'PRO', amount: 690, status: 'PENDING' }),
+          data: expect.objectContaining({ userId, plan: 'PRO', amount: 1090, status: 'PENDING' }),
         }),
       );
       expect(result).toEqual({
@@ -115,7 +122,7 @@ describe('BillingService', () => {
           data: expect.objectContaining({
             userId,
             plan: 'STARTER',
-            amount: 4212,
+            amount: 7452,
             rawResponse: expect.objectContaining({
               billingCycle: 'yearly',
               periodTimes: '4',
@@ -126,7 +133,7 @@ describe('BillingService', () => {
       expect(newebpayUtil.encryptTradeInfo).toHaveBeenCalledWith(
         expect.objectContaining({
           ProdDesc: 'Geovault Starter 方案 年繳訂閱',
-          PeriodAmt: 4212,
+          PeriodAmt: 7452,
           PeriodType: 'Y',
           PeriodPoint: expect.stringMatching(/^\d{4}$/),
           PeriodTimes: '4',
@@ -226,6 +233,7 @@ describe('BillingService', () => {
         productionConfig as any,
         { getUsageSummary: jest.fn() } as any,
         creditService as any,
+        affiliateService as any,
       );
       prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
       prisma.order.create.mockResolvedValue({});
@@ -260,6 +268,7 @@ describe('BillingService', () => {
         productionConfig as any,
         { getUsageSummary: jest.fn() } as any,
         creditService as any,
+        affiliateService as any,
       );
       prisma.user.findUnique.mockResolvedValue({ id: userId, email: 'test@test.com' });
       prisma.order.create.mockResolvedValue({});
@@ -339,13 +348,13 @@ describe('BillingService', () => {
     it('should upgrade user plan after self-service period payment succeeds', async () => {
       (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
         Status: 'SUCCESS',
-        Result: { MerOrderNo: 'GEO123', PeriodNo: 'PERIOD123', PeriodAmt: 690 },
+        Result: { MerOrderNo: 'GEO123', PeriodNo: 'PERIOD123', PeriodAmt: 1090 },
       });
       prisma.order.findUnique.mockResolvedValue({
         merchantOrderNo: 'GEO123',
         userId,
         plan: 'PRO',
-        amount: 690,
+        amount: 1090,
         status: 'PENDING',
       });
       prisma.order.update.mockResolvedValue({});
@@ -410,7 +419,7 @@ describe('BillingService', () => {
         tradeNo: 'PERIOD123',
         userId,
         plan: 'PRO',
-        amount: 690,
+        amount: 1090,
         rawResponse: { Status: 'SUCCESS' },
       });
       prisma.order.update.mockResolvedValue({});
@@ -464,7 +473,7 @@ describe('BillingService', () => {
         tradeNo: 'PERIOD123',
         userId,
         plan: 'PRO',
-        amount: 690,
+        amount: 1090,
         rawResponse: {},
       });
       jest.spyOn(global, 'fetch' as any).mockResolvedValue({
@@ -484,10 +493,10 @@ describe('BillingService', () => {
       (newebpayUtil.generateTradeSha as jest.Mock).mockReturnValue('VALID_SHA');
       (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
         Status: 'SUCCESS',
-        Result: { MerchantOrderNo: 'GEO123', TradeNo: 'TN123', PaymentType: 'CREDIT', Amt: 690 },
+        Result: { MerchantOrderNo: 'GEO123', TradeNo: 'TN123', PaymentType: 'CREDIT', Amt: 1090 },
       });
       prisma.order.findUnique.mockResolvedValue({
-        merchantOrderNo: 'GEO123', userId, plan: 'PRO', amount: 690, status: 'PENDING',
+        merchantOrderNo: 'GEO123', userId, plan: 'PRO', amount: 1090, status: 'PENDING',
       });
       prisma.order.update.mockResolvedValue({});
       prisma.user.update.mockResolvedValue({});
@@ -520,7 +529,7 @@ describe('BillingService', () => {
         merchantOrderNo: 'GEO123',
         userId,
         plan: 'PRO',
-        amount: 690,
+        amount: 1090,
         status: 'PENDING',
       });
       prisma.order.update.mockResolvedValue({});

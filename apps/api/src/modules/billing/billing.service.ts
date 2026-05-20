@@ -21,13 +21,13 @@ import {
 type BillingCycle = 'monthly' | 'yearly';
 
 const PLAN_MONTHLY_PRICE: Record<string, number> = {
-  STARTER: 390,
-  PRO: 690,
+  STARTER: 690,
+  PRO: 1090,
 };
 
 const PLAN_YEARLY_MONTHLY_PRICE: Record<string, number> = {
-  STARTER: 351,
-  PRO: 621,
+  STARTER: 621,
+  PRO: 981,
 };
 
 const PLAN_DESC: Record<string, string> = {

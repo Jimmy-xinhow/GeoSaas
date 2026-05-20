@@ -7,6 +7,7 @@ import { ScanController } from './scan.controller';
 import { ScanService } from './scan.service';
 import { ScanProcessor } from './scan.processor';
 import { ScanPipelineService } from './scan-pipeline.service';
+import { DeepSiteAnalysisService } from './deep-site-analysis.service';
 import { PlanUsageService } from '../../common/guards/plan.guard';
 import { CrawlerService } from './crawler/crawler.service';
 import { ParserService } from './crawler/parser.service';
@@ -36,6 +37,7 @@ const indicatorProviders = [
 const coreProviders = [
   ScanService,
   ScanPipelineService,
+  DeepSiteAnalysisService,
   CrawlerService,
   ParserService,
   ScoringService,

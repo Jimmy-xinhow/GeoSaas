@@ -50,16 +50,16 @@ import {
 
 const PLAN_LIMITS: Record<string, { scans: number; sites: number; label: string; description: string }> = {
   FREE: { scans: 2, sites: 1, label: 'Free 方案', description: '每站 2 次掃描/月 | 1 個網站 | 1 次修復體驗' },
-  STARTER: { scans: 6, sites: 1, label: 'Starter 方案 NT$390/月', description: '每站 6 次掃描/月 | 1 個網站 | 每月 20 點方案 AI 額度 | 引用監控 20 題 | 每週 1 篇 Geovault 專屬內容' },
-  PRO: { scans: 10, sites: 3, label: 'Pro 方案 NT$690/月', description: '每站 10 次掃描/月 | 3 個網站 | 每月 40 點方案 AI 額度 | 引用監控 30 題 | 多平台 | 自動排程 | 每週 3 篇 Geovault 專屬內容' },
+  STARTER: { scans: 6, sites: 1, label: 'Starter 方案 NT$690/月', description: '每站 6 次掃描/月 | 1 個網站 | 每月 20 點方案 AI 額度 | 引用監控 20 題 | 每週 1 篇 Geovault 專屬內容' },
+  PRO: { scans: 10, sites: 3, label: 'Pro 方案 NT$1090/月', description: '每站 10 次掃描/月 | 3 個網站 | 站內深度分析 | 每月 40 點方案 AI 額度 | 引用監控 30 題 | 多平台 | 自動排程 | 每週 3 篇 Geovault 專屬內容' },
 }
 
 const SUBSCRIPTION_OPTIONS = [
   {
     plan: 'STARTER',
     name: 'Starter',
-    monthlyPrice: 390,
-    yearlyMonthlyPrice: 351,
+    monthlyPrice: 690,
+    yearlyMonthlyPrice: 621,
     icon: Wrench,
     accent: 'from-blue-500 to-cyan-400',
     metrics: ['1 網站', '6 掃描/月', '20 點/月', '20 題監控'],
@@ -80,8 +80,8 @@ const SUBSCRIPTION_OPTIONS = [
   {
     plan: 'PRO',
     name: 'Pro',
-    monthlyPrice: 690,
-    yearlyMonthlyPrice: 621,
+    monthlyPrice: 1090,
+    yearlyMonthlyPrice: 981,
     icon: Sparkles,
     accent: 'from-indigo-500 to-blue-400',
     metrics: ['3 網站', '10 掃描/月', '40 點/月', '30 題監控'],
@@ -96,6 +96,7 @@ const SUBSCRIPTION_OPTIONS = [
       '額度用完後可加購點數',
       '知識庫 Q&A 15 次/月',
       'AI 引用監控 30 題/月（檢查扣 1 點/題）',
+      '站內深度分析（多頁 FAQ/Schema 偵測）',
       '每週 3 篇 AI 專屬內容（Geovault 發布）',
       '多平台發佈',
       '自動排程',

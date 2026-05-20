@@ -8,7 +8,7 @@ export class CreateQaDto {
   @MaxLength(500)
   question: string;
 
-  @ApiProperty({ example: '我們提供免費方案和 Pro 方案，Pro 方案每月 NT$990...' })
+  @ApiProperty({ example: '我們提供免費方案和 Pro 方案，Pro 方案每月 NT$1090...' })
   @IsString()
   @MinLength(2)
   @MaxLength(5000)

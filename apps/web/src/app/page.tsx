@@ -179,7 +179,7 @@ const jsonLdApp = {
     {
       '@type': 'Offer',
       name: 'Starter',
-      price: '390',
+      price: '690',
       priceCurrency: 'TWD',
       description:
         '1 個網站、每站 6 次掃描/月、AI 修復 30 次、AI 內容 30 次、引用監控 20 題',
@@ -187,7 +187,7 @@ const jsonLdApp = {
     {
       '@type': 'Offer',
       name: 'Pro',
-      price: '690',
+      price: '1090',
       priceCurrency: 'TWD',
       description:
         '3 個網站、每站 10 次掃描/月、AI 修復 50 次、AI 內容 50 次、引用監控 30 題、多平台發佈、自動排程',

@@ -1,6 +1,7 @@
 import { BadRequestException, Controller, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ScanService } from './scan.service';
+import { DeepSiteAnalysisService } from './deep-site-analysis.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles, RolesGuard } from '../../common/guards/roles.guard';
 
@@ -8,7 +9,10 @@ import { Roles, RolesGuard } from '../../common/guards/roles.guard';
 @ApiBearerAuth()
 @Controller()
 export class ScanController {
-  constructor(private scanService: ScanService) {}
+  constructor(
+    private scanService: ScanService,
+    private deepSiteAnalysis: DeepSiteAnalysisService,
+  ) {}
 
   private parseLimit(value: string | undefined, fallback: number, max: number): number {
     if (value === undefined || value === '') return fallback;
@@ -56,6 +60,19 @@ export class ScanController {
     @CurrentUser('role') role: string,
   ) {
     return this.scanService.triggerScan(siteId, userId, role);
+  }
+
+  @Post('sites/:siteId/deep-analysis')
+  @ApiOperation({
+    summary:
+      'Run a Pro-only deep site analysis across sampled internal pages for FAQ/schema/AI-readable signals.',
+  })
+  runDeepAnalysis(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.deepSiteAnalysis.analyzeSite(siteId, userId, role);
   }
 
   @Get('sites/:siteId/scans')
