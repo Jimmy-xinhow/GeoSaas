@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 import BlogClient from './blog-client';
 
@@ -95,6 +96,7 @@ export default async function BlogPage() {
           </div>
         </section>
       )}
+      <PublicFooter />
     </div>
   );
 }

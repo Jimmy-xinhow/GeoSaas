@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useBrandImpression, useCitationTrend } from '@/hooks/use-industry-ai';
 import { INDUSTRIES } from '@geovault/shared';
 import { Bot, ArrowLeft, TrendingUp, ThumbsUp, ThumbsDown, Minus, MessageSquare, BarChart3, ExternalLink } from 'lucide-react';
+import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -209,6 +210,7 @@ export default function BrandDetailClient({ params }: { params: { industry: stri
           </p>
         </div>
       </div>
+      <PublicFooter />
     </>
   );
 }

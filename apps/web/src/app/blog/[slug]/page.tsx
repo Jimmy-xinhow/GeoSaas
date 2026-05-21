@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, ChevronRight, Clock, List } from 'lucide-react';
 import { getPost, getAllPosts } from '@/content/blog/posts';
 import RelatedArticles from './article-client';
+import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 import { extractHeadings, markdownToHtml } from './markdown';
 
@@ -296,6 +297,7 @@ export default async function BlogPostPage({ params }: Props) {
 
         <RelatedArticles slug={post.slug} />
       </article>
+      <PublicFooter />
     </div>
   );
 }

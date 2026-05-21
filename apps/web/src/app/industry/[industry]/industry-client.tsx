@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useIndustryAiRanking } from '@/hooks/use-industry-ai';
 import { INDUSTRIES } from '@geovault/shared';
 import { Trophy, TrendingUp, Bot, ArrowRight, BarChart3, Crown, Medal } from 'lucide-react';
+import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
@@ -199,6 +200,7 @@ export default function IndustryRankingClient({ params }: { params: { industry: 
           </Card>
         </div>
       </div>
+      <PublicFooter />
     </>
   );
 }

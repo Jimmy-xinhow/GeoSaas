@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Eye, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useSuccessCase, type SuccessCase, type SimilarSuccessCase } from '@/hooks/use-cases';
+import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
@@ -209,6 +210,7 @@ export default function CaseDetailClient({ initialCase }: { initialCase?: Succes
           </Link>
         </div>
       </article>
+      <PublicFooter />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
+import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 import EmailLink from '@/components/shared/email-link';
 
@@ -254,12 +255,7 @@ export default function PrivacyPage() {
 
       </div>
 
-      {/* Footer */}
-      <div className="border-t border-white/10 py-8 text-center">
-        <p className="text-xs font-mono text-gray-600">
-          © {new Date().getFullYear()} Geovault · <a href="https://www.geovault.app" className="text-gray-500 hover:text-blue-400">geovault.app</a> · <EmailLink className="text-gray-500 hover:text-blue-400" />
-        </p>
-      </div>
+      <PublicFooter />
     </div>
   );
 }

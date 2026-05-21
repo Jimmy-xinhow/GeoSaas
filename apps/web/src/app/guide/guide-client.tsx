@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PublicNavbar from '@/components/layout/public-navbar'
+import PublicFooter from '@/components/layout/public-footer'
 
 /* ─── Mock UI Components ─── */
 
@@ -607,11 +608,7 @@ export default function GuideClient() {
         </div>
       </section>
 
-      <footer className="py-8 border-t border-white/5 bg-gray-950">
-        <div className="max-w-6xl mx-auto px-6 text-center">
-          <p className="text-gray-600 text-sm">&copy; {new Date().getFullYear()} Geovault. All rights reserved.</p>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   )
 }

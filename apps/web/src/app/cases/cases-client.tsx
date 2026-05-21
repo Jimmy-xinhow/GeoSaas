@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useSuccessCases, useFeaturedCases } from '@/hooks/use-cases';
 import useAuthStore from '@/stores/auth-store';
+import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 import { INDUSTRIES } from '@geovault/shared';
 
@@ -278,6 +279,7 @@ export default function CasesClient() {
           </Link>
         </div>
       </section>
+      <PublicFooter />
     </div>
   );
 }

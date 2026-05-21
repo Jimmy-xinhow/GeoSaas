@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import PublicFooter from '@/components/layout/public-footer'
 import PublicNavbar from '@/components/layout/public-navbar'
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function DirectoryLayout({
     <div className="min-h-screen bg-gray-900">
       <PublicNavbar />
       <main>{children}</main>
+      <PublicFooter />
     </div>
   )
 }

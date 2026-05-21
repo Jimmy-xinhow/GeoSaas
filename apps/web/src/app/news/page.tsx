@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import NewsClient from './news-client';
+import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
@@ -91,6 +92,7 @@ export default async function NewsPage() {
           </div>
         </section>
       )}
+      <PublicFooter />
     </div>
   );
 }

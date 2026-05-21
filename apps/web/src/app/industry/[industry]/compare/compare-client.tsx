@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useIndustryAiSites, useBrandComparison } from '@/hooks/use-industry-ai';
 import { INDUSTRIES } from '@geovault/shared';
 import { ArrowLeft, ArrowLeftRight, Bot, Zap, Loader2 } from 'lucide-react';
+import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
@@ -218,6 +219,7 @@ export default function CompareClient({ params }: { params: { industry: string }
           </p>
         </div>
       </div>
+      <PublicFooter />
     </>
   );
 }

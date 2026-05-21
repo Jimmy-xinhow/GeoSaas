@@ -36,6 +36,7 @@ import { useSubmitIndexNow } from '@/hooks/use-indexnow'
 import { useCrawlerFeed, usePlatformStats } from '@/hooks/use-directory'
 import { useManagedCheckout } from '@/hooks/use-settings'
 import PublicNavbar from '@/components/layout/public-navbar'
+import PublicFooter from '@/components/layout/public-footer'
 import { GeovaultLogoCompact, GeovaultLogoCompactDark } from '@/components/logo'
 import { savePendingGuestScan } from '@/lib/pending-guest-scan'
 import { toast } from 'sonner'
@@ -1998,13 +1999,9 @@ export default function HomeClient() {
               </ul>
             </div>
           </div>
-          <div className="border-t border-white/5 pt-8 flex items-center justify-center gap-4 text-sm text-gray-600">
-            <span>&copy; {new Date().getFullYear()} Geovault</span>
-            <span>·</span>
-            <Link href="/privacy" className="hover:text-white transition-colors">隱私權政策</Link>
-          </div>
         </div>
       </footer>
+      <PublicFooter />
     </div>
   )
 }
