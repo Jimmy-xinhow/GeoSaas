@@ -13,7 +13,7 @@ import {
   Loader2,
   PlugZap,
   RotateCw,
-  Settings,
+  SearchCheck,
   ShieldCheck,
   Upload,
   Wrench,
@@ -167,7 +167,7 @@ function ActionRow({ action }: { action: SiteFixAction }) {
   )
 }
 
-function FixRunProgress({ run }: { run: SiteFixRun }) {
+function FixRunProgress({ run, siteId }: { run: SiteFixRun; siteId: string }) {
   const total = run.actions.length
   const applied = run.actions.filter((action) => action.status === 'applied').length
   const skipped = run.actions.filter((action) => action.status === 'skipped').length
@@ -216,6 +216,16 @@ function FixRunProgress({ run }: { run: SiteFixRun }) {
         <p className="mt-3 text-xs text-blue-100">
           如果一直停在已派送，請到 WordPress 的 Geovault Auto Fix 按一次「立即同步修復」，或確認外掛可以連到目前的 API URL。
         </p>
+      ) : null}
+      {waiting || isComplete ? (
+        <div className="mt-4">
+          <Link href={`/sites/${siteId}?afterCmsFix=1`}>
+            <Button className="bg-blue-600 text-white hover:bg-blue-700">
+              <SearchCheck className="mr-2 h-4 w-4" />
+              {isComplete ? '修復後重新掃描' : 'WordPress 同步完成後重新掃描'}
+            </Button>
+          </Link>
+        </div>
       ) : null}
     </div>
   )
@@ -514,17 +524,17 @@ export default function CmsFixPage() {
               {dispatchRun.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlugZap className="mr-2 h-4 w-4" />}
               派送到 WordPress
             </Button>
-            <Link href={`/sites/${siteId}/guided-fix`}>
+            <Link href={`/sites/${siteId}?afterCmsFix=1`}>
               <Button variant="outline">
-                <Settings className="mr-2 h-4 w-4" />
-                回引導頁面
+                <SearchCheck className="mr-2 h-4 w-4" />
+                修復後重新掃描
               </Button>
             </Link>
           </div>
 
           {latestRun?.actions.length ? (
             <div className="space-y-3">
-              <FixRunProgress run={latestRun} />
+              <FixRunProgress run={latestRun} siteId={siteId} />
               {latestRun.actions.map((action) => (
                 <ActionRow key={action.id} action={action} />
               ))}

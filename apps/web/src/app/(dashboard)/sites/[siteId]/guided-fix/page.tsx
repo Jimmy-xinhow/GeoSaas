@@ -13,6 +13,7 @@ import {
   LifeBuoy,
   Loader2,
   PlugZap,
+  SearchCheck,
   Sparkles,
   Wrench,
   XCircle,
@@ -37,6 +38,7 @@ import {
   type GuidedIssue,
   type HandoffFile,
 } from '@/hooks/use-guided-fix'
+import { useCmsFixStatus } from '@/hooks/use-cms-fix'
 
 function statusClass(status: string) {
   if (status === 'pass') return 'bg-green-500/20 text-green-300'
@@ -122,7 +124,13 @@ export default function GuidedFixPage() {
   const { data: plan, isLoading: planLoading, error: planError } = useGuidedFixPlan(siteId)
   const { data: handoff, isLoading: handoffLoading } = useEngineerHandoff(siteId)
   const { data: report, isLoading: reportLoading } = useCompletionReport(siteId)
+  const { data: cmsFixStatus } = useCmsFixStatus(siteId)
   const [activeTab, setActiveTab] = useState('quick-wins')
+  const cmsRunStatus = cmsFixStatus?.latestRun?.status
+  const hasDispatchedCmsFix =
+    cmsRunStatus === 'dispatched' ||
+    cmsRunStatus === 'partially_applied' ||
+    cmsRunStatus === 'applied'
 
   useEffect(() => {
     if (window.location.hash === '#handoff') {
@@ -260,44 +268,71 @@ export default function GuidedFixPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {plan.paths.map((path) => (
-          <Card key={path.key} className={path.recommended ? 'border-blue-500/40 bg-blue-500/10' : ''}>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-3">
-                <CardTitle className="text-base">{path.title}</CardTitle>
-                {path.recommended ? <Badge className="bg-blue-500/20 text-blue-200">推薦</Badge> : null}
-              </div>
-              <CardDescription>{path.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-4 text-sm text-muted-foreground">投入時間：{path.effort}</p>
-              {path.key === 'engineer' ? (
-                <Button
-                  className="w-full"
-                  variant={path.recommended ? 'default' : 'outline'}
-                  onClick={() => {
-                    setActiveTab('handoff')
-                    window.setTimeout(() => {
-                      document.getElementById('handoff')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }, 0)
-                  }}
-                >
-                  <FileDown className="mr-2 h-4 w-4" />
-                  {path.cta}
+      {hasDispatchedCmsFix ? (
+        <Card className="border-green-500/30 bg-green-500/10">
+          <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <Badge className="mb-2 bg-green-500/20 text-green-200">已進入驗證階段</Badge>
+              <h2 className="text-lg font-semibold text-white">下一步：修復後重新掃描</h2>
+              <p className="mt-1 max-w-2xl text-sm text-green-100/80">
+                CMS 修復包已派送到 WordPress。請重新掃描網站，讓系統用最新 HTML 判斷修復是否真的生效，再更新後續引導。
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Link href={`/sites/${siteId}?afterCmsFix=1`}>
+                <Button className="w-full bg-green-600 text-white hover:bg-green-700 sm:w-auto">
+                  <SearchCheck className="mr-2 h-4 w-4" />
+                  修復後重新掃描
                 </Button>
-              ) : (
-                <Link href={path.href}>
-                  <Button className="w-full" variant={path.recommended ? 'default' : 'outline'}>
-                    {path.key === 'wordpress' ? <PlugZap className="mr-2 h-4 w-4" /> : <LifeBuoy className="mr-2 h-4 w-4" />}
+              </Link>
+              <Link href={`/sites/${siteId}/cms-fix`}>
+                <Button variant="outline" className="w-full sm:w-auto">
+                  查看派送狀態
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-3">
+          {plan.paths.map((path) => (
+            <Card key={path.key} className={path.recommended ? 'border-blue-500/40 bg-blue-500/10' : ''}>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <CardTitle className="text-base">{path.title}</CardTitle>
+                  {path.recommended ? <Badge className="bg-blue-500/20 text-blue-200">推薦</Badge> : null}
+                </div>
+                <CardDescription>{path.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-4 text-sm text-muted-foreground">投入時間：{path.effort}</p>
+                {path.key === 'engineer' ? (
+                  <Button
+                    className="w-full"
+                    variant={path.recommended ? 'default' : 'outline'}
+                    onClick={() => {
+                      setActiveTab('handoff')
+                      window.setTimeout(() => {
+                        document.getElementById('handoff')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }, 0)
+                    }}
+                  >
+                    <FileDown className="mr-2 h-4 w-4" />
                     {path.cta}
                   </Button>
-                </Link>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                ) : (
+                  <Link href={path.href}>
+                    <Button className="w-full" variant={path.recommended ? 'default' : 'outline'}>
+                      {path.key === 'wordpress' ? <PlugZap className="mr-2 h-4 w-4" /> : <LifeBuoy className="mr-2 h-4 w-4" />}
+                      {path.cta}
+                    </Button>
+                  </Link>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>

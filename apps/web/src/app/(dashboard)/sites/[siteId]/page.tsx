@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   RefreshCw,
@@ -844,7 +844,9 @@ function ProfileFactsEditor({
 
 export default function SiteDetailPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const siteId = params.siteId as string
+  const isAfterCmsFix = searchParams.get('afterCmsFix') === '1'
 
   const { data: site, isLoading: siteLoading } = useSite(siteId)
   const { data: brandFacts, isLoading: brandFactsLoading } = useBrandFactReadiness(siteId)
@@ -967,6 +969,13 @@ export default function SiteDetailPage() {
         description: '掃描完成後會自動整理分數、缺失項目與可修復內容。',
         label: '掃描中...',
         kind: 'active' as const,
+      }
+    : isAfterCmsFix && hasCompletedScan
+    ? {
+        title: '修復後重新掃描驗證',
+        description: '修復包已送出後，下一步是重新掃描網站，確認 WordPress 是否真的套用了結構化資料與 llms.txt。',
+        label: '開始重新掃描',
+        kind: 'scan' as const,
       }
     : !hasCompletedScan
     ? {
@@ -1123,6 +1132,31 @@ export default function SiteDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {isAfterCmsFix ? (
+        <Card className="border-green-500/30 bg-green-500/10">
+          <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-semibold text-green-100">修復包已派送，請重新掃描驗證結果</p>
+              <p className="mt-1 text-sm text-green-100/80">
+                重新掃描完成後，引導頁會依照最新結果更新，不會停留在派送前的修復步驟。
+              </p>
+            </div>
+            <Button
+              className="bg-green-600 text-white hover:bg-green-700"
+              onClick={handleScan}
+              disabled={hasActiveScan || triggerScanMutation.isPending}
+            >
+              {hasActiveScan || triggerScanMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              {hasActiveScan ? '掃描中...' : triggerScanMutation.isPending ? '啟動中...' : '修復後重新掃描'}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <BrandFactReadinessSection
         readiness={brandFacts}
