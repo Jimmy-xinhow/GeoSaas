@@ -625,7 +625,7 @@ function BrandFactReadinessSection({
       : 'text-red-400'
 
   return (
-    <Card className="bg-white/5 border-white/10">
+    <Card id="ai-wiki-readiness" className="scroll-mt-24 bg-white/5 border-white/10">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -795,7 +795,7 @@ function ProfileFactsEditor({
   const fieldClass = 'w-full rounded-md border border-white/10 bg-gray-950 px-3 py-2 text-sm text-white outline-none focus:border-blue-500'
 
   return (
-    <Card className="bg-white/5 border-white/10">
+    <Card id="brand-facts" className="scroll-mt-24 bg-white/5 border-white/10">
       <CardHeader>
         <CardTitle>品牌事實資料</CardTitle>
         <CardDescription>

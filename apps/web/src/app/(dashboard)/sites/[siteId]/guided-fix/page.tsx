@@ -5,11 +5,13 @@ import Link from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
+  BookOpen,
   CheckCircle2,
   Clipboard,
   Code2,
   ExternalLink,
   FileDown,
+  FileText,
   LifeBuoy,
   Loader2,
   PlugZap,
@@ -83,6 +85,141 @@ function IssueRow({ issue }: { issue: GuidedIssue }) {
       </div>
     </div>
   )
+}
+
+function issueAction(issue: GuidedIssue, siteId: string) {
+  const actions: Record<string, { href: string; label: string }> = {
+    llms_txt: { href: `/sites/${siteId}/llms-txt`, label: '更新 llms.txt' },
+    json_ld: { href: `/sites/${siteId}/cms-fix`, label: '回 CMS 修復' },
+    faq_schema: { href: `/sites/${siteId}/knowledge`, label: '補 Q&A' },
+    og_tags: { href: `/sites/${siteId}/fix`, label: '開啟修復工具' },
+    meta_description: { href: `/sites/${siteId}#brand-facts`, label: '補品牌描述' },
+    title_optimization: { href: `/sites/${siteId}/fix`, label: '調整標題' },
+    contact_info: { href: `/sites/${siteId}#brand-facts`, label: '補聯絡資訊' },
+    image_alt: { href: `/sites/${siteId}/fix`, label: '查看圖片 Alt 建議' },
+    robots_ai: { href: `/sites/${siteId}/fix`, label: '檢查 robots.txt' },
+  }
+  return actions[issue.indicator] ?? { href: `/sites/${siteId}/fix`, label: '查看處理方式' }
+}
+
+function ActionableIssueRow({ issue, siteId }: { issue: GuidedIssue; siteId: string }) {
+  const action = issueAction(issue, siteId)
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-4 md:flex-row md:items-start md:justify-between">
+      <div className="min-w-0 space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-medium text-white">{issue.label}</p>
+          <Badge className={statusClass(issue.status)}>{issue.status}</Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">{issue.nextStep}</p>
+      </div>
+      <Link href={action.href}>
+        <Button size="sm" variant="outline" className="w-full md:w-auto">
+          {action.label}
+        </Button>
+      </Link>
+    </div>
+  )
+}
+
+function buildFollowUpTasks({
+  report,
+  plan,
+  siteId,
+}: {
+  report?: { remaining: GuidedIssue[]; verification: Array<{ key: string; label: string; passed: boolean }>; crawlerVisits: unknown[] } | null
+  plan: { missingBrandFacts: string[] }
+  siteId: string
+}) {
+  const tasks: Array<{
+    key: string
+    title: string
+    description: string
+    href: string
+    cta: string
+    icon: typeof BookOpen
+    priority: 'high' | 'medium' | 'low'
+  }> = []
+  const addTask = (task: (typeof tasks)[number]) => {
+    if (!tasks.some((existing) => existing.key === task.key)) tasks.push(task)
+  }
+
+  const remainingIndicators = new Set((report?.remaining ?? []).map((issue) => issue.indicator))
+  const failedVerification = new Set((report?.verification ?? []).filter((item) => !item.passed).map((item) => item.key))
+
+  if (plan.missingBrandFacts.length > 0 || remainingIndicators.has('contact_info') || remainingIndicators.has('meta_description')) {
+    addTask({
+      key: 'brand-facts',
+      title: '補品牌事實資料',
+      description: `還缺 ${Math.max(plan.missingBrandFacts.length, 1)} 項品牌資料，會影響 AI Wiki、llms-full 與內容生成。`,
+      href: `/sites/${siteId}#brand-facts`,
+      cta: '去補資料',
+      icon: BookOpen,
+      priority: 'high',
+    })
+  }
+
+  if (remainingIndicators.has('faq_schema') || plan.missingBrandFacts.some((item) => item.includes('Q&A'))) {
+    addTask({
+      key: 'knowledge',
+      title: '補品牌 Q&A',
+      description: '問答數不足會讓 FAQ Schema 和 AI 可引用內容變弱，建議至少補 6 組。',
+      href: `/sites/${siteId}/knowledge`,
+      cta: '新增 Q&A',
+      icon: BookOpen,
+      priority: 'high',
+    })
+  }
+
+  if (remainingIndicators.has('llms_txt') || failedVerification.has('llms_txt')) {
+    addTask({
+      key: 'llms',
+      title: '更新 llms.txt',
+      description: '/llms.txt 還沒被確認為可讀，請更新或重新發布 AI 可讀資料。',
+      href: `/sites/${siteId}/llms-txt`,
+      cta: '更新 llms.txt',
+      icon: FileText,
+      priority: 'high',
+    })
+  }
+
+  if (remainingIndicators.has('json_ld') || remainingIndicators.has('og_tags') || remainingIndicators.has('meta_description')) {
+    addTask({
+      key: 'cms-fix',
+      title: '再次派送 CMS 修復',
+      description: '仍有結構化資料或頁面語意項目未通過，可重新產生修復包或檢查 WordPress 套用狀態。',
+      href: `/sites/${siteId}/cms-fix`,
+      cta: '回 CMS 修復',
+      icon: PlugZap,
+      priority: 'medium',
+    })
+  }
+
+  if (remainingIndicators.has('title_optimization') || remainingIndicators.has('image_alt') || remainingIndicators.has('robots_ai')) {
+    addTask({
+      key: 'manual-fix',
+      title: '處理人工修復項目',
+      description: '標題、圖片 Alt、robots.txt 這類項目通常需要人工調整內容或網站設定。',
+      href: `/sites/${siteId}/fix`,
+      cta: '看修復建議',
+      icon: Wrench,
+      priority: 'medium',
+    })
+  }
+
+  if ((report?.crawlerVisits.length ?? 0) === 0) {
+    addTask({
+      key: 'crawler',
+      title: '確認 AI 爬蟲追蹤',
+      description: '目前還沒有真實 AI 爬蟲紀錄，建議確認追蹤碼與公開頁面是否可被存取。',
+      href: `/sites/${siteId}/crawler`,
+      cta: '查看追蹤',
+      icon: SearchCheck,
+      priority: 'low',
+    })
+  }
+
+  return tasks
 }
 
 function FileBlock({ file }: { file: HandoffFile }) {
@@ -248,6 +385,9 @@ export default function GuidedFixPage() {
     )
   }
 
+  const followUpTasks = buildFollowUpTasks({ report, plan, siteId })
+  const highPriorityTasks = followUpTasks.filter((task) => task.priority === 'high')
+
   return (
     <div className="space-y-6">
       <div>
@@ -324,6 +464,40 @@ export default function GuidedFixPage() {
               </div>
             ))}
           </div>
+          {hasPostFixScan ? (
+            <div className="mt-5 rounded-md border border-blue-500/20 bg-blue-500/10 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="font-medium text-white">後續補強任務</p>
+                  <p className="mt-1 text-sm text-blue-100/80">
+                    {followUpTasks.length > 0
+                      ? `目前有 ${followUpTasks.length} 個可執行補強項目，先處理高優先項目。`
+                      : '目前沒有明顯補強項目，可以持續追蹤 AI 爬蟲與後續掃描。'}
+                  </p>
+                </div>
+                <Button variant="outline" className="w-full md:w-auto" onClick={() => setActiveTab('report')}>
+                  查看報告明細
+                </Button>
+              </div>
+              {followUpTasks.length > 0 ? (
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {(highPriorityTasks.length > 0 ? highPriorityTasks : followUpTasks).slice(0, 3).map((task) => {
+                    const Icon = task.icon
+                    return (
+                      <Link key={task.key} href={task.href} className="rounded-md border border-white/10 bg-black/20 p-4 hover:bg-white/10">
+                        <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md bg-blue-500/15 text-blue-200">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <p className="font-medium text-white">{task.title}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{task.description}</p>
+                        <p className="mt-3 text-sm font-medium text-blue-200">{task.cta}</p>
+                      </Link>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -560,6 +734,51 @@ export default function GuidedFixPage() {
                       <p className="text-3xl font-semibold">{report.crawlerVisits.length}</p>
                     </div>
                   </div>
+                  <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <p className="font-medium text-white">接下來要做什麼</p>
+                        <p className="mt-1 text-sm text-blue-100/80">
+                          下面每張卡片都可以直接跳去執行，不需要回頭找功能入口。
+                        </p>
+                      </div>
+                      {followUpTasks.length > 0 ? (
+                        <Badge className="bg-blue-500/20 text-blue-200">{followUpTasks.length} 個任務</Badge>
+                      ) : null}
+                    </div>
+                    {followUpTasks.length > 0 ? (
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        {followUpTasks.map((task) => {
+                          const Icon = task.icon
+                          return (
+                            <div key={task.key} className="rounded-md border border-white/10 bg-black/20 p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-blue-500/15 text-blue-200">
+                                  <Icon className="h-5 w-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="font-medium text-white">{task.title}</p>
+                                    {task.priority === 'high' ? <Badge className="bg-red-500/20 text-red-200">優先</Badge> : null}
+                                  </div>
+                                  <p className="mt-1 text-sm text-muted-foreground">{task.description}</p>
+                                </div>
+                              </div>
+                              <Link href={task.href}>
+                                <Button size="sm" className="mt-4 w-full md:w-auto">
+                                  {task.cta}
+                                </Button>
+                              </Link>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-md border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-100">
+                        目前沒有主要補強任務。可以查看 AI 爬蟲追蹤，觀察是否開始被 AI 工具讀取。
+                      </div>
+                    )}
+                  </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     {report.verification.map((item) => (
                       <div key={item.key} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] p-4">
@@ -574,9 +793,9 @@ export default function GuidedFixPage() {
                   </div>
                   {report.remaining.length > 0 ? (
                     <div className="space-y-3">
-                      <p className="font-medium">下一步</p>
+                      <p className="font-medium">仍需處理的掃描項目</p>
                       {report.remaining.slice(0, 3).map((issue) => (
-                        <IssueRow key={issue.indicator} issue={issue} />
+                        <ActionableIssueRow key={issue.indicator} issue={issue} siteId={siteId} />
                       ))}
                     </div>
                   ) : (
