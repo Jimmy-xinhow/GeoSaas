@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -118,6 +118,7 @@ function FileBlock({ file }: { file: HandoffFile }) {
 
 export default function GuidedFixPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const rawSiteId = params.siteId as string
   const isPlaceholderSiteId = !rawSiteId || rawSiteId.includes('{') || rawSiteId.includes('}')
   const siteId = isPlaceholderSiteId ? '' : rawSiteId
@@ -125,7 +126,7 @@ export default function GuidedFixPage() {
   const { data: handoff, isLoading: handoffLoading } = useEngineerHandoff(siteId)
   const { data: report, isLoading: reportLoading } = useCompletionReport(siteId)
   const { data: cmsFixStatus } = useCmsFixStatus(siteId)
-  const [activeTab, setActiveTab] = useState('quick-wins')
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'report' ? 'report' : 'quick-wins')
   const cmsRunStatus = cmsFixStatus?.latestRun?.status
   const hasDispatchedCmsFix =
     cmsRunStatus === 'dispatched' ||
@@ -133,13 +134,21 @@ export default function GuidedFixPage() {
     cmsRunStatus === 'applied'
 
   useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'report') {
+      setActiveTab('report')
+      window.setTimeout(() => {
+        document.getElementById('completion-report')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 0)
+      return
+    }
     if (window.location.hash === '#handoff') {
       setActiveTab('handoff')
       window.setTimeout(() => {
         document.getElementById('handoff')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 0)
     }
-  }, [])
+  }, [searchParams])
 
   const handoffText = useMemo(() => {
     if (!handoff) return ''
@@ -279,7 +288,7 @@ export default function GuidedFixPage() {
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Link href={`/sites/${siteId}?afterCmsFix=1`}>
+              <Link href={`/sites/${siteId}?afterCmsFix=1&autoScan=1`}>
                 <Button className="w-full bg-green-600 text-white hover:bg-green-700 sm:w-auto">
                   <SearchCheck className="mr-2 h-4 w-4" />
                   修復後重新掃描
@@ -414,7 +423,7 @@ export default function GuidedFixPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="report" className="space-y-4">
+        <TabsContent value="report" id="completion-report" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>修復後完成報告</CardTitle>

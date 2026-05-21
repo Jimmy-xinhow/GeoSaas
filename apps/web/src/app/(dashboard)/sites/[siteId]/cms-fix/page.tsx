@@ -219,7 +219,7 @@ function FixRunProgress({ run, siteId }: { run: SiteFixRun; siteId: string }) {
       ) : null}
       {waiting || isComplete ? (
         <div className="mt-4">
-          <Link href={`/sites/${siteId}?afterCmsFix=1`}>
+          <Link href={`/sites/${siteId}?afterCmsFix=1&autoScan=1`}>
             <Button className="bg-blue-600 text-white hover:bg-blue-700">
               <SearchCheck className="mr-2 h-4 w-4" />
               {isComplete ? '修復後重新掃描' : 'WordPress 同步完成後重新掃描'}
@@ -524,7 +524,7 @@ export default function CmsFixPage() {
               {dispatchRun.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlugZap className="mr-2 h-4 w-4" />}
               派送到 WordPress
             </Button>
-            <Link href={`/sites/${siteId}?afterCmsFix=1`}>
+            <Link href={`/sites/${siteId}?afterCmsFix=1&autoScan=1`}>
               <Button variant="outline">
                 <SearchCheck className="mr-2 h-4 w-4" />
                 修復後重新掃描

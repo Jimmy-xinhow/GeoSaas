@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   RefreshCw,
@@ -844,9 +844,11 @@ function ProfileFactsEditor({
 
 export default function SiteDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const siteId = params.siteId as string
   const isAfterCmsFix = searchParams.get('afterCmsFix') === '1'
+  const shouldAutoScanAfterCmsFix = isAfterCmsFix && searchParams.get('autoScan') === '1'
 
   const { data: site, isLoading: siteLoading } = useSite(siteId)
   const { data: brandFacts, isLoading: brandFactsLoading } = useBrandFactReadiness(siteId)
@@ -857,6 +859,8 @@ export default function SiteDetailPage() {
     isRefetching: scansRefetching,
   } = useScanHistory(siteId)
   const triggerScanMutation = useTriggerScan()
+  const autoScanStartedRef = useRef(false)
+  const redirectAfterScanRef = useRef(false)
 
   // Derive scanning state from actual scan data
   const hasActiveScan = useMemo(() => {
@@ -872,10 +876,16 @@ export default function SiteDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['sites'] })
       queryClient.invalidateQueries({ queryKey: ['sites', siteId] })
       queryClient.invalidateQueries({ queryKey: ['scan-results'] })
-      toast.success('掃描已完成！')
+      if (redirectAfterScanRef.current) {
+        redirectAfterScanRef.current = false
+        toast.success('修復後掃描已完成，正在開啟完成報告')
+        router.push(`/sites/${siteId}/guided-fix?tab=report&afterCmsFix=1`)
+      } else {
+        toast.success('掃描已完成！')
+      }
     }
     prevActiveRef.current = hasActiveScan
-  }, [hasActiveScan, queryClient, siteId])
+  }, [hasActiveScan, queryClient, router, siteId])
 
   // Find the best scan — skip scans with empty results
   const [scanIdx, setScanIdx] = useState(0)
@@ -923,14 +933,30 @@ export default function SiteDetailPage() {
     }
   }, [scanResults])
 
-  const handleScan = async () => {
+  const handleScan = async (redirectToCompletionReport = false) => {
     try {
+      if (redirectToCompletionReport) {
+        redirectAfterScanRef.current = true
+      }
       await triggerScanMutation.mutateAsync(siteId)
-      toast.success('掃描已啟動，系統將自動更新結果')
+      toast.success(redirectToCompletionReport ? '修復後重新掃描已啟動，完成後會開啟完成報告' : '掃描已啟動，系統將自動更新結果')
     } catch (err: any) {
+      if (redirectToCompletionReport) {
+        redirectAfterScanRef.current = false
+      }
       toast.error(err?.response?.data?.message || '掃描失敗，請稍後再試')
     }
   }
+
+  useEffect(() => {
+    if (!shouldAutoScanAfterCmsFix || autoScanStartedRef.current || scansLoading || !scans) return
+    if (hasActiveScan || triggerScanMutation.isPending) {
+      redirectAfterScanRef.current = true
+      return
+    }
+    autoScanStartedRef.current = true
+    handleScan(true)
+  }, [hasActiveScan, scans, scansLoading, shouldAutoScanAfterCmsFix, triggerScanMutation.isPending])
 
   const isLoading = siteLoading || scansLoading
 
@@ -1051,7 +1077,7 @@ export default function SiteDetailPage() {
             ) : (
               <Button
                 className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto"
-                onClick={handleScan}
+                onClick={() => handleScan(isAfterCmsFix)}
                 disabled={hasActiveScan || triggerScanMutation.isPending}
               >
                 {hasActiveScan || triggerScanMutation.isPending ? (
@@ -1091,7 +1117,7 @@ export default function SiteDetailPage() {
                 </Link>
                 <button
                   type="button"
-                  onClick={handleScan}
+                  onClick={() => handleScan(false)}
                   disabled={hasActiveScan || triggerScanMutation.isPending}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -1144,7 +1170,7 @@ export default function SiteDetailPage() {
             </div>
             <Button
               className="bg-green-600 text-white hover:bg-green-700"
-              onClick={handleScan}
+              onClick={() => handleScan(true)}
               disabled={hasActiveScan || triggerScanMutation.isPending}
             >
               {hasActiveScan || triggerScanMutation.isPending ? (
