@@ -65,6 +65,11 @@ const visualGuideSteps = [
     description: '把三個欄位貼到 WordPress 設定頁，按儲存設定，再按立即同步修復。',
     image: '/cms-fix-guide/10-wp-save-sync.jpg',
   },
+  {
+    title: '11. 回到 Geovault 重新整理確認已連線',
+    description: 'WordPress 同步成功後，回到 CMS 一鍵結構修復頁重新整理；外掛狀態顯示「已連線」才算綁定完成。',
+    image: '/cms-fix-guide/11-refresh-connected.svg',
+  },
 ]
 
 export default function CmsFixGuidePage() {

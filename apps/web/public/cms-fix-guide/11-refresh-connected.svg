@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="810" viewBox="0 0 1440 810" role="img" aria-label="重新整理頁面後確認 WordPress 外掛狀態已連線">
+  <rect width="1440" height="810" fill="#0f172a"/>
+  <rect x="0" y="0" width="180" height="810" fill="#111827"/>
+  <rect x="180" y="0" width="1260" height="56" fill="#111827"/>
+  <text x="196" y="35" fill="#ffffff" font-family="Arial, sans-serif" font-size="20" font-weight="700">網站詳情</text>
+  <text x="24" y="34" fill="#ffffff" font-family="Arial, sans-serif" font-size="15" font-weight="700">Geovault</text>
+  <rect x="10" y="126" width="160" height="36" rx="6" fill="#1f2937"/>
+  <text x="45" y="149" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700">我的網站</text>
+  <text x="326" y="96" fill="#e5e7eb" font-family="Arial, sans-serif" font-size="14">返回網站詳情</text>
+  <text x="355" y="138" fill="#ffffff" font-family="Arial, sans-serif" font-size="28" font-weight="700">CMS 一鍵結構修復</text>
+  <text x="326" y="176" fill="#fef3c7" font-family="Arial, sans-serif" font-size="15">綁定後請重新整理頁面，確認外掛狀態顯示為已連線。</text>
+  <rect x="326" y="218" width="312" height="160" rx="8" fill="#1f2937" stroke="#334155"/>
+  <text x="360" y="262" fill="#ffffff" font-family="Arial, sans-serif" font-size="22" font-weight="700">外掛狀態</text>
+  <text x="360" y="292" fill="#93c5fd" font-family="Arial, sans-serif" font-size="16">WordPress 是否已和 Geovault 連線</text>
+  <rect x="360" y="324" width="68" height="26" rx="13" fill="#166534"/>
+  <text x="374" y="342" fill="#bbf7d0" font-family="Arial, sans-serif" font-size="13" font-weight="700">已連線</text>
+  <text x="360" y="374" fill="#fef3c7" font-family="Arial, sans-serif" font-size="16">最後連線：剛剛</text>
+  <path d="M704 306 C820 322, 850 334, 930 370" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round"/>
+  <path d="M920 334 L985 395 L900 410 Z" fill="#ef4444"/>
+  <rect x="990" y="286" width="340" height="138" rx="10" fill="#172554" stroke="#2563eb"/>
+  <text x="1022" y="327" fill="#ffffff" font-family="Arial, sans-serif" font-size="22" font-weight="700">確認方式</text>
+  <text x="1022" y="363" fill="#bfdbfe" font-family="Arial, sans-serif" font-size="16">1. WordPress 儲存設定並同步一次</text>
+  <text x="1022" y="394" fill="#bfdbfe" font-family="Arial, sans-serif" font-size="16">2. 回到 Geovault 重新整理頁面</text>
+  <text x="1022" y="425" fill="#bfdbfe" font-family="Arial, sans-serif" font-size="16">3. 看到「已連線」才算綁定完成</text>
+  <rect x="326" y="430" width="312" height="84" rx="8" fill="#1f2937" stroke="#334155"/>
+  <text x="360" y="466" fill="#ffffff" font-family="Arial, sans-serif" font-size="18" font-weight="700">如果仍顯示尚未連線</text>
+  <text x="360" y="498" fill="#cbd5e1" font-family="Arial, sans-serif" font-size="15">請確認 API URL 不是 localhost 或 192.168.x.x。</text>
+</svg>

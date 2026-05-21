@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -38,6 +38,7 @@ import {
   useDispatchCmsFixRun,
   type ConnectWordPressResponse,
   type SiteFixAction,
+  type SiteFixRun,
 } from '@/hooks/use-cms-fix'
 
 const pluginDownloadUrl = '/downloads/geovault-auto-fix-0.1.2.zip'
@@ -166,6 +167,60 @@ function ActionRow({ action }: { action: SiteFixAction }) {
   )
 }
 
+function FixRunProgress({ run }: { run: SiteFixRun }) {
+  const total = run.actions.length
+  const applied = run.actions.filter((action) => action.status === 'applied').length
+  const skipped = run.actions.filter((action) => action.status === 'skipped').length
+  const failed = run.actions.filter((action) => action.status === 'failed').length
+  const finished = applied + skipped + failed
+  const waiting = run.status === 'dispatched' || run.status === 'partially_applied'
+  const isComplete = run.status === 'applied'
+  const hasFailed = failed > 0
+
+  return (
+    <div className="rounded-md border border-white/10 bg-white/[0.03] p-4 text-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-medium text-white">派送狀態確認</p>
+          <p className="mt-1 text-muted-foreground">
+            {isComplete
+              ? 'WordPress 外掛已回報全部完成，這次修復才算完成。'
+              : waiting
+              ? '已派送到 WordPress，等待外掛拉取並回報結果；此頁會每 5 秒自動更新。'
+              : hasFailed
+              ? 'WordPress 外掛回報有項目失敗，請查看下方錯誤訊息。'
+              : '產生修復包後，派送到 WordPress 才會開始套用。'}
+          </p>
+        </div>
+        <StatusBadge status={run.status} />
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-4">
+        <div className="rounded-md bg-black/20 p-3">
+          <p className="text-muted-foreground">總項目</p>
+          <p className="text-lg font-semibold text-white">{total}</p>
+        </div>
+        <div className="rounded-md bg-black/20 p-3">
+          <p className="text-muted-foreground">已完成</p>
+          <p className="text-lg font-semibold text-green-300">{applied}</p>
+        </div>
+        <div className="rounded-md bg-black/20 p-3">
+          <p className="text-muted-foreground">已回報</p>
+          <p className="text-lg font-semibold text-blue-200">{finished}</p>
+        </div>
+        <div className="rounded-md bg-black/20 p-3">
+          <p className="text-muted-foreground">失敗</p>
+          <p className="text-lg font-semibold text-red-300">{failed}</p>
+        </div>
+      </div>
+      {waiting ? (
+        <p className="mt-3 text-xs text-blue-100">
+          如果一直停在已派送，請到 WordPress 的 Geovault Auto Fix 按一次「立即同步修復」，或確認外掛可以連到目前的 API URL。
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 export default function CmsFixPage() {
   const params = useParams()
   const siteId = params.siteId as string
@@ -181,14 +236,13 @@ export default function CmsFixPage() {
   const connection = status?.connection
   const siteUrl = normalizeExternalUrl(site?.url)
 
-  const setupSnippet = useMemo(() => {
-    if (!installConfig) return ''
-    return [
-      `API URL: ${installConfig.apiUrl}`,
-      `Site ID: ${installConfig.siteId}`,
-      `Plugin Token: ${installConfig.token}`,
-    ].join('\n')
-  }, [installConfig])
+  const setupRows = installConfig
+    ? [
+        { label: 'API URL', value: installConfig.apiUrl },
+        { label: 'Site ID', value: installConfig.siteId },
+        { label: 'Plugin Token', value: installConfig.token },
+      ]
+    : []
 
   const isLoading = siteLoading || statusLoading
 
@@ -215,7 +269,7 @@ export default function CmsFixPage() {
     if (!latestRun) return
     try {
       await dispatchRun.mutateAsync(latestRun.id)
-      toast.success('已派送到 WordPress，外掛會自動拉取並套用')
+      toast.success('已派送到 WordPress，請看下方狀態確認是否完成')
     } catch (err: any) {
       toast.error(getErrorMessage(err))
     }
@@ -249,11 +303,11 @@ export default function CmsFixPage() {
     <div className="space-y-6">
       <div>
         <Link
-          href={`/sites/${siteId}`}
+          href={`/sites/${siteId}/guided-fix`}
           className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-white"
         >
           <ArrowLeft className="mr-1 h-4 w-4" />
-          返回網站詳情
+          返回引導頁面
         </Link>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -411,17 +465,25 @@ export default function CmsFixPage() {
 
           {installConfig ? (
             <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-4">
-              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-medium text-blue-100">貼到 WordPress 設定頁的內容</p>
-                  <p className="text-sm text-blue-100/70">Settings &gt; Geovault Auto Fix</p>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => copyText(setupSnippet)}>
-                  <Clipboard className="mr-2 h-4 w-4" />
-                  複製設定
-                </Button>
+              <div className="mb-3">
+                <p className="font-medium text-blue-100">貼到 WordPress 設定頁的內容</p>
+                <p className="text-sm text-blue-100/70">Settings &gt; Geovault Auto Fix</p>
               </div>
-              <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-black/30 p-3 text-sm text-blue-50">{setupSnippet}</pre>
+              <div className="space-y-2">
+                {setupRows.map((row) => (
+                  <div
+                    key={row.label}
+                    className="grid gap-2 rounded-md border border-blue-300/15 bg-black/25 p-3 md:grid-cols-[150px_1fr_auto] md:items-center"
+                  >
+                    <p className="text-sm font-medium text-blue-100">{row.label}</p>
+                    <code className="min-w-0 break-all text-sm text-blue-50">{row.value}</code>
+                    <Button size="sm" variant="outline" onClick={() => copyText(row.value)}>
+                      <Clipboard className="mr-2 h-4 w-4" />
+                      複製
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : connection ? (
             <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-100">
@@ -452,16 +514,17 @@ export default function CmsFixPage() {
               {dispatchRun.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlugZap className="mr-2 h-4 w-4" />}
               派送到 WordPress
             </Button>
-            <Link href={`/sites/${siteId}`}>
+            <Link href={`/sites/${siteId}/guided-fix`}>
               <Button variant="outline">
                 <Settings className="mr-2 h-4 w-4" />
-                回網站詳情掃描
+                回引導頁面
               </Button>
             </Link>
           </div>
 
           {latestRun?.actions.length ? (
             <div className="space-y-3">
+              <FixRunProgress run={latestRun} />
               {latestRun.actions.map((action) => (
                 <ActionRow key={action.id} action={action} />
               ))}

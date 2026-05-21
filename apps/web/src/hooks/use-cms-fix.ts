@@ -55,6 +55,11 @@ export function useCmsFixStatus(siteId: string) {
       const { data } = await apiClient.get<CmsFixStatus>(`/cms-fix/sites/${siteId}/status`);
       return data;
     },
+    refetchInterval: (query) => {
+      const data = query.state.data as CmsFixStatus | undefined;
+      const status = data?.latestRun?.status;
+      return status === 'dispatched' || status === 'partially_applied' ? 5000 : false;
+    },
     enabled: Boolean(siteId),
   });
 }

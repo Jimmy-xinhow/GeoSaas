@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
@@ -122,6 +122,16 @@ export default function GuidedFixPage() {
   const { data: plan, isLoading: planLoading, error: planError } = useGuidedFixPlan(siteId)
   const { data: handoff, isLoading: handoffLoading } = useEngineerHandoff(siteId)
   const { data: report, isLoading: reportLoading } = useCompletionReport(siteId)
+  const [activeTab, setActiveTab] = useState('quick-wins')
+
+  useEffect(() => {
+    if (window.location.hash === '#handoff') {
+      setActiveTab('handoff')
+      window.setTimeout(() => {
+        document.getElementById('handoff')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 0)
+    }
+  }, [])
 
   const handoffText = useMemo(() => {
     if (!handoff) return ''
@@ -262,18 +272,34 @@ export default function GuidedFixPage() {
             </CardHeader>
             <CardContent>
               <p className="mb-4 text-sm text-muted-foreground">投入時間：{path.effort}</p>
-              <Link href={path.href}>
-                <Button className="w-full" variant={path.recommended ? 'default' : 'outline'}>
-                  {path.key === 'wordpress' ? <PlugZap className="mr-2 h-4 w-4" /> : path.key === 'engineer' ? <FileDown className="mr-2 h-4 w-4" /> : <LifeBuoy className="mr-2 h-4 w-4" />}
+              {path.key === 'engineer' ? (
+                <Button
+                  className="w-full"
+                  variant={path.recommended ? 'default' : 'outline'}
+                  onClick={() => {
+                    setActiveTab('handoff')
+                    window.setTimeout(() => {
+                      document.getElementById('handoff')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }, 0)
+                  }}
+                >
+                  <FileDown className="mr-2 h-4 w-4" />
                   {path.cta}
                 </Button>
-              </Link>
+              ) : (
+                <Link href={path.href}>
+                  <Button className="w-full" variant={path.recommended ? 'default' : 'outline'}>
+                    {path.key === 'wordpress' ? <PlugZap className="mr-2 h-4 w-4" /> : <LifeBuoy className="mr-2 h-4 w-4" />}
+                    {path.cta}
+                  </Button>
+                </Link>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <Tabs defaultValue="quick-wins" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="quick-wins">可立即修復</TabsTrigger>
           <TabsTrigger value="handoff">工程師修復包</TabsTrigger>
