@@ -6,15 +6,19 @@ import {
   Activity,
   ArrowRight,
   BarChart3,
+  ClipboardCheck,
   CheckCircle2,
   ClipboardList,
+  Eye,
   FileText,
   Globe,
   Loader2,
   MessageSquareQuote,
+  PlusCircle,
   Search,
   Sparkles,
   TrendingUp,
+  Wrench,
 } from 'lucide-react'
 import {
   Area,
@@ -168,6 +172,255 @@ function TableSkeleton() {
   )
 }
 
+type OnboardingStep = {
+  key: string
+  title: string
+  description: string
+  href: string
+  cta: string
+  done: boolean
+  icon: typeof Activity
+}
+
+function getSiteScore(site: any): number {
+  return clampScore(
+    site?.overallScore ??
+      site?.score ??
+      site?.geoScore ??
+      site?.latestScan?.geoScore ??
+      site?.latestScan?.score ??
+      site?.scans?.[0]?.geoScore ??
+      site?.scans?.[0]?.score ??
+      0,
+  )
+}
+
+function hasCompletedScan(site: any): boolean {
+  const scans = Array.isArray(site?.scans) ? site.scans : []
+  return (
+    scans.some((scan: any) => scan.status === 'COMPLETED' || scan.geoScore || scan.score) ||
+    Boolean(site?.latestScan) ||
+    getSiteScore(site) > 0
+  )
+}
+
+function getPrimarySite(sites: any[]): any | null {
+  if (sites.length === 0) return null
+  return (
+    sites.find((site) => hasCompletedScan(site)) ??
+    sites.find((site) => site?.isClient) ??
+    sites[0]
+  )
+}
+
+function buildOnboardingSteps({
+  sites,
+  contents,
+  monitorQueriesCount,
+}: {
+  sites: any[] | undefined
+  contents: any[] | undefined
+  monitorQueriesCount: number
+}): OnboardingStep[] {
+  const siteList = sites ?? []
+  const primarySite = getPrimarySite(siteList)
+  const hasSite = siteList.length > 0
+  const hasScan = siteList.some((site) => hasCompletedScan(site))
+  const bestScore = siteList.reduce((max, site) => Math.max(max, getSiteScore(site)), 0)
+  const repairReady = hasScan && bestScore >= 80
+  const hasContentEngine = (contents?.length ?? 0) > 0
+  const hasMonitor = monitorQueriesCount > 0
+  const siteHref = primarySite?.id ? `/sites/${primarySite.id}` : '/sites'
+
+  return [
+    {
+      key: 'registered',
+      title: '完成註冊',
+      description: '帳號已建立，可以開始把網站接進 Geovault。',
+      href: '/dashboard',
+      cta: '查看總覽',
+      done: true,
+      icon: CheckCircle2,
+    },
+    {
+      key: 'sites',
+      title: '進入我的網站',
+      description: '先到網站列表，確認要追蹤與優化的品牌網站。',
+      href: '/sites',
+      cta: '前往我的網站',
+      done: hasSite,
+      icon: Globe,
+    },
+    {
+      key: 'create-site',
+      title: '建立網站',
+      description: '新增網站網址，系統才能保存掃描、修復與追蹤資料。',
+      href: hasSite ? siteHref : '/sites/new',
+      cta: hasSite ? '查看網站' : '建立第一個網站',
+      done: hasSite,
+      icon: PlusCircle,
+    },
+    {
+      key: 'scan',
+      title: '完成第一次掃描',
+      description: '取得 GEO 分數、缺失項目與可修復的結構清單。',
+      href: hasSite ? siteHref : '/sites/new',
+      cta: hasSite ? '開始掃描' : '先建立網站',
+      done: hasScan,
+      icon: Search,
+    },
+    {
+      key: 'fix',
+      title: '導引修復',
+      description: '依照系統建議修復 JSON-LD、FAQ、OG/Meta、llms.txt 等項目。',
+      href: primarySite?.id ? `/sites/${primarySite.id}/guided-fix` : '/sites',
+      cta: '開啟導引修復',
+      done: repairReady,
+      icon: Wrench,
+    },
+    {
+      key: 'content',
+      title: '建立內容引擎',
+      description: '補齊品牌定位、服務、問答與 llms.txt，讓 AI 有可引用內容。',
+      href: '/content',
+      cta: '建立內容引擎',
+      done: hasContentEngine,
+      icon: FileText,
+    },
+    {
+      key: 'monitor',
+      title: '啟用 AI 監控',
+      description: '設定追蹤問題，觀察 ChatGPT、Gemini 等平台是否引用品牌。',
+      href: '/monitor',
+      cta: '設定 AI 監控',
+      done: hasMonitor,
+      icon: Eye,
+    },
+    {
+      key: 'report',
+      title: '查看驗收報告',
+      description: '完成修復與監控後，用報告確認分數、引用與後續待辦。',
+      href: '/monitor/reports',
+      cta: '查看驗收報告',
+      done: false,
+      icon: ClipboardCheck,
+    },
+  ]
+}
+
+function OnboardingGuide({
+  sites,
+  contents,
+  monitorQueriesCount,
+  isLoading,
+}: {
+  sites: any[] | undefined
+  contents: any[] | undefined
+  monitorQueriesCount: number
+  isLoading: boolean
+}) {
+  const steps = useMemo(
+    () => buildOnboardingSteps({ sites, contents, monitorQueriesCount }),
+    [sites, contents, monitorQueriesCount],
+  )
+  const currentStep = steps.find((step) => !step.done) ?? steps[steps.length - 1]
+  const completedCount = steps.filter((step) => step.done).length
+  const progress = Math.round((completedCount / steps.length) * 100)
+  const CurrentIcon = currentStep.icon
+
+  if (isLoading) {
+    return (
+      <Card className="border-white/10 bg-white/5">
+        <CardContent className="p-5">
+          <Skeleton className="h-5 w-36" />
+          <Skeleton className="mt-4 h-24 w-full rounded-xl" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="overflow-hidden border-blue-400/20 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.14),transparent_30%),rgba(15,23,42,0.82)]">
+      <CardContent className="grid gap-5 p-5 lg:grid-cols-[0.9fr_1.35fr]">
+        <div className="rounded-xl border border-white/10 bg-slate-950/35 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-bold text-blue-100">新手成功路徑</p>
+            <span className="rounded-full border border-blue-300/20 bg-blue-300/10 px-2.5 py-1 text-xs font-semibold text-blue-100">
+              {completedCount}/{steps.length}
+            </span>
+          </div>
+          <div className="mt-4 h-2 rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-blue-400 to-cyan-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="mt-5 flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-500/18 text-blue-100">
+              <CurrentIcon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-400">下一步</p>
+              <h2 className="mt-1 text-xl font-bold text-white">{currentStep.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                {currentStep.description}
+              </p>
+            </div>
+          </div>
+          <Link
+            href={currentStep.href}
+            className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            {currentStep.cta}
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {steps.map((step, index) => {
+            const Icon = step.icon
+            const isCurrent = step.key === currentStep.key
+            const isLocked = !step.done && !isCurrent
+            const content = (
+              <div
+                className={cn(
+                  'min-h-[112px] rounded-xl border p-3 transition-colors',
+                  step.done && 'border-emerald-400/25 bg-emerald-400/10',
+                  isCurrent && 'border-blue-300/55 bg-blue-500/14',
+                  isLocked && 'border-white/10 bg-slate-950/30 opacity-60',
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div
+                    className={cn(
+                      'flex h-9 w-9 items-center justify-center rounded-lg',
+                      step.done ? 'bg-emerald-400/15 text-emerald-200' : 'bg-white/8 text-blue-200',
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-500">Step {index + 1}</span>
+                </div>
+                <p className="mt-3 text-sm font-bold text-white">{step.title}</p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">
+                  {step.description}
+                </p>
+              </div>
+            )
+
+            if (isLocked) return <div key={step.key}>{content}</div>
+            return (
+              <Link key={step.key} href={step.href} className="block">
+                {content}
+              </Link>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function DashboardPage() {
   const [url, setUrl] = useState('')
 
@@ -309,6 +562,13 @@ export default function DashboardPage() {
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
+
+      <OnboardingGuide
+        sites={sites as any[] | undefined}
+        contents={contents as any[] | undefined}
+        monitorQueriesCount={monitorData?.queries?.length ?? 0}
+        isLoading={isLoading}
+      />
 
       <PublishedContentBanner sites={sites as any[]} />
 
