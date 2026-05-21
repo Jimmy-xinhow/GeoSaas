@@ -39,6 +39,8 @@ import { UploadModule } from './modules/upload/upload.module';
 import { ContentQualityModule } from './modules/content-quality/content-quality.module';
 import { SupportModule } from './modules/support/support.module';
 import { AffiliateModule } from './modules/affiliate/affiliate.module';
+import { CmsFixModule } from './modules/cms-fix/cms-fix.module';
+import { GuidedFixModule } from './modules/guided-fix/guided-fix.module';
 
 @Module({
   imports: [
@@ -89,6 +91,8 @@ import { AffiliateModule } from './modules/affiliate/affiliate.module';
     ContentQualityModule,
     SupportModule,
     AffiliateModule,
+    CmsFixModule,
+    GuidedFixModule,
   ],
   controllers: [HealthController],
   providers: [

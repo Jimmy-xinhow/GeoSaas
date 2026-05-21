@@ -8,8 +8,26 @@ declare module 'axios' {
   }
 }
 
+function resolveApiBaseUrl() {
+  const configured = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+  if (typeof window === 'undefined') {
+    return configured;
+  }
+
+  const host = window.location.hostname;
+  const isLanHost = host !== 'localhost' && host !== '127.0.0.1' && host !== '::1';
+  const pointsToLoopback = configured.includes('localhost') || configured.includes('127.0.0.1');
+
+  if (isLanHost && pointsToLoopback) {
+    return `${window.location.protocol}//${host}:4000`;
+  }
+
+  return configured;
+}
+
 const apiClient = axios.create({
-  baseURL: `${process.env.NEXT_PUBLIC_API_URL}/api`,
+  baseURL: `${resolveApiBaseUrl()}/api`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -85,7 +103,7 @@ apiClient.interceptors.response.use(
 
           try {
             const { data } = await axios.post(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/auth/refresh`,
+              `${resolveApiBaseUrl()}/api/auth/refresh`,
               { refreshToken },
             );
 

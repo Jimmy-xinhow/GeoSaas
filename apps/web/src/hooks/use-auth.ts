@@ -33,6 +33,19 @@ interface AuthResponse {
   refreshToken?: string;
 }
 
+interface RegisterResponse {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    plan?: string;
+    emailVerified?: boolean;
+  };
+  requiresEmailVerification: boolean;
+  message?: string;
+  devVerificationUrl?: string;
+}
+
 export function useLogin() {
   const { login } = useAuthStore();
   const queryClient = useQueryClient();
@@ -41,7 +54,8 @@ export function useLogin() {
     mutationFn: async (payload: LoginPayload) => {
       const { data } = await apiClient.post<AuthResponse>(
         '/auth/login',
-        payload
+        payload,
+        { suppressGlobalErrorToast: true }
       );
       return data;
     },
@@ -73,23 +87,49 @@ export function useGoogleLogin() {
 }
 
 export function useRegister() {
-  const { login } = useAuthStore();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (payload: RegisterPayload) => {
-      const { data } = await apiClient.post<AuthResponse>(
+      const { data } = await apiClient.post<RegisterResponse>(
         '/auth/register',
         payload
       );
       return data;
     },
     onSuccess: (data, variables) => {
-      login(data.user, data.token, data.refreshToken);
       if (variables.affiliateCode) {
         clearStoredAffiliateRef();
       }
       queryClient.invalidateQueries({ queryKey: ['user'] });
+    },
+  });
+}
+
+export function useVerifyEmail() {
+  const { login } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (token: string) => {
+      const { data } = await apiClient.post<AuthResponse>('/auth/verify-email', { token });
+      return data;
+    },
+    onSuccess: (data) => {
+      login(data.user, data.token, data.refreshToken);
+      queryClient.invalidateQueries({ queryKey: ['user'] });
+    },
+  });
+}
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: async (email: string) => {
+      const { data } = await apiClient.post<{
+        message: string;
+        devVerificationUrl?: string;
+      }>('/auth/resend-verification', { email });
+      return data;
     },
   });
 }

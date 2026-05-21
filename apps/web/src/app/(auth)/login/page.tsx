@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { GeovaultLogoCompact } from '@/components/logo'
-import { useLogin } from '@/hooks/use-auth'
+import { useLogin, useResendVerification } from '@/hooks/use-auth'
 import GoogleSignInButton from '@/components/auth/google-sign-in-button'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,6 +38,9 @@ export default function LoginPage() {
     ? rawRedirect
     : '/dashboard'
   const loginMutation = useLogin()
+  const resendVerificationMutation = useResendVerification()
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
+  const [devVerificationUrl, setDevVerificationUrl] = useState<string | null>(null)
 
   const {
     register,
@@ -53,6 +57,10 @@ export default function LoginPage() {
         router.push(redirectTo)
       },
       onError: (error: any) => {
+        const code = error?.response?.data?.code
+        if (code === 'EMAIL_NOT_VERIFIED') {
+          setUnverifiedEmail(data.email)
+        }
         const message =
           error?.response?.data?.message || '登入失敗，請檢查您的帳號密碼'
         toast.error(message)
@@ -120,6 +128,34 @@ export default function LoginPage() {
             {loginMutation.isPending ? '登入中...' : '登入'}
           </Button>
         </form>
+
+        {unverifiedEmail ? (
+          <div className="mt-4 rounded-lg border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+            <p className="font-semibold">這個 Email 尚未驗證</p>
+            <p className="mt-2 leading-6">請先完成信箱驗證，或重新寄送驗證連結。</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3 h-9 border-amber-300/40 bg-transparent text-amber-100 hover:bg-amber-300/10"
+              disabled={resendVerificationMutation.isPending}
+              onClick={() => {
+                resendVerificationMutation.mutate(unverifiedEmail, {
+                  onSuccess: (result) => {
+                    toast.success('Verification email sent.')
+                    setDevVerificationUrl(result.devVerificationUrl ?? null)
+                  },
+                })
+              }}
+            >
+              {resendVerificationMutation.isPending ? 'Sending...' : '重新寄送驗證信'}
+            </Button>
+            {devVerificationUrl ? (
+              <a href={devVerificationUrl} className="mt-3 block text-blue-200 underline">
+                本地測試用驗證連結
+              </a>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">

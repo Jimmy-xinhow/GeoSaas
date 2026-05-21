@@ -61,40 +61,43 @@ enum OrderStatus {
 // ==================== Models ====================
 
 model User {
-  id               String    @id @default(cuid())
-  email            String    @unique
-  name             String?
-  passwordHash     String?
-  avatarUrl        String?
-  googleId         String?   @unique
-  emailVerified    Boolean   @default(false)
-  role             UserRole  @default(USER)
-  plan             Plan      @default(FREE)
-  managedBy        String?   // SUPER_ADMIN userId who manages this client
-  affiliateReferrerId String? @map("affiliate_referrer_id")
-  credits          Int       @default(0)
-  freeGenUsed      Int       @default(0)    // monthly free generation counter
-  freeGenResetAt   DateTime? // when to reset freeGenUsed (start of next month)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String?
+  passwordHash        String?
+  avatarUrl           String?
+  googleId            String?   @unique
+  emailVerified       Boolean   @default(false)
+  role                UserRole  @default(USER)
+  plan                Plan      @default(FREE)
+  managedBy           String? // SUPER_ADMIN userId who manages this client
+  affiliateReferrerId String?   @map("affiliate_referrer_id")
+  credits             Int       @default(0)
+  freeGenUsed         Int       @default(0) // monthly free generation counter
+  freeGenResetAt      DateTime? // when to reset freeGenUsed (start of next month)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  sites              Site[]
-  contents           Content[]
-  notifications      Notification[]
-  supportConversations SupportConversation[] @relation("SupportConversationUser")
-  assignedSupportConversations SupportConversation[] @relation("SupportConversationAssignee")
-  supportMessages    SupportMessage[] @relation("SupportMessageSender")
-  supportKnowledgeItems SupportKnowledgeItem[] @relation("SupportKnowledgeAuthor")
+  sites                        Site[]
+  contents                     Content[]
+  notifications                Notification[]
+  supportConversations         SupportConversation[]        @relation("SupportConversationUser")
+  assignedSupportConversations SupportConversation[]        @relation("SupportConversationAssignee")
+  supportMessages              SupportMessage[]             @relation("SupportMessageSender")
+  supportKnowledgeItems        SupportKnowledgeItem[]       @relation("SupportKnowledgeAuthor")
   supportConversationSummaries SupportConversationSummary[] @relation("SupportConversationSummaryUser")
-  orders             Order[]
-  successCases       GeoSuccessCase[]
-  creditTransactions CreditTransaction[]
-  passwordResetTokens PasswordResetToken[]
-  affiliateProfile   Affiliate? @relation("AffiliateOwner")
-  affiliateReferrer  Affiliate? @relation("AffiliateAttributedUsers", fields: [affiliateReferrerId], references: [id], onDelete: SetNull)
-  affiliateCommissions AffiliateCommission[] @relation("AffiliateCommissionAffiliateUser")
-  referredAffiliateCommissions AffiliateCommission[] @relation("AffiliateCommissionReferredUser")
-  affiliateWithdrawals AffiliateWithdrawal[] @relation("AffiliateWithdrawalUser")
+  orders                       Order[]
+  successCases                 GeoSuccessCase[]
+  cmsConnections               CmsConnection[]
+  requestedFixRuns             SiteFixRun[]                 @relation("SiteFixRunRequester")
+  creditTransactions           CreditTransaction[]
+  passwordResetTokens          PasswordResetToken[]
+  emailVerificationTokens      EmailVerificationToken[]
+  affiliateProfile             Affiliate?                   @relation("AffiliateOwner")
+  affiliateReferrer            Affiliate?                   @relation("AffiliateAttributedUsers", fields: [affiliateReferrerId], references: [id], onDelete: SetNull)
+  affiliateCommissions         AffiliateCommission[]        @relation("AffiliateCommissionAffiliateUser")
+  referredAffiliateCommissions AffiliateCommission[]        @relation("AffiliateCommissionReferredUser")
+  affiliateWithdrawals         AffiliateWithdrawal[]        @relation("AffiliateWithdrawalUser")
 
   @@index([managedBy])
   @@index([affiliateReferrerId])
@@ -115,17 +118,31 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("email_verification_tokens")
+}
+
 model CreditTransaction {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type        String   // topup | deduct | expire | refund
-  amount      Int      // positive for topup, negative for deduct
-  balance     Int      // balance after transaction
-  description String   // "充值 50 點" / "手動生成知識庫 Q&A (-2點)"
-  orderId     String?  // linked to Order if topup via payment
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String // topup | deduct | expire | refund
+  amount      Int // positive for topup, negative for deduct
+  balance     Int // balance after transaction
+  description String // "充值 50 點" / "手動生成知識庫 Q&A (-2點)"
+  orderId     String? // linked to Order if topup via payment
   expiresAt   DateTime? // for topup: purchase date + 12 months
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([userId, createdAt])
   @@index([expiresAt])
@@ -147,44 +164,46 @@ model Site {
   llmsTxtUpdatedAt DateTime?
 
   // Directory & Leaderboard
-  isPublic    Boolean  @default(false)
+  isPublic    Boolean   @default(false)
   industry    String?
   tier        String?
-  bestScore   Int      @default(0)
+  bestScore   Int       @default(0)
   bestScoreAt DateTime?
 
   // Client tagging
-  isClient     Boolean  @default(false)
+  isClient Boolean @default(false)
 
   // Verified status
-  isVerified   Boolean  @default(false)
-  verifiedAt   DateTime?
+  isVerified Boolean   @default(false)
+  verifiedAt DateTime?
 
   // Crawler tracking
   crawlerToken String? @unique
 
-  scans               Scan[]
-  monitors            Monitor[]
-  competitors         Competitor[]
-  contents            Content[]
-  qas                 SiteQa[]
-  crawlerVisits       CrawlerVisit[]
-  crawlerRobotsChecks CrawlerRobotsCheck[]
-  blogArticles        BlogArticle[]
-  badges              SiteBadge[]
-  successCases        GeoSuccessCase[]
-  supportConversations SupportConversation[]
+  scans                        Scan[]
+  monitors                     Monitor[]
+  competitors                  Competitor[]
+  contents                     Content[]
+  qas                          SiteQa[]
+  crawlerVisits                CrawlerVisit[]
+  crawlerRobotsChecks          CrawlerRobotsCheck[]
+  blogArticles                 BlogArticle[]
+  badges                       SiteBadge[]
+  successCases                 GeoSuccessCase[]
+  supportConversations         SupportConversation[]
   supportConversationSummaries SupportConversationSummary[]
-  seedSource          SeedSource?
-  clientQuerySets     ClientQuerySet[]
-  monitorReports      MonitorReport[]
-  industryAiResults   IndustryAiResult[]
-  industryAiSnapshots IndustryAiSnapshot[]
-  qualityLogs         ArticleQualityLog[]
+  seedSource                   SeedSource?
+  clientQuerySets              ClientQuerySet[]
+  monitorReports               MonitorReport[]
+  industryAiResults            IndustryAiResult[]
+  industryAiSnapshots          IndustryAiSnapshot[]
+  qualityLogs                  ArticleQualityLog[]
+  cmsConnections               CmsConnection[]
+  fixRuns                      SiteFixRun[]
+  fixActions                   SiteFixAction[]
 
   @@map("sites")
 }
-
 
 model Scan {
   id          String     @id @default(cuid())
@@ -201,18 +220,94 @@ model Scan {
 }
 
 model ScanResult {
-  id            String  @id @default(cuid())
+  id            String          @id @default(cuid())
   scanId        String
-  scan          Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  scan          Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
   indicator     String
   score         Int
-  status        String  // pass | warning | fail
+  status        String // pass | warning | fail
   details       Json
   suggestion    String?
-  autoFixable   Boolean @default(false)
-  generatedCode String? @db.Text
+  autoFixable   Boolean         @default(false)
+  generatedCode String?         @db.Text
+  cmsFixActions SiteFixAction[]
 
   @@map("scan_results")
+}
+
+model CmsConnection {
+  id     String @id @default(cuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider        String    @default("wordpress")
+  status          String    @default("pending") // pending | connected | disabled
+  apiBaseUrl      String?
+  pluginTokenHash String    @unique
+  tokenLast4      String
+  capabilities    String[]  @default([])
+  lastSeenAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  fixRuns SiteFixRun[]
+
+  @@unique([siteId, provider])
+  @@index([userId])
+  @@index([status, updatedAt])
+  @@map("cms_connections")
+}
+
+model SiteFixRun {
+  id            String         @id @default(cuid())
+  siteId        String
+  site          Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  connectionId  String?
+  connection    CmsConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  requestedById String
+  requestedBy   User           @relation("SiteFixRunRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+
+  mode       String    @default("wordpress_plugin")
+  status     String    @default("planned") // planned | dispatched | partially_applied | applied | failed
+  summary    Json?
+  error      String?   @db.Text
+  executedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  actions SiteFixAction[]
+
+  @@index([siteId, createdAt])
+  @@index([connectionId, status])
+  @@index([requestedById, createdAt])
+  @@map("site_fix_runs")
+}
+
+model SiteFixAction {
+  id           String      @id @default(cuid())
+  runId        String
+  run          SiteFixRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  siteId       String
+  site         Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  scanResultId String?
+  scanResult   ScanResult? @relation(fields: [scanResultId], references: [id], onDelete: SetNull)
+
+  type            String
+  title           String
+  status          String    @default("pending") // pending | dispatched | applied | failed | skipped
+  payload         Json
+  generatedCode   String?   @db.Text
+  pluginAppliedAt DateTime?
+  error           String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([runId, status])
+  @@index([siteId, status])
+  @@index([scanResultId])
+  @@map("site_fix_actions")
 }
 
 model Content {
@@ -275,56 +370,56 @@ model Competitor {
 }
 
 model Order {
-  id              String      @id @default(cuid())
-  merchantOrderNo String      @unique
-  userId          String
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan            String
-  amount          Int
-  status          OrderStatus @default(PENDING)
-  tradeNo         String?
-  paymentType     String?
-  paidAt          DateTime?
-  rawResponse     Json?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                   String                @id @default(cuid())
+  merchantOrderNo      String                @unique
+  userId               String
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                 String
+  amount               Int
+  status               OrderStatus           @default(PENDING)
+  tradeNo              String?
+  paymentType          String?
+  paidAt               DateTime?
+  rawResponse          Json?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
   affiliateCommissions AffiliateCommission[]
 
   @@map("orders")
 }
 
 model Affiliate {
-  id                  String   @id @default(cuid())
-  userId              String   @unique @map("user_id")
-  user                User     @relation("AffiliateOwner", fields: [userId], references: [id], onDelete: Cascade)
-  status              String   @default("pending") // pending | approved | rejected | suspended
-  realName            String   @map("real_name")
-  contactEmail        String?  @map("contact_email")
-  websiteUrl          String?  @map("website_url")
-  promotionChannel    String?  @map("promotion_channel")
-  audienceDescription String?  @db.Text @map("audience_description")
-  payoutMethod        String   @default("bank_transfer") @map("payout_method")
-  bankName            String?  @map("bank_name")
-  bankBranch          String?  @map("bank_branch")
-  bankAccountNumber   String?  @map("bank_account_number")
-  bankAccountName     String?  @map("bank_account_name")
-  affiliateCode       String   @unique @map("affiliate_code")
-  tier                String   @default("standard")
-  commissionRate      Int      @default(20) @map("commission_rate")
-  reviewedById        String?  @map("reviewed_by_id")
-  reviewedAt          DateTime? @map("reviewed_at")
-  reviewNote          String?  @db.Text @map("review_note")
-  rejectionReason     String?  @db.Text @map("rejection_reason")
-  totalClicks         Int      @default(0) @map("total_clicks")
-  totalSignups        Int      @default(0) @map("total_signups")
-  totalConversions    Int      @default(0) @map("total_conversions")
-  totalCommissionEarned Int    @default(0) @map("total_commission_earned")
-  totalCommissionPaid Int      @default(0) @map("total_commission_paid")
-  pendingCommission   Int      @default(0) @map("pending_commission")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                    String    @id @default(cuid())
+  userId                String    @unique @map("user_id")
+  user                  User      @relation("AffiliateOwner", fields: [userId], references: [id], onDelete: Cascade)
+  status                String    @default("pending") // pending | approved | rejected | suspended
+  realName              String    @map("real_name")
+  contactEmail          String?   @map("contact_email")
+  websiteUrl            String?   @map("website_url")
+  promotionChannel      String?   @map("promotion_channel")
+  audienceDescription   String?   @map("audience_description") @db.Text
+  payoutMethod          String    @default("bank_transfer") @map("payout_method")
+  bankName              String?   @map("bank_name")
+  bankBranch            String?   @map("bank_branch")
+  bankAccountNumber     String?   @map("bank_account_number")
+  bankAccountName       String?   @map("bank_account_name")
+  affiliateCode         String    @unique @map("affiliate_code")
+  tier                  String    @default("standard")
+  commissionRate        Int       @default(20) @map("commission_rate")
+  reviewedById          String?   @map("reviewed_by_id")
+  reviewedAt            DateTime? @map("reviewed_at")
+  reviewNote            String?   @map("review_note") @db.Text
+  rejectionReason       String?   @map("rejection_reason") @db.Text
+  totalClicks           Int       @default(0) @map("total_clicks")
+  totalSignups          Int       @default(0) @map("total_signups")
+  totalConversions      Int       @default(0) @map("total_conversions")
+  totalCommissionEarned Int       @default(0) @map("total_commission_earned")
+  totalCommissionPaid   Int       @default(0) @map("total_commission_paid")
+  pendingCommission     Int       @default(0) @map("pending_commission")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  attributedUsers User[] @relation("AffiliateAttributedUsers")
+  attributedUsers User[]                @relation("AffiliateAttributedUsers")
   clicks          AffiliateClick[]
   commissions     AffiliateCommission[]
   withdrawals     AffiliateWithdrawal[]
@@ -334,17 +429,17 @@ model Affiliate {
 }
 
 model AffiliateClick {
-  id              String   @id @default(cuid())
-  affiliateId     String   @map("affiliate_id")
+  id              String    @id @default(cuid())
+  affiliateId     String    @map("affiliate_id")
   affiliate       Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
-  affiliateCode   String   @map("affiliate_code")
-  visitorId       String   @map("visitor_id")
-  ipHash          String?  @map("ip_hash")
-  userAgent       String?  @db.Text @map("user_agent")
-  landingPage     String?  @db.Text @map("landing_page")
-  convertedUserId String?  @map("converted_user_id")
+  affiliateCode   String    @map("affiliate_code")
+  visitorId       String    @map("visitor_id")
+  ipHash          String?   @map("ip_hash")
+  userAgent       String?   @map("user_agent") @db.Text
+  landingPage     String?   @map("landing_page") @db.Text
+  convertedUserId String?   @map("converted_user_id")
   convertedAt     DateTime? @map("converted_at")
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   @@index([affiliateId, createdAt])
   @@index([affiliateCode, visitorId, createdAt])
@@ -353,26 +448,26 @@ model AffiliateClick {
 }
 
 model AffiliateCommission {
-  id               String   @id @default(cuid())
-  affiliateId      String   @map("affiliate_id")
-  affiliate        Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
-  affiliateUserId  String   @map("affiliate_user_id")
-  affiliateUser    User     @relation("AffiliateCommissionAffiliateUser", fields: [affiliateUserId], references: [id], onDelete: Cascade)
-  referredUserId   String   @map("referred_user_id")
-  referredUser     User     @relation("AffiliateCommissionReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
-  orderId          String   @unique @map("order_id")
-  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  paymentAmount    Int      @map("payment_amount")
-  commissionRate   Int      @map("commission_rate")
-  commissionAmount Int      @map("commission_amount")
-  status           String   @default("pending") // pending | approved | paid | clawed_back
-  lockedUntil      DateTime @map("locked_until")
-  withdrawalId     String?  @map("withdrawal_id")
+  id               String               @id @default(cuid())
+  affiliateId      String               @map("affiliate_id")
+  affiliate        Affiliate            @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  affiliateUserId  String               @map("affiliate_user_id")
+  affiliateUser    User                 @relation("AffiliateCommissionAffiliateUser", fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  referredUserId   String               @map("referred_user_id")
+  referredUser     User                 @relation("AffiliateCommissionReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  orderId          String               @unique @map("order_id")
+  order            Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  paymentAmount    Int                  @map("payment_amount")
+  commissionRate   Int                  @map("commission_rate")
+  commissionAmount Int                  @map("commission_amount")
+  status           String               @default("pending") // pending | approved | paid | clawed_back
+  lockedUntil      DateTime             @map("locked_until")
+  withdrawalId     String?              @map("withdrawal_id")
   withdrawal       AffiliateWithdrawal? @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
-  clawbackReason   String?  @db.Text @map("clawback_reason")
-  clawbackAt       DateTime? @map("clawback_at")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  clawbackReason   String?              @map("clawback_reason") @db.Text
+  clawbackAt       DateTime?            @map("clawback_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
 
   @@index([affiliateId, createdAt])
   @@index([affiliateUserId, status])
@@ -382,22 +477,22 @@ model AffiliateCommission {
 }
 
 model AffiliateWithdrawal {
-  id             String   @id @default(cuid())
-  affiliateId    String   @map("affiliate_id")
-  affiliate      Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
-  affiliateUserId String  @map("affiliate_user_id")
-  affiliateUser  User     @relation("AffiliateWithdrawalUser", fields: [affiliateUserId], references: [id], onDelete: Cascade)
-  amount         Int
-  type           String   @default("bank_transfer") // bank_transfer | platform_credits
-  status         String   @default("pending") // pending | processing | completed | rejected
-  bankSnapshot   Json?    @map("bank_snapshot")
-  processedById  String?  @map("processed_by_id")
-  processedAt    DateTime? @map("processed_at")
-  processNote    String?  @db.Text @map("process_note")
-  rejectionReason String? @db.Text @map("rejection_reason")
-  taxYear        Int      @map("tax_year")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id              String    @id @default(cuid())
+  affiliateId     String    @map("affiliate_id")
+  affiliate       Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  affiliateUserId String    @map("affiliate_user_id")
+  affiliateUser   User      @relation("AffiliateWithdrawalUser", fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  amount          Int
+  type            String    @default("bank_transfer") // bank_transfer | platform_credits
+  status          String    @default("pending") // pending | processing | completed | rejected
+  bankSnapshot    Json?     @map("bank_snapshot")
+  processedById   String?   @map("processed_by_id")
+  processedAt     DateTime? @map("processed_at")
+  processNote     String?   @map("process_note") @db.Text
+  rejectionReason String?   @map("rejection_reason") @db.Text
+  taxYear         Int       @map("tax_year")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   commissions AffiliateCommission[]
 
@@ -465,28 +560,28 @@ model Notification {
 }
 
 model SupportConversation {
-  id              String    @id @default(cuid())
-  userId          String    @map("user_id")
-  user            User      @relation("SupportConversationUser", fields: [userId], references: [id], onDelete: Cascade)
-  siteId          String?   @map("site_id")
-  site            Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  assignedAdminId String?   @map("assigned_admin_id")
-  assignedAdmin   User?     @relation("SupportConversationAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  id              String  @id @default(cuid())
+  userId          String  @map("user_id")
+  user            User    @relation("SupportConversationUser", fields: [userId], references: [id], onDelete: Cascade)
+  siteId          String? @map("site_id")
+  site            Site?   @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  assignedAdminId String? @map("assigned_admin_id")
+  assignedAdmin   User?   @relation("SupportConversationAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
 
-  subject         String
-  category        String    @default("general")
-  status          String    @default("open") // open | waiting_admin | waiting_user | closed
-  priority        String    @default("normal") // low | normal | high | urgent
-  channel         String    @default("ticket") // ticket | message | realtime
-  planSnapshot    String    @default("FREE") @map("plan_snapshot")
+  subject      String
+  category     String @default("general")
+  status       String @default("open") // open | waiting_admin | waiting_user | closed
+  priority     String @default("normal") // low | normal | high | urgent
+  channel      String @default("ticket") // ticket | message | realtime
+  planSnapshot String @default("FREE") @map("plan_snapshot")
 
-  lastMessageAt   DateTime  @default(now()) @map("last_message_at")
-  closedAt        DateTime? @map("closed_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  lastMessageAt DateTime  @default(now()) @map("last_message_at")
+  closedAt      DateTime? @map("closed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  messages        SupportMessage[]
-  summary         SupportConversationSummary?
+  messages SupportMessage[]
+  summary  SupportConversationSummary?
 
   @@index([userId, status, lastMessageAt])
   @@index([status, priority, lastMessageAt])
@@ -542,10 +637,10 @@ model SupportMessage {
   senderId       String?             @map("sender_id")
   sender         User?               @relation("SupportMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
 
-  senderRole     String              @default("user") @map("sender_role") // user | admin | ai | system
-  body           String              @db.Text
-  isAi           Boolean             @default(false) @map("is_ai")
-  createdAt      DateTime            @default(now()) @map("created_at")
+  senderRole String   @default("user") @map("sender_role") // user | admin | ai | system
+  body       String   @db.Text
+  isAi       Boolean  @default(false) @map("is_ai")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
@@ -568,23 +663,23 @@ model BlogArticle {
   updatedAt   DateTime @updatedAt
 
   // Template system
-  templateType        String    @default("geo_overview")
-  industrySlug        String?
-  targetKeywords      String[]
-  readingTimeMinutes  Int       @default(5)
-  lastRegeneratedAt   DateTime?
+  templateType       String    @default("geo_overview")
+  industrySlug       String?
+  targetKeywords     String[]
+  readingTimeMinutes Int       @default(5)
+  lastRegeneratedAt  DateTime?
 
   // Legacy slug history — when we rewrite a slug (e.g. CJK → ASCII for AI
   // crawler-friendliness), the old slug goes here so /blog/[oldSlug] keeps
   // working via 301 redirect to the canonical slug.
-  aliasSlugs          String[]  @default([])
+  aliasSlugs String[] @default([])
 
   // Success case relation
-  successCase         GeoSuccessCase?
+  successCase GeoSuccessCase?
 
   // Quality runner — every attempt that ultimately landed as this article
   // is linked back here for traceability.
-  qualityLogs         ArticleQualityLog[]
+  qualityLogs ArticleQualityLog[]
 
   @@index([category])
   @@index([siteId])
@@ -599,33 +694,33 @@ model BlogArticle {
 // buyer_guide, industry_insights, …). pass/fail both recorded so we can
 // build a quality-trend dashboard and tune prompts over time.
 model ArticleQualityLog {
-  id            String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  templateType  String   // e.g. "client_daily/tue_qa_deepdive", "brand_spread/medium"
-  promptVersion String   // bump when prompt is materially changed (e.g. "v3")
-  stage         String   // "outline" | "full" | "patch"
-  attempt       Int      // 1-based within (templateType, siteId, day)
+  templateType  String // e.g. "client_daily/tue_qa_deepdive", "brand_spread/medium"
+  promptVersion String // bump when prompt is materially changed (e.g. "v3")
+  stage         String // "outline" | "full" | "patch"
+  attempt       Int // 1-based within (templateType, siteId, day)
 
-  passed        Boolean
-  totalScore    Int      // 0-100
-  ruleScores    Json     // { brandSaturation: 18, niche: 15, ... }
-  failedRules   String[] // ["brand_saturation:7", "too_short:600"]
+  passed      Boolean
+  totalScore  Int // 0-100
+  ruleScores  Json // { brandSaturation: 18, niche: 15, ... }
+  failedRules String[] // ["brand_saturation:7", "too_short:600"]
 
-  model         String   // "gpt-4o" | "gpt-4o-mini" | …
-  charCount     Int
-  tokensIn      Int?
-  tokensOut     Int?
-  durationMs    Int
+  model      String // "gpt-4o" | "gpt-4o-mini" | …
+  charCount  Int
+  tokensIn   Int?
+  tokensOut  Int?
+  durationMs Int
 
-  siteId        String?
-  site          Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  siteId String?
+  site   Site?   @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
   // If this attempt's content ultimately landed as a published article,
   // the BlogArticle id is filled in. Failed attempts leave this null.
-  articleId     String?
-  article       BlogArticle? @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  articleId String?
+  article   BlogArticle? @relation(fields: [articleId], references: [id], onDelete: SetNull)
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([templateType, createdAt])
   @@index([siteId, createdAt])
@@ -638,8 +733,8 @@ model SiteBadge {
   id        String   @id @default(cuid())
   siteId    String
   site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  badge     String   // e.g. "first_scan", "score_50", "score_80", "score_100", "crawler_visited", "top_10", "improver"
-  label     String   // Display label
+  badge     String // e.g. "first_scan", "score_50", "score_80", "score_100", "crawler_visited", "top_10", "improver"
+  label     String // Display label
   awardedAt DateTime @default(now())
 
   @@unique([siteId, badge])
@@ -648,34 +743,34 @@ model SiteBadge {
 }
 
 model GeoSuccessCase {
-  id              String    @id @default(cuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  siteId          String?
-  site            Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  id     String  @id @default(cuid())
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId String?
+  site   Site?   @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
   title           String
   aiPlatform      String
   queryUsed       String
-  aiResponse      String    @db.Text
+  aiResponse      String  @db.Text
   screenshotUrl   String?
   beforeGeoScore  Int?
   afterGeoScore   Int?
   improvementDays Int?
 
-  industry        String?
-  tags            String[]
+  industry String?
+  tags     String[]
 
-  generatedArticleId String?  @unique
+  generatedArticleId String?      @unique
   generatedArticle   BlogArticle? @relation(fields: [generatedArticleId], references: [id], onDelete: SetNull)
 
   status          String    @default("pending")
   rejectionReason String?
   featuredAt      DateTime?
 
-  viewCount       Int       @default(0)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  viewCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status, createdAt])
   @@index([aiPlatform, status])
@@ -685,21 +780,21 @@ model GeoSuccessCase {
 }
 
 model NewsArticle {
-  id            String   @id @default(cuid())
-  slug          String   @unique
-  title         String
-  titleEn       String?
-  titleJa       String?
-  summary       String   @db.Text
-  summaryEn     String?  @db.Text
-  summaryJa     String?  @db.Text
-  sourceUrl     String
-  sourceName    String
-  category      String   @default("ai-seo")
-  imageUrl      String?
-  published     Boolean  @default(true)
-  publishedAt   DateTime @default(now())
-  createdAt     DateTime @default(now())
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  titleEn     String?
+  titleJa     String?
+  summary     String   @db.Text
+  summaryEn   String?  @db.Text
+  summaryJa   String?  @db.Text
+  sourceUrl   String
+  sourceName  String
+  category    String   @default("ai-seo")
+  imageUrl    String?
+  published   Boolean  @default(true)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([category, publishedAt])
   @@index([published, publishedAt])
@@ -717,34 +812,34 @@ model SystemConfig {
 }
 
 model ScheduledTask {
-  id            String    @id @default(cuid())
-  taskKey       String    @unique
-  name          String
-  description   String?
-  cronExpr      String    // e.g. "0 2 * * *"
-  enabled       Boolean   @default(true)
-  lastRunAt     DateTime?
-  lastResult    String?
-  nextRunAt     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  taskKey     String    @unique
+  name        String
+  description String?
+  cronExpr    String // e.g. "0 2 * * *"
+  enabled     Boolean   @default(true)
+  lastRunAt   DateTime?
+  lastResult  String?
+  nextRunAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@map("scheduled_tasks")
 }
 
 model SeedSource {
-  id          String   @id @default(cuid())
-  url         String   @unique
-  brandName   String
-  industry    String
-  country     String   @default("TW")
-  source      String   @default("manual")
-  status      String   @default("pending")
-  failReason  String?
-  siteId      String?  @unique
-  site        Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  url        String   @unique
+  brandName  String
+  industry   String
+  country    String   @default("TW")
+  source     String   @default("manual")
+  status     String   @default("pending")
+  failReason String?
+  siteId     String?  @unique
+  site       Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([industry, status])
   @@index([country, status])
@@ -753,32 +848,32 @@ model SeedSource {
 }
 
 model ClientQuerySet {
-  id          String   @id @default(cuid())
-  siteId      String
-  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  name        String   // e.g. "立如整復 驗收問題集"
-  queries     Json     // array of { category, question }
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name      String // e.g. "立如整復 驗收問題集"
+  queries   Json // array of { category, question }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  reports     MonitorReport[]
+  reports MonitorReport[]
 
   @@index([siteId])
   @@map("client_query_sets")
 }
 
 model MonitorReport {
-  id            String   @id @default(cuid())
-  querySetId    String
-  querySet      ClientQuerySet @relation(fields: [querySetId], references: [id], onDelete: Cascade)
-  siteId        String
-  site          Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  period        String   // e.g. "2026-03"
-  results       Json     // array of { question, platform, mentioned, response }
-  summary       Json?    // { totalQueries, mentionedCount, mentionRate, byPlatform }
-  status        String   @default("pending") // pending | running | completed
-  completedAt   DateTime?
-  createdAt     DateTime @default(now())
+  id          String         @id @default(cuid())
+  querySetId  String
+  querySet    ClientQuerySet @relation(fields: [querySetId], references: [id], onDelete: Cascade)
+  siteId      String
+  site        Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period      String // e.g. "2026-03"
+  results     Json // array of { question, platform, mentioned, response }
+  summary     Json? // { totalQueries, mentionedCount, mentionRate, byPlatform }
+  status      String         @default("pending") // pending | running | completed
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
 
   @@index([siteId, period])
   @@index([querySetId])
@@ -817,18 +912,18 @@ model IndustryQuery {
 }
 
 model IndustryAiResult {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   siteId    String
-  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site      Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
   queryId   String
   query     IndustryQuery @relation(fields: [queryId], references: [id], onDelete: Cascade)
   platform  String
-  mentioned Boolean  @default(false)
+  mentioned Boolean       @default(false)
   position  Int?
-  response  String   @db.Text
+  response  String        @db.Text
   sentiment String?
   weekOf    DateTime
-  checkedAt DateTime @default(now())
+  checkedAt DateTime      @default(now())
 
   @@unique([siteId, queryId, platform, weekOf])
   @@index([siteId, weekOf])

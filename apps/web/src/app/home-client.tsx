@@ -37,6 +37,7 @@ import { useCrawlerFeed, usePlatformStats } from '@/hooks/use-directory'
 import { useManagedCheckout } from '@/hooks/use-settings'
 import PublicNavbar from '@/components/layout/public-navbar'
 import { GeovaultLogoCompact, GeovaultLogoCompactDark } from '@/components/logo'
+import { savePendingGuestScan } from '@/lib/pending-guest-scan'
 import { toast } from 'sonner'
 
 /* ─── Animated counter hook ─── */
@@ -212,7 +213,16 @@ function GuestScanResults({ scanId }: { scanId: string }) {
       </div>
       <IndexNowButton url={scan.url} />
       <div className="text-center">
-        <Link href="/register" prefetch={false}>
+        <Link
+          href={`/register?guestScanId=${encodeURIComponent(scan.id)}&siteUrl=${encodeURIComponent(scan.url)}`}
+          prefetch={false}
+          onClick={() => savePendingGuestScan({
+            id: scan.id,
+            url: scan.url,
+            totalScore: scan.totalScore,
+            createdAt: scan.createdAt,
+          })}
+        >
           <Button size="lg" className="bg-white text-gray-900 hover:bg-gray-100 font-semibold h-12 px-10">
             註冊解鎖完整報告 & 自動修復
             <ArrowRight className="h-4 w-4 ml-2" />

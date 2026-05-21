@@ -3,6 +3,7 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -40,28 +41,37 @@ export class AuthService {
     this.googleClient = new OAuth2Client(this.googleClientId);
   }
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto, origin?: string) {
     const email = this.normalizeEmail(dto.email);
     const name = this.normalizeOptionalName(dto.name);
     const existing = await this.prisma.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
     });
-    if (existing) throw new ConflictException('Email already registered');
+    if (existing) throw new ConflictException('Email already registered. Please log in or verify this email.');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
       data: { email, passwordHash, name },
-      select: { id: true, email: true, name: true, role: true, plan: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, plan: true, emailVerified: true, createdAt: true },
     });
 
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
+    const verificationToken = await this.createEmailVerificationToken(user.id);
+    const verificationUrl = this.buildEmailVerificationUrl(verificationToken, origin);
+    await this.email.sendEmailVerification(user.email, user.name ?? undefined, verificationUrl);
 
     // Send welcome notification + email (non-blocking)
     this.notifications.create(user.id, 'welcome', '歡迎加入 Geovault', `${user.name || '使用者'}，感謝您註冊 Geovault！`).catch(() => {});
 
     this.affiliateService.attributeSignup(user.id, dto.affiliateCode, dto.affiliateVisitorId).catch(() => {});
 
-    return { user, ...tokens };
+    return {
+      user,
+      requiresEmailVerification: true,
+      message: 'Please verify your email before logging in.',
+      ...(this.shouldExposeDevVerificationUrl(origin)
+        ? { devVerificationUrl: verificationUrl }
+        : {}),
+    };
   }
 
   async login(dto: LoginDto) {
@@ -79,6 +89,12 @@ export class AuthService {
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
+    if (!user.emailVerified) {
+      throw new ForbiddenException({
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email before logging in.',
+      });
+    }
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
     return {
@@ -177,7 +193,7 @@ export class AuthService {
     }
   }
 
-  async forgotPassword(emailInput: string) {
+  async forgotPassword(emailInput: string, origin?: string) {
     const email = this.normalizeEmail(emailInput);
     const user = await this.prisma.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
@@ -203,13 +219,83 @@ export class AuthService {
       },
     });
 
-    const webUrl = this.config.get<string>('FRONTEND_URL')
-      || this.config.get<string>('WEB_URL')
-      || 'https://www.geovault.app';
+    const webUrl = this.resolveFrontendUrl(origin);
     const resetUrl = `${webUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
     await this.email.sendPasswordReset(user.email, resetUrl);
 
-    return generic;
+    return {
+      ...generic,
+      ...(this.shouldExposeDevVerificationUrl(origin)
+        ? { devResetUrl: resetUrl }
+        : {}),
+    };
+  }
+
+  async verifyEmail(token: string) {
+    const tokenHash = this.hashEmailVerificationToken(token);
+    const verificationToken = await this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+    if (!verificationToken || verificationToken.usedAt || verificationToken.expiresAt <= new Date()) {
+      throw new BadRequestException('Email verification link is invalid or expired.');
+    }
+
+    const verifiedAt = new Date();
+    const [, user] = await this.prisma.$transaction([
+      this.prisma.emailVerificationToken.update({
+        where: { id: verificationToken.id },
+        data: { usedAt: verifiedAt },
+      }),
+      this.prisma.user.update({
+        where: { id: verificationToken.userId },
+        data: { emailVerified: true },
+      }),
+      this.prisma.emailVerificationToken.deleteMany({
+        where: {
+          userId: verificationToken.userId,
+          usedAt: null,
+          id: { not: verificationToken.id },
+        },
+      }),
+    ]);
+
+    const tokens = await this.generateTokens(user.id, user.email, user.role);
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        plan: user.plan,
+      },
+      ...tokens,
+      message: 'Email verified successfully.',
+    };
+  }
+
+  async resendVerification(emailInput: string, origin?: string) {
+    const generic = {
+      message: 'If this email needs verification, we sent a new verification link.',
+    };
+    const email = this.normalizeEmail(emailInput);
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true, email: true, name: true, emailVerified: true },
+    });
+
+    if (!user || user.emailVerified) return generic;
+
+    const token = await this.createEmailVerificationToken(user.id);
+    const verificationUrl = this.buildEmailVerificationUrl(token, origin);
+    await this.email.sendEmailVerification(user.email, user.name ?? undefined, verificationUrl);
+
+    return {
+      ...generic,
+      ...(this.shouldExposeDevVerificationUrl(origin)
+        ? { devVerificationUrl: verificationUrl }
+        : {}),
+    };
   }
 
   async resetPassword(token: string, newPassword: string) {
@@ -341,6 +427,61 @@ export class AuthService {
   }
 
   private hashPasswordResetToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private async createEmailVerificationToken(userId: string): Promise<string> {
+    await this.prisma.emailVerificationToken.deleteMany({
+      where: { userId, usedAt: null },
+    });
+
+    const token = randomBytes(32).toString('hex');
+    await this.prisma.emailVerificationToken.create({
+      data: {
+        userId,
+        tokenHash: this.hashEmailVerificationToken(token),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+    return token;
+  }
+
+  private buildEmailVerificationUrl(token: string, origin?: string): string {
+    const webUrl = this.resolveFrontendUrl(origin);
+    return `${webUrl.replace(/\/$/, '')}/verify-email?token=${encodeURIComponent(token)}`;
+  }
+
+  private resolveFrontendUrl(origin?: string): string {
+    if (origin && this.isTrustedLocalOrigin(origin)) return origin;
+    return this.config.get<string>('FRONTEND_URL')
+      || this.config.get<string>('WEB_URL')
+      || 'https://www.geovault.app';
+  }
+
+  private isTrustedLocalOrigin(origin?: string): boolean {
+    if (!origin) return false;
+    try {
+      const url = new URL(origin);
+      const host = url.hostname;
+      return (
+        url.protocol === 'http:' &&
+        (host === 'localhost' ||
+          host === '127.0.0.1' ||
+          host.startsWith('192.168.') ||
+          host.startsWith('10.') ||
+          /^172\.(1[6-9]|2\d|3[0-1])\./.test(host))
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private shouldExposeDevVerificationUrl(origin?: string): boolean {
+    if (this.isTrustedLocalOrigin(origin)) return true;
+    return process.env.NODE_ENV !== 'production' && !this.email.isConfigured();
+  }
+
+  private hashEmailVerificationToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }
 }

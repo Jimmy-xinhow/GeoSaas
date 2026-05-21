@@ -959,6 +959,35 @@ export default function SiteDetailPage() {
   const lastScanDate = latestScan?.createdAt
     ? new Date(latestScan.createdAt).toLocaleString('zh-TW')
     : '尚未掃描'
+  const issueCount = summary.warning + summary.fail
+  const hasCompletedScan = completedScans.length > 0
+  const nextStep = hasActiveScan
+    ? {
+        title: '正在掃描網站',
+        description: '掃描完成後會自動整理分數、缺失項目與可修復內容。',
+        label: '掃描中...',
+        kind: 'active' as const,
+      }
+    : !hasCompletedScan
+    ? {
+        title: '先完成第一次掃描',
+        description: '系統會先建立網站的 GEO 分數與缺失清單，後續修復才有依據。',
+        label: '開始第一次掃描',
+        kind: 'scan' as const,
+      }
+    : issueCount > 0
+    ? {
+        title: '依照引導修復缺失項目',
+        description: `目前有 ${issueCount} 個項目需要處理，建議先用引導流程逐步完成。`,
+        label: '開始引導修復',
+        kind: 'guided' as const,
+      }
+    : {
+        title: '補強 AI 可引用的品牌內容',
+        description: '分數已經穩定，下一步是補充品牌事實與問答，提升被 AI 正確引用的機率。',
+        label: '補強知識庫',
+        kind: 'knowledge' as const,
+      }
 
   return (
     <div className="space-y-6">
@@ -971,7 +1000,7 @@ export default function SiteDetailPage() {
           <ArrowLeft className="h-4 w-4 mr-1" />
           返回網站列表
         </Link>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-white">{site.name}</h1>
@@ -995,52 +1024,105 @@ export default function SiteDetailPage() {
               </span>
             </div>
           </div>
-          <div className="flex gap-3">
-            <Link href={`/sites/${siteId}/knowledge`}>
-              <Button variant="outline">
-                <BookOpen className="h-4 w-4 mr-2" />
-                知識庫
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
+            {nextStep.kind === 'guided' ? (
+              <Link href={`/sites/${siteId}/guided-fix`}>
+                <Button className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto">
+                  <SearchCheck className="h-4 w-4 mr-2" />
+                  {nextStep.label}
+                </Button>
+              </Link>
+            ) : nextStep.kind === 'knowledge' ? (
+              <Link href={`/sites/${siteId}/knowledge`}>
+                <Button className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto">
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  {nextStep.label}
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto"
+                onClick={handleScan}
+                disabled={hasActiveScan || triggerScanMutation.isPending}
+              >
+                {hasActiveScan || triggerScanMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                {hasActiveScan ? '掃描中...' : triggerScanMutation.isPending ? '啟動中...' : nextStep.label}
               </Button>
-            </Link>
-            <Link href={`/sites/${siteId}/fix`}>
-              <Button variant="outline">
-                <Wrench className="h-4 w-4 mr-2" />
-                修復工具
-              </Button>
-            </Link>
-            <Link href={`/sites/${siteId}/cms-fix`}>
-              <Button variant="outline">
-                <PlugZap className="h-4 w-4 mr-2" />
-                CMS 一鍵修復
-              </Button>
-            </Link>
-            <Link href={`/sites/${siteId}/llms-txt`}>
-              <Button variant="outline">
-                <FileText className="h-4 w-4 mr-2" />
-                llms.txt
-              </Button>
-            </Link>
-            <Link href={`/sites/${siteId}/crawler`}>
-              <Button variant="outline">
-                <Bot className="h-4 w-4 mr-2" />
-                爬蟲追蹤
-              </Button>
-            </Link>
-            <Button
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={handleScan}
-              disabled={hasActiveScan || triggerScanMutation.isPending}
-            >
-              {hasActiveScan || triggerScanMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              {hasActiveScan ? '掃描中...' : triggerScanMutation.isPending ? '啟動中...' : '重新掃描'}
-            </Button>
+            )}
+
+            <details className="group relative">
+              <summary className="inline-flex h-10 w-full cursor-pointer list-none items-center justify-center rounded-md border border-white/15 px-4 text-sm font-medium text-white hover:bg-white/10 sm:w-auto">
+                更多工具
+                <ChevronDown className="ml-2 h-4 w-4 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-md border border-white/10 bg-slate-950 shadow-xl">
+                <Link href={`/sites/${siteId}/fix`} className="flex items-center gap-2 px-3 py-2 text-sm text-white hover:bg-white/10">
+                  <Wrench className="h-4 w-4 text-blue-300" />
+                  修復工具
+                </Link>
+                <Link href={`/sites/${siteId}/cms-fix`} className="flex items-center gap-2 px-3 py-2 text-sm text-white hover:bg-white/10">
+                  <PlugZap className="h-4 w-4 text-blue-300" />
+                  CMS 一鍵修復
+                </Link>
+                <Link href={`/sites/${siteId}/llms-txt`} className="flex items-center gap-2 px-3 py-2 text-sm text-white hover:bg-white/10">
+                  <FileText className="h-4 w-4 text-blue-300" />
+                  llms.txt
+                </Link>
+                <Link href={`/sites/${siteId}/crawler`} className="flex items-center gap-2 px-3 py-2 text-sm text-white hover:bg-white/10">
+                  <Bot className="h-4 w-4 text-blue-300" />
+                  爬蟲追蹤
+                </Link>
+                <Link href={`/sites/${siteId}/knowledge`} className="flex items-center gap-2 px-3 py-2 text-sm text-white hover:bg-white/10">
+                  <BookOpen className="h-4 w-4 text-blue-300" />
+                  知識庫
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleScan}
+                  disabled={hasActiveScan || triggerScanMutation.isPending}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RefreshCw className="h-4 w-4 text-blue-300" />
+                  重新掃描
+                </button>
+              </div>
+            </details>
           </div>
         </div>
       </div>
+
+      <Card className="border-blue-500/30 bg-blue-500/10">
+        <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-200">
+              建議下一步
+            </p>
+            <h2 className="text-lg font-semibold text-white">{nextStep.title}</h2>
+            <p className="max-w-2xl text-sm text-blue-100/80">{nextStep.description}</p>
+          </div>
+          <div className="grid grid-cols-4 gap-2 text-center text-xs text-blue-100/80">
+            {['掃描', '修復', '補內容', '追蹤'].map((step, index) => (
+              <div
+                key={step}
+                className={`rounded-md border px-3 py-2 ${
+                  (nextStep.kind === 'scan' && index === 0) ||
+                  (nextStep.kind === 'guided' && index === 1) ||
+                  (nextStep.kind === 'knowledge' && index === 2) ||
+                  (nextStep.kind === 'active' && index === 0)
+                    ? 'border-blue-300 bg-blue-300/15 text-white'
+                    : 'border-white/10 bg-white/5'
+                }`}
+              >
+                {step}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <BrandFactReadinessSection
         readiness={brandFacts}

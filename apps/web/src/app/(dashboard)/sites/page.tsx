@@ -17,6 +17,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSites, useCreateSite, useDeleteSite } from '@/hooks/use-sites'
 import { useTriggerScan } from '@/hooks/use-scan'
+import { clearPendingGuestScan, loadPendingGuestScan, type PendingGuestScan } from '@/lib/pending-guest-scan'
 
 function ScoreGauge({ score, size = 80 }: { score: number; size?: number }) {
   const radius = (size - 8) / 2
@@ -98,14 +99,35 @@ function ScanStatusBadge({ status }: { status: string }) {
   return <Badge className={c.className}>{c.label}</Badge>
 }
 
+function normalizeSiteUrlInput(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  return /^[a-z][a-z\d+\-.]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+}
+
 export default function SitesPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [newSiteUrl, setNewSiteUrl] = useState('')
   const [newSiteName, setNewSiteName] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [pendingGuestScan, setPendingGuestScan] = useState<PendingGuestScan | null>(null)
 
   const { data: sites, isLoading, error } = useSites()
+
+  useEffect(() => {
+    const pending = loadPendingGuestScan()
+    if (!pending) return
+    setPendingGuestScan(pending)
+    setNewSiteUrl(pending.url)
+
+    try {
+      setNewSiteName(new URL(pending.url).hostname)
+    } catch {
+      setNewSiteName(pending.url)
+    }
+    setShowAddForm(true)
+  }, [])
 
   const filteredSites = useMemo(() => {
     if (!sites) return []
@@ -151,20 +173,31 @@ export default function SitesPage() {
   }
 
   const handleAddSite = async () => {
-    if (!newSiteUrl.trim()) {
+    const normalizedUrl = normalizeSiteUrlInput(newSiteUrl)
+    const shouldImportGuestScan = pendingGuestScan
+      ? normalizeSiteUrlInput(pendingGuestScan.url) === normalizedUrl
+      : false
+
+    if (!normalizedUrl) {
       toast.error('請輸入網址')
       return
     }
 
     try {
       await createSiteMutation.mutateAsync({
-        url: newSiteUrl.trim(),
-        name: newSiteName.trim() || newSiteUrl.trim(),
+        url: normalizedUrl,
+        name: newSiteName.trim() || normalizedUrl,
+        ...(shouldImportGuestScan ? { guestScanId: pendingGuestScan!.id } : {}),
       })
       toast.success('網站新增成功')
       setNewSiteUrl('')
       setNewSiteName('')
       setShowAddForm(false)
+      if (shouldImportGuestScan) {
+        clearPendingGuestScan()
+        setPendingGuestScan(null)
+        toast.success('網站已新增，並已套用免費掃描結果')
+      }
     } catch (err: any) {
       toast.error(err?.response?.data?.message || '新增失敗，請稍後再試')
     }
@@ -229,6 +262,11 @@ export default function SitesPage() {
         <Card className="bg-white/5 border-white/10">
           <CardContent className="p-6">
             <div className="space-y-3">
+              {pendingGuestScan ? (
+                <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 p-3 text-sm text-blue-100">
+                  已偵測到你剛完成的免費掃描。新增同一個網址時，系統會直接套用該掃描結果，不會再重複掃描。
+                </div>
+              ) : null}
               <Input
                 placeholder="網站名稱（選填）"
                 value={newSiteName}
@@ -236,7 +274,7 @@ export default function SitesPage() {
               />
               <div className="flex gap-3">
                 <Input
-                  placeholder="輸入網址，例如 https://example.com"
+                  placeholder="輸入網址，例如 example.com"
                   value={newSiteUrl}
                   onChange={(e) => setNewSiteUrl(e.target.value)}
                   className="flex-1"

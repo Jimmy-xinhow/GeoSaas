@@ -35,8 +35,16 @@ export class SitesService {
     }
 
     const site = await this.prisma.site.create({
-      data: { ...dto, url, userId },
+      data: { url, name: dto.name, userId },
     });
+
+    if (dto.guestScanId) {
+      try {
+        await this.importGuestScanResult(site.id, url, dto.guestScanId);
+      } catch (err) {
+        this.logger.warn(`Guest scan import skipped for site ${site.id}: ${err instanceof Error ? err.message : err}`);
+      }
+    }
 
     // If the new site is public, AI crawlers should learn about it fast:
     // ping the new directory page + the platform-wide feeds that list it.
@@ -45,6 +53,68 @@ export class SitesService {
     }
 
     return site;
+  }
+
+  private async importGuestScanResult(siteId: string, siteUrl: string, guestScanId: string): Promise<void> {
+    const guestScan = await this.prisma.guestScan.findUnique({
+      where: { id: guestScanId },
+      select: {
+        id: true,
+        url: true,
+        status: true,
+        totalScore: true,
+        results: true,
+        createdAt: true,
+        completedAt: true,
+      },
+    });
+    if (!guestScan) throw new BadRequestException('Guest scan not found');
+    if (guestScan.status !== 'COMPLETED' || !guestScan.results) {
+      throw new BadRequestException('Guest scan is not completed yet');
+    }
+
+    const normalizedGuestUrl = this.normalizePublicSiteUrl(guestScan.url);
+    if (normalizedGuestUrl !== siteUrl) {
+      throw new BadRequestException('Guest scan URL does not match this site URL');
+    }
+
+    const results = guestScan.results as any;
+    const indicators = results?.indicators && typeof results.indicators === 'object'
+      ? results.indicators
+      : {};
+    const totalScore = Number(results?.totalScore ?? guestScan.totalScore ?? 0);
+    const tier = totalScore >= 80 ? 'gold' : totalScore >= 70 ? 'silver' : totalScore >= 60 ? 'bronze' : null;
+
+    await this.prisma.$transaction([
+      this.prisma.scan.create({
+        data: {
+          siteId,
+          status: 'COMPLETED',
+          totalScore,
+          createdAt: guestScan.createdAt,
+          completedAt: guestScan.completedAt ?? new Date(),
+          results: {
+            create: Object.entries(indicators).map(([indicator, result]: [string, any]) => ({
+              indicator,
+              score: Number(result?.score ?? 0),
+              status: result?.status ?? 'fail',
+              details: result?.details ?? {},
+              suggestion: result?.suggestion ?? null,
+              autoFixable: Boolean(result?.autoFixable),
+              generatedCode: result?.generatedCode ?? null,
+            })),
+          },
+        },
+      }),
+      this.prisma.site.update({
+        where: { id: siteId },
+        data: {
+          bestScore: totalScore,
+          bestScoreAt: guestScan.completedAt ?? new Date(),
+          tier,
+        },
+      }),
+    ]);
   }
 
   private pingDirectoryUrls(siteId: string): void {

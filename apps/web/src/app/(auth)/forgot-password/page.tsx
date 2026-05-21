@@ -21,6 +21,7 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [devResetUrl, setDevResetUrl] = useState<string | null>(null)
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -28,7 +29,8 @@ export default function ForgotPasswordPage() {
 
     setIsSubmitting(true)
     try {
-      await apiClient.post('/auth/forgot-password', { email })
+      const { data } = await apiClient.post<{ devResetUrl?: string }>('/auth/forgot-password', { email })
+      setDevResetUrl(data.devResetUrl ?? null)
       setSubmitted(true)
     } catch (error: any) {
       toast.error(error?.response?.data?.message || '無法送出重設密碼要求，請稍後再試')
@@ -58,6 +60,11 @@ export default function ForgotPasswordPage() {
             <p className="text-xs text-gray-500">
               連結 1 小時後失效，且只能使用一次。
             </p>
+            {devResetUrl ? (
+              <a href={devResetUrl} className="block text-sm text-blue-300 underline">
+                本地測試用重設密碼連結
+              </a>
+            ) : null}
             <Link href="/login">
               <Button variant="outline" className="mt-4">
                 <ArrowLeft className="h-4 w-4 mr-2" />

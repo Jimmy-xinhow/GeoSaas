@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -21,6 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { savePendingGuestScan } from '@/lib/pending-guest-scan'
 
 const registerSchema = z
   .object({
@@ -37,8 +39,12 @@ const registerSchema = z
 type RegisterForm = z.infer<typeof registerSchema>
 
 export default function RegisterPage() {
-  const router = useRouter()
+  const searchParams = useSearchParams()
   const registerMutation = useRegister()
+  const [verificationNotice, setVerificationNotice] = useState<{
+    email: string
+    devVerificationUrl?: string
+  } | null>(null)
 
   const {
     register,
@@ -48,6 +54,14 @@ export default function RegisterPage() {
     resolver: zodResolver(registerSchema),
   })
 
+  useEffect(() => {
+    const guestScanId = searchParams?.get('guestScanId')
+    const siteUrl = searchParams?.get('siteUrl')
+    if (guestScanId && siteUrl) {
+      savePendingGuestScan({ id: guestScanId, url: siteUrl })
+    }
+  }, [searchParams])
+
   const onSubmit = async (data: RegisterForm) => {
     const { confirmPassword, ...payload } = data
     const affiliateRef = getStoredAffiliateRef()
@@ -55,10 +69,13 @@ export default function RegisterPage() {
       ? { ...payload, affiliateCode: affiliateRef.code, affiliateVisitorId: affiliateRef.visitorId }
       : payload
     registerMutation.mutate(registerPayload, {
-      onSuccess: () => {
+      onSuccess: (result) => {
         toast.success('註冊成功，歡迎加入！')
         clearStoredAffiliateRef()
-        router.push('/dashboard')
+        setVerificationNotice({
+          email: result.user.email,
+          devVerificationUrl: result.devVerificationUrl,
+        })
       },
       onError: (error: any) => {
         const message =
@@ -76,6 +93,22 @@ export default function RegisterPage() {
         <CardDescription>免費註冊，立即開始使用</CardDescription>
       </CardHeader>
       <CardContent>
+        {verificationNotice ? (
+          <div className="mb-5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+            <p className="font-semibold">請先完成 Email 驗證</p>
+            <p className="mt-2 leading-6">
+              我們已將驗證連結寄到 {verificationNotice.email}。完成驗證後才能登入使用。
+            </p>
+            {verificationNotice.devVerificationUrl ? (
+              <a
+                href={verificationNotice.devVerificationUrl}
+                className="mt-3 inline-flex text-blue-200 underline"
+              >
+                本地測試用驗證連結
+              </a>
+            ) : null}
+          </div>
+        ) : null}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">姓名</Label>

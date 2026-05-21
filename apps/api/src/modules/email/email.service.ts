@@ -16,6 +16,10 @@ export class EmailService {
     this.fromEmail = this.config.get<string>('EMAIL_FROM', 'Geovault <noreply@geovault.app>');
   }
 
+  isConfigured(): boolean {
+    return Boolean(this.resend);
+  }
+
   /** Send scan complete notification */
   async sendScanComplete(to: string, data: { siteName: string; score: number; url: string }) {
     return this.send({
@@ -97,6 +101,31 @@ export class EmailService {
         <p style="color:#9ca3af;font-size:12px;">Geovault — The APAC Authority on AI Search Optimization</p>
       `,
     });
+  }
+
+  async sendEmailVerification(to: string, name: string | undefined, verificationUrl: string) {
+    const displayName = this.escapeHtml(name || 'there');
+    return this.send({
+      to,
+      subject: 'Verify your Geovault email',
+      html: `
+        <h2>Verify your email</h2>
+        <p>Hi ${displayName}, please verify this email before logging in to Geovault.</p>
+        <p><a href="${verificationUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Verify email</a></p>
+        <p style="color:#6b7280;font-size:13px;">This link expires in 24 hours. If you did not create a Geovault account, you can ignore this email.</p>
+        <hr/>
+        <p style="color:#9ca3af;font-size:12px;">Geovault - The APAC Authority on AI Search Optimization</p>
+      `,
+    });
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   private async send(params: { to: string; subject: string; html: string }) {

@@ -50,6 +50,7 @@ interface Site {
 interface CreateSitePayload {
   url: string;
   name: string;
+  guestScanId?: string;
 }
 
 export function useSites() {
