@@ -958,6 +958,8 @@ export default function SiteDetailPage() {
     handleScan(true)
   }, [hasActiveScan, scans, scansLoading, shouldAutoScanAfterCmsFix, triggerScanMutation.isPending])
 
+  const isPostFixFlowActive = isAfterCmsFix && (hasActiveScan || triggerScanMutation.isPending || shouldAutoScanAfterCmsFix)
+
   const isLoading = siteLoading || scansLoading
 
   if (isLoading) {
@@ -1184,14 +1186,18 @@ export default function SiteDetailPage() {
         </Card>
       ) : null}
 
-      <BrandFactReadinessSection
-        readiness={brandFacts}
-        isLoading={brandFactsLoading}
-        siteId={siteId}
-        profile={site.profile}
-      />
+      {!isPostFixFlowActive ? (
+        <>
+          <BrandFactReadinessSection
+            readiness={brandFacts}
+            isLoading={brandFactsLoading}
+            siteId={siteId}
+            profile={site.profile}
+          />
 
-      <ProfileFactsEditor siteId={siteId} profile={site.profile} />
+          <ProfileFactsEditor siteId={siteId} profile={site.profile} />
+        </>
+      ) : null}
 
       {/* Scan progress banner */}
       {hasActiveScan && (

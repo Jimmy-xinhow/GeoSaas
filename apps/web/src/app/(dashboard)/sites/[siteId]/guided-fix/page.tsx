@@ -13,6 +13,7 @@ import {
   LifeBuoy,
   Loader2,
   PlugZap,
+  RefreshCw,
   SearchCheck,
   Sparkles,
   Wrench,
@@ -127,11 +128,48 @@ export default function GuidedFixPage() {
   const { data: report, isLoading: reportLoading } = useCompletionReport(siteId)
   const { data: cmsFixStatus } = useCmsFixStatus(siteId)
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'report' ? 'report' : 'quick-wins')
-  const cmsRunStatus = cmsFixStatus?.latestRun?.status
+  const latestCmsRun = cmsFixStatus?.latestRun
+  const cmsRunStatus = latestCmsRun?.status
+  const latestScanAt = plan?.scan?.completedAt ? new Date(plan.scan.completedAt).getTime() : 0
+  const latestCmsRunUpdatedAt = latestCmsRun?.updatedAt ? new Date(latestCmsRun.updatedAt).getTime() : 0
   const hasDispatchedCmsFix =
     cmsRunStatus === 'dispatched' ||
     cmsRunStatus === 'partially_applied' ||
     cmsRunStatus === 'applied'
+  const hasPostFixScan = Boolean(hasDispatchedCmsFix && latestScanAt > latestCmsRunUpdatedAt)
+  const needsPostFixScan = Boolean(hasDispatchedCmsFix && !hasPostFixScan)
+  const flowSteps = [
+    {
+      key: 'scan',
+      label: '掃描診斷',
+      done: true,
+      active: !hasDispatchedCmsFix && plan?.quickWins.length === 0,
+    },
+    {
+      key: 'fix',
+      label: '選擇修復',
+      done: hasDispatchedCmsFix,
+      active: !hasDispatchedCmsFix,
+    },
+    {
+      key: 'wp',
+      label: '套用到網站',
+      done: cmsRunStatus === 'applied' || hasPostFixScan,
+      active: cmsRunStatus === 'dispatched' || cmsRunStatus === 'partially_applied',
+    },
+    {
+      key: 'verify',
+      label: '重新掃描驗證',
+      done: hasPostFixScan,
+      active: needsPostFixScan,
+    },
+    {
+      key: 'next',
+      label: '後續補強',
+      done: false,
+      active: hasPostFixScan,
+    },
+  ]
 
   useEffect(() => {
     const tab = searchParams.get('tab')
@@ -149,6 +187,12 @@ export default function GuidedFixPage() {
       }, 0)
     }
   }, [searchParams])
+
+  useEffect(() => {
+    if (hasPostFixScan) {
+      setActiveTab('report')
+    }
+  }, [hasPostFixScan])
 
   const handoffText = useMemo(() => {
     if (!handoff) return ''
@@ -233,6 +277,56 @@ export default function GuidedFixPage() {
         </div>
       </div>
 
+      <Card className="border-white/10 bg-white/[0.04]">
+        <CardContent className="p-5">
+          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">目前流程位置</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {needsPostFixScan
+                  ? '修復已送出，請先重新掃描驗證；完成後才會更新後續建議。'
+                  : hasPostFixScan
+                  ? '已完成修復後重新掃描，請查看完成報告與下一步。'
+                  : '依照順序完成掃描、修復、驗證，不需要在多個頁面猜下一步。'}
+              </p>
+            </div>
+            {needsPostFixScan ? (
+              <Link href={`/sites/${siteId}?afterCmsFix=1&autoScan=1`}>
+                <Button className="w-full bg-green-600 text-white hover:bg-green-700 md:w-auto">
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  立即重新掃描驗證
+                </Button>
+              </Link>
+            ) : hasPostFixScan ? (
+              <Button className="w-full md:w-auto" onClick={() => setActiveTab('report')}>
+                <SearchCheck className="mr-2 h-4 w-4" />
+                查看完成報告
+              </Button>
+            ) : null}
+          </div>
+          <div className="grid gap-2 md:grid-cols-5">
+            {flowSteps.map((step, index) => (
+              <div
+                key={step.key}
+                className={`rounded-md border p-3 text-sm ${
+                  step.active
+                    ? 'border-blue-400 bg-blue-500/15 text-white'
+                    : step.done
+                    ? 'border-green-500/30 bg-green-500/10 text-green-100'
+                    : 'border-white/10 bg-black/15 text-muted-foreground'
+                }`}
+              >
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-xs">Step {index + 1}</span>
+                  {step.done ? <CheckCircle2 className="h-4 w-4 text-green-300" /> : null}
+                </div>
+                <p className="font-medium">{step.label}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="border-blue-500/30 bg-blue-500/10">
         <CardContent className="grid gap-6 p-6 lg:grid-cols-[1.1fr_.9fr]">
           <div>
@@ -277,7 +371,7 @@ export default function GuidedFixPage() {
         </CardContent>
       </Card>
 
-      {hasDispatchedCmsFix ? (
+      {needsPostFixScan ? (
         <Card className="border-green-500/30 bg-green-500/10">
           <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
             <div>
@@ -291,7 +385,7 @@ export default function GuidedFixPage() {
               <Link href={`/sites/${siteId}?afterCmsFix=1&autoScan=1`}>
                 <Button className="w-full bg-green-600 text-white hover:bg-green-700 sm:w-auto">
                   <SearchCheck className="mr-2 h-4 w-4" />
-                  修復後重新掃描
+                  立即重新掃描驗證
                 </Button>
               </Link>
               <Link href={`/sites/${siteId}/cms-fix`}>
@@ -300,6 +394,22 @@ export default function GuidedFixPage() {
                 </Button>
               </Link>
             </div>
+          </CardContent>
+        </Card>
+      ) : hasPostFixScan ? (
+        <Card className="border-blue-500/30 bg-blue-500/10">
+          <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <Badge className="mb-2 bg-blue-500/20 text-blue-200">已完成驗證掃描</Badge>
+              <h2 className="text-lg font-semibold text-white">現在看完成報告</h2>
+              <p className="mt-1 max-w-2xl text-sm text-blue-100/80">
+                最新掃描已在修復包之後完成。請查看分數變化、已解決項目與剩餘下一步。
+              </p>
+            </div>
+            <Button className="w-full sm:w-auto" onClick={() => setActiveTab('report')}>
+              <SearchCheck className="mr-2 h-4 w-4" />
+              查看完成報告
+            </Button>
           </CardContent>
         </Card>
       ) : (
