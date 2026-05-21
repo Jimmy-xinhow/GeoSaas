@@ -20,6 +20,15 @@ export class EmailService {
     return Boolean(this.resend);
   }
 
+  getStatus() {
+    return {
+      provider: 'resend',
+      configured: this.isConfigured(),
+      fromConfigured: Boolean(this.fromEmail),
+      fromDomain: this.fromEmail.match(/@([^>\s]+)/)?.[1] ?? null,
+    };
+  }
+
   /** Send scan complete notification */
   async sendScanComplete(to: string, data: { siteName: string; score: number; url: string }) {
     return this.send({
@@ -131,7 +140,7 @@ export class EmailService {
   private async send(params: { to: string; subject: string; html: string }) {
     if (!this.resend) {
       this.logger.warn('Resend not configured (RESEND_API_KEY missing), skipping email');
-      return;
+      throw new Error('Resend not configured (RESEND_API_KEY missing)');
     }
 
     try {
@@ -144,6 +153,7 @@ export class EmailService {
       this.logger.log(`Email sent to ${params.to}: ${params.subject}`);
     } catch (err) {
       this.logger.error(`Failed to send email to ${params.to}: ${err}`);
+      throw err;
     }
   }
 }
