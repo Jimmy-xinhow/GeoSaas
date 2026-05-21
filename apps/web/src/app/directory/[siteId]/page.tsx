@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import SiteDetailClient from './site-detail-client';
 import type { DirectorySiteDetail } from '@/hooks/use-directory';
 
@@ -8,15 +8,24 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const OG_IMAGE = `${SITE_URL}/opengraph-image`;
 
 async function fetchSite(siteId: string): Promise<DirectorySiteDetail | null> {
+  const result = await fetchSiteResult(siteId);
+  return result.site;
+}
+
+async function fetchSiteResult(siteId: string): Promise<{ site: DirectorySiteDetail | null; status: number | null }> {
   try {
     const res = await fetch(`${API_BASE}/api/directory/${siteId}`, {
       next: { revalidate: 3600 },
     });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return (json.data ?? json) as DirectorySiteDetail;
+    if (!res.ok) return { site: null, status: res.status };
+    const json = await res.json().catch(() => null);
+    const site = (json?.data ?? json) as DirectorySiteDetail | null;
+    if (!site || typeof site !== 'object' || !('id' in site)) {
+      return { site: null, status: 404 };
+    }
+    return { site, status: res.status };
   } catch {
-    return null;
+    return { site: null, status: null };
   }
 }
 
@@ -53,14 +62,6 @@ export async function generateMetadata({
     description,
     alternates: {
       canonical,
-      types: {
-        'application/rss+xml': [
-          { title: `${site.name} AI visibility feed RSS`, url: `${canonical}/feed` },
-        ],
-        'application/feed+json': [
-          { title: `${site.name} AI visibility feed JSON`, url: `${canonical}/feed.json` },
-        ],
-      },
     },
     openGraph: {
       title,
@@ -92,8 +93,11 @@ export default async function SiteDetailPage({
 }: {
   params: { siteId: string };
 }) {
-  const site = await fetchSite(params.siteId);
-  if (!site) notFound();
+  const { site, status } = await fetchSiteResult(params.siteId);
+  if (!site) {
+    if (status === 404) permanentRedirect('/directory');
+    notFound();
+  }
 
   const canonical = `${SITE_URL}/directory/${params.siteId}`;
   const jsonLd = {

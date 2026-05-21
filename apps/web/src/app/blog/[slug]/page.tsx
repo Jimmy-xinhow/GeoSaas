@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound, redirect } from 'next/navigation';
+import { notFound, permanentRedirect, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ChevronRight, Clock, List } from 'lucide-react';
 import { getPost, getAllPosts } from '@/content/blog/posts';
@@ -137,10 +137,11 @@ export default async function BlogPostPage({ params }: Props) {
       // network / DNS failure
     }
     if (!res) notFound();
+    if (res.status === 404) permanentRedirect('/blog');
     if (!res.ok) notFound();
     const data = await res.json().catch(() => null);
     resolvedArticle = unwrapArticlePayload(data);
-    if (!resolvedArticle) notFound();
+    if (!resolvedArticle) permanentRedirect('/blog');
   }
 
   // 301 legacy slugs to canonical. redirect() throws NEXT_REDIRECT — placed

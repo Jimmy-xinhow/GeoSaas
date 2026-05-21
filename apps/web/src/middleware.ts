@@ -10,8 +10,67 @@ const AI_BOT_PATTERNS = [...AI_BOTS].sort((a, b) => b.uaPattern.length - a.uaPat
 const GONE_PATHS = new Set([
   '/blog/cmn908gxe0-202604-sat-data-pulse-icfq',
 ]);
+const LEGACY_PUBLIC_REDIRECTS = new Map<string, string>([
+  ['/about', '/'],
+  ['/contact', '/'],
+  ['/en', '/'],
+  ['/ja', '/'],
+  ['/products', '/guide'],
+  ['/services', '/guide'],
+  ['/%E6%9C%88', '/'],
+  ['/月', '/'],
+]);
+const DB_BLOG_SLUG_MARKERS = [
+  'brand-showcase',
+  'brand_reputation',
+  'buyer-guide',
+  'client-daily',
+  'competitor_comparison',
+  'geo_overview',
+  'improvement_tips',
+  'industry_benchmark',
+  'industry-top10',
+  'score-breakdown',
+];
 
-export function middleware(request: NextRequest, event: NextFetchEvent) {
+async function getMissingPublicRecordRedirect(pathname: string): Promise<string | null> {
+  const blogMatch = pathname.match(/^\/blog\/([^/]+)$/);
+  if (blogMatch) {
+    const slug = blogMatch[1];
+    if (!DB_BLOG_SLUG_MARKERS.some((marker) => slug.includes(marker))) {
+      return null;
+    }
+
+    try {
+      const decodedSlug = decodeURIComponent(slug);
+      const res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(decodedSlug)}`, {
+        cache: 'no-store',
+      });
+      return res.status === 404 ? '/blog' : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const directoryMatch = pathname.match(/^\/directory\/([^/]+)$/);
+  if (directoryMatch) {
+    const siteId = directoryMatch[1];
+    if (siteId === 'industries' || siteId === 'industry') return null;
+
+    try {
+      const res = await fetch(`${API_URL}/api/directory/${encodeURIComponent(siteId)}`, {
+        cache: 'no-store',
+      });
+      return res.status === 404 ? '/directory' : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+export async function middleware(request: NextRequest, event: NextFetchEvent) {
   if (request.nextUrl.hostname === 'geovault.app') {
     const url = request.nextUrl.clone();
     url.hostname = 'www.geovault.app';
@@ -21,6 +80,21 @@ export function middleware(request: NextRequest, event: NextFetchEvent) {
   const response = NextResponse.next();
   const ua = request.headers.get('user-agent') || '';
   const pathname = request.nextUrl.pathname;
+  const legacyDestination = LEGACY_PUBLIC_REDIRECTS.get(pathname);
+  if (legacyDestination) {
+    const url = request.nextUrl.clone();
+    url.pathname = legacyDestination;
+    url.search = '';
+    return NextResponse.redirect(url, 301);
+  }
+
+  const missingRecordDestination = await getMissingPublicRecordRedirect(pathname);
+  if (missingRecordDestination) {
+    const url = request.nextUrl.clone();
+    url.pathname = missingRecordDestination;
+    url.search = '';
+    return NextResponse.redirect(url, 301);
+  }
 
   if (GONE_PATHS.has(pathname)) {
     return new NextResponse('Gone', {
