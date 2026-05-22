@@ -10,12 +10,8 @@ import {
   Share2,
   Check,
   ArrowRight,
-  Loader2,
-  AlertCircle,
   CheckCircle2,
-  XCircle,
   AlertTriangle,
-  Send,
   Shield,
   BarChart3,
   Eye,
@@ -31,8 +27,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { useGuestScan, useGuestScanStatus } from '@/hooks/use-guest-scan'
-import { useSubmitIndexNow } from '@/hooks/use-indexnow'
 import { useCrawlerFeed, usePlatformStats } from '@/hooks/use-directory'
 import { useManagedCheckout } from '@/hooks/use-settings'
 import PublicNavbar from '@/components/layout/public-navbar'
@@ -71,167 +65,6 @@ function useCountUp(target: number, duration = 2000) {
   }, [target, duration])
 
   return { count, ref }
-}
-
-/* ─── Scan Result Sub-components (kept from original) ─── */
-
-const STATUS_ICON = {
-  pass: CheckCircle2,
-  warning: AlertTriangle,
-  fail: XCircle,
-}
-const STATUS_COLOR = {
-  pass: 'text-green-600',
-  warning: 'text-yellow-600',
-  fail: 'text-red-500',
-}
-
-function IndexNowButton({ url }: { url: string }) {
-  const submitIndexNow = useSubmitIndexNow()
-  const successCount = submitIndexNow.data?.results?.filter((r: any) => r.success).length ?? 0
-  const totalCount = submitIndexNow.data?.results?.length ?? 0
-  const isGeovaultUrl = (() => {
-    try {
-      const host = new URL(url).hostname.toLowerCase()
-      return ['geovault.app', 'www.geovault.app', 'geosaas.com', 'www.geosaas.com'].includes(host)
-    } catch {
-      return false
-    }
-  })()
-
-  if (!isGeovaultUrl) {
-    return (
-      <div className="rounded-2xl border border-orange-300/20 bg-orange-500/10 p-4 text-left text-orange-100">
-        <div className="flex items-start gap-3">
-          <Send className="mt-0.5 h-5 w-5 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold">IndexNow 會在收錄後自動處理</p>
-            <p className="mt-1 text-xs leading-relaxed text-orange-100/80">
-              這個功能是把 Geovault 的公開目錄頁、AI Wiki 和 llms-full 更新通知 Bing / Yandex。
-              訪客掃描的是你的原網站 URL，尚未建立 Geovault 收錄頁，所以不會手動送出。
-            </p>
-            <Link href="/register" prefetch={false}>
-              <Button size="sm" className="mt-3 h-9 bg-orange-400 text-gray-950 hover:bg-orange-300">
-                建立品牌資料並啟用自動通知
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
-      <button
-        onClick={() => submitIndexNow.mutate(url)}
-        disabled={submitIndexNow.isPending || submitIndexNow.isSuccess}
-        className={cn(
-          'w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold transition-all text-sm',
-          submitIndexNow.isSuccess
-            ? 'bg-green-500/30 text-green-200 cursor-default'
-            : 'bg-orange-500/30 text-orange-200 hover:bg-orange-500/50 cursor-pointer',
-          submitIndexNow.isPending && 'opacity-60 cursor-wait',
-        )}
-      >
-        {submitIndexNow.isPending ? (
-          <><Loader2 className="h-4 w-4 animate-spin" />通知中...</>
-        ) : submitIndexNow.isSuccess ? (
-          <><CheckCircle2 className="h-4 w-4" />已通知 {successCount}/{totalCount} 個搜尋引擎</>
-        ) : (
-          <><Send className="h-4 w-4" />通知搜尋引擎更新（IndexNow）</>
-        )}
-      </button>
-      {submitIndexNow.isSuccess && (
-        <div className="mt-2 space-y-1">
-          {submitIndexNow.data?.results?.map((r: any) => (
-            <div key={r.engine} className="flex items-center justify-between text-xs px-2">
-              <span className="text-white/60">{r.engine}</span>
-              <span className={r.success ? 'text-green-400' : 'text-red-400'}>{r.success ? '✓' : '✗'}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function GuestScanResults({ scanId }: { scanId: string }) {
-  const { data: scan } = useGuestScanStatus(scanId)
-  if (!scan) return null
-
-  if (scan.status === 'PENDING' || scan.status === 'RUNNING') {
-    return (
-      <div className="mt-8 bg-white/10 backdrop-blur-sm rounded-2xl p-8 max-w-2xl mx-auto">
-        <div className="flex items-center justify-center gap-3 text-white">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-lg">{scan.status === 'PENDING' ? '排隊中...' : '掃描進行中...'}</span>
-        </div>
-      </div>
-    )
-  }
-
-  if (scan.status === 'FAILED') {
-    return (
-      <div className="mt-8 bg-red-500/20 backdrop-blur-sm rounded-2xl p-6 max-w-2xl mx-auto">
-        <div className="flex items-start justify-center gap-2 text-white text-left">
-          <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
-          <span>無法完成掃描。請確認網址可公開連線，且網站沒有封鎖外部掃描或只允許登入後瀏覽。</span>
-        </div>
-      </div>
-    )
-  }
-
-  const indicators = scan.results?.indicators
-  if (!indicators) return null
-
-  const scoreColor = scan.totalScore >= 80 ? 'text-green-300' : scan.totalScore >= 60 ? 'text-blue-200' : scan.totalScore >= 40 ? 'text-yellow-300' : 'text-red-300'
-
-  return (
-    <div className="mt-8 max-w-2xl mx-auto space-y-4">
-      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center">
-        <p className="text-blue-200 text-sm mb-1">您的 GEO 分數</p>
-        <p className={`text-6xl font-bold ${scoreColor}`}>{scan.totalScore}</p>
-        <p className="text-blue-200 text-sm mt-2">/ 100</p>
-      </div>
-      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
-        <h3 className="text-white font-semibold mb-4">指標詳情</h3>
-        <div className="space-y-3">
-          {Object.entries(indicators).map(([name, result]: [string, any]) => {
-            const Icon = STATUS_ICON[result.status as keyof typeof STATUS_ICON]
-            const color = STATUS_COLOR[result.status as keyof typeof STATUS_COLOR]
-            return (
-              <div key={name} className="flex items-center justify-between py-2 px-3 bg-white/5 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Icon className={`h-4 w-4 ${color}`} />
-                  <span className="text-white text-sm">{name}</span>
-                </div>
-                <span className="text-white font-semibold tabular-nums">{result.score}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-      <IndexNowButton url={scan.url} />
-      <div className="text-center">
-        <Link
-          href={`/register?guestScanId=${encodeURIComponent(scan.id)}&siteUrl=${encodeURIComponent(scan.url)}`}
-          prefetch={false}
-          onClick={() => savePendingGuestScan({
-            id: scan.id,
-            url: scan.url,
-            totalScore: scan.totalScore,
-            createdAt: scan.createdAt,
-          })}
-        >
-          <Button size="lg" className="bg-white text-gray-900 hover:bg-gray-100 font-semibold h-12 px-10">
-            註冊解鎖完整報告 & 自動修復
-            <ArrowRight className="h-4 w-4 ml-2" />
-          </Button>
-        </Link>
-      </div>
-    </div>
-  )
 }
 
 function CrawlerMarquee() {
@@ -487,12 +320,10 @@ const faqItems = [
 /* ─── Main Page ─── */
 export default function HomeClient() {
   const [scanUrl, setScanUrl] = useState('')
-  const [scanId, setScanId] = useState<string | null>(null)
   const [isYearly, setIsYearly] = useState(false)
   const [managedBillingCycle, setManagedBillingCycle] = useState<'monthly' | 'yearly'>('monthly')
   const [selectedManagedPlan, setSelectedManagedPlan] = useState<(typeof managedPlans)[number] | null>(null)
   const [modalTermsAccepted, setModalTermsAccepted] = useState(false)
-  const guestScan = useGuestScan()
   const managedCheckout = useManagedCheckout()
   const { data: stats } = usePlatformStats()
 
@@ -500,7 +331,14 @@ export default function HomeClient() {
     if (!scanUrl.trim()) return
     let url = scanUrl.trim()
     if (!/^https?:\/\//.test(url)) url = `https://${url}`
-    guestScan.mutate(url, { onSuccess: (data: any) => setScanId(data.id) })
+    try {
+      new URL(url)
+    } catch {
+      toast.error('請輸入有效的網站網址')
+      return
+    }
+    savePendingGuestScan({ url, source: 'landing' })
+    window.location.href = `/register?siteUrl=${encodeURIComponent(url)}&intent=scan`
   }
 
   const openManagedCheckout = (plan: (typeof managedPlans)[number]) => {
@@ -603,7 +441,7 @@ export default function HomeClient() {
           {/* Scan input */}
           <div className="mt-10 flex flex-col sm:flex-row items-center gap-3 max-w-xl mx-auto">
             <Input
-              placeholder="輸入你的網址，免費檢測 AI 能見度..."
+              placeholder="輸入你的網址，註冊後立即免費掃描..."
               value={scanUrl}
               onChange={(e) => setScanUrl(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleScan()}
@@ -613,25 +451,15 @@ export default function HomeClient() {
               size="lg"
               className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold h-14 px-8 shrink-0 rounded-xl shadow-lg shadow-blue-500/25"
               onClick={handleScan}
-              disabled={guestScan.isPending}
             >
-              {guestScan.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              免費檢測
-              {!guestScan.isPending && <ArrowRight className="h-4 w-4 ml-2" />}
+              免費註冊並掃描
+              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </div>
 
-          {guestScan.isError && (
-            <p className="mt-4 text-sm text-red-300">
-              {(guestScan.error as any)?.response?.data?.message || '無法建立掃描，請確認網址格式後再試。'}
-            </p>
-          )}
-
-          {!scanId && (
-            <p className="mt-4 text-sm text-blue-300/60">無需註冊，每月可免費檢測 2 次</p>
-          )}
-
-          {scanId && <GuestScanResults scanId={scanId} />}
+          <p className="mt-4 text-sm text-blue-300/70">
+            需免費註冊帳號；完成驗證或登入後，系統會自動建立網站並開始第一次掃描。
+          </p>
         </div>
       </section>
 

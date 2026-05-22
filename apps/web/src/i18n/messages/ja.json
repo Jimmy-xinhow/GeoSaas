@@ -26,9 +26,9 @@
     "hero": {
       "title": "AIに優先的に\nあなたのブランドを推薦させよう",
       "subtitle": "オールインワンのGEO（Generative Engine Optimization）ソリューション — ChatGPT、Claude、Perplexityなどに推薦されましょう。",
-      "scanPlaceholder": "URLを入力して無料スキャン...",
-      "scanButton": "無料スキャン",
-      "scanLimit": "登録不要 — 1日3回無料スキャン",
+      "scanPlaceholder": "URLを入力。登録後に無料スキャン...",
+      "scanButton": "無料登録してスキャン",
+      "scanLimit": "無料登録が必要です。ログイン後に初回スキャンを開始します",
       "scanFailed": "スキャンに失敗しました。後でもう一度お試しください",
       "scanning": "スキャン中...",
       "queuing": "キュー待ち..."

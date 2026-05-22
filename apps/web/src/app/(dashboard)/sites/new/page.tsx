@@ -18,6 +18,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { useCreateSite } from '@/hooks/use-sites'
+import { useTriggerScan } from '@/hooks/use-scan'
 import { clearPendingGuestScan, loadPendingGuestScan, type PendingGuestScan } from '@/lib/pending-guest-scan'
 
 function normalizeSiteUrlInput(value: string) {
@@ -36,6 +37,7 @@ type NewSiteForm = z.infer<typeof newSiteSchema>
 export default function NewSitePage() {
   const router = useRouter()
   const createSite = useCreateSite()
+  const triggerScan = useTriggerScan()
   const [pendingGuestScan, setPendingGuestScan] = useState<PendingGuestScan | null>(null)
 
   const {
@@ -62,18 +64,24 @@ export default function NewSitePage() {
   const onSubmit = async (data: NewSiteForm) => {
     try {
       const shouldImportGuestScan = pendingGuestScan
-        ? normalizeSiteUrlInput(pendingGuestScan.url) === data.url
+        ? Boolean(pendingGuestScan.id) && normalizeSiteUrlInput(pendingGuestScan.url) === data.url
+        : false
+      const shouldStartPendingScan = pendingGuestScan
+        ? !pendingGuestScan.id && normalizeSiteUrlInput(pendingGuestScan.url) === data.url
         : false
       const guestScanId = shouldImportGuestScan ? pendingGuestScan?.id : undefined
       const site = await createSite.mutateAsync({
         ...data,
         ...(guestScanId ? { guestScanId } : {}),
       })
-      if (shouldImportGuestScan) {
+      if (shouldStartPendingScan) {
+        await triggerScan.mutateAsync(site.id)
+      }
+      if (shouldImportGuestScan || shouldStartPendingScan) {
         clearPendingGuestScan()
         setPendingGuestScan(null)
       }
-      toast.success('網站新增成功！')
+      toast.success(shouldStartPendingScan ? '網站新增成功，第一次免費掃描已啟動！' : '網站新增成功！')
       router.push(`/sites/${site.id}`)
     } catch (err: any) {
       toast.error(err?.response?.data?.message || '新增網站失敗，請稍後再試')
@@ -103,7 +111,9 @@ export default function NewSitePage() {
         <CardContent>
           {pendingGuestScan ? (
             <div className="mb-4 rounded-lg border border-blue-400/30 bg-blue-500/10 p-3 text-sm text-blue-100">
-              已偵測到你剛完成的免費掃描。新增同一個網址時會直接帶入結果，不會再重複掃描。
+              {pendingGuestScan.id
+                ? '已偵測到你剛完成的免費掃描。新增同一個網址時會直接帶入結果，不會再重複掃描。'
+                : '已偵測到你註冊前輸入的網址。新增同一個網址時會自動開始第一次正式掃描。'}
             </div>
           ) : null}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -137,9 +147,9 @@ export default function NewSitePage() {
             <Button
               type="submit"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={createSite.isPending}
+              disabled={createSite.isPending || triggerScan.isPending}
             >
-              {createSite.isPending ? '新增中...' : '新增並掃描'}
+              {createSite.isPending || triggerScan.isPending ? '處理中...' : '新增並掃描'}
             </Button>
           </form>
         </CardContent>

@@ -57,8 +57,11 @@ export default function RegisterPage() {
   useEffect(() => {
     const guestScanId = searchParams?.get('guestScanId')
     const siteUrl = searchParams?.get('siteUrl')
-    if (guestScanId && siteUrl) {
-      savePendingGuestScan({ id: guestScanId, url: siteUrl })
+    if (siteUrl) {
+      savePendingGuestScan({
+        ...(guestScanId ? { id: guestScanId, source: 'guest-scan' as const } : { source: 'landing' as const }),
+        url: siteUrl,
+      })
     }
   }, [searchParams])
 
@@ -90,14 +93,14 @@ export default function RegisterPage() {
       <CardHeader className="text-center space-y-2">
         <div className="mb-2 flex justify-center"><GeovaultLogoCompact className="h-9 w-auto" /></div>
         <CardTitle className="text-2xl">建立帳號</CardTitle>
-        <CardDescription>免費註冊，立即開始使用</CardDescription>
+        <CardDescription>免費註冊後，系統會承接你輸入的網址並開始第一次掃描</CardDescription>
       </CardHeader>
       <CardContent>
         {verificationNotice ? (
           <div className="mb-5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
             <p className="font-semibold">請先完成 Email 驗證</p>
             <p className="mt-2 leading-6">
-              我們已將驗證連結寄到 {verificationNotice.email}。完成驗證後才能登入使用。
+              我們已將驗證連結寄到 {verificationNotice.email}。完成驗證後會進入工作台，並自動啟動你的免費網站掃描。
             </p>
             {verificationNotice.devVerificationUrl ? (
               <a

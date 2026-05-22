@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, Ip } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Ip, GoneException } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { GuestScanService } from './guest-scan.service';
@@ -11,9 +11,11 @@ export class GuestScanController {
 
   @Public()
   @Post()
-  @ApiOperation({ summary: 'Trigger a free guest scan (rate-limited by IP)' })
+  @ApiOperation({ summary: 'Deprecated: free scans now require registration' })
   create(@Body() dto: CreateGuestScanDto, @Ip() ip: string) {
-    return this.service.createScan(dto.url, ip);
+    void dto;
+    void ip;
+    throw new GoneException('免費掃描已改為註冊後啟動。請先建立免費帳號。');
   }
 
   @Public()

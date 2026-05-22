@@ -175,7 +175,10 @@ export default function SitesPage() {
   const handleAddSite = async () => {
     const normalizedUrl = normalizeSiteUrlInput(newSiteUrl)
     const shouldImportGuestScan = pendingGuestScan
-      ? normalizeSiteUrlInput(pendingGuestScan.url) === normalizedUrl
+      ? Boolean(pendingGuestScan.id) && normalizeSiteUrlInput(pendingGuestScan.url) === normalizedUrl
+      : false
+    const shouldStartPendingScan = pendingGuestScan
+      ? !pendingGuestScan.id && normalizeSiteUrlInput(pendingGuestScan.url) === normalizedUrl
       : false
 
     if (!normalizedUrl) {
@@ -184,11 +187,14 @@ export default function SitesPage() {
     }
 
     try {
-      await createSiteMutation.mutateAsync({
+      const site = await createSiteMutation.mutateAsync({
         url: normalizedUrl,
         name: newSiteName.trim() || normalizedUrl,
         ...(shouldImportGuestScan ? { guestScanId: pendingGuestScan!.id } : {}),
       })
+      if (shouldStartPendingScan) {
+        await triggerScanMutation.mutateAsync(site.id)
+      }
       toast.success('網站新增成功')
       setNewSiteUrl('')
       setNewSiteName('')
@@ -197,6 +203,10 @@ export default function SitesPage() {
         clearPendingGuestScan()
         setPendingGuestScan(null)
         toast.success('網站已新增，並已套用免費掃描結果')
+      } else if (shouldStartPendingScan) {
+        clearPendingGuestScan()
+        setPendingGuestScan(null)
+        toast.success('網站已新增，第一次免費掃描已啟動')
       }
     } catch (err: any) {
       toast.error(err?.response?.data?.message || '新增失敗，請稍後再試')
@@ -264,7 +274,9 @@ export default function SitesPage() {
             <div className="space-y-3">
               {pendingGuestScan ? (
                 <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 p-3 text-sm text-blue-100">
-                  已偵測到你剛完成的免費掃描。新增同一個網址時，系統會直接套用該掃描結果，不會再重複掃描。
+                  {pendingGuestScan.id
+                    ? '已偵測到你剛完成的免費掃描。新增同一個網址時，系統會直接套用該掃描結果，不會再重複掃描。'
+                    : '已偵測到你註冊前輸入的網址。新增同一個網址時，系統會自動開始第一次正式掃描。'}
                 </div>
               ) : null}
               <Input
@@ -283,9 +295,9 @@ export default function SitesPage() {
                 <Button
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                   onClick={handleAddSite}
-                  disabled={createSiteMutation.isPending}
+                  disabled={createSiteMutation.isPending || triggerScanMutation.isPending}
                 >
-                  {createSiteMutation.isPending ? (
+                  {createSiteMutation.isPending || triggerScanMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     '新增'

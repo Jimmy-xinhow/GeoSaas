@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Activity,
   ArrowRight,
@@ -45,6 +46,7 @@ import { useClientDailyStats } from '@/hooks/use-client-reports'
 import { useMonitorDashboard } from '@/hooks/use-monitor'
 import { useScoreTrend, useTriggerScan } from '@/hooks/use-scan'
 import { useCreateSite, useSites } from '@/hooks/use-sites'
+import { clearPendingGuestScan, loadPendingGuestScan } from '@/lib/pending-guest-scan'
 import { cn } from '@/lib/utils'
 
 type ScoreTone = 'excellent' | 'good' | 'warning' | 'danger'
@@ -94,6 +96,20 @@ function formatTimeAgo(dateStr: string): string {
 
 function clampScore(score: number): number {
   return Math.max(0, Math.min(100, Math.round(score || 0)))
+}
+
+function normalizeSiteUrlInput(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  return /^[a-z][a-z\d+\-.]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+}
+
+function getSiteNameFromUrl(url: string) {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return url
+  }
 }
 
 function SectionTitle({
@@ -422,7 +438,9 @@ function OnboardingGuide({
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [url, setUrl] = useState('')
+  const pendingRegistrationScanHandled = useRef(false)
 
   const { data: sites, isLoading: sitesLoading, error: sitesError } = useSites()
   const { data: contents, isLoading: contentsLoading } = useContents()
@@ -538,6 +556,46 @@ export default function DashboardPage() {
 
   const isScanning = createSiteMutation.isPending || triggerScanMutation.isPending
   const isLoading = sitesLoading || contentsLoading || monitorLoading
+
+  useEffect(() => {
+    if (pendingRegistrationScanHandled.current || sitesLoading) return
+    const pending = loadPendingGuestScan()
+    if (!pending?.url) return
+    const pendingScan = pending
+
+    pendingRegistrationScanHandled.current = true
+    const normalizedUrl = normalizeSiteUrlInput(pendingScan.url)
+    const existingSite = (sites as any[] | undefined)?.find(
+      (site) => normalizeSiteUrlInput(site.url) === normalizedUrl,
+    )
+
+    async function startRegisteredScan() {
+      try {
+        const site = existingSite
+          ? existingSite
+          : await createSiteMutation.mutateAsync({
+              url: normalizedUrl,
+              name: getSiteNameFromUrl(normalizedUrl),
+              ...(pendingScan.id ? { guestScanId: pendingScan.id } : {}),
+            })
+
+        const latestScan = site?.scans?.[0]
+        const hasActiveScan =
+          latestScan?.status === 'PENDING' || latestScan?.status === 'RUNNING'
+        if (!pendingScan.id && !hasActiveScan) {
+          await triggerScanMutation.mutateAsync(site.id)
+        }
+
+        clearPendingGuestScan()
+        toast.success(pendingScan.id ? '已帶入免費掃描結果' : '已建立網站並開始第一次免費掃描')
+        router.push(`/sites/${site.id}`)
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || '無法自動啟動掃描，請到「我的網站」手動新增')
+      }
+    }
+
+    startRegisteredScan()
+  }, [createSiteMutation, router, sites, sitesLoading, triggerScanMutation])
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">

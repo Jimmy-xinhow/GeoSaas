@@ -26,9 +26,9 @@
     "hero": {
       "title": "讓 AI 優先推薦\n你的品牌",
       "subtitle": "全方位 GEO（Generative Engine Optimization）解決方案，讓 ChatGPT、Claude、Perplexity 等 AI 工具主動推薦你。",
-      "scanPlaceholder": "輸入您的網址，免費掃描...",
-      "scanButton": "免費掃描",
-      "scanLimit": "無需註冊，每日可免費掃描 3 次",
+      "scanPlaceholder": "輸入您的網址，註冊後免費掃描...",
+      "scanButton": "免費註冊並掃描",
+      "scanLimit": "需免費註冊，登入後自動開始第一次掃描",
       "scanFailed": "掃描請求失敗，請稍後再試",
       "scanning": "掃描中...",
       "queuing": "排隊中..."

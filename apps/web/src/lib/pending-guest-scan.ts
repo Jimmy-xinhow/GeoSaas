@@ -1,10 +1,11 @@
 const KEY = 'geovault.pendingGuestScan';
 
 export interface PendingGuestScan {
-  id: string;
+  id?: string;
   url: string;
   totalScore?: number;
   createdAt?: string;
+  source?: 'landing' | 'guest-scan';
 }
 
 export function savePendingGuestScan(scan: PendingGuestScan) {
@@ -18,7 +19,7 @@ export function loadPendingGuestScan(): PendingGuestScan | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PendingGuestScan;
-    if (!parsed.id || !parsed.url) return null;
+    if (!parsed.url) return null;
     return parsed;
   } catch {
     return null;

@@ -26,9 +26,9 @@
     "hero": {
       "title": "Get AI to Recommend\nYour Brand First",
       "subtitle": "All-in-one GEO (Generative Engine Optimization) solution — get recommended by ChatGPT, Claude, Perplexity and more.",
-      "scanPlaceholder": "Enter your URL for a free scan...",
-      "scanButton": "Free Scan",
-      "scanLimit": "No registration needed — 3 free scans per day",
+      "scanPlaceholder": "Enter your URL. Register to start the free scan...",
+      "scanButton": "Register & Scan Free",
+      "scanLimit": "Free registration required; your first scan starts after login",
       "scanFailed": "Scan failed, please try again later",
       "scanning": "Scanning...",
       "queuing": "Queuing..."

@@ -334,15 +334,17 @@ function MockPublishPage() {
 /* ─── Steps Data ─── */
 const steps = [
   {
-    step: 1, title: '免費掃描你的網站', icon: Search, color: 'blue',
-    description: '在首頁輸入你的網址，系統會自動檢測 9 項 AI 可讀性指標，產出你的 GEO 分數。',
+    step: 1, title: '免費註冊並啟動掃描', icon: Search, color: 'blue',
+    description: '先建立免費帳號，系統會承接你輸入的網址，登入後自動建立網站並啟動第一次 GEO 掃描。',
     details: [
       '前往首頁，在掃描框輸入你的網站網址',
+      '建立免費帳號並完成 Email 驗證',
+      '登入工作台後，系統自動建立網站並啟動第一次掃描',
       '系統自動檢測：JSON-LD、llms.txt、FAQ Schema、OG Tags、Meta Description、標題優化、聯絡資訊、圖片 Alt、robots.txt AI 政策',
-      '30 秒內取得 GEO 分數（0-100 分）和各指標狀態',
+      '掃描完成後取得 GEO 分數（0-100 分）和各指標狀態',
       '免費帳號每月可掃描 2 次',
     ],
-    tip: '第一次掃描不需要註冊！直接在首頁輸入網址就能免費體驗。',
+    tip: '免費掃描會綁定在你的帳號裡，後續才能接著做修復、內容引擎、AI 監控和驗收報告。',
     Demo: MockScanResult,
   },
   {
@@ -351,7 +353,7 @@ const steps = [
     details: [
       '點擊「免費開始」註冊帳號（Email + 密碼）',
       '登入後進入 Dashboard，一目了然看到所有數據',
-      '新增你的網站，系統自動執行首次掃描',
+      '若你從首頁輸入網址註冊，系統會自動建立網站並執行首次掃描',
       '追蹤 GEO 分數趨勢變化',
     ],
     tip: 'Free 方案可管理 1 個網站，Starter 和 Pro 方案最多 3 個。',
@@ -592,11 +594,11 @@ export default function GuideClient() {
         <div className="absolute top-0 left-1/4 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
         <div className="relative max-w-3xl mx-auto px-6 text-center">
           <h2 className="text-2xl sm:text-3xl font-bold">準備好了嗎？</h2>
-          <p className="mt-4 text-blue-100">從免費掃描開始，3 分鐘看到你的 GEO 分數</p>
+          <p className="mt-4 text-blue-100">先免費註冊，登入後自動啟動第一次 GEO 掃描</p>
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/">
+            <Link href="/register">
               <Button size="lg" className="bg-white text-gray-900 hover:bg-gray-100 font-semibold h-12 px-8 rounded-xl">
-                免費掃描我的網站 <ArrowRight className="h-4 w-4 ml-2" />
+                免費註冊並掃描 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </Link>
             <Link href="/register">
