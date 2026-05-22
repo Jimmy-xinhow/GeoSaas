@@ -14,6 +14,23 @@ import {
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
+function optionalTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return value as string | undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function optionalLowercaseEmail(value: unknown): string | undefined {
+  const trimmed = optionalTrimmedString(value);
+  return typeof trimmed === 'string' ? trimmed.toLowerCase() : trimmed;
+}
+
+function optionalUrl(value: unknown): string | undefined {
+  const trimmed = optionalTrimmedString(value);
+  if (!trimmed) return undefined;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 export class TrackAffiliateClickDto {
   @IsString()
   @MinLength(4)
@@ -39,21 +56,24 @@ export class ApplyAffiliateDto {
   realName: string;
 
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @Transform(({ value }) => optionalLowercaseEmail(value))
   @IsEmail()
   contactEmail?: string;
 
   @IsOptional()
+  @Transform(({ value }) => optionalUrl(value))
   @IsUrl({ require_protocol: true })
   @MaxLength(300)
   websiteUrl?: string;
 
   @IsOptional()
+  @Transform(({ value }) => optionalTrimmedString(value))
   @IsString()
   @MaxLength(120)
   promotionChannel?: string;
 
   @IsOptional()
+  @Transform(({ value }) => optionalTrimmedString(value))
   @IsString()
   @MaxLength(1000)
   audienceDescription?: string;
@@ -63,21 +83,25 @@ export class ApplyAffiliateDto {
   payoutMethod?: 'bank_transfer' | 'platform_credits';
 
   @IsOptional()
+  @Transform(({ value }) => optionalTrimmedString(value))
   @IsString()
   @MaxLength(80)
   bankName?: string;
 
   @IsOptional()
+  @Transform(({ value }) => optionalTrimmedString(value))
   @IsString()
   @MaxLength(80)
   bankBranch?: string;
 
   @IsOptional()
+  @Transform(({ value }) => optionalTrimmedString(value))
   @IsString()
   @MaxLength(60)
   bankAccountNumber?: string;
 
   @IsOptional()
+  @Transform(({ value }) => optionalTrimmedString(value))
   @IsString()
   @MaxLength(80)
   bankAccountName?: string;
