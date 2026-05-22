@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, HandCoins, Link2, Send } from 'lucide-react'
+import { Copy, HandCoins, Link2, MousePointerClick, Send, UserCheck, WalletCards } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   useAffiliateDashboard,
+  useAffiliateReferralDetails,
   useAffiliateStatus,
   useApplyAffiliate,
   useRequestAffiliateWithdrawal,
@@ -17,6 +18,30 @@ import {
 
 function money(value?: number) {
   return `NT$ ${Number(value || 0).toLocaleString('zh-TW')}`
+}
+
+function dateTime(value?: string | null) {
+  if (!value) return '尚未'
+  return new Intl.DateTimeFormat('zh-TW', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function commissionStatus(status?: string) {
+  const labels: Record<string, string> = {
+    pending: '保留期中',
+    approved: '可提領',
+    paid: '已付款',
+    clawed_back: '已扣回',
+  }
+  return labels[status || ''] || status || '未知'
+}
+
+function clickStatus(status?: string) {
+  return status === 'registered' ? '已註冊' : '已點擊'
 }
 
 const tierGuides = [
@@ -44,6 +69,7 @@ export default function AffiliatePage() {
   const statusQuery = useAffiliateStatus()
   const affiliate = statusQuery.data?.affiliate
   const dashboardQuery = useAffiliateDashboard(affiliate?.status === 'approved')
+  const referralDetailsQuery = useAffiliateReferralDetails(affiliate?.status === 'approved')
   const applyMutation = useApplyAffiliate()
   const withdrawalMutation = useRequestAffiliateWithdrawal()
   const [form, setForm] = useState({
@@ -200,6 +226,7 @@ export default function AffiliatePage() {
   }
 
   const dashboard = dashboardQuery.data
+  const referralDetails = referralDetailsQuery.data
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
       <div>
@@ -235,6 +262,160 @@ export default function AffiliatePage() {
           <Button onClick={() => navigator.clipboard.writeText(dashboard?.trackingLink || '').then(() => toast.success('已複製'))}>
             <Copy className="mr-2 h-4 w-4" /> 複製
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-700 bg-slate-900 text-white">
+        <CardHeader>
+          <CardTitle>推薦明細與連結使用狀態</CardTitle>
+          <CardDescription className="text-slate-400">
+            追蹤最近的點擊、註冊與付費佣金，協助你判斷哪個來源頁與推廣方式有效。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {referralDetailsQuery.isLoading && <p className="text-sm text-slate-400">載入推薦明細中...</p>}
+          {!referralDetailsQuery.isLoading && referralDetails && (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border border-white/10 bg-slate-950 p-4">
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <MousePointerClick className="h-4 w-4" />
+                    連結點擊
+                  </div>
+                  <p className="mt-2 text-2xl font-bold">{referralDetails.summary.totalClicks}</p>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-950 p-4">
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <UserCheck className="h-4 w-4" />
+                    推薦註冊
+                  </div>
+                  <p className="mt-2 text-2xl font-bold">{referralDetails.summary.totalSignups}</p>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-950 p-4">
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <WalletCards className="h-4 w-4" />
+                    付費轉換
+                  </div>
+                  <p className="mt-2 text-2xl font-bold">{referralDetails.summary.totalConversions}</p>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-950 p-4">
+                  <div className="text-sm text-slate-400">待確認佣金</div>
+                  <p className="mt-2 text-2xl font-bold">{money(referralDetails.summary.pendingCommission)}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">來源頁成效</h3>
+                    <p className="mt-1 text-xs text-slate-400">依點擊數排序，方便比較不同貼文、頁面或廣告入口。</p>
+                  </div>
+                  <div className="space-y-2">
+                    {referralDetails.landingPages.length === 0 && (
+                      <p className="rounded-lg bg-slate-950 p-3 text-sm text-slate-400">目前尚無來源頁紀錄。</p>
+                    )}
+                    {referralDetails.landingPages.map((item) => (
+                      <div key={item.landingPage} className="rounded-lg border border-white/10 bg-slate-950 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="min-w-0 truncate text-sm font-medium">{item.landingPage}</p>
+                          <span className="shrink-0 rounded bg-blue-500/15 px-2 py-1 text-xs text-blue-200">
+                            {item.clicks} 次
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">最近點擊</h3>
+                    <p className="mt-1 text-xs text-slate-400">顯示連結是否被使用，以及該點擊是否已轉成註冊。</p>
+                  </div>
+                  <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                    {referralDetails.clicks.length === 0 && (
+                      <p className="rounded-lg bg-slate-950 p-3 text-sm text-slate-400">目前尚無點擊紀錄。</p>
+                    )}
+                    {referralDetails.clicks.map((item) => (
+                      <div key={item.id} className="rounded-lg border border-white/10 bg-slate-950 p-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{item.landingPage}</p>
+                            <p className="mt-1 text-xs text-slate-400">點擊：{dateTime(item.clickedAt)}</p>
+                          </div>
+                          <span className={item.status === 'registered' ? 'rounded bg-emerald-500/15 px-2 py-1 text-xs text-emerald-200' : 'rounded bg-slate-700 px-2 py-1 text-xs text-slate-200'}>
+                            {clickStatus(item.status)}
+                          </span>
+                        </div>
+                        {item.convertedAt && <p className="mt-2 text-xs text-emerald-200">註冊：{dateTime(item.convertedAt)}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-2">
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">最近註冊</h3>
+                    <p className="mt-1 text-xs text-slate-400">個資已遮罩，保留付費狀態供你追蹤轉換品質。</p>
+                  </div>
+                  <div className="space-y-2">
+                    {referralDetails.signups.length === 0 && (
+                      <p className="rounded-lg bg-slate-950 p-3 text-sm text-slate-400">目前尚無推薦註冊。</p>
+                    )}
+                    {referralDetails.signups.map((item) => (
+                      <div key={item.id} className="rounded-lg border border-white/10 bg-slate-950 p-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-sm font-medium">{item.displayName} · {item.email}</p>
+                            <p className="mt-1 text-xs text-slate-400">註冊：{dateTime(item.signedUpAt)} · 目前方案：{item.plan}</p>
+                          </div>
+                          <span className={item.hasPaid ? 'rounded bg-emerald-500/15 px-2 py-1 text-xs text-emerald-200' : 'rounded bg-amber-500/15 px-2 py-1 text-xs text-amber-200'}>
+                            {item.hasPaid ? '已付費' : '未付費'}
+                          </span>
+                        </div>
+                        {item.hasPaid && (
+                          <p className="mt-2 text-xs text-slate-300">
+                            最近付款：{item.latestPaidPlan} · {money(item.latestPaidAmount || 0)} · {dateTime(item.latestPaidAt)}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">付費與佣金</h3>
+                    <p className="mt-1 text-xs text-slate-400">列出已產生佣金的付費訂單與目前結算狀態。</p>
+                  </div>
+                  <div className="space-y-2">
+                    {referralDetails.commissions.length === 0 && (
+                      <p className="rounded-lg bg-slate-950 p-3 text-sm text-slate-400">目前尚無付費佣金紀錄。</p>
+                    )}
+                    {referralDetails.commissions.map((item) => (
+                      <div key={item.id} className="rounded-lg border border-white/10 bg-slate-950 p-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-sm font-medium">{item.referredUser.displayName} · {item.referredUser.email}</p>
+                            <p className="mt-1 text-xs text-slate-400">
+                              {item.orderPlan} · 付款 {money(item.paymentAmount)} · {dateTime(item.paidAt)}
+                            </p>
+                          </div>
+                          <div className="text-left sm:text-right">
+                            <p className="text-sm font-semibold">{money(item.commissionAmount)}</p>
+                            <p className="mt-1 text-xs text-slate-400">{item.commissionRate}% · {commissionStatus(item.status)}</p>
+                          </div>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500">保留期至：{dateTime(item.lockedUntil)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

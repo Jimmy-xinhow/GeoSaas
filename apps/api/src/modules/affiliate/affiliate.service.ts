@@ -279,7 +279,7 @@ export class AffiliateService {
         bankTransfer: settings.allowBankTransfer,
         platformCredits: settings.allowPlatformCredits,
       },
-      recentCommissions,
+      recentCommissions: recentCommissions.map((commission) => this.sanitizeMemberCommission(commission)),
       recentWithdrawals,
     };
   }
@@ -291,6 +291,121 @@ export class AffiliateService {
       affiliateCode: affiliate.affiliateCode,
       trackingLink: this.buildTrackingLink(affiliate.affiliateCode),
       cookieWindowDays: settings.cookieWindowDays,
+    };
+  }
+
+  async getReferralDetails(userId: string) {
+    const affiliate = await this.requireAffiliateByUser(userId);
+    if (affiliate.status !== 'approved') throw new ForbiddenException('Affiliate is not approved');
+
+    const [clicks, signups, commissions, landingPages, availableCommission] = await Promise.all([
+      this.prisma.affiliateClick.findMany({
+        where: { affiliateId: affiliate.id },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        select: {
+          id: true,
+          landingPage: true,
+          convertedAt: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.user.findMany({
+        where: { affiliateReferrerId: affiliate.id },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          plan: true,
+          createdAt: true,
+          orders: {
+            where: { status: 'PAID' },
+            orderBy: { paidAt: 'desc' },
+            take: 1,
+            select: {
+              plan: true,
+              amount: true,
+              paidAt: true,
+            },
+          },
+        },
+      }),
+      this.prisma.affiliateCommission.findMany({
+        where: { affiliateId: affiliate.id },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include: {
+          referredUser: { select: { id: true, email: true, name: true } },
+          order: { select: { plan: true, amount: true, paidAt: true } },
+        },
+      }),
+      this.prisma.affiliateClick.groupBy({
+        by: ['landingPage'],
+        where: { affiliateId: affiliate.id },
+        _count: { id: true },
+      }),
+      this.getAvailableCommissionAmount(affiliate.id),
+    ]);
+
+    const landingPageStats = landingPages
+      .map((item) => ({
+        landingPage: item.landingPage || '未記錄來源頁',
+        clicks: item._count.id,
+      }))
+      .sort((a, b) => b.clicks - a.clicks)
+      .slice(0, 8);
+
+    return {
+      summary: {
+        totalClicks: affiliate.totalClicks,
+        totalSignups: affiliate.totalSignups,
+        totalConversions: affiliate.totalConversions,
+        totalCommissionEarned: affiliate.totalCommissionEarned,
+        totalCommissionPaid: affiliate.totalCommissionPaid,
+        pendingCommission: affiliate.pendingCommission,
+        availableCommission,
+      },
+      landingPages: landingPageStats,
+      clicks: clicks.map((click) => ({
+        id: click.id,
+        landingPage: click.landingPage || '未記錄來源頁',
+        status: click.convertedAt ? 'registered' : 'clicked',
+        clickedAt: click.createdAt,
+        convertedAt: click.convertedAt,
+      })),
+      signups: signups.map((user) => {
+        const latestPaidOrder = user.orders[0];
+        return {
+          id: user.id,
+          displayName: this.maskName(user.name),
+          email: this.maskEmail(user.email),
+          plan: user.plan,
+          signedUpAt: user.createdAt,
+          hasPaid: Boolean(latestPaidOrder),
+          latestPaidPlan: latestPaidOrder?.plan ?? null,
+          latestPaidAmount: latestPaidOrder?.amount ?? null,
+          latestPaidAt: latestPaidOrder?.paidAt ?? null,
+        };
+      }),
+      commissions: commissions.map((commission) => ({
+        id: commission.id,
+        referredUser: {
+          id: commission.referredUser.id,
+          displayName: this.maskName(commission.referredUser.name),
+          email: this.maskEmail(commission.referredUser.email),
+        },
+        orderPlan: commission.order.plan,
+        paymentAmount: commission.paymentAmount,
+        orderAmount: commission.order.amount,
+        paidAt: commission.order.paidAt,
+        commissionRate: commission.commissionRate,
+        commissionAmount: commission.commissionAmount,
+        status: commission.status,
+        lockedUntil: commission.lockedUntil,
+        createdAt: commission.createdAt,
+      })),
     };
   }
 
@@ -449,7 +564,7 @@ export class AffiliateService {
       }),
       this.prisma.affiliateCommission.count({ where: { affiliateId: affiliate.id } }),
     ]);
-    return { items, total, page, limit };
+    return { items: items.map((commission) => this.sanitizeMemberCommission(commission)), total, page, limit };
   }
 
   async getWithdrawals(userId: string, page = 1, limit = 20) {
@@ -796,6 +911,35 @@ export class AffiliateService {
         ? affiliate.bankAccountNumber.replace(/.(?=.{4})/g, '*')
         : null,
     };
+  }
+
+  private sanitizeMemberCommission<
+    T extends {
+      referredUser: { id: string; email: string; name: string | null };
+    },
+  >(commission: T) {
+    return {
+      ...commission,
+      referredUser: {
+        ...commission.referredUser,
+        name: this.maskName(commission.referredUser.name),
+        email: this.maskEmail(commission.referredUser.email),
+      },
+    };
+  }
+
+  private maskEmail(email: string): string {
+    const [local, domain] = email.split('@');
+    if (!domain) return this.maskName(email);
+    const visible = local.slice(0, 2);
+    return `${visible}${'*'.repeat(Math.max(local.length - visible.length, 3))}@${domain}`;
+  }
+
+  private maskName(name?: string | null): string {
+    if (!name) return '未提供姓名';
+    const trimmed = name.trim();
+    if (trimmed.length <= 1) return `${trimmed}*`;
+    return `${trimmed.slice(0, 1)}${'*'.repeat(Math.min(trimmed.length - 1, 4))}`;
   }
 
   private hash(value: string): string {

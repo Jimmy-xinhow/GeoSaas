@@ -80,6 +80,12 @@ export class AffiliateController {
   }
 
   @ApiBearerAuth()
+  @Get('affiliate/referral-details')
+  referralDetails(@CurrentUser('userId') userId: string) {
+    return this.service.getReferralDetails(userId);
+  }
+
+  @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Get('admin/affiliates/overview')

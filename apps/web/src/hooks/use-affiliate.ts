@@ -17,6 +17,57 @@ export type AffiliateSettings = {
   landingPageIntro: string
 }
 
+export type AffiliateReferralDetails = {
+  summary: {
+    totalClicks: number
+    totalSignups: number
+    totalConversions: number
+    totalCommissionEarned: number
+    totalCommissionPaid: number
+    pendingCommission: number
+    availableCommission: number
+  }
+  landingPages: Array<{
+    landingPage: string
+    clicks: number
+  }>
+  clicks: Array<{
+    id: string
+    landingPage: string
+    status: 'clicked' | 'registered'
+    clickedAt: string
+    convertedAt?: string | null
+  }>
+  signups: Array<{
+    id: string
+    displayName: string
+    email: string
+    plan: string
+    signedUpAt: string
+    hasPaid: boolean
+    latestPaidPlan?: string | null
+    latestPaidAmount?: number | null
+    latestPaidAt?: string | null
+  }>
+  commissions: Array<{
+    id: string
+    referredUser: {
+      id: string
+      displayName: string
+      email: string
+    }
+    orderPlan: string
+    paymentAmount: number
+    orderAmount: number
+    paidAt?: string | null
+    commissionRate: number
+    commissionAmount: number
+    status: string
+    lockedUntil: string
+    createdAt: string
+  }>
+}
+
 export function useAffiliateStatus() {
   return useQuery({
     queryKey: ['affiliate', 'status'],
@@ -33,6 +84,17 @@ export function useAffiliateDashboard(enabled = true) {
     queryFn: async () => {
       const { data } = await apiClient.get('/affiliate/dashboard')
       return data
+    },
+    enabled,
+  })
+}
+
+export function useAffiliateReferralDetails(enabled = true) {
+  return useQuery({
+    queryKey: ['affiliate', 'referral-details'],
+    queryFn: async () => {
+      const { data } = await apiClient.get('/affiliate/referral-details')
+      return data as AffiliateReferralDetails
     },
     enabled,
   })
