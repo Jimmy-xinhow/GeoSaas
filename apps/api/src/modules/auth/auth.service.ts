@@ -52,7 +52,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
       data: { email, passwordHash, name },
-      select: { id: true, email: true, name: true, role: true, plan: true, emailVerified: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, plan: true, planExpiresAt: true, emailVerified: true, createdAt: true },
     });
 
     const verificationToken = await this.createEmailVerificationToken(user.id);
@@ -104,6 +104,7 @@ export class AuthService {
         name: user.name,
         role: user.role,
         plan: user.plan,
+        planExpiresAt: user.planExpiresAt,
       },
       ...tokens,
     };
@@ -174,6 +175,7 @@ export class AuthService {
         name: user.name,
         role: user.role,
         plan: user.plan,
+        planExpiresAt: user.planExpiresAt,
         avatarUrl: user.avatarUrl,
       },
       ...tokens,
@@ -344,7 +346,7 @@ export class AuthService {
 
     return this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, role: true, plan: true, avatarUrl: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, plan: true, planExpiresAt: true, avatarUrl: true, createdAt: true },
     });
   }
 
@@ -368,7 +370,7 @@ export class AuthService {
     return this.prisma.user.update({
       where: { id: userId },
       data: updateData,
-      select: { id: true, email: true, name: true, role: true, plan: true, avatarUrl: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, plan: true, planExpiresAt: true, avatarUrl: true, createdAt: true },
     });
   }
 

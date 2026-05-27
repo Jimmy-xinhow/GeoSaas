@@ -70,6 +70,8 @@ model User {
   emailVerified       Boolean   @default(false)
   role                UserRole  @default(USER)
   plan                Plan      @default(FREE)
+  planExpiresAt       DateTime? @map("plan_expires_at")
+  planSource          String    @default("manual") @map("plan_source")
   managedBy           String? // SUPER_ADMIN userId who manages this client
   affiliateReferrerId String?   @map("affiliate_referrer_id")
   credits             Int       @default(0)
@@ -91,6 +93,8 @@ model User {
   cmsConnections               CmsConnection[]
   requestedFixRuns             SiteFixRun[]                 @relation("SiteFixRunRequester")
   creditTransactions           CreditTransaction[]
+  planGrantsReceived           PlanGrant[]                  @relation("PlanGrantRecipient")
+  planGrantsCreated            PlanGrant[]                  @relation("PlanGrantAdmin")
   passwordResetTokens          PasswordResetToken[]
   emailVerificationTokens      EmailVerificationToken[]
   affiliateProfile             Affiliate?                   @relation("AffiliateOwner")
@@ -100,8 +104,29 @@ model User {
   affiliateWithdrawals         AffiliateWithdrawal[]        @relation("AffiliateWithdrawalUser")
 
   @@index([managedBy])
+  @@index([planExpiresAt])
   @@index([affiliateReferrerId])
   @@map("users")
+}
+
+model PlanGrant {
+  id                    String    @id @default(cuid())
+  userId                String    @map("user_id")
+  user                  User      @relation("PlanGrantRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  grantedById           String?   @map("granted_by_id")
+  grantedBy             User?     @relation("PlanGrantAdmin", fields: [grantedById], references: [id], onDelete: SetNull)
+  plan                  Plan
+  days                  Int
+  startsAt              DateTime  @map("starts_at")
+  expiresAt             DateTime  @map("expires_at")
+  reason                String    @db.Text
+  previousPlan          Plan      @map("previous_plan")
+  previousPlanExpiresAt DateTime? @map("previous_plan_expires_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, expiresAt])
+  @@index([grantedById, createdAt])
+  @@map("plan_grants")
 }
 
 model PasswordResetToken {

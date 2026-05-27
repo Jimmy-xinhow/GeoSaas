@@ -407,7 +407,7 @@ export class BillingService {
       } else {
         await this.prisma.user.update({
           where: { id: order.userId },
-          data: { plan: order.plan as any },
+          data: { plan: order.plan as any, planExpiresAt: null, planSource: 'paid_subscription' },
         });
         await this.prisma.notification.create({
           data: {
@@ -624,7 +624,11 @@ export class BillingService {
       const nextActivePlan = paidSelfOrders.find((item) => !isTerminatedRawResponse(item.rawResponse))?.plan;
       await this.prisma.user.update({
         where: { id: userId },
-        data: { plan: (nextActivePlan || 'FREE') as any },
+        data: {
+          plan: (nextActivePlan || 'FREE') as any,
+          planExpiresAt: null,
+          planSource: nextActivePlan ? 'paid_subscription' : 'subscription_cancelled',
+        },
       });
     }
 
@@ -762,7 +766,7 @@ export class BillingService {
         // Plan upgrade order
         await this.prisma.user.update({
           where: { id: order.userId },
-          data: { plan: order.plan as any },
+          data: { plan: order.plan as any, planExpiresAt: null, planSource: 'paid_subscription' },
         });
         this.logger.log(`用戶 ${order.userId} 升級為 ${order.plan}`);
       }

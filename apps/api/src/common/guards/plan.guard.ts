@@ -118,6 +118,29 @@ export class PlanUsageService {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   }
 
+  async getEffectivePlan(userId: string, fallbackPlan = 'FREE'): Promise<keyof typeof PLAN_LIMITS> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { plan: true, planExpiresAt: true, planSource: true },
+    });
+    if (!user) return (fallbackPlan || 'FREE') as keyof typeof PLAN_LIMITS;
+
+    const now = new Date();
+    if (user.planExpiresAt && user.planExpiresAt <= now) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          plan: 'FREE',
+          planExpiresAt: null,
+          planSource: 'expired_manual_grant',
+        },
+      });
+      return 'FREE';
+    }
+
+    return (user.plan || fallbackPlan || 'FREE') as keyof typeof PLAN_LIMITS;
+  }
+
   async checkAndIncrement(
     userId: string,
     feature: PlanLimitKey,
@@ -129,7 +152,7 @@ export class PlanUsageService {
       return { allowed: true, used: 0, limit: -1 };
     }
 
-    const plan = userPlan || 'FREE';
+    const plan = await this.getEffectivePlan(userId, userPlan);
     const limits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS];
     if (!limits) return { allowed: false, used: 0, limit: 0 };
 
@@ -210,7 +233,8 @@ export class PlanUsageService {
 
   async getUsageSummary(userId: string, userPlan: string) {
     const monthStart = this.getMonthStart();
-    const limits = PLAN_LIMITS[(userPlan || 'FREE') as keyof typeof PLAN_LIMITS];
+    const plan = await this.getEffectivePlan(userId, userPlan);
+    const limits = PLAN_LIMITS[plan];
 
     const [sitesCount, scansCount, contentCount, monitorCount, reportsCount, qaCount] =
       await Promise.all([
@@ -233,7 +257,7 @@ export class PlanUsageService {
       ]);
 
     return {
-      plan: userPlan,
+      plan,
       sites: { used: sitesCount, limit: limits.maxSites },
       scans: { used: scansCount, limit: limits.scansPerSitePerMonth * limits.maxSites },
       content: { used: contentCount, limit: limits.contentPerMonth },

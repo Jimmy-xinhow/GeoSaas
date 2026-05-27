@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertSiteAccess } from '../../common/auth/site-access';
+import { PlanUsageService } from '../../common/guards/plan.guard';
 import { CrawlerService } from './crawler/crawler.service';
 import { ParserService } from './crawler/parser.service';
 
@@ -82,6 +83,7 @@ export class DeepSiteAnalysisService {
     private readonly prisma: PrismaService,
     private readonly crawler: CrawlerService,
     private readonly parser: ParserService,
+    private readonly planUsage: PlanUsageService,
   ) {}
 
   async analyzeSite(siteId: string, userId: string, role?: string): Promise<DeepSiteAnalysisResult> {
@@ -93,8 +95,9 @@ export class DeepSiteAnalysisService {
     });
     if (!user) throw new NotFoundException('User not found');
 
+    const effectivePlan = await this.planUsage.getEffectivePlan(userId, user.plan);
     const canUse =
-      user.plan === 'PRO' ||
+      effectivePlan === 'PRO' ||
       ['STAFF', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) ||
       ['STAFF', 'ADMIN', 'SUPER_ADMIN'].includes(String(role || '').toUpperCase());
 
@@ -103,7 +106,7 @@ export class DeepSiteAnalysisService {
         code: 'PRO_REQUIRED',
         message: '站內深度分析為 Pro 功能。升級 Pro 後可掃描多個內頁，判斷 FAQ Schema 與 AI 可讀訊號分布。',
         requiredPlan: 'PRO',
-        currentPlan: user.plan || 'FREE',
+        currentPlan: effectivePlan,
       });
     }
 

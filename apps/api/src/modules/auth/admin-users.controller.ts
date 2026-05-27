@@ -1,6 +1,7 @@
 import { BadRequestException, Controller, Get, Patch, Delete, Param, Query, Body, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @ApiTags('Admin Users')
@@ -13,6 +14,7 @@ export class AdminUsersController {
 
   private readonly allowedRoles = new Set(['USER', 'STAFF', 'ADMIN', 'SUPER_ADMIN']);
   private readonly allowedPlans = new Set(['FREE', 'STARTER', 'PRO']);
+  private readonly grantablePlans = new Set(['STARTER', 'PRO']);
 
   @Get()
   @ApiOperation({ summary: 'List all users (admin)' })
@@ -20,6 +22,7 @@ export class AdminUsersController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
+    @Query('siteFilter') siteFilter?: string,
   ) {
     const p = parseInt(page || '1', 10);
     const l = parseInt(limit || '20', 10);
@@ -32,8 +35,21 @@ export class AdminUsersController {
         { name: { contains: search, mode: 'insensitive' } },
       ];
     }
+    if (siteFilter) {
+      if (siteFilter === 'no_sites') {
+        where.sites = { none: {} };
+      } else if (siteFilter === 'has_sites_not_public') {
+        where.AND = [
+          ...(where.AND || []),
+          { sites: { some: {} } },
+          { sites: { none: { isPublic: true } } },
+        ];
+      } else if (siteFilter !== 'all') {
+        throw new BadRequestException('Invalid siteFilter');
+      }
+    }
 
-    const [items, total] = await Promise.all([
+    const [users, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
         select: {
@@ -42,8 +58,68 @@ export class AdminUsersController {
           name: true,
           role: true,
           plan: true,
+          planExpiresAt: true,
+          planSource: true,
           managedBy: true,
           createdAt: true,
+          planGrantsReceived: {
+            orderBy: { createdAt: 'desc' },
+            take: 3,
+            select: {
+              id: true,
+              plan: true,
+              days: true,
+              startsAt: true,
+              expiresAt: true,
+              reason: true,
+              createdAt: true,
+              grantedBy: { select: { email: true, name: true } },
+            },
+          },
+          sites: {
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              id: true,
+              name: true,
+              url: true,
+              industry: true,
+              isPublic: true,
+              isClient: true,
+              isVerified: true,
+              bestScore: true,
+              bestScoreAt: true,
+              tier: true,
+              createdAt: true,
+              updatedAt: true,
+              scans: {
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+                select: {
+                  id: true,
+                  totalScore: true,
+                  status: true,
+                  createdAt: true,
+                  completedAt: true,
+                  results: {
+                    orderBy: { indicator: 'asc' },
+                    select: {
+                      indicator: true,
+                      score: true,
+                      status: true,
+                    },
+                  },
+                },
+              },
+              _count: {
+                select: {
+                  scans: true,
+                  qas: true,
+                  blogArticles: true,
+                  monitors: true,
+                },
+              },
+            },
+          },
           _count: { select: { sites: true, contents: true, orders: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -52,6 +128,57 @@ export class AdminUsersController {
       }),
       this.prisma.user.count({ where }),
     ]);
+
+    const items = users.map((user) => {
+      const sites = user.sites.map((site) => {
+        const latestScan = site.scans[0] ?? null;
+        return {
+          id: site.id,
+          name: site.name,
+          url: site.url,
+          industry: site.industry,
+          isPublic: site.isPublic,
+          isClient: site.isClient,
+          isVerified: site.isVerified,
+          bestScore: site.bestScore,
+          bestScoreAt: site.bestScoreAt,
+          tier: site.tier,
+          createdAt: site.createdAt,
+          updatedAt: site.updatedAt,
+          latestScan: latestScan
+            ? {
+                id: latestScan.id,
+                totalScore: latestScan.totalScore,
+                status: latestScan.status,
+                createdAt: latestScan.createdAt,
+                completedAt: latestScan.completedAt,
+                results: latestScan.results,
+              }
+            : null,
+          counts: site._count,
+        };
+      });
+      const scores = sites.map((site) => site.bestScore ?? 0);
+      const latestScanTimes = sites
+        .map((site) => site.latestScan?.completedAt ?? site.latestScan?.createdAt ?? site.bestScoreAt)
+        .filter(Boolean)
+        .map((value) => new Date(value as Date));
+
+      return {
+        ...user,
+        sites,
+        siteSummary: {
+          totalSites: sites.length,
+          publicSites: sites.filter((site) => site.isPublic).length,
+          privateSites: sites.filter((site) => !site.isPublic).length,
+          highestScore: scores.length > 0 ? Math.max(...scores) : null,
+          lastScanAt:
+            latestScanTimes.length > 0
+              ? latestScanTimes.sort((a, b) => b.getTime() - a.getTime())[0]
+              : null,
+        },
+      };
+    });
 
     return { items, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
   }
@@ -84,9 +211,89 @@ export class AdminUsersController {
     }
     return this.prisma.user.update({
       where: { id: userId },
-      data: { plan: plan as any },
-      select: { id: true, email: true, plan: true },
+      data: { plan: plan as any, planExpiresAt: null, planSource: 'admin_manual' },
+      select: { id: true, email: true, plan: true, planExpiresAt: true, planSource: true },
     });
+  }
+
+  @Patch(':userId/plan-grant')
+  @ApiOperation({ summary: 'Grant paid plan time to a user (admin)' })
+  async grantPlanTime(
+    @Param('userId') userId: string,
+    @Body('plan') plan: string,
+    @Body('days') rawDays: number,
+    @Body('reason') rawReason: string,
+    @CurrentUser('userId') adminUserId: string,
+  ) {
+    if (!this.grantablePlans.has(plan)) {
+      throw new BadRequestException('Grant plan must be STARTER or PRO');
+    }
+
+    const days = Number(rawDays);
+    if (!Number.isInteger(days) || days < 1 || days > 366) {
+      throw new BadRequestException('Grant days must be an integer between 1 and 366');
+    }
+
+    const reason = typeof rawReason === 'string' ? rawReason.trim() : '';
+    if (reason.length < 3 || reason.length > 300) {
+      throw new BadRequestException('Reason must be 3-300 characters');
+    }
+
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        plan: true,
+        planExpiresAt: true,
+        planSource: true,
+      },
+    });
+    if (!target) throw new ForbiddenException('User not found');
+
+    if (target.plan === plan && !target.planExpiresAt && target.planSource === 'paid_subscription') {
+      throw new BadRequestException('User already has an active paid subscription for this plan');
+    }
+
+    const now = new Date();
+    const extendFrom =
+      target.plan === plan && target.planExpiresAt && target.planExpiresAt > now
+        ? target.planExpiresAt
+        : now;
+    const expiresAt = new Date(extendFrom.getTime() + days * 24 * 60 * 60 * 1000);
+
+    const [, user] = await this.prisma.$transaction([
+      this.prisma.planGrant.create({
+        data: {
+          userId: target.id,
+          grantedById: adminUserId,
+          plan: plan as any,
+          days,
+          startsAt: extendFrom,
+          expiresAt,
+          reason,
+          previousPlan: target.plan,
+          previousPlanExpiresAt: target.planExpiresAt,
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: target.id },
+        data: {
+          plan: plan as any,
+          planExpiresAt: expiresAt,
+          planSource: 'manual_grant',
+        },
+        select: {
+          id: true,
+          email: true,
+          plan: true,
+          planExpiresAt: true,
+          planSource: true,
+        },
+      }),
+    ]);
+
+    return { user, grantedDays: days, expiresAt };
   }
 
   @Delete(':userId')

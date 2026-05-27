@@ -33,7 +33,7 @@ export class ScanService {
     // Check plan limit: scans per site per month
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (user && !['STAFF', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
-      const plan = (user.plan || 'FREE') as keyof typeof PLAN_LIMITS;
+      const plan = await this.planUsage.getEffectivePlan(userId, user.plan);
       const limits = PLAN_LIMITS[plan];
       if (limits) {
         const monthStart = new Date();

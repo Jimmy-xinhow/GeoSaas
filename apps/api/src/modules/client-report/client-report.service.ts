@@ -549,7 +549,9 @@ export class ClientReportService implements OnModuleInit {
       select: { id: true, plan: true, role: true },
     });
 
-    const planKey = (user?.plan || 'FREE') as keyof typeof PLAN_LIMITS;
+    const planKey = user
+      ? await this.planUsage.getEffectivePlan(user.id, user.plan)
+      : 'FREE';
     const limits = PLAN_LIMITS[planKey] ?? PLAN_LIMITS.FREE;
     const monthStart = new Date();
     monthStart.setDate(1);
