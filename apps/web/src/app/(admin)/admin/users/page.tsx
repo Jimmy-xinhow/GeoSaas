@@ -482,7 +482,7 @@ export default function AdminUsersPage() {
                                       </p>
                                     </div>
                                     <a
-                                      href={`/dashboard/sites/${site.id}`}
+                                      href={`/sites/${site.id}`}
                                       className="inline-flex h-10 items-center justify-center rounded-md border border-white/15 bg-white/5 px-3 text-sm font-semibold text-white hover:bg-white/10"
                                     >
                                       <Eye className="mr-1 h-4 w-4" />
