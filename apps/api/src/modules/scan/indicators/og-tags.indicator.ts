@@ -18,12 +18,13 @@ export class OgTagsIndicator implements IIndicatorAnalyzer {
 
     required.forEach((tag) => { if (!found[tag]) missing.push(tag); });
 
-    const score = Math.round((Object.keys(found).length / required.length) * 100);
+    const requiredFound = required.length - missing.length;
+    const score = Math.round((requiredFound / required.length) * 100);
 
     return {
       score: Math.min(100, score),
       status: missing.length === 0 ? 'pass' : missing.length <= 2 ? 'warning' : 'fail',
-      details: { found, missing, totalFound: Object.keys(found).length, totalRequired: required.length },
+      details: { found, missing, totalFound: Object.keys(found).length, totalRequired: required.length, requiredFound },
       suggestion: missing.length > 0 ? `缺少以下 OG 標籤：${missing.join(', ')}。這些標籤有助於 AI 和社群平台理解您的頁面內容。` : undefined,
       autoFixable: true,
     };

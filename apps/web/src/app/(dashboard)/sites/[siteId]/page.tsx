@@ -933,6 +933,11 @@ export default function SiteDetailPage() {
     }
   }, [scanResults])
 
+  const actionableIssues = useMemo(() => {
+    if (!scanResults) return []
+    return scanResults.filter((r) => r.status !== 'pass' || r.score < 90)
+  }, [scanResults])
+
   const handleScan = async (redirectToCompletionReport = false) => {
     try {
       if (redirectToCompletionReport) {
@@ -989,7 +994,7 @@ export default function SiteDetailPage() {
   const lastScanDate = latestScan?.createdAt
     ? new Date(latestScan.createdAt).toLocaleString('zh-TW')
     : '尚未掃描'
-  const issueCount = summary.warning + summary.fail
+  const issueCount = actionableIssues.length
   const hasCompletedScan = completedScans.length > 0
   const nextStep = hasActiveScan
     ? {
@@ -1140,6 +1145,30 @@ export default function SiteDetailPage() {
             </p>
             <h2 className="text-lg font-semibold text-white">{nextStep.title}</h2>
             <p className="max-w-2xl text-sm text-blue-100/80">{nextStep.description}</p>
+            {nextStep.kind === 'guided' && actionableIssues.length > 0 ? (
+              <div className="mt-3 flex max-w-3xl flex-wrap gap-2">
+                {actionableIssues.slice(0, 6).map((issue) => {
+                  const canAutoFix = issue.autoFixable || fixableIndicators.has(issue.indicator)
+                  return (
+                    <span
+                      key={issue.id}
+                      className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-xs text-blue-50"
+                    >
+                      <StatusIcon status={issue.status} />
+                      <span>{indicatorNames[issue.indicator] || issue.indicator}</span>
+                      <span className={canAutoFix ? 'text-green-300' : 'text-yellow-200'}>
+                        {canAutoFix ? '可自動修復' : '需人工處理'}
+                      </span>
+                    </span>
+                  )
+                })}
+                {actionableIssues.length > 6 ? (
+                  <span className="inline-flex items-center rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-xs text-blue-100/80">
+                    +{actionableIssues.length - 6} 個在下方指標分析
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="grid grid-cols-4 gap-2 text-center text-xs text-blue-100/80">
             {['掃描', '修復', '補內容', '追蹤'].map((step, index) => (

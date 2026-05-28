@@ -280,7 +280,7 @@ export default function GuidedFixPage() {
       key: 'scan',
       label: '掃描診斷',
       done: true,
-      active: !hasDispatchedCmsFix && plan?.quickWins.length === 0,
+      active: false,
     },
     {
       key: 'fix',
@@ -387,6 +387,11 @@ export default function GuidedFixPage() {
 
   const followUpTasks = buildFollowUpTasks({ report, plan, siteId })
   const highPriorityTasks = followUpTasks.filter((task) => task.priority === 'high')
+  const estimatedGain = Math.max(0, plan.headline.estimatedScore - plan.headline.currentScore)
+  const headlineTitle =
+    plan.headline.quickWinCount > 0
+      ? plan.headline.title
+      : `${plan.site.name} 目前沒有可一鍵加分項目`
 
   return (
     <div className="space-y-6">
@@ -427,7 +432,7 @@ export default function GuidedFixPage() {
                   ? '修復已送出，請先重新掃描驗證；完成後才會更新後續建議。'
                   : hasPostFixScan
                   ? '已完成修復後重新掃描，請查看完成報告與下一步。'
-                  : '依照順序完成掃描、修復、驗證，不需要在多個頁面猜下一步。'}
+                  : `依照順序完成掃描、修復、驗證。此頁會把可自動修復 ${plan.headline.quickWinCount} 項、需人工處理 ${plan.headline.manualCount} 項分開列出。`}
               </p>
             </div>
             {needsPostFixScan ? (
@@ -505,9 +510,11 @@ export default function GuidedFixPage() {
         <CardContent className="grid gap-6 p-6 lg:grid-cols-[1.1fr_.9fr]">
           <div>
             <Badge className="mb-3 bg-blue-500/20 text-blue-200">建議第一步</Badge>
-            <h2 className="text-2xl font-bold text-white">{plan.headline.title}</h2>
+            <h2 className="text-2xl font-bold text-white">{headlineTitle}</h2>
             <p className="mt-2 text-sm text-blue-100">
-              預估 {plan.headline.estimatedMinutes} 分鐘完成 {plan.headline.quickWinCount} 個可修復項目。
+              {plan.headline.quickWinCount > 0
+                ? `預估 ${plan.headline.estimatedMinutes} 分鐘完成 ${plan.headline.quickWinCount} 個可修復項目，可提升約 ${estimatedGain} 分。`
+                : '目前沒有會直接加分的自動修復項目；請先處理人工項目或重新掃描確認最新狀態。'}
             </p>
             <div className="mt-5 grid gap-4 sm:grid-cols-3">
               <div>

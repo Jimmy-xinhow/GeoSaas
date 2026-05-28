@@ -4,7 +4,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { assertSiteAccess } from '../../common/auth/site-access';
 import { FixService } from '../fix/fix.service';
 
-const INDICATOR_META: Record<string, { label: string; weight: number; plain: string; canAutoFix: boolean }> = {
+type IndicatorMeta = { label: string; weight: number; plain: string; canAutoFix: boolean };
+
+const INDICATOR_META: Record<string, IndicatorMeta> = {
   json_ld: {
     label: 'JSON-LD 結構化資料',
     weight: 15,
@@ -62,6 +64,7 @@ const INDICATOR_META: Record<string, { label: string; weight: number; plain: str
 };
 
 const FIX_ORDER = ['llms_txt', 'json_ld', 'faq_schema', 'og_tags', 'meta_description'];
+const TOTAL_INDICATOR_WEIGHT = Object.values(INDICATOR_META).reduce((sum, meta) => sum + meta.weight, 0);
 
 type LatestScan = {
   id: string;
@@ -336,39 +339,82 @@ export class GuidedFixService {
     return scan.results
       .filter((result) => result.status !== 'pass' || result.score < 90)
       .map((result) => {
-        const meta = INDICATOR_META[result.indicator] ?? {
+        const indicator = this.normalizeIndicator(result.indicator);
+        const meta = INDICATOR_META[indicator] ?? {
           label: result.indicator,
           weight: 5,
           plain: result.suggestion || '此項目會影響 AI 理解網站。',
           canAutoFix: Boolean(result.autoFixable),
         };
+        const canAutoFix = Boolean(result.autoFixable || meta.canAutoFix);
         return {
-          indicator: result.indicator,
+          indicator,
           label: meta.label,
           score: result.score,
           status: result.status,
-          canAutoFix: Boolean(result.autoFixable || meta.canAutoFix),
-          estimatedGain: Math.max(1, Math.round(((100 - result.score) / 100) * meta.weight)),
+          canAutoFix,
+          estimatedGain: this.estimatedGain(indicator, result.score),
           whyItMatters: meta.plain,
-          nextStep: this.nextStepFor(result.indicator, Boolean(result.autoFixable || meta.canAutoFix)),
+          nextStep: this.nextStepFor(indicator, canAutoFix),
           suggestion: result.suggestion,
         };
       });
   }
 
   private resultSummary(result: any) {
-    const meta = INDICATOR_META[result.indicator] ?? {
+    const indicator = this.normalizeIndicator(result.indicator);
+    const meta = INDICATOR_META[indicator] ?? {
       label: result.indicator,
       plain: result.suggestion || '此項目會影響 AI 理解網站。',
       canAutoFix: Boolean(result.autoFixable),
     };
+    const canAutoFix = Boolean(result.autoFixable || meta.canAutoFix);
     return {
-      indicator: result.indicator,
+      indicator,
       label: meta.label,
       score: result.score,
       status: result.status,
-      nextStep: this.nextStepFor(result.indicator, Boolean(result.autoFixable || meta.canAutoFix)),
+      estimatedGain: this.estimatedGain(indicator, result.score),
+      canAutoFix,
+      whyItMatters: meta.plain,
+      suggestion: result.suggestion,
+      nextStep: this.nextStepFor(indicator, canAutoFix),
     };
+  }
+
+  private estimatedGain(indicator: string, score: number): number {
+    if (score >= 100) return 0;
+    const weight = INDICATOR_META[indicator]?.weight ?? 5;
+    const gain = Math.round(((100 - score) * weight) / TOTAL_INDICATOR_WEIGHT);
+    return Math.max(1, gain);
+  }
+
+  private normalizeIndicator(indicator: string): string {
+    const normalized = indicator
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .toLowerCase()
+      .replace(/[-\s]+/g, '_');
+    const aliases: Record<string, string> = {
+      jsonld: 'json_ld',
+      json_ld: 'json_ld',
+      llmstxt: 'llms_txt',
+      llms_txt: 'llms_txt',
+      ogtags: 'og_tags',
+      og_tags: 'og_tags',
+      metadescription: 'meta_description',
+      meta_description: 'meta_description',
+      faqschema: 'faq_schema',
+      faq_schema: 'faq_schema',
+      titleoptimization: 'title_optimization',
+      title_optimization: 'title_optimization',
+      contactinfo: 'contact_info',
+      contact_info: 'contact_info',
+      imagealt: 'image_alt',
+      image_alt: 'image_alt',
+      robotsai: 'robots_ai',
+      robots_ai: 'robots_ai',
+    };
+    return aliases[normalized] ?? aliases[normalized.replace(/_/g, '')] ?? normalized;
   }
 
   private buildHandoffFiles(site: SiteContext, scan: LatestScan) {
