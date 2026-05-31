@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Plus, ExternalLink, RefreshCw, Loader2, Trash2, Globe, Search } from 'lucide-react'
+import { Plus, ExternalLink, RefreshCw, Loader2, Trash2, Globe, Search, Pencil, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useSites, useCreateSite, useDeleteSite } from '@/hooks/use-sites'
+import { useSites, useCreateSite, useDeleteSite, useUpdateSite } from '@/hooks/use-sites'
 import { useTriggerScan } from '@/hooks/use-scan'
 import { clearPendingGuestScan, loadPendingGuestScan, type PendingGuestScan } from '@/lib/pending-guest-scan'
 
@@ -112,6 +112,8 @@ export default function SitesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [pendingGuestScan, setPendingGuestScan] = useState<PendingGuestScan | null>(null)
+  const [editingSiteId, setEditingSiteId] = useState<string | null>(null)
+  const [editingSiteName, setEditingSiteName] = useState('')
 
   const { data: sites, isLoading, error } = useSites()
 
@@ -142,6 +144,7 @@ export default function SitesPage() {
   }, [sites, searchQuery])
   const createSiteMutation = useCreateSite()
   const deleteSiteMutation = useDeleteSite()
+  const updateSiteMutation = useUpdateSite()
   const triggerScanMutation = useTriggerScan()
 
   // Detect which sites have active scans (PENDING or RUNNING)
@@ -222,6 +225,36 @@ export default function SitesPage() {
       toast.error(err?.response?.data?.message || '刪除失敗，請稍後再試')
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const startRename = (site: { id: string; name: string }) => {
+    setEditingSiteId(site.id)
+    setEditingSiteName(site.name || '')
+  }
+
+  const cancelRename = () => {
+    setEditingSiteId(null)
+    setEditingSiteName('')
+  }
+
+  const saveRename = async (site: { id: string; name: string }) => {
+    const nextName = editingSiteName.trim()
+    if (!nextName) {
+      toast.error('請輸入網站名稱')
+      return
+    }
+    if (nextName === site.name) {
+      cancelRename()
+      return
+    }
+
+    try {
+      await updateSiteMutation.mutateAsync({ id: site.id, name: nextName })
+      toast.success('網站名稱已更新')
+      cancelRename()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || '更新網站名稱失敗，請稍後再試')
     }
   }
 
@@ -360,7 +393,61 @@ export default function SitesPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg truncate">{site.name}</CardTitle>
+                        {editingSiteId === site.id ? (
+                          <div className="flex min-w-0 flex-1 items-center gap-1">
+                            <Input
+                              value={editingSiteName}
+                              onChange={(e) => setEditingSiteName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveRename(site)
+                                if (e.key === 'Escape') cancelRename()
+                              }}
+                              className="h-8 min-w-0 text-sm"
+                              autoFocus
+                              maxLength={120}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-green-400 hover:bg-green-500/20 hover:text-green-300"
+                              onClick={() => saveRename(site)}
+                              disabled={updateSiteMutation.isPending}
+                              aria-label="儲存網站名稱"
+                            >
+                              {updateSiteMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Check className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-gray-400 hover:bg-white/10 hover:text-white"
+                              onClick={cancelRename}
+                              disabled={updateSiteMutation.isPending}
+                              aria-label="取消更名"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <CardTitle className="min-w-0 truncate text-lg">{site.name}</CardTitle>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 text-gray-400 hover:bg-white/10 hover:text-white"
+                              onClick={() => startRename(site)}
+                              aria-label={`更名 ${site.name}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
                         {status && <ScanStatusBadge status={status} />}
                       </div>
                       <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">

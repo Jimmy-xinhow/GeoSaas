@@ -23,10 +23,13 @@ import {
   PlugZap,
   SearchCheck,
   LockKeyhole,
+  Pencil,
+  Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Card,
   CardContent,
@@ -42,7 +45,7 @@ import ScanHistoryChart from '@/components/scan/scan-history-chart'
 import { CodeSnippetViewer } from '@/components/fix/code-snippet-viewer'
 import apiClient from '@/lib/api-client'
 import { isBillingRequiredError } from '@/lib/billing-error'
-import { useBrandFactReadiness, useSite, useUpdateSiteProfile, type BrandFactReadiness, type SiteProfile } from '@/hooks/use-sites'
+import { useBrandFactReadiness, useSite, useUpdateSite, useUpdateSiteProfile, type BrandFactReadiness, type SiteProfile } from '@/hooks/use-sites'
 import {
   useTriggerScan,
   useRunDeepAnalysis,
@@ -853,6 +856,9 @@ export default function SiteDetailPage() {
   const { data: site, isLoading: siteLoading } = useSite(siteId)
   const { data: brandFacts, isLoading: brandFactsLoading } = useBrandFactReadiness(siteId)
   const queryClient = useQueryClient()
+  const updateSiteMutation = useUpdateSite()
+  const [isRenamingSite, setIsRenamingSite] = useState(false)
+  const [siteNameDraft, setSiteNameDraft] = useState('')
   const {
     data: scans,
     isLoading: scansLoading,
@@ -953,6 +959,38 @@ export default function SiteDetailPage() {
     }
   }
 
+  const startRenameSite = () => {
+    if (!site) return
+    setSiteNameDraft(site.name || '')
+    setIsRenamingSite(true)
+  }
+
+  const cancelRenameSite = () => {
+    setIsRenamingSite(false)
+    setSiteNameDraft('')
+  }
+
+  const saveRenameSite = async () => {
+    if (!site) return
+    const nextName = siteNameDraft.trim()
+    if (!nextName) {
+      toast.error('請輸入網站名稱')
+      return
+    }
+    if (nextName === site.name) {
+      cancelRenameSite()
+      return
+    }
+
+    try {
+      await updateSiteMutation.mutateAsync({ id: site.id, name: nextName })
+      toast.success('網站名稱已更新')
+      cancelRenameSite()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || '更新網站名稱失敗，請稍後再試')
+    }
+  }
+
   useEffect(() => {
     if (!shouldAutoScanAfterCmsFix || autoScanStartedRef.current || scansLoading || !scans) return
     if (hasActiveScan || triggerScanMutation.isPending) {
@@ -1044,8 +1082,62 @@ export default function SiteDetailPage() {
         </Link>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-white">{site.name}</h1>
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              {isRenamingSite ? (
+                <div className="flex min-w-0 items-center gap-2">
+                  <Input
+                    value={siteNameDraft}
+                    onChange={(e) => setSiteNameDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveRenameSite()
+                      if (e.key === 'Escape') cancelRenameSite()
+                    }}
+                    className="h-10 w-[min(22rem,70vw)] text-lg font-semibold"
+                    autoFocus
+                    maxLength={120}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-green-400 hover:bg-green-500/20 hover:text-green-300"
+                    onClick={saveRenameSite}
+                    disabled={updateSiteMutation.isPending}
+                    aria-label="儲存網站名稱"
+                  >
+                    {updateSiteMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-gray-400 hover:bg-white/10 hover:text-white"
+                    onClick={cancelRenameSite}
+                    disabled={updateSiteMutation.isPending}
+                    aria-label="取消更名"
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex min-w-0 items-center gap-2">
+                  <h1 className="truncate text-2xl font-bold text-white">{site.name}</h1>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-gray-400 hover:bg-white/10 hover:text-white"
+                    onClick={startRenameSite}
+                    aria-label={`更名 ${site.name}`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
               {latestScan && <ScanStatusBadge status={latestScan.status} />}
             </div>
             <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">

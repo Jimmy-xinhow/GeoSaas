@@ -37,7 +37,7 @@ export interface BrandFactReadiness {
   ready: boolean;
 }
 
-interface Site {
+export interface Site {
   id: string;
   url: string;
   name: string;
@@ -51,6 +51,13 @@ interface CreateSitePayload {
   url: string;
   name: string;
   guestScanId?: string;
+}
+
+interface UpdateSitePayload {
+  id: string;
+  name?: string;
+  url?: string;
+  profile?: SiteProfile;
 }
 
 export function useSites() {
@@ -119,6 +126,22 @@ export function useDeleteSite() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
+    },
+  });
+}
+
+export function useUpdateSite() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...payload }: UpdateSitePayload) => {
+      const { data } = await apiClient.put<Site>(`/sites/${id}`, payload);
+      return data;
+    },
+    onSuccess: (site) => {
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['sites', site.id] });
+      queryClient.invalidateQueries({ queryKey: ['brand-facts', site.id] });
     },
   });
 }
