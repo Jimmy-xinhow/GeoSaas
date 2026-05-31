@@ -185,7 +185,7 @@ export class BlogArticleService {
     if (type) where.templateType = type;
     if (siteId) where.siteId = siteId;
 
-    const [items] = await Promise.all([
+    const [items, total] = await Promise.all([
       this.prisma.blogArticle.findMany({
         where,
         select: {
@@ -204,17 +204,18 @@ export class BlogArticleService {
           site: { select: { id: true, name: true, url: true, bestScore: true, industry: true } },
         },
         orderBy: { createdAt: 'desc' },
-        take: 2000,
+        skip,
+        take: limit,
       }),
+      this.prisma.blogArticle.count({ where }),
     ]);
 
-    const filtered = items.filter((article) => isIndexablePublicBlogArticle(article));
     return {
-      items: filtered.slice(skip, skip + limit),
-      total: filtered.length,
+      items: items.filter((article) => isIndexablePublicBlogArticle(article)),
+      total,
       page,
       limit,
-      totalPages: Math.ceil(filtered.length / limit),
+      totalPages: Math.ceil(total / limit),
     };
   }
 

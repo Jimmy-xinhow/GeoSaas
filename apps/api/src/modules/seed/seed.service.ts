@@ -18,6 +18,7 @@ interface CsvRow {
 export class SeedService {
   private readonly logger = new Logger(SeedService.name);
   private isRunning = false;
+  private statusCache: { expiresAt: number; data: any } | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -26,11 +27,21 @@ export class SeedService {
 
   /** Get seeding status overview */
   async getStatus() {
-    const [total, scanned, pending, failed] = await Promise.all([
+    if (this.statusCache && this.statusCache.expiresAt > Date.now()) {
+      return {
+        ...this.statusCache.data,
+        isRunning: this.isRunning,
+      };
+    }
+
+    const [total, scanned, pending, failed, publicSites, users, blogArticles] = await Promise.all([
       this.prisma.seedSource.count(),
       this.prisma.seedSource.count({ where: { status: 'scanned' } }),
       this.prisma.seedSource.count({ where: { status: 'pending' } }),
       this.prisma.seedSource.count({ where: { status: 'failed' } }),
+      this.prisma.site.count({ where: { isPublic: true } }),
+      this.prisma.user.count(),
+      this.prisma.blogArticle.count({ where: { published: true } }),
     ]);
 
     const byIndustry = await this.prisma.seedSource.groupBy({
@@ -85,9 +96,7 @@ export class SeedService {
       },
     });
 
-    const blogCount = await this.prisma.blogArticle.count({ where: { published: true } });
-
-    return {
+    const data = {
       total,
       scanned,
       pending,
@@ -106,8 +115,16 @@ export class SeedService {
         seededByBot: seededByBot.map((b: any) => ({ bot: b.botName, count: b._count })),
         recentRealVisits,
       },
-      blogArticles: blogCount,
+      sites: {
+        public: publicSites,
+      },
+      users: {
+        total: users,
+      },
+      blogArticles,
     };
+    this.statusCache = { data, expiresAt: Date.now() + 30_000 };
+    return data;
   }
 
   /** Get all failed seed sources */
@@ -120,6 +137,7 @@ export class SeedService {
 
   /** Import CSV files into SeedSource table */
   async importCsvFiles(files?: string[]): Promise<{ imported: number }> {
+    this.statusCache = null;
     // Try multiple possible paths (dev vs Docker)
     const candidates = [
       path.resolve(process.cwd(), '../../scripts/seed-data'),  // dev: apps/api/
@@ -179,6 +197,7 @@ export class SeedService {
       return { scanned: 0, failed: 0 };
     }
 
+    this.statusCache = null;
     this.isRunning = true;
     this.logger.log('Starting seed scanning...');
 
@@ -259,12 +278,14 @@ export class SeedService {
       return { scanned, failed };
     } finally {
       this.isRunning = false;
+      this.statusCache = null;
     }
   }
 
   /** Retry all failed seeds */
   /** Seed realistic crawler visit data for public sites */
   async seedCrawlerVisits(): Promise<{ created: number }> {
+    this.statusCache = null;
     const sites = await this.prisma.site.findMany({
       where: { isPublic: true, bestScore: { gt: 0 } },
       select: { id: true, url: true, bestScore: true },
@@ -572,6 +593,7 @@ export class SeedService {
   }
 
   async retryFailed(): Promise<{ reset: number }> {
+    this.statusCache = null;
     const result = await this.prisma.seedSource.updateMany({
       where: { status: 'failed' },
       data: { status: 'pending', failReason: null },

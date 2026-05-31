@@ -124,6 +124,8 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [siteFilter, setSiteFilter] = useState<(typeof SITE_FILTERS)[number]['value']>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedSites, setExpandedSites] = useState<Record<string, any[]>>({});
+  const [loadingSitesFor, setLoadingSitesFor] = useState<string | null>(null);
   const [editRole, setEditRole] = useState('');
   const [editPlan, setEditPlan] = useState('');
   const [editName, setEditName] = useState('');
@@ -252,6 +254,18 @@ export default function AdminUsersPage() {
     setDeleteConfirm(null);
     setGrantPlan(user.plan === 'STARTER' ? 'STARTER' : 'PRO');
     setGrantDays('30');
+    if (!expandedSites[user.id]) {
+      setLoadingSitesFor(user.id);
+      apiClient
+        .get(`/admin/users/${user.id}/sites`)
+        .then(({ data }) => {
+          setExpandedSites((current) => ({ ...current, [user.id]: data || [] }));
+        })
+        .catch((err: any) => {
+          toast.error(err?.response?.data?.message || 'Failed to load user sites');
+        })
+        .finally(() => setLoadingSitesFor(null));
+    }
     setGrantReason('公開測試活動贈送');
   };
 
@@ -336,6 +350,8 @@ export default function AdminUsersPage() {
             const internal = isInternalRole(u.role);
             const isDeleting = deleteConfirm === u.id;
             const summary = u.siteSummary || {};
+            const userSites = expandedSites[u.id] || [];
+            const isLoadingSites = loadingSitesFor === u.id;
 
             return (
               <div
@@ -428,13 +444,17 @@ export default function AdminUsersPage() {
                         </div>
                       </div>
 
-                      {!u.sites || u.sites.length === 0 ? (
+                      {isLoadingSites ? (
+                        <div className="rounded-md border border-dashed border-white/10 p-4 text-sm text-gray-400">
+                          Loading sites...
+                        </div>
+                      ) : userSites.length === 0 ? (
                         <div className="rounded-md border border-dashed border-white/10 p-4 text-sm text-gray-400">
                           這個用戶尚未新增網站。
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {u.sites.map((site: any) => {
+                          {userSites.map((site: any) => {
                             const latestScan = site.latestScan;
                             const results = latestScan?.results || [];
                             return (

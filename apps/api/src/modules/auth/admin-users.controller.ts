@@ -80,44 +80,10 @@ export class AdminUsersController {
             orderBy: { updatedAt: 'desc' },
             select: {
               id: true,
-              name: true,
-              url: true,
-              industry: true,
               isPublic: true,
-              isClient: true,
-              isVerified: true,
               bestScore: true,
               bestScoreAt: true,
-              tier: true,
-              createdAt: true,
               updatedAt: true,
-              scans: {
-                orderBy: { createdAt: 'desc' },
-                take: 1,
-                select: {
-                  id: true,
-                  totalScore: true,
-                  status: true,
-                  createdAt: true,
-                  completedAt: true,
-                  results: {
-                    orderBy: { indicator: 'asc' },
-                    select: {
-                      indicator: true,
-                      score: true,
-                      status: true,
-                    },
-                  },
-                },
-              },
-              _count: {
-                select: {
-                  scans: true,
-                  qas: true,
-                  blogArticles: true,
-                  monitors: true,
-                },
-              },
             },
           },
           _count: { select: { sites: true, contents: true, orders: true } },
@@ -130,43 +96,16 @@ export class AdminUsersController {
     ]);
 
     const items = users.map((user) => {
-      const sites = user.sites.map((site) => {
-        const latestScan = site.scans[0] ?? null;
-        return {
-          id: site.id,
-          name: site.name,
-          url: site.url,
-          industry: site.industry,
-          isPublic: site.isPublic,
-          isClient: site.isClient,
-          isVerified: site.isVerified,
-          bestScore: site.bestScore,
-          bestScoreAt: site.bestScoreAt,
-          tier: site.tier,
-          createdAt: site.createdAt,
-          updatedAt: site.updatedAt,
-          latestScan: latestScan
-            ? {
-                id: latestScan.id,
-                totalScore: latestScan.totalScore,
-                status: latestScan.status,
-                createdAt: latestScan.createdAt,
-                completedAt: latestScan.completedAt,
-                results: latestScan.results,
-              }
-            : null,
-          counts: site._count,
-        };
-      });
+      const sites = user.sites;
       const scores = sites.map((site) => site.bestScore ?? 0);
       const latestScanTimes = sites
-        .map((site) => site.latestScan?.completedAt ?? site.latestScan?.createdAt ?? site.bestScoreAt)
+        .map((site) => site.bestScoreAt ?? site.updatedAt)
         .filter(Boolean)
         .map((value) => new Date(value as Date));
 
       return {
         ...user,
-        sites,
+        sites: [],
         siteSummary: {
           totalSites: sites.length,
           publicSites: sites.filter((site) => site.isPublic).length,
@@ -181,6 +120,91 @@ export class AdminUsersController {
     });
 
     return { items, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
+  }
+
+  @Get(':userId/sites')
+  @ApiOperation({ summary: 'List one user sites with latest scan details (admin)' })
+  async listUserSites(@Param('userId') userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) throw new ForbiddenException('User not found');
+
+    const sites = await this.prisma.site.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        industry: true,
+        isPublic: true,
+        isClient: true,
+        isVerified: true,
+        bestScore: true,
+        bestScoreAt: true,
+        tier: true,
+        createdAt: true,
+        updatedAt: true,
+        scans: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            totalScore: true,
+            status: true,
+            createdAt: true,
+            completedAt: true,
+            results: {
+              orderBy: { indicator: 'asc' },
+              select: {
+                indicator: true,
+                score: true,
+                status: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            scans: true,
+            qas: true,
+            blogArticles: true,
+            monitors: true,
+          },
+        },
+      },
+    });
+
+    return sites.map((site) => {
+      const latestScan = site.scans[0] ?? null;
+      return {
+        id: site.id,
+        name: site.name,
+        url: site.url,
+        industry: site.industry,
+        isPublic: site.isPublic,
+        isClient: site.isClient,
+        isVerified: site.isVerified,
+        bestScore: site.bestScore,
+        bestScoreAt: site.bestScoreAt,
+        tier: site.tier,
+        createdAt: site.createdAt,
+        updatedAt: site.updatedAt,
+        latestScan: latestScan
+          ? {
+              id: latestScan.id,
+              totalScore: latestScan.totalScore,
+              status: latestScan.status,
+              createdAt: latestScan.createdAt,
+              completedAt: latestScan.completedAt,
+              results: latestScan.results,
+            }
+          : null,
+        counts: site._count,
+      };
+    });
   }
 
   @Patch(':userId/role')

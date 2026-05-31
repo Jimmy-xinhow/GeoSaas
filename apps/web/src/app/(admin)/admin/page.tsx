@@ -131,19 +131,15 @@ export default function AdminDashboard() {
   const fetchStats = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      const [dirRes, articleRes, seedRes] = await Promise.all([
-        apiClient.get('/directory?limit=1'),
-        apiClient.get('/blog/articles?limit=1'),
-        apiClient.get('/admin/seed/status'),
-      ]);
+      const { data: seedStats } = await apiClient.get('/admin/seed/status');
 
       setStats({
-        sites: { total: dirRes.data?.total || 0, public: dirRes.data?.total || 0 },
-        articles: { total: articleRes.data?.total || 0 },
-        users: { total: 0 },
-        seeds: seedRes.data || { total: 0, scanned: 0, pending: 0, failed: 0, isRunning: false },
-        industries: seedRes.data?.byIndustry || [],
-        crawler: seedRes.data?.crawler || { total: 0, real: 0, seeded: 0, real24h: 0, seeded24h: 0, real7d: 0, seeded7d: 0, realByBot: [], seededByBot: [], recentRealVisits: [] },
+        sites: { total: seedStats?.sites?.public || 0, public: seedStats?.sites?.public || 0 },
+        articles: { total: seedStats?.blogArticles || 0 },
+        users: { total: seedStats?.users?.total || 0 },
+        seeds: seedStats || { total: 0, scanned: 0, pending: 0, failed: 0, isRunning: false },
+        industries: seedStats?.byIndustry || [],
+        crawler: seedStats?.crawler || { total: 0, real: 0, seeded: 0, real24h: 0, seeded24h: 0, real7d: 0, seeded7d: 0, realByBot: [], seededByBot: [], recentRealVisits: [] },
       });
     } catch (err) {
       // stats fetch failed — silent
