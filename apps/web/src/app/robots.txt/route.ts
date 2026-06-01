@@ -16,6 +16,13 @@ const PRIVATE_PATHS = [
   '/dashboard/',
   '/cdn-cgi/',
 ];
+const AUTH_NOINDEX_PATHS = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email',
+];
 
 const AI_BOTS = [
   'GPTBot', 'ChatGPT-User', 'OAI-SearchBot',
@@ -39,6 +46,7 @@ export async function GET() {
     // closed and spread the load with a modest Crawl-delay.
     'User-agent: *',
     'Allow: /',
+    ...AUTH_NOINDEX_PATHS.map((path) => `Allow: ${path}`),
     ...PRIVATE_PATHS.map((path) => `Disallow: ${path}`),
     'Crawl-delay: 5',
     '',
@@ -49,6 +57,9 @@ export async function GET() {
   for (const bot of AI_BOTS) {
     lines.push(`User-agent: ${bot}`);
     lines.push('Allow: /');
+    for (const path of AUTH_NOINDEX_PATHS) {
+      lines.push(`Allow: ${path}`);
+    }
     for (const path of PRIVATE_PATHS) {
       lines.push(`Disallow: ${path}`);
     }

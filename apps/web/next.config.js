@@ -56,6 +56,26 @@ module.exports = withNextIntl({
         source: '/industry/:industry/:siteId',
         headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }],
       },
+      {
+        source: '/login',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
+      {
+        source: '/register',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
+      {
+        source: '/forgot-password',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
+      {
+        source: '/reset-password',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
+      {
+        source: '/verify-email',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
     ];
   },
   // NOTE: previously had `rewrites()` proxying /api/:path* to api.geovault.app.
