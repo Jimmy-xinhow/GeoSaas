@@ -3,9 +3,15 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
+  IsInt,
+  IsIn,
+  IsOptional,
   IsString,
   MaxLength,
+  Max,
   MinLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -45,4 +51,43 @@ export class SeedIndustryQueriesDto {
   @ValidateNested({ each: true })
   @Type(() => SeedIndustryQueryItemDto)
   queries: SeedIndustryQueryItemDto[];
+}
+
+const INDUSTRY_AI_PLATFORM_VALUES = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'] as const;
+
+export class RunIndustryTestDto {
+  @IsOptional()
+  @IsBoolean()
+  fullRun?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  maxSites?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  maxQueries?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(5)
+  @IsIn(INDUSTRY_AI_PLATFORM_VALUES, { each: true })
+  platforms?: Array<(typeof INDUSTRY_AI_PLATFORM_VALUES)[number]>;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  maxTotalCalls?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5000)
+  maxCopilotCalls?: number;
 }

@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChatgptDetector } from '../monitor/platforms/chatgpt.detector';
 import { ClaudeDetector } from '../monitor/platforms/claude.detector';
@@ -6,8 +7,29 @@ import { PerplexityDetector } from '../monitor/platforms/perplexity.detector';
 import { GeminiDetector } from '../monitor/platforms/gemini.detector';
 import { CopilotDetector } from '../monitor/platforms/copilot.detector';
 
-const PLATFORMS = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'] as const;
-type Platform = (typeof PLATFORMS)[number];
+export const INDUSTRY_AI_PLATFORMS = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'] as const;
+const PLATFORMS = INDUSTRY_AI_PLATFORMS;
+export type IndustryAiPlatform = (typeof PLATFORMS)[number];
+type Platform = IndustryAiPlatform;
+
+export interface IndustryAiRunOptions {
+  maxSites?: number;
+  maxQueries?: number;
+  platforms?: Platform[];
+  maxTotalCalls?: number;
+  maxCopilotCalls?: number;
+  label?: string;
+}
+
+export interface IndustryAiRunResult {
+  tested: number;
+  sites: number;
+  queries: number;
+  platforms: string[];
+  plannedCalls: number;
+  skippedExisting: number;
+  skippedByBudget: number;
+}
 
 const POSITIVE_KEYWORDS = ['推薦', '值得', '不錯', '優質', '專業', '口碑好', '好評', '首選', '知名', '受歡迎', '滿意', '信賴'];
 const NEGATIVE_KEYWORDS = ['不建議', '不推薦', '注意', '小心', '避免', '品質差', '負評', '投訴', '爭議', '問題多'];
@@ -21,6 +43,7 @@ export class IndustryAiService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
     chatgpt: ChatgptDetector,
     claude: ClaudeDetector,
     perplexity: PerplexityDetector,
@@ -61,32 +84,86 @@ export class IndustryAiService {
   }
 
   // ─── Core: Run full industry test ───
-  async runIndustryTest(industry: string): Promise<{ tested: number; sites: number }> {
-    if (this.isRunning) return { tested: 0, sites: 0 };
+  async runIndustryTest(industry: string, options: IndustryAiRunOptions = {}): Promise<IndustryAiRunResult> {
+    if (this.isRunning) {
+      return {
+        tested: 0,
+        sites: 0,
+        queries: 0,
+        platforms: [],
+        plannedCalls: 0,
+        skippedExisting: 0,
+        skippedByBudget: 0,
+      };
+    }
     this.isRunning = true;
 
     try {
       const weekOf = this.getWeekOf();
+      const normalizeLimit = (value?: number): number | undefined => {
+        if (!value || !Number.isFinite(value) || value < 1) return undefined;
+        return Math.floor(value);
+      };
+      const maxSites = normalizeLimit(options.maxSites);
+      const maxQueries = normalizeLimit(options.maxQueries);
+      const maxTotalCalls = normalizeLimit(options.maxTotalCalls);
+      const maxCopilotCalls = normalizeLimit(options.maxCopilotCalls);
+      const selectedPlatforms = options.platforms && options.platforms.length > 0
+        ? options.platforms
+        : [...PLATFORMS];
+      const copilotEnabled = this.config.get<string>('INDUSTRY_AI_ENABLE_COPILOT', '1') !== '0';
+      const platforms = [...new Set(selectedPlatforms)]
+        .filter((p): p is Platform => PLATFORMS.includes(p as Platform))
+        .filter((p) => copilotEnabled || p !== 'COPILOT');
 
       // Load queries
       const queries = await this.prisma.industryQuery.findMany({
         where: { industry, isActive: true },
+        orderBy: [{ category: 'asc' }, { question: 'asc' }],
+        ...(maxQueries ? { take: maxQueries } : {}),
       });
       if (queries.length === 0) {
         this.logger.warn(`No active queries for industry ${industry}`);
-        return { tested: 0, sites: 0 };
+        return {
+          tested: 0,
+          sites: 0,
+          queries: 0,
+          platforms,
+          plannedCalls: 0,
+          skippedExisting: 0,
+          skippedByBudget: 0,
+        };
       }
 
       // Load sites
       const sites = await this.prisma.site.findMany({
         where: { isPublic: true, industry, bestScore: { gt: 0 } },
         select: { id: true, name: true, url: true },
+        orderBy: { bestScore: 'desc' },
+        ...(maxSites ? { take: maxSites } : {}),
       });
-      if (sites.length === 0) return { tested: 0, sites: 0 };
+      if (sites.length === 0) {
+        return {
+          tested: 0,
+          sites: 0,
+          queries: queries.length,
+          platforms,
+          plannedCalls: 0,
+          skippedExisting: 0,
+          skippedByBudget: 0,
+        };
+      }
 
-      this.logger.log(`Running industry AI test: ${industry} — ${queries.length} queries × ${sites.length} sites × ${PLATFORMS.length} platforms`);
+      const plannedCalls = queries.length * sites.length * platforms.length;
+      this.logger.log(
+        `Running industry AI test${options.label ? ` (${options.label})` : ''}: ${industry} - ${queries.length} queries x ${sites.length} sites x ${platforms.length} platforms = ${plannedCalls} planned checks`,
+      );
 
       let tested = 0;
+      let attemptedCalls = 0;
+      let attemptedCopilotCalls = 0;
+      let skippedExisting = 0;
+      let skippedByBudget = 0;
 
       for (const query of queries) {
         const isTemplate = query.question.includes('[品牌名]');
@@ -96,7 +173,7 @@ export class IndustryAiService {
             ? query.question.replace('[品牌名]', site.name)
             : query.question;
 
-          for (const platform of PLATFORMS) {
+          for (const platform of platforms) {
             try {
               // Check if already tested this week
               const existing = await this.prisma.industryAiResult.findUnique({
@@ -109,9 +186,24 @@ export class IndustryAiService {
                   },
                 },
               });
-              if (existing) continue;
+              if (existing) {
+                skippedExisting++;
+                continue;
+              }
+
+              if (maxTotalCalls && attemptedCalls >= maxTotalCalls) {
+                skippedByBudget++;
+                continue;
+              }
+
+              if (platform === 'COPILOT' && maxCopilotCalls && attemptedCopilotCalls >= maxCopilotCalls) {
+                skippedByBudget++;
+                continue;
+              }
 
               const detector = this.detectors[platform];
+              attemptedCalls++;
+              if (platform === 'COPILOT') attemptedCopilotCalls++;
               const result = await detector.detect(question, site.name, site.url);
               const sentiment = result.mentioned
                 ? this.analyzeSentiment(result.response, site.name)
@@ -143,8 +235,18 @@ export class IndustryAiService {
       // Aggregate snapshots
       await this.aggregateSnapshots(industry, weekOf, sites);
 
-      this.logger.log(`Industry AI test complete: ${industry} — ${tested} results`);
-      return { tested, sites: sites.length };
+      this.logger.log(
+        `Industry AI test complete: ${industry} - ${tested} new results, ${skippedExisting} existing skipped, ${skippedByBudget} budget skipped`,
+      );
+      return {
+        tested,
+        sites: sites.length,
+        queries: queries.length,
+        platforms,
+        plannedCalls,
+        skippedExisting,
+        skippedByBudget,
+      };
     } finally {
       this.isRunning = false;
     }

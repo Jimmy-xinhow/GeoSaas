@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { IndustryAiService } from './industry-ai.service';
-import { RunIndustryComparisonDto, SeedIndustryQueriesDto } from './dto/industry-ai.dto';
+import { RunIndustryComparisonDto, RunIndustryTestDto, SeedIndustryQueriesDto } from './dto/industry-ai.dto';
 
 @ApiTags('Industry AI')
 @Controller('industry-ai')
@@ -118,13 +118,40 @@ export class IndustryAiController {
   @Roles('ADMIN')
   @Post(':industry/run')
   @ApiOperation({ summary: 'Trigger full industry AI test (admin, background)' })
-  runTest(@Param('industry') industry: string) {
+  runTest(
+    @Param('industry') industry: string,
+    @Body() body?: RunIndustryTestDto,
+  ) {
     const normalizedIndustry = this.normalizeIndustry(industry);
+    const hasLimits = body && (
+      body.fullRun === false ||
+      body.maxSites ||
+      body.maxQueries ||
+      body.platforms?.length ||
+      body.maxTotalCalls ||
+      body.maxCopilotCalls
+    );
+    const options = hasLimits
+      ? {
+          maxSites: body.maxSites,
+          maxQueries: body.maxQueries,
+          platforms: body.platforms,
+          maxTotalCalls: body.maxTotalCalls,
+          maxCopilotCalls: body.maxCopilotCalls,
+          label: 'admin-limited',
+        }
+      : { label: 'admin-full' };
+
     // Run in background to avoid HTTP timeout
-    this.service.runIndustryTest(normalizedIndustry).catch((err) => {
+    this.service.runIndustryTest(normalizedIndustry, options).catch((err) => {
       console.error(`Industry AI test failed for ${normalizedIndustry}:`, err);
     });
-    return { message: `Industry AI test started for ${normalizedIndustry}`, status: 'running' };
+    return {
+      message: `Industry AI test started for ${normalizedIndustry}`,
+      status: 'running',
+      mode: hasLimits ? 'limited' : 'full',
+      options,
+    };
   }
 
   @ApiBearerAuth()
