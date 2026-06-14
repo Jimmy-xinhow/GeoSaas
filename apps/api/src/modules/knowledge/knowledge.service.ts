@@ -9,6 +9,7 @@ import { emitLlmsFullInvalidated, REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY } 
 import { assertSiteAccess } from '../../common/auth/site-access';
 import { CreateQaDto } from './dto/create-qa.dto';
 import { UpdateQaDto } from './dto/update-qa.dto';
+import { buildKnowledgeXlsx } from './knowledge-xlsx.util';
 
 const MAX_QA_PER_SITE = 200;
 const WEB_URL = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
@@ -120,6 +121,35 @@ export class KnowledgeService implements OnModuleDestroy {
       where: { siteId },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
+  }
+
+  async exportXlsx(siteId: string, userId: string, role?: string) {
+    const site = await this.verifySiteOwnership(siteId, userId, role);
+    const qas = await this.prisma.siteQa.findMany({
+      where: { siteId },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return {
+      fileName: `${this.safeFileName(site.name || 'knowledge')}-knowledge-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      buffer: buildKnowledgeXlsx(
+        {
+          id: site.id,
+          name: site.name,
+          url: site.url,
+        },
+        qas,
+      ),
+    };
+  }
+
+  private safeFileName(value: string): string {
+    return value
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 80) || 'knowledge';
   }
 
   async create(siteId: string, dto: CreateQaDto, userId: string, role?: string) {

@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Res } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { Response } from 'express';
 import { KnowledgeService } from './knowledge.service';
 import { CreditService } from '../billing/credit.service';
 import { CreateQaDto, UpdateQaDto, BatchCreateQaDto, AiGenerateQaDto } from './dto';
@@ -23,6 +24,22 @@ export class KnowledgeController {
     @CurrentUser('role') role: string,
   ) {
     return this.knowledgeService.findAll(siteId, userId, role);
+  }
+
+  @Get('export.xlsx')
+  @ApiOperation({ summary: 'Export all Q&A pairs for a site as an Excel file' })
+  async exportXlsx(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+    @Res() res: Response,
+  ) {
+    const { fileName, buffer } = await this.knowledgeService.exportXlsx(siteId, userId, role);
+    const encodedFileName = encodeURIComponent(fileName);
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="knowledge-export.xlsx"; filename*=UTF-8''${encodedFileName}`);
+    res.set('Cache-Control', 'private, no-store');
+    return res.send(buffer);
   }
 
   @Post()

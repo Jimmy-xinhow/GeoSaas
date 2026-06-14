@@ -133,3 +133,47 @@ export function useAiGenerateQa(siteId: string) {
     },
   });
 }
+
+function extractDownloadFileName(contentDisposition?: string): string | null {
+  if (!contentDisposition) return null;
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+
+  const asciiMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  return asciiMatch?.[1] ?? null;
+}
+
+export function useExportKnowledgeXlsx(siteId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.get<Blob>(
+        `/sites/${siteId}/knowledge/export.xlsx`,
+        { responseType: 'blob' },
+      );
+      return {
+        blob: response.data,
+        fileName:
+          extractDownloadFileName(response.headers['content-disposition']) ??
+          `knowledge-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      };
+    },
+    onSuccess: ({ blob, fileName }) => {
+      if (typeof window === 'undefined') return;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    },
+  });
+}

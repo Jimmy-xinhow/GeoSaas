@@ -26,6 +26,7 @@ import {
   Globe,
   Brain,
   Filter,
+  Download,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -49,6 +50,7 @@ import {
   useUpdateQa,
   useDeleteQa,
   useAiGenerateQa,
+  useExportKnowledgeXlsx,
   type QaItem,
   type GeneratedQa,
 } from '@/hooks/use-knowledge'
@@ -1149,6 +1151,7 @@ export default function KnowledgePage() {
 
   const aiGenerate = useAiGenerateQa(siteId)
   const deleteMutation = useDeleteQa(siteId)
+  const exportKnowledge = useExportKnowledgeXlsx(siteId)
 
   const editingQa = useMemo(
     () => (editingQaId ? qas?.find((q) => q.id === editingQaId) || null : null),
@@ -1198,6 +1201,15 @@ export default function KnowledgePage() {
       toast.error(err?.response?.data?.message || '繼續生成失敗')
     } finally {
       setIsContinuing(false)
+    }
+  }
+
+  const handleExportXlsx = async () => {
+    try {
+      await exportKnowledge.mutateAsync()
+      toast.success('Excel 檔案已開始下載')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Excel 匯出失敗')
     }
   }
 
@@ -1402,6 +1414,19 @@ export default function KnowledgePage() {
               </Badge>
             </div>
             <div className="flex gap-2 flex-shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportXlsx}
+                disabled={exportKnowledge.isPending}
+              >
+                {exportKnowledge.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-1.5" />
+                )}
+                匯出 Excel
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
