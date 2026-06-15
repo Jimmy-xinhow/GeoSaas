@@ -23,6 +23,7 @@ export class AdminUsersController {
     @Query('limit') limit?: string,
     @Query('search') search?: string,
     @Query('siteFilter') siteFilter?: string,
+    @Query('customerFilter') customerFilter?: string,
   ) {
     const p = parseInt(page || '1', 10);
     const l = parseInt(limit || '20', 10);
@@ -48,6 +49,15 @@ export class AdminUsersController {
         throw new BadRequestException('Invalid siteFilter');
       }
     }
+    if (customerFilter) {
+      if (customerFilter === 'customers') {
+        where.isCustomer = true;
+      } else if (customerFilter === 'non_customers') {
+        where.isCustomer = false;
+      } else if (customerFilter !== 'all') {
+        throw new BadRequestException('Invalid customerFilter');
+      }
+    }
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -60,6 +70,7 @@ export class AdminUsersController {
           plan: true,
           planExpiresAt: true,
           planSource: true,
+          isCustomer: true,
           managedBy: true,
           createdAt: true,
           planGrantsReceived: {
@@ -204,6 +215,22 @@ export class AdminUsersController {
           : null,
         counts: site._count,
       };
+    });
+  }
+
+  @Patch(':userId/customer')
+  @ApiOperation({ summary: 'Mark or unmark a user as a customer (admin)' })
+  async setCustomerTag(
+    @Param('userId') userId: string,
+    @Body('isCustomer') isCustomer: boolean,
+  ) {
+    if (typeof isCustomer !== 'boolean') {
+      throw new BadRequestException('isCustomer must be a boolean');
+    }
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { isCustomer },
+      select: { id: true, email: true, isCustomer: true },
     });
   }
 

@@ -72,6 +72,7 @@ model User {
   plan                Plan      @default(FREE)
   planExpiresAt       DateTime? @map("plan_expires_at")
   planSource          String    @default("manual") @map("plan_source")
+  isCustomer          Boolean   @default(false) @map("is_customer")
   managedBy           String? // SUPER_ADMIN userId who manages this client
   affiliateReferrerId String?   @map("affiliate_referrer_id")
   credits             Int       @default(0)
@@ -104,6 +105,7 @@ model User {
   affiliateWithdrawals         AffiliateWithdrawal[]        @relation("AffiliateWithdrawalUser")
 
   @@index([managedBy])
+  @@index([isCustomer])
   @@index([planExpiresAt])
   @@index([affiliateReferrerId])
   @@map("users")
