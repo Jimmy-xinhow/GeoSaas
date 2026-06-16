@@ -23,7 +23,6 @@ export class AdminUsersController {
     @Query('limit') limit?: string,
     @Query('search') search?: string,
     @Query('siteFilter') siteFilter?: string,
-    @Query('customerFilter') customerFilter?: string,
   ) {
     const p = parseInt(page || '1', 10);
     const l = parseInt(limit || '20', 10);
@@ -45,17 +44,10 @@ export class AdminUsersController {
           { sites: { some: {} } },
           { sites: { none: { isPublic: true } } },
         ];
+      } else if (siteFilter === 'has_client_sites') {
+        where.sites = { some: { isClient: true } };
       } else if (siteFilter !== 'all') {
         throw new BadRequestException('Invalid siteFilter');
-      }
-    }
-    if (customerFilter) {
-      if (customerFilter === 'customers') {
-        where.isCustomer = true;
-      } else if (customerFilter === 'non_customers') {
-        where.isCustomer = false;
-      } else if (customerFilter !== 'all') {
-        throw new BadRequestException('Invalid customerFilter');
       }
     }
 
@@ -70,7 +62,6 @@ export class AdminUsersController {
           plan: true,
           planExpiresAt: true,
           planSource: true,
-          isCustomer: true,
           managedBy: true,
           createdAt: true,
           planGrantsReceived: {
@@ -92,6 +83,7 @@ export class AdminUsersController {
             select: {
               id: true,
               isPublic: true,
+              isClient: true,
               bestScore: true,
               bestScoreAt: true,
               updatedAt: true,
@@ -121,6 +113,7 @@ export class AdminUsersController {
           totalSites: sites.length,
           publicSites: sites.filter((site) => site.isPublic).length,
           privateSites: sites.filter((site) => !site.isPublic).length,
+          clientSites: sites.filter((site) => site.isClient).length,
           highestScore: scores.length > 0 ? Math.max(...scores) : null,
           lastScanAt:
             latestScanTimes.length > 0
@@ -215,22 +208,6 @@ export class AdminUsersController {
           : null,
         counts: site._count,
       };
-    });
-  }
-
-  @Patch(':userId/customer')
-  @ApiOperation({ summary: 'Mark or unmark a user as a customer (admin)' })
-  async setCustomerTag(
-    @Param('userId') userId: string,
-    @Body('isCustomer') isCustomer: boolean,
-  ) {
-    if (typeof isCustomer !== 'boolean') {
-      throw new BadRequestException('isCustomer must be a boolean');
-    }
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { isCustomer },
-      select: { id: true, email: true, isCustomer: true },
     });
   }
 

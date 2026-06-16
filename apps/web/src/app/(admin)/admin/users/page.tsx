@@ -36,11 +36,7 @@ const SITE_FILTERS = [
   { value: 'all', label: '全部用戶' },
   { value: 'no_sites', label: '尚未新增網站' },
   { value: 'has_sites_not_public', label: '有網站但未公開' },
-] as const;
-const CUSTOMER_FILTERS = [
-  { value: 'all', label: '全部客戶狀態' },
-  { value: 'customers', label: '已標註客戶' },
-  { value: 'non_customers', label: '未標註客戶' },
+  { value: 'has_client_sites', label: '有客戶網站' },
 ] as const;
 
 const ROLE_COLORS: Record<string, string> = {
@@ -128,7 +124,6 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [siteFilter, setSiteFilter] = useState<(typeof SITE_FILTERS)[number]['value']>('all');
-  const [customerFilter, setCustomerFilter] = useState<(typeof CUSTOMER_FILTERS)[number]['value']>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedSites, setExpandedSites] = useState<Record<string, any[]>>({});
   const [loadingSitesFor, setLoadingSitesFor] = useState<string | null>(null);
@@ -143,12 +138,11 @@ export default function AdminUsersPage() {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-users', page, search, siteFilter, customerFilter],
+    queryKey: ['admin-users', page, search, siteFilter],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: '20' });
       if (search) params.set('search', search);
       if (siteFilter !== 'all') params.set('siteFilter', siteFilter);
-      if (customerFilter !== 'all') params.set('customerFilter', customerFilter);
       const { data } = await apiClient.get(`/admin/users?${params}`);
       return data;
     },
@@ -185,16 +179,6 @@ export default function AdminUsersPage() {
       invalidate();
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || '贈送方案時間失敗'),
-  });
-
-  const customerMutation = useMutation({
-    mutationFn: ({ userId, isCustomer }: { userId: string; isCustomer: boolean }) =>
-      apiClient.patch(`/admin/users/${userId}/customer`, { isCustomer }),
-    onSuccess: (_, vars) => {
-      toast.success(vars.isCustomer ? '已標註為客戶' : '已取消客戶標註');
-      invalidate();
-    },
-    onError: (err: any) => toast.error(err?.response?.data?.message || '客戶標註更新失敗'),
   });
 
   const nameMutation = useMutation({
@@ -253,6 +237,22 @@ export default function AdminUsersPage() {
     onError: (err: any) => toast.error(err?.response?.data?.message || '公開狀態更新失敗'),
   });
 
+  const clientMutation = useMutation({
+    mutationFn: ({ siteId, isClient }: { userId: string; siteId: string; isClient: boolean }) =>
+      apiClient.patch(`/sites/admin/${siteId}/toggle-client`, { isClient }),
+    onSuccess: ({ data: updatedSite }, vars) => {
+      toast.success(vars.isClient ? '已標註為客戶網站' : '已取消客戶網站標註');
+      setExpandedSites((current) => ({
+        ...current,
+        [vars.userId]: (current[vars.userId] || []).map((site: any) =>
+          site.id === vars.siteId ? { ...site, ...updatedSite } : site,
+        ),
+      }));
+      invalidate();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '客戶網站標註更新失敗'),
+  });
+
   const users = data?.items || [];
   const total = data?.total || 0;
   const totalPages = data?.totalPages || 1;
@@ -290,11 +290,11 @@ export default function AdminUsersPage() {
     roleMutation.isPending ||
     planMutation.isPending ||
     grantMutation.isPending ||
-    customerMutation.isPending ||
     nameMutation.isPending ||
     passwordMutation.isPending ||
     scanMutation.isPending ||
-    publicMutation.isPending;
+    publicMutation.isPending ||
+    clientMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -349,23 +349,6 @@ export default function AdminUsersPage() {
             </Button>
           ))}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {CUSTOMER_FILTERS.map((filter) => (
-            <Button
-              key={filter.value}
-              type="button"
-              variant={customerFilter === filter.value ? 'default' : 'outline'}
-              size="sm"
-              className={customerFilter === filter.value ? 'bg-blue-600 text-white hover:bg-blue-500' : ''}
-              onClick={() => {
-                setCustomerFilter(filter.value);
-                setPage(1);
-              }}
-            >
-              {filter.label}
-            </Button>
-          ))}
-        </div>
       </div>
 
       <div className="space-y-2">
@@ -410,9 +393,6 @@ export default function AdminUsersPage() {
                     <div className="truncate text-xs text-gray-500">{u.email}</div>
                   </div>
                   <Badge className={`${ROLE_COLORS[u.role] || 'bg-white/10'} shrink-0`}>{u.role}</Badge>
-                  <Badge className={`${u.isCustomer ? 'bg-blue-500/20 text-blue-300' : 'bg-white/10 text-gray-400'} shrink-0`}>
-                    {u.isCustomer ? '客戶' : '非客戶'}
-                  </Badge>
                   {internal ? (
                     <span className="w-24 shrink-0 text-center text-xs text-gray-500">內部帳號</span>
                   ) : (
@@ -428,6 +408,9 @@ export default function AdminUsersPage() {
                     </span>
                     <span className="flex items-center gap-1 text-emerald-300" title="公開網站數">
                       公開 {summary.publicSites ?? 0}
+                    </span>
+                    <span className="flex items-center gap-1 text-blue-300" title="客戶網站數">
+                      客戶網站 {summary.clientSites ?? 0}
                     </span>
                     <span className="flex items-center gap-1" title="內容數">
                       <FileText className="h-3 w-3" />
@@ -459,10 +442,10 @@ export default function AdminUsersPage() {
                           <h2 className="text-sm font-semibold text-white">網站總覽</h2>
                           <p className="mt-1 text-xs text-gray-400">
                             {summary.totalSites ?? 0} 個網站，{summary.publicSites ?? 0} 個公開，最高 GEO 分數{' '}
-                            {summary.highestScore ?? '-'}。
+                            {summary.highestScore ?? '-'}，{summary.clientSites ?? 0} 個客戶網站。
                           </p>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
                           <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                             <p className="text-gray-500">網站</p>
                             <p className="font-mono text-lg font-semibold text-white">{summary.totalSites ?? 0}</p>
@@ -470,6 +453,10 @@ export default function AdminUsersPage() {
                           <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                             <p className="text-gray-500">公開</p>
                             <p className="font-mono text-lg font-semibold text-emerald-300">{summary.publicSites ?? 0}</p>
+                          </div>
+                          <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                            <p className="text-gray-500">客戶網站</p>
+                            <p className="font-mono text-lg font-semibold text-blue-300">{summary.clientSites ?? 0}</p>
                           </div>
                           <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                             <p className="text-gray-500">最高分</p>
@@ -503,6 +490,9 @@ export default function AdminUsersPage() {
                                       <p className="font-medium text-white">{site.name}</p>
                                       <Badge className={site.isPublic ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-gray-300'}>
                                         {site.isPublic ? '公開' : '未公開'}
+                                      </Badge>
+                                      <Badge className={site.isClient ? 'bg-blue-500/20 text-blue-300' : 'bg-white/10 text-gray-400'}>
+                                        {site.isClient ? '客戶網站' : '一般網站'}
                                       </Badge>
                                       {site.tier && (
                                         <Badge className={TIER_COLORS[site.tier] || 'bg-white/10 text-gray-300'}>
@@ -558,6 +548,23 @@ export default function AdminUsersPage() {
                                     </Button>
                                     <Button
                                       type="button"
+                                      variant={site.isClient ? 'outline' : 'default'}
+                                      size="sm"
+                                      disabled={clientMutation.isPending}
+                                      className={!site.isClient ? 'bg-blue-600 text-white hover:bg-blue-500' : ''}
+                                      onClick={() =>
+                                        clientMutation.mutate({
+                                          userId: u.id,
+                                          siteId: site.id,
+                                          isClient: !site.isClient,
+                                        })
+                                      }
+                                    >
+                                      <UserCheck className="mr-1 h-4 w-4" />
+                                      {site.isClient ? '取消客戶網站' : '標註客戶網站'}
+                                    </Button>
+                                    <Button
+                                      type="button"
                                       variant={site.isPublic ? 'outline' : 'default'}
                                       size="sm"
                                       disabled={publicMutation.isPending}
@@ -597,7 +604,7 @@ export default function AdminUsersPage() {
                       )}
                     </div>
 
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <div>
                         <label className="mb-1 block text-xs text-gray-500">名稱</label>
                         <div className="flex gap-1">
@@ -612,22 +619,6 @@ export default function AdminUsersPage() {
                             <Save className="h-3.5 w-3.5 text-blue-400" />
                           </Button>
                         </div>
-                      </div>
-
-                      <div>
-                        <label className="mb-1 block text-xs text-gray-500">客戶標註</label>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={u.isCustomer ? 'outline' : 'default'}
-                          disabled={isBusy}
-                          className={`h-8 w-full ${!u.isCustomer ? 'bg-blue-600 text-white hover:bg-blue-500' : ''}`}
-                          onClick={() => customerMutation.mutate({ userId: u.id, isCustomer: !u.isCustomer })}
-                        >
-                          <UserCheck className="mr-1 h-3.5 w-3.5" />
-                          {u.isCustomer ? '取消客戶' : '標註客戶'}
-                        </Button>
-                        <p className="mt-1 text-[11px] text-gray-600">僅供後台篩選，不會變更方案。</p>
                       </div>
 
                       <div>

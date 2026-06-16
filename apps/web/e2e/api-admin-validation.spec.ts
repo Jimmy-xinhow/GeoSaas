@@ -41,24 +41,6 @@ test.describe('API smoke - admin validation', () => {
     expect(goodPlan.status()).toBe(200);
     expect((await goodPlan.json()).data.plan).toBe('STARTER');
 
-    const badCustomerTag = await request.patch(`${API}/api/admin/users/${target.user.id}/customer`, {
-      headers: { Authorization: `Bearer ${admin.token}` },
-      data: { isCustomer: 'true' },
-    });
-    expect(badCustomerTag.status()).toBe(400);
-
-    const goodCustomerTag = await request.patch(`${API}/api/admin/users/${target.user.id}/customer`, {
-      headers: { Authorization: `Bearer ${admin.token}` },
-      data: { isCustomer: true },
-    });
-    expect(goodCustomerTag.status()).toBe(200);
-    expect((await goodCustomerTag.json()).data.isCustomer).toBe(true);
-
-    const customerFilteredList = await request.get(`${API}/api/admin/users?customerFilter=customers&limit=5`, {
-      headers: { Authorization: `Bearer ${admin.token}` },
-    });
-    expect(customerFilteredList.status()).toBe(200);
-
     const emptyName = await request.patch(`${API}/api/admin/users/${target.user.id}/name`, {
       headers: { Authorization: `Bearer ${admin.token}` },
       data: { name: '   ' },

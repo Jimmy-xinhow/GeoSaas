@@ -220,6 +220,11 @@ test.describe('API smoke - admin routes and scan/directory boundaries', () => {
     expect(toggled.isClient).toBe(true);
     expect(toggled.crawlerToken).toBeTruthy();
 
+    const filteredUsers = await request.get(`${API}/api/admin/users?siteFilter=has_client_sites&limit=5`, {
+      headers: { Authorization: `Bearer ${admin.token}` },
+    });
+    expect(filteredUsers.status()).toBe(200);
+
     const invalidVerify = await request.patch(`${API}/api/admin/sites/${site.id}/verify`, {
       headers: { Authorization: `Bearer ${admin.token}` },
       data: { isVerified: 'true' },
