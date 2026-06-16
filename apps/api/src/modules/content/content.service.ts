@@ -110,7 +110,7 @@ export class ContentService {
     const positioning = this.stringValue(profile.positioning) || this.stringValue(profile.uniqueValue);
     const targetAudiences = this.cleanStrings([
       ...this.arrayValue(profile.targetAudiences),
-      this.stringValue(profile.targetAudience),
+      ...this.splitList(this.stringValue(profile.targetAudience)),
     ]);
     const validQaCount = site.qas.filter((qa) =>
       qa.question.trim().length >= 5 && qa.answer.trim().length >= 20,
@@ -181,7 +181,7 @@ export class ContentService {
       services: this.stringValue(profile.services),
       targetAudiences: this.cleanStrings([
         ...this.arrayValue(profile.targetAudiences),
-        this.stringValue(profile.targetAudience),
+        ...this.splitList(this.stringValue(profile.targetAudience)),
       ]),
       location: this.stringValue(profile.location),
       positioning: this.stringValue(profile.positioning) || this.stringValue(profile.uniqueValue),
@@ -213,6 +213,14 @@ export class ContentService {
     if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
     const single = this.stringValue(value);
     return single ? [single] : [];
+  }
+
+  private splitList(value: string | null): string[] {
+    if (!value) return [];
+    return value
+      .split(/[,，、;；\n]+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
   }
 
   private cleanStrings(values: Array<string | null | undefined>): string[] {

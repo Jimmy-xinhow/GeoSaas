@@ -770,7 +770,7 @@ function ProfileFactsEditor({
   const save = async () => {
     const split = (value: string) =>
       value
-        .split(/[,，、;\n]/)
+        .split(/[,，、;；\n]+/)
         .map((item) => item.trim())
         .filter(Boolean)
 
@@ -828,11 +828,11 @@ function ProfileFactsEditor({
             <input className={fieldClass} value={form.contact} onChange={(e) => setField('contact', e.target.value)} />
           </label>
           <label className="space-y-1.5">
-            <span className="text-xs text-muted-foreground">目標客群，用逗號分隔</span>
+            <span className="text-xs text-muted-foreground">目標客群，用逗號或頓號分隔</span>
             <input className={fieldClass} value={form.targetAudience} onChange={(e) => setField('targetAudience', e.target.value)} />
           </label>
           <label className="space-y-1.5 md:col-span-2">
-            <span className="text-xs text-muted-foreground">不適合/禁止描述，用逗號分隔</span>
+            <span className="text-xs text-muted-foreground">不適合/禁止描述，用逗號或頓號分隔</span>
             <input className={fieldClass} value={form.notFor} onChange={(e) => setField('notFor', e.target.value)} />
           </label>
         </div>

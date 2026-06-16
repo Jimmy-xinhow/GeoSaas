@@ -39,8 +39,7 @@ function recordValue(value: unknown): Record<string, unknown> {
 function splitList(value?: string): string[] {
   if (!value) return [];
   return value
-    .replace(/[，、；]/g, ',')
-    .split(/[,;\n]/)
+    .split(/[,，、;；\n]+/)
     .map((item) => item.trim())
     .filter((item) => item.length >= 2)
     .slice(0, 8);
@@ -93,6 +92,8 @@ export class BrandFactService {
     const notFor = [
       ...arrayValue(profile.notFor),
       ...arrayValue(profile.forbidden),
+      ...splitList(textValue(profile.notFor)),
+      ...splitList(textValue(profile.forbidden)),
     ];
 
     const verifiedFacts = [
