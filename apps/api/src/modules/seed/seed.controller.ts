@@ -51,15 +51,6 @@ export class SeedController {
     return { ...result, message: 'Reset and rescanning started' };
   }
 
-  @Post('seed-crawlers')
-  @ApiOperation({ summary: 'Seed realistic crawler visit data for public sites' })
-  async seedCrawlers() {
-    this.service.seedCrawlerVisits().catch((err) => {
-      console.error('Crawler seeding failed:', err);
-    });
-    return { message: 'Crawler visit seeding started' };
-  }
-
   @Post('geovault-self')
   @ApiOperation({ summary: 'Register www.geovault.app as a scannable site and trigger initial scan' })
   async seedGeovaultSelf() {
