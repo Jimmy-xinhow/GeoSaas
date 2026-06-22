@@ -53,34 +53,18 @@ export class SeedService {
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const [
-      crawlerTotal, crawlerReal, crawlerSeeded,
-      real24h, seeded24h, real7d, seeded7d,
-    ] = await Promise.all([
-      this.prisma.crawlerVisit.count(),
+    const [crawlerTotal, real24h, real7d] = await Promise.all([
       this.prisma.crawlerVisit.count({ where: { isSeeded: false } }),
-      this.prisma.crawlerVisit.count({ where: { isSeeded: true } }),
       this.prisma.crawlerVisit.count({ where: { isSeeded: false, visitedAt: { gte: twentyFourHoursAgo } } }),
-      this.prisma.crawlerVisit.count({ where: { isSeeded: true, visitedAt: { gte: twentyFourHoursAgo } } }),
       this.prisma.crawlerVisit.count({ where: { isSeeded: false, visitedAt: { gte: sevenDaysAgo } } }),
-      this.prisma.crawlerVisit.count({ where: { isSeeded: true, visitedAt: { gte: sevenDaysAgo } } }),
     ]);
 
-    // Bot breakdown: real vs seeded per bot
-    const [realByBot, seededByBot] = await Promise.all([
-      this.prisma.crawlerVisit.groupBy({
-        by: ['botName'],
-        where: { isSeeded: false },
-        _count: true,
-        orderBy: { _count: { botName: 'desc' } },
-      }),
-      this.prisma.crawlerVisit.groupBy({
-        by: ['botName'],
-        where: { isSeeded: true },
-        _count: true,
-        orderBy: { _count: { botName: 'desc' } },
-      }),
-    ]);
+    const realByBot = await this.prisma.crawlerVisit.groupBy({
+      by: ['botName'],
+      where: { isSeeded: false },
+      _count: true,
+      orderBy: { _count: { botName: 'desc' } },
+    });
 
     // Recent real visits (last 20)
     const recentRealVisits = await this.prisma.crawlerVisit.findMany({
@@ -105,14 +89,10 @@ export class SeedService {
       byIndustry: byIndustry.map((b: any) => ({ industry: b.industry, count: b._count })),
       crawler: {
         total: crawlerTotal,
-        real: crawlerReal,
-        seeded: crawlerSeeded,
+        real: crawlerTotal,
         real24h,
-        seeded24h,
         real7d,
-        seeded7d,
         realByBot: realByBot.map((b: any) => ({ bot: b.botName, count: b._count })),
-        seededByBot: seededByBot.map((b: any) => ({ bot: b.botName, count: b._count })),
         recentRealVisits,
       },
       sites: {

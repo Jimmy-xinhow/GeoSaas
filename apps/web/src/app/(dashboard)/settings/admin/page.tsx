@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Shield, Bot, FileText, Globe, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/shared/page-header';
 import apiClient from '@/lib/api-client';
 
 interface SeedStatus {
@@ -13,7 +14,7 @@ interface SeedStatus {
   failed: number;
   isRunning: boolean;
   byIndustry: { industry: string; count: number }[];
-  crawler: { total: number; real: number; seeded: number };
+  crawler: { total: number; real: number };
   blogArticles: number;
 }
 
@@ -33,15 +34,11 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Shield className="h-6 w-6" />
-          管理員儀表板
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          平台數據總覽 — 真實 vs 模擬數據一目了然
-        </p>
-      </div>
+      <PageHeader
+        title="管理員儀表板"
+        description="平台數據總覽 — 僅顯示真實資料"
+        icon={Shield}
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -84,49 +81,25 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* Crawler Stats — Real vs Seeded */}
+          {/* Crawler Stats */}
           <div>
-            <h2 className="text-lg font-semibold mb-3">爬蟲數據（真實 vs 模擬）</h2>
-            <div className="grid grid-cols-3 gap-4">
+            <h2 className="text-lg font-semibold mb-3">AI 爬蟲數據（真實）</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Card>
                 <CardContent className="p-5 text-center">
                   <Bot className="h-6 w-6 text-gray-600 mx-auto mb-2" />
                   <p className="text-3xl font-bold">{data.crawler.total}</p>
-                  <p className="text-sm text-muted-foreground">總造訪</p>
+                  <p className="text-sm text-muted-foreground">真實總造訪</p>
                 </CardContent>
               </Card>
-              <Card className="border-green-200 bg-green-50">
+              <Card className="border-green-200">
                 <CardContent className="p-5 text-center">
                   <Bot className="h-6 w-6 text-green-600 mx-auto mb-2" />
                   <p className="text-3xl font-bold text-green-600">{data.crawler.real}</p>
                   <p className="text-sm text-green-700 font-medium">真實爬蟲</p>
                 </CardContent>
               </Card>
-              <Card className="border-orange-200 bg-orange-50">
-                <CardContent className="p-5 text-center">
-                  <Bot className="h-6 w-6 text-orange-600 mx-auto mb-2" />
-                  <p className="text-3xl font-bold text-orange-600">{data.crawler.seeded}</p>
-                  <p className="text-sm text-orange-700 font-medium">模擬數據</p>
-                </CardContent>
-              </Card>
             </div>
-            {data.crawler.total > 0 && (
-              <div className="mt-3 flex items-center gap-4">
-                <div className="flex-1 h-4 bg-gray-200 rounded-full overflow-hidden flex">
-                  <div
-                    className="h-full bg-green-500 transition-all"
-                    style={{ width: `${(data.crawler.real / data.crawler.total) * 100}%` }}
-                  />
-                  <div
-                    className="h-full bg-orange-400 transition-all"
-                    style={{ width: `${(data.crawler.seeded / data.crawler.total) * 100}%` }}
-                  />
-                </div>
-                <span className="text-sm text-muted-foreground shrink-0">
-                  真實 {data.crawler.total > 0 ? Math.round((data.crawler.real / data.crawler.total) * 100) : 0}%
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Industry Breakdown */}

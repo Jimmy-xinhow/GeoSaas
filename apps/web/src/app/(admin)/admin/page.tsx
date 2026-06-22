@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import apiClient from '@/lib/api-client';
-import { Globe, FileText, Users, Database, RefreshCw, Zap, BarChart3, Activity, Bot, Eye, EyeOff, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Globe, FileText, Users, Database, RefreshCw, Zap, BarChart3, Activity, Bot, Eye, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
 import { INDUSTRIES } from '@geovault/shared';
 
 const INDUSTRY_LABEL: Record<string, string> = Object.fromEntries(
@@ -23,13 +23,9 @@ interface RealVisit {
 interface CrawlerStats {
   total: number;
   real: number;
-  seeded: number;
   real24h: number;
-  seeded24h: number;
   real7d: number;
-  seeded7d: number;
   realByBot: BotCount[];
-  seededByBot: BotCount[];
   recentRealVisits: RealVisit[];
 }
 interface DashboardStats {
@@ -139,7 +135,7 @@ export default function AdminDashboard() {
         users: { total: seedStats?.users?.total || 0 },
         seeds: seedStats || { total: 0, scanned: 0, pending: 0, failed: 0, isRunning: false },
         industries: seedStats?.byIndustry || [],
-        crawler: seedStats?.crawler || { total: 0, real: 0, seeded: 0, real24h: 0, seeded24h: 0, real7d: 0, seeded7d: 0, realByBot: [], seededByBot: [], recentRealVisits: [] },
+        crawler: seedStats?.crawler || { total: 0, real: 0, real24h: 0, real7d: 0, realByBot: [], recentRealVisits: [] },
       });
     } catch (err) {
       // stats fetch failed — silent
@@ -176,7 +172,6 @@ export default function AdminDashboard() {
   }
 
   const c = stats?.crawler;
-  const realPercent = c && c.total > 0 ? Math.round((c.real / c.total) * 100) : 0;
 
   const statCards = [
     { label: '收錄品牌', value: stats?.seeds.scanned || 0, icon: Globe, color: 'text-blue-400' },
@@ -218,36 +213,31 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* ═══ Crawler Data: Real vs Simulated ═══ */}
+      {/* Crawler Data: real visits only */}
       <Card className="border-2 border-blue-500/30 bg-white/5">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
             <Bot className="h-5 w-5" /> AI 爬蟲數據總覽
-            <Badge variant="outline" className="ml-2 text-xs">真實 vs 模擬</Badge>
+            <Badge variant="outline" className="ml-2 text-xs">真實數據</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Summary Row */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="text-center p-4 bg-green-500/20 rounded-lg border border-green-500/30">
               <Eye className="h-5 w-5 mx-auto mb-1 text-green-400" />
-              <p className="text-2xl font-bold text-green-400">{c?.real || 0}</p>
+              <p className="text-2xl font-bold text-green-400">{c?.total || 0}</p>
               <p className="text-xs text-green-400 font-medium">真實爬蟲造訪</p>
-            </div>
-            <div className="text-center p-4 bg-white/5 rounded-lg border border-white/10">
-              <EyeOff className="h-5 w-5 mx-auto mb-1 text-gray-400" />
-              <p className="text-2xl font-bold text-gray-400">{c?.seeded || 0}</p>
-              <p className="text-xs text-gray-400 font-medium">模擬爬蟲數據</p>
             </div>
             <div className="text-center p-4 bg-blue-500/20 rounded-lg border border-blue-500/30">
               <Activity className="h-5 w-5 mx-auto mb-1 text-blue-400" />
-              <p className="text-2xl font-bold text-blue-400">{c?.total || 0}</p>
-              <p className="text-xs text-blue-400 font-medium">總計造訪</p>
+              <p className="text-2xl font-bold text-blue-400">{c?.real24h || 0}</p>
+              <p className="text-xs text-blue-400 font-medium">最近 24 小時</p>
             </div>
             <div className="text-center p-4 bg-emerald-500/20 rounded-lg border border-emerald-500/30">
               <BarChart3 className="h-5 w-5 mx-auto mb-1 text-emerald-400" />
-              <p className="text-2xl font-bold text-emerald-400">{realPercent}%</p>
-              <p className="text-xs text-emerald-400 font-medium">真實數據佔比</p>
+              <p className="text-2xl font-bold text-emerald-400">{c?.real7d || 0}</p>
+              <p className="text-xs text-emerald-400 font-medium">最近 7 天</p>
             </div>
           </div>
 
@@ -259,91 +249,46 @@ export default function AdminDashboard() {
                 <thead>
                   <tr className="border-b border-white/10 text-left">
                     <th className="pb-2 text-gray-400">區間</th>
-                    <th className="pb-2 text-green-400">真實</th>
-                    <th className="pb-2 text-gray-400">模擬</th>
-                    <th className="pb-2 text-blue-400">合計</th>
-                    <th className="pb-2 text-emerald-400">真實佔比</th>
+                    <th className="pb-2 text-green-400">真實造訪</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   <tr>
                     <td className="py-2 font-medium">最近 24 小時</td>
                     <td className="py-2 text-green-400 font-bold">{c?.real24h || 0}</td>
-                    <td className="py-2 text-gray-400">{c?.seeded24h || 0}</td>
-                    <td className="py-2 font-semibold">{(c?.real24h || 0) + (c?.seeded24h || 0)}</td>
-                    <td className="py-2">
-                      {c && (c.real24h + c.seeded24h) > 0
-                        ? <span className={c.real24h > 0 ? 'text-green-400 font-bold' : 'text-gray-400'}>{Math.round(c.real24h / (c.real24h + c.seeded24h) * 100)}%</span>
-                        : <span className="text-gray-400">—</span>
-                      }
-                    </td>
                   </tr>
                   <tr>
                     <td className="py-2 font-medium">最近 7 天</td>
                     <td className="py-2 text-green-400 font-bold">{c?.real7d || 0}</td>
-                    <td className="py-2 text-gray-400">{c?.seeded7d || 0}</td>
-                    <td className="py-2 font-semibold">{(c?.real7d || 0) + (c?.seeded7d || 0)}</td>
-                    <td className="py-2">
-                      {c && (c.real7d + c.seeded7d) > 0
-                        ? <span className={c.real7d > 0 ? 'text-green-400 font-bold' : 'text-gray-400'}>{Math.round(c.real7d / (c.real7d + c.seeded7d) * 100)}%</span>
-                        : <span className="text-gray-400">—</span>
-                      }
-                    </td>
                   </tr>
                   <tr>
                     <td className="py-2 font-medium">全部</td>
-                    <td className="py-2 text-green-400 font-bold">{c?.real || 0}</td>
-                    <td className="py-2 text-gray-400">{c?.seeded || 0}</td>
-                    <td className="py-2 font-semibold">{c?.total || 0}</td>
-                    <td className="py-2">
-                      <span className={realPercent > 0 ? 'text-green-400 font-bold' : 'text-gray-400'}>{realPercent}%</span>
-                    </td>
+                    <td className="py-2 text-green-400 font-bold">{c?.total || 0}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Bot breakdown side by side */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-sm font-semibold text-green-400 mb-2 flex items-center gap-1">
-                <Eye className="h-4 w-4" /> 真實爬蟲（依 Bot）
-              </h3>
-              {(c?.realByBot?.length || 0) > 0 ? (
-                <div className="space-y-1">
-                  {c?.realByBot.map((b) => (
-                    <div key={b.bot} className="flex items-center justify-between p-2 bg-green-500/20 rounded text-sm">
-                      <Badge className={botColors[b.bot] || 'bg-white/10 text-gray-300'} variant="secondary">
-                        {b.bot}
-                      </Badge>
-                      <span className="font-bold text-green-400">{b.count}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 p-3 bg-white/5 rounded text-center">尚無真實爬蟲造訪</p>
-              )}
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                <EyeOff className="h-4 w-4" /> 模擬爬蟲（依 Bot）
-              </h3>
-              {(c?.seededByBot?.length || 0) > 0 ? (
-                <div className="space-y-1">
-                  {c?.seededByBot.map((b) => (
-                    <div key={b.bot} className="flex items-center justify-between p-2 bg-white/5 rounded text-sm">
-                      <Badge variant="outline" className="text-gray-400">
-                        {b.bot}
-                      </Badge>
-                      <span className="font-mono text-gray-400">{b.count}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 p-3 bg-white/5 rounded text-center">尚無模擬數據</p>
-              )}
-            </div>
+          {/* Bot breakdown */}
+          <div>
+            <h3 className="text-sm font-semibold text-green-400 mb-2 flex items-center gap-1">
+              <Eye className="h-4 w-4" /> 真實爬蟲（依 Bot）
+            </h3>
+            {(c?.realByBot?.length || 0) > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {c?.realByBot.map((b) => (
+                  <div key={b.bot} className="flex items-center justify-between p-2 bg-green-500/20 rounded text-sm">
+                    <Badge className={botColors[b.bot] || 'bg-white/10 text-gray-300'} variant="secondary">
+                      {b.bot}
+                    </Badge>
+                    <span className="font-bold text-green-400">{b.count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 p-3 bg-white/5 rounded text-center">尚無真實爬蟲造訪</p>
+            )}
           </div>
 
           {/* Recent REAL visits */}
