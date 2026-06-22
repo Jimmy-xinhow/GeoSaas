@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Shield, FileText, Globe, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Shield, Bot, FileText, Globe, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/shared/page-header';
@@ -14,7 +14,7 @@ interface SeedStatus {
   failed: number;
   isRunning: boolean;
   byIndustry: { industry: string; count: number }[];
-  crawler: { total: number };
+  crawler: { total: number; real: number };
   blogArticles: number;
 }
 
@@ -76,6 +76,27 @@ export default function AdminDashboardPage() {
                   <FileText className="h-6 w-6 text-purple-600 mx-auto mb-2" />
                   <p className="text-3xl font-bold text-purple-600">{data.blogArticles}</p>
                   <p className="text-sm text-muted-foreground">Blog 文章</p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Crawler Stats */}
+          <div>
+            <h2 className="text-lg font-semibold mb-3">AI 爬蟲數據（真實）</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Card>
+                <CardContent className="p-5 text-center">
+                  <Bot className="h-6 w-6 text-gray-600 mx-auto mb-2" />
+                  <p className="text-3xl font-bold">{data.crawler.total}</p>
+                  <p className="text-sm text-muted-foreground">真實總造訪</p>
+                </CardContent>
+              </Card>
+              <Card className="border-green-200">
+                <CardContent className="p-5 text-center">
+                  <Bot className="h-6 w-6 text-green-600 mx-auto mb-2" />
+                  <p className="text-3xl font-bold text-green-600">{data.crawler.real}</p>
+                  <p className="text-sm text-green-700 font-medium">真實爬蟲</p>
                 </CardContent>
               </Card>
             </div>
