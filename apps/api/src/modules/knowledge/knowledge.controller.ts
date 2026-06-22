@@ -1,9 +1,22 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Res,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { KnowledgeService } from './knowledge.service';
 import { CreditService } from '../billing/credit.service';
-import { CreateQaDto, UpdateQaDto, BatchCreateQaDto, AiGenerateQaDto } from './dto';
+import { CreateQaDto, UpdateQaDto, BatchCreateQaDto, AiGenerateQaDto, CommitKnowledgeImportDto } from './dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 
@@ -62,6 +75,40 @@ export class KnowledgeController {
     @CurrentUser('role') role: string,
   ) {
     return this.knowledgeService.batchCreate(siteId, dto.items, userId, role);
+  }
+
+  @Get('import/quota')
+  @ApiOperation({ summary: 'Get monthly AI import quota for knowledge uploads' })
+  importQuota(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.knowledgeService.getImportQuotaForSite(siteId, userId, role);
+  }
+
+  @Post('import/preview')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @ApiOperation({ summary: 'Upload a knowledge file and preview AI extracted Q&A drafts' })
+  previewImport(
+    @Param('siteId') siteId: string,
+    @UploadedFile() file: any,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.knowledgeService.previewImport(siteId, file, userId, role);
+  }
+
+  @Post('import/:jobId/commit')
+  @ApiOperation({ summary: 'Commit selected imported Q&A drafts into the knowledge base' })
+  commitImport(
+    @Param('siteId') siteId: string,
+    @Param('jobId') jobId: string,
+    @Body() dto: CommitKnowledgeImportDto,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.knowledgeService.commitImport(siteId, jobId, dto.items, userId, role);
   }
 
   @Put(':qaId')

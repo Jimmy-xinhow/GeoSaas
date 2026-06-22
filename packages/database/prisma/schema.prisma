@@ -93,6 +93,7 @@ model User {
   cmsConnections               CmsConnection[]
   requestedFixRuns             SiteFixRun[]                 @relation("SiteFixRunRequester")
   creditTransactions           CreditTransaction[]
+  knowledgeImportJobs          KnowledgeImportJob[]
   planGrantsReceived           PlanGrant[]                  @relation("PlanGrantRecipient")
   planGrantsCreated            PlanGrant[]                  @relation("PlanGrantAdmin")
   passwordResetTokens          PasswordResetToken[]
@@ -210,6 +211,7 @@ model Site {
   competitors                  Competitor[]
   contents                     Content[]
   qas                          SiteQa[]
+  knowledgeImportJobs          KnowledgeImportJob[]
   crawlerVisits                CrawlerVisit[]
   crawlerRobotsChecks          CrawlerRobotsCheck[]
   blogArticles                 BlogArticle[]
@@ -545,6 +547,32 @@ model SiteQa {
   updatedAt DateTime @updatedAt
 
   @@map("site_qas")
+}
+
+model KnowledgeImportJob {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId            String
+  site              Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  fileName          String
+  fileHash          String
+  mimeType          String?
+  byteSize          Int
+  extractedChars    Int      @default(0)
+  generatedCount    Int      @default(0)
+  importedCount     Int      @default(0)
+  countsTowardQuota Boolean  @default(true)
+  status            String   @default("previewed") // previewed | imported | failed
+  errorMessage      String?  @db.Text
+  draftJson         Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([siteId, fileHash, createdAt])
+  @@index([status, createdAt])
+  @@map("knowledge_import_jobs")
 }
 
 model CrawlerVisit {

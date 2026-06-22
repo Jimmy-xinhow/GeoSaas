@@ -122,6 +122,37 @@ export interface GeneratedQa {
   category: string;
 }
 
+export interface KnowledgeImportDraftItem extends GeneratedQa {
+  confidence?: number;
+  sourceExcerpt?: string;
+}
+
+export interface KnowledgeImportQuota {
+  used: number;
+  limit: number;
+  remaining: number;
+  resetAt: string | null;
+}
+
+export interface KnowledgeImportPreview {
+  jobId: string;
+  reused: boolean;
+  quota: KnowledgeImportQuota;
+  file: {
+    name: string;
+    size: number;
+    mimeType?: string | null;
+    extractedChars: number;
+  };
+  items: KnowledgeImportDraftItem[];
+  warnings: string[];
+}
+
+export interface KnowledgeImportCommitResult {
+  imported: number;
+  items: QaItem[];
+}
+
 export function useAiGenerateQa(siteId: string) {
   return useMutation({
     mutationFn: async (excludeQuestions?: string[]) => {
@@ -130,6 +161,61 @@ export function useAiGenerateQa(siteId: string) {
         { excludeQuestions },
       );
       return data;
+    },
+  });
+}
+
+export function useKnowledgeImportQuota(siteId: string) {
+  return useQuery({
+    queryKey: ['knowledge-import-quota', siteId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<KnowledgeImportQuota>(
+        `/sites/${siteId}/knowledge/import/quota`,
+      );
+      return data;
+    },
+    enabled: !!siteId,
+  });
+}
+
+export function usePreviewKnowledgeImport(siteId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data } = await apiClient.post<KnowledgeImportPreview>(
+        `/sites/${siteId}/knowledge/import/preview`,
+        formData,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['knowledge-import-quota', siteId] });
+    },
+  });
+}
+
+export function useCommitKnowledgeImport(siteId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      jobId,
+      items,
+    }: {
+      jobId: string;
+      items: CreateQaPayload[];
+    }) => {
+      const { data } = await apiClient.post<KnowledgeImportCommitResult>(
+        `/sites/${siteId}/knowledge/import/${jobId}/commit`,
+        { items },
+      );
+      return data;
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<QaItem[]>(['knowledge', siteId], result.items);
+      queryClient.invalidateQueries({ queryKey: ['knowledge', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['knowledge-import-quota', siteId] });
     },
   });
 }

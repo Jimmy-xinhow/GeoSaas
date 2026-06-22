@@ -27,6 +27,7 @@ import {
   Brain,
   Filter,
   Download,
+  FileUp,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,15 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { PageHeader } from '@/components/shared/page-header'
+import { SiteWorkspaceTabs } from '@/components/layout/site-workspace-tabs'
 import { useSite, useUpdateSiteProfile, type SiteProfile } from '@/hooks/use-sites'
 import {
   useKnowledge,
@@ -51,8 +61,13 @@ import {
   useDeleteQa,
   useAiGenerateQa,
   useExportKnowledgeXlsx,
+  useKnowledgeImportQuota,
+  usePreviewKnowledgeImport,
+  useCommitKnowledgeImport,
   type QaItem,
   type GeneratedQa,
+  type KnowledgeImportDraftItem,
+  type KnowledgeImportPreview,
 } from '@/hooks/use-knowledge'
 import { isBillingRequiredError } from '@/lib/billing-error'
 
@@ -66,6 +81,11 @@ const CATEGORY_MAP: Record<string, { label: string; color: string }> = {
   consumer: { label: '消費者疑慮', color: 'bg-red-500/20 text-red-300' },
   education: { label: '教育延伸', color: 'bg-purple-500/20 text-purple-300' },
 }
+
+const CATEGORY_OPTIONS = Object.entries(CATEGORY_MAP).map(([value, item]) => ({
+  value,
+  label: item.label,
+}))
 
 // ── Site Profile Form (collapsible) ──
 function ProfileSection({
@@ -414,12 +434,19 @@ function QaRow({
 function AddQaForm({
   siteId,
   onClose,
+  initialCategory,
+  onCreated,
 }: {
   siteId: string
   onClose: () => void
+  initialCategory?: string | null
+  onCreated?: (category: string) => void
 }) {
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
+  const [category, setCategory] = useState(
+    initialCategory && CATEGORY_MAP[initialCategory] ? initialCategory : 'product',
+  )
   const createMutation = useCreateQa(siteId)
 
   const handleSubmit = async () => {
@@ -428,9 +455,11 @@ function AddQaForm({
       await createMutation.mutateAsync({
         question: question.trim(),
         answer: answer.trim(),
+        category,
       })
       setQuestion('')
       setAnswer('')
+      onCreated?.(category)
       onClose()
       toast.success('問答已新增')
     } catch (err: any) {
@@ -439,8 +468,32 @@ function AddQaForm({
   }
 
   return (
-    <Card className="border-blue-200 bg-blue-500/10">
-      <CardContent className="p-4 space-y-3">
+    <div className="scroll-mt-24 rounded-lg border border-blue-400/40 bg-blue-500/10">
+      <div className="border-b border-blue-400/20 px-4 py-3">
+        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <Plus className="h-4 w-4 text-blue-300" />
+          手動新增 Q&A
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          適合把客戶提供但網站上沒有的商品、服務、價格、適合對象或注意事項直接補進 AI 可讀知識庫。
+        </p>
+      </div>
+      <div className="p-4 space-y-4">
+        <div className="max-w-xs">
+          <Label htmlFor="manual-qa-category" className="text-sm">分類</Label>
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger id="manual-qa-category" className="mt-1 bg-white/5">
+              <SelectValue placeholder="選擇分類" />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORY_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div>
           <Label htmlFor="manual-qa-question" className="text-sm">問題</Label>
           <Textarea
@@ -448,7 +501,7 @@ function AddQaForm({
             aria-label="問題"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="例：你們的服務如何收費？"
+            placeholder="例：這項商品適合哪些客戶？"
             className="mt-1 bg-white/5 text-sm"
             rows={2}
           />
@@ -460,7 +513,7 @@ function AddQaForm({
             aria-label="回答"
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
-            placeholder="例：我們提供免費方案和 Pro 方案，Pro 方案每月 NT$1090..."
+            placeholder="例：這項商品適合正在尋找...的客戶，主要特色包含..."
             className="mt-1 bg-white/5 text-sm"
             rows={3}
           />
@@ -477,14 +530,14 @@ function AddQaForm({
             ) : (
               <Plus className="h-3.5 w-3.5 mr-1" />
             )}
-            新增
+            新增 Q&A
           </Button>
           <Button size="sm" variant="outline" onClick={onClose}>
             取消
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
 
@@ -519,7 +572,7 @@ function AiGeneratingProgress() {
   const progress = Math.min(((step + 1) / AI_PROGRESS_STEPS.length) * 100, 95)
 
   return (
-    <Card className="border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50">
+    <Card className="border-purple-200">
       <CardContent className="py-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="relative">
@@ -941,6 +994,257 @@ function AiGeneratePreview({
   )
 }
 
+function KnowledgeImportPreviewPanel({
+  preview,
+  siteId,
+  onClose,
+  onImported,
+}: {
+  preview: KnowledgeImportPreview
+  siteId: string
+  onClose: () => void
+  onImported: (importedCount: number) => void
+}) {
+  const [items, setItems] = useState<KnowledgeImportDraftItem[]>(preview.items)
+  const [focusedIndex, setFocusedIndex] = useState(0)
+  const [selected, setSelected] = useState<Set<number>>(
+    new Set(preview.items.map((_, index) => index)),
+  )
+  const commitImport = useCommitKnowledgeImport(siteId)
+
+  useEffect(() => {
+    setItems(preview.items)
+    setSelected(new Set(preview.items.map((_, index) => index)))
+    setFocusedIndex(0)
+  }, [preview.jobId, preview.items])
+
+  const focusedItem = items[focusedIndex]
+  const quotaText =
+    preview.quota.limit === -1
+      ? 'AI 匯入不限額度'
+      : `本月 AI 匯入 ${preview.quota.used}/${preview.quota.limit}`
+
+  const toggleItem = (index: number) => {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    setSelected((current) =>
+      current.size === items.length ? new Set() : new Set(items.map((_, index) => index)),
+    )
+  }
+
+  const updateItem = (
+    index: number,
+    field: 'question' | 'answer' | 'category',
+    value: string,
+  ) => {
+    setItems((current) => {
+      const next = [...current]
+      next[index] = { ...next[index], [field]: value }
+      return next
+    })
+  }
+
+  const handleCommit = async () => {
+    const selectedItems = items
+      .filter((_, index) => selected.has(index))
+      .map(({ question, answer, category }) => ({ question, answer, category }))
+    if (selectedItems.length === 0) return
+
+    try {
+      const result = await commitImport.mutateAsync({
+        jobId: preview.jobId,
+        items: selectedItems,
+      })
+      toast.success(`已匯入 ${result.imported} 筆 Q&A`)
+      onImported(result.imported)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || '匯入失敗')
+    }
+  }
+
+  return (
+    <div className="scroll-mt-24 rounded-lg border border-cyan-400/40 bg-cyan-500/10">
+      <div className="border-b border-cyan-400/20 px-4 py-3">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <FileUp className="h-4 w-4 text-cyan-300" />
+              檔案匯入預覽
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              {preview.file.name} · {items.length} 筆草稿 · {quotaText}
+              {preview.reused ? ' · 已重用上次預覽' : ''}
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" className="self-start lg:self-auto" onClick={onClose}>
+            <X className="h-4 w-4 mr-1" />
+            關閉
+          </Button>
+        </div>
+        {preview.warnings.length > 0 && (
+          <div className="mt-3 space-y-1">
+            {preview.warnings.slice(0, 3).map((warning, index) => (
+              <p key={index} className="text-xs text-cyan-100/80">
+                {warning}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="p-4">
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)]">
+          <div className="rounded-lg border border-white/10 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+              <span className="text-xs text-muted-foreground">
+                已選取 {selected.size}/{items.length}
+              </span>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={toggleAll}>
+                {selected.size === items.length ? '取消全選' : '全選'}
+              </Button>
+            </div>
+            <div className="max-h-[420px] overflow-y-auto">
+              {items.map((item, index) => {
+                const isSelected = selected.has(index)
+                const isFocused = focusedIndex === index
+                return (
+                  <button
+                    key={`${item.question}-${index}`}
+                    type="button"
+                    className={`flex w-full items-start gap-2 border-b border-white/5 px-3 py-2 text-left transition-colors last:border-b-0 ${
+                      isFocused
+                        ? 'bg-cyan-500/20 border-l-2 border-l-cyan-400'
+                        : isSelected
+                          ? 'bg-cyan-500/10'
+                          : 'bg-white/5 opacity-60'
+                    }`}
+                    onClick={() => setFocusedIndex(index)}
+                  >
+                    <span
+                      className="mt-0.5 flex-shrink-0"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        toggleItem(index)
+                      }}
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="h-4 w-4 text-cyan-300" />
+                      ) : (
+                        <Square className="h-4 w-4 text-gray-400" />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-medium text-white line-clamp-2">
+                        {item.question}
+                      </span>
+                      <span className="mt-1 block text-[11px] text-muted-foreground">
+                        {CATEGORY_MAP[item.category]?.label || item.category}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            {focusedItem ? (
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+                  <div>
+                    <Label className="text-xs font-semibold text-gray-300">分類</Label>
+                    <Select
+                      value={focusedItem.category}
+                      onValueChange={(value) => updateItem(focusedIndex, 'category', value)}
+                    >
+                      <SelectTrigger className="mt-1 bg-white/5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORY_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold text-gray-300">信心分數</Label>
+                    <div className="mt-1 h-10 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                      {typeof focusedItem.confidence === 'number'
+                        ? `${Math.round(focusedItem.confidence * 100)}%`
+                        : '未提供'}
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-300">問題</Label>
+                  <Textarea
+                    value={focusedItem.question}
+                    onChange={(event) => updateItem(focusedIndex, 'question', event.target.value)}
+                    className="mt-1 bg-white/5 text-sm"
+                    rows={2}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-300">回答</Label>
+                  <Textarea
+                    value={focusedItem.answer}
+                    onChange={(event) => updateItem(focusedIndex, 'answer', event.target.value)}
+                    className="mt-1 bg-white/5 text-sm"
+                    rows={7}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {focusedItem.answer.length} 字
+                  </p>
+                </div>
+                {focusedItem.sourceExcerpt && (
+                  <div>
+                    <Label className="text-xs font-semibold text-gray-300">檔案依據</Label>
+                    <p className="mt-1 rounded-md border border-white/10 bg-black/20 p-3 text-xs text-muted-foreground">
+                      {focusedItem.sourceExcerpt}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex min-h-[260px] items-center justify-center text-sm text-muted-foreground">
+                點擊左側項目以預覽和編輯
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-4">
+          <Button
+            className="bg-cyan-600 hover:bg-cyan-700 text-white"
+            onClick={handleCommit}
+            disabled={commitImport.isPending || selected.size === 0}
+          >
+            {commitImport.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4 mr-2" />
+            )}
+            匯入已選 {selected.size} 筆 Q&A
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            取消
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Saved Q&A Edit Panel (shows when clicking a saved Q&A) ──
 function SavedQaEditor({
   qa,
@@ -988,7 +1292,7 @@ function SavedQaEditor({
   }
 
   return (
-    <Card className="border-blue-200 bg-blue-500/10">
+    <Card className="border-blue-200">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
@@ -1138,9 +1442,11 @@ export default function KnowledgePage() {
 
   const { data: site, isLoading: siteLoading } = useSite(siteId)
   const { data: qas, isLoading: qasLoading } = useKnowledge(siteId)
+  const { data: importQuota } = useKnowledgeImportQuota(siteId)
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [aiResults, setAiResults] = useState<GeneratedQa[] | null>(null)
+  const [importPreview, setImportPreview] = useState<KnowledgeImportPreview | null>(null)
   const [isContinuing, setIsContinuing] = useState(false)
   const [showCompleteBanner, setShowCompleteBanner] = useState(false)
   const [completedCount, setCompletedCount] = useState(0)
@@ -1150,8 +1456,10 @@ export default function KnowledgePage() {
   const [currentPage, setCurrentPage] = useState(1)
 
   const aiGenerate = useAiGenerateQa(siteId)
+  const previewImport = usePreviewKnowledgeImport(siteId)
   const deleteMutation = useDeleteQa(siteId)
   const exportKnowledge = useExportKnowledgeXlsx(siteId)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const editingQa = useMemo(
     () => (editingQaId ? qas?.find((q) => q.id === editingQaId) || null : null),
@@ -1166,6 +1474,8 @@ export default function KnowledgePage() {
   }, [qas, editingQaId])
 
   const handleAiGenerate = async () => {
+    setShowAddForm(false)
+    setImportPreview(null)
     setShowCompleteBanner(false)
     try {
       const results = await aiGenerate.mutateAsync(undefined)
@@ -1210,6 +1520,27 @@ export default function KnowledgePage() {
       toast.success('Excel 檔案已開始下載')
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Excel 匯出失敗')
+    }
+  }
+
+  const handleImportClick = () => {
+    setShowAddForm(false)
+    setAiResults(null)
+    setEditingQaId(null)
+    fileInputRef.current?.click()
+  }
+
+  const handleImportFileSelected = async (file?: File) => {
+    if (!file) return
+    try {
+      const preview = await previewImport.mutateAsync(file)
+      setImportPreview(preview)
+      setShowCompleteBanner(false)
+      toast.success(preview.reused ? '已載入上次匯入預覽' : `已整理出 ${preview.items.length} 筆 Q&A 草稿`)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || '檔案匯入失敗')
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -1267,8 +1598,24 @@ export default function KnowledgePage() {
     setCurrentPage(1)
   }
 
+  const openManualForm = () => {
+    setEditingQaId(null)
+    setImportPreview(null)
+    setShowAddForm(true)
+  }
+
+  const handleManualCreated = (category: string) => {
+    setActiveCategory(category)
+    setCurrentPage(1)
+  }
+
   const isLoading = siteLoading || qasLoading
   const qaCount = qas?.length ?? 0
+  const importQuotaLabel = importQuota
+    ? importQuota.limit === -1
+      ? 'AI 匯入不限'
+      : `AI 匯入 ${importQuota.used}/${importQuota.limit}`
+    : null
 
   if (isLoading) {
     return <KnowledgeSkeleton />
@@ -1295,27 +1642,21 @@ export default function KnowledgePage() {
 
   return (
     <div className="space-y-4">
-      {/* Back link */}
-      <Link
-        href={`/sites/${siteId}`}
-        className="inline-flex items-center text-sm text-muted-foreground hover:text-white transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4 mr-1" />
-        返回網站詳情
-      </Link>
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept=".txt,.md,.markdown,.csv,.json,.html,.htm,.docx,.xlsx"
+        onChange={(event) => handleImportFileSelected(event.target.files?.[0])}
+      />
+      <SiteWorkspaceTabs siteId={siteId} siteName={site?.name} />
 
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BookOpen className="h-6 w-6 text-purple-600" />
-          <div>
-            <h1 className="text-2xl font-bold text-white">知識庫</h1>
-            <p className="text-sm text-muted-foreground">
-              {site.name} — AI 搜尋引擎收錄用問答
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="知識庫"
+        description={`${site.name} — AI 搜尋引擎收錄用問答`}
+        icon={BookOpen}
+      />
 
       {/* Section A: Site Profile */}
       <ProfileSection
@@ -1334,11 +1675,6 @@ export default function KnowledgePage() {
         />
       )}
 
-      {/* Add form */}
-      {showAddForm && (
-        <AddQaForm siteId={siteId} onClose={() => setShowAddForm(false)} />
-      )}
-
       {/* Persistent Workspace Panel */}
       <Card className="border-purple-200">
         <CardHeader className="pb-2">
@@ -1347,15 +1683,44 @@ export default function KnowledgePage() {
               <Pencil className="h-4 w-4 text-purple-600" />
               問答工作區
             </CardTitle>
-            {aiResults && aiResults.length > 0 && (
-              <Badge className="bg-purple-500/20 text-purple-300">
-                {aiResults.length} 筆 AI 建議待處理
-              </Badge>
-            )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {importQuotaLabel && (
+                <Badge variant="outline" className="border-cyan-400/40 text-cyan-200">
+                  {importQuotaLabel}
+                </Badge>
+              )}
+              {importPreview && (
+                <Badge className="bg-cyan-500/20 text-cyan-200">
+                  {importPreview.items.length} 筆匯入草稿待處理
+                </Badge>
+              )}
+              {aiResults && aiResults.length > 0 && (
+                <Badge className="bg-purple-500/20 text-purple-300">
+                  {aiResults.length} 筆 AI 建議待處理
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          {aiResults && aiResults.length > 0 ? (
+          {importPreview ? (
+            <KnowledgeImportPreviewPanel
+              preview={importPreview}
+              siteId={siteId}
+              onClose={() => setImportPreview(null)}
+              onImported={() => {
+                setImportPreview(null)
+                setCurrentPage(1)
+              }}
+            />
+          ) : showAddForm ? (
+            <AddQaForm
+              siteId={siteId}
+              initialCategory={activeCategory}
+              onClose={() => setShowAddForm(false)}
+              onCreated={handleManualCreated}
+            />
+          ) : aiResults && aiResults.length > 0 ? (
             /* Has AI results: show two-column layout */
             <AiGeneratePreview
               items={aiResults}
@@ -1377,19 +1742,41 @@ export default function KnowledgePage() {
             <div className="text-center py-8 text-muted-foreground">
               <Pencil className="h-8 w-8 mx-auto mb-3 text-gray-300" />
               <p className="text-sm">
-                點擊下方問答以編輯，或使用
+                點擊下方問答以編輯，或直接新增客戶提供的公開資訊。
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
                 <Button
-                  variant="link"
+                  variant="outline"
                   size="sm"
-                  className="px-1 text-purple-600"
+                  onClick={handleImportClick}
+                  disabled={previewImport.isPending || qaCount >= MAX_QA}
+                >
+                  {previewImport.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileUp className="h-4 w-4 mr-2" />
+                  )}
+                  匯入檔案
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={openManualForm}
+                  disabled={qaCount >= MAX_QA}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  手動新增 Q&A
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleAiGenerate}
                   disabled={aiGenerate.isPending || qaCount >= MAX_QA}
                 >
                   <Sparkles className="h-3.5 w-3.5 mr-1" />
                   AI 生成
                 </Button>
-                新問答
-              </p>
+              </div>
             </div>
           )}
         </CardContent>
@@ -1398,8 +1785,8 @@ export default function KnowledgePage() {
       {/* Section B: Saved Q&A List with category badges */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 flex-1">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -1413,7 +1800,20 @@ export default function KnowledgePage() {
                 {qaCount}/{MAX_QA}
               </Badge>
             </div>
-            <div className="flex gap-2 flex-shrink-0">
+            <div className="flex flex-wrap gap-2 flex-shrink-0 lg:justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleImportClick}
+                disabled={previewImport.isPending || qaCount >= MAX_QA}
+              >
+                {previewImport.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <FileUp className="h-4 w-4 mr-1.5" />
+                )}
+                匯入檔案
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -1443,11 +1843,11 @@ export default function KnowledgePage() {
               <Button
                 size="sm"
                 className="bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => setShowAddForm(true)}
+                onClick={openManualForm}
                 disabled={showAddForm || qaCount >= MAX_QA}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
-                手動新增
+                手動新增 Q&A
               </Button>
             </div>
           </div>
@@ -1500,6 +1900,19 @@ export default function KnowledgePage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={handleImportClick}
+                  disabled={previewImport.isPending}
+                >
+                  {previewImport.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileUp className="h-4 w-4 mr-2" />
+                  )}
+                  匯入檔案
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleAiGenerate}
                   disabled={aiGenerate.isPending}
                 >
@@ -1513,11 +1926,11 @@ export default function KnowledgePage() {
                 <Button
                   size="sm"
                   className="bg-blue-600 hover:bg-blue-700 text-white"
-                  onClick={() => setShowAddForm(true)}
+                  onClick={openManualForm}
                   disabled={showAddForm}
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  手動新增
+                  手動新增 Q&A
                 </Button>
               </div>
             </div>
@@ -1542,7 +1955,11 @@ export default function KnowledgePage() {
                           ? 'bg-blue-500/20 border-l-2 border-l-blue-500'
                           : 'hover:bg-white/5'
                       }`}
-                      onClick={() => setEditingQaId(isEditing ? null : qa.id)}
+                      onClick={() => {
+                        setShowAddForm(false)
+                        setImportPreview(null)
+                        setEditingQaId(isEditing ? null : qa.id)
+                      }}
                     >
                       <span className="text-xs text-muted-foreground w-6 text-right flex-shrink-0">
                         {globalIndex}
@@ -1563,6 +1980,8 @@ export default function KnowledgePage() {
                           className="h-7 w-7 p-0"
                           onClick={(e) => {
                             e.stopPropagation()
+                            setShowAddForm(false)
+                            setImportPreview(null)
                             setEditingQaId(qa.id)
                           }}
                         >
