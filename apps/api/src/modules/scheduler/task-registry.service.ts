@@ -215,7 +215,7 @@ export class TaskRegistryService implements OnModuleInit {
       this.logger.log(
         `client_daily batch: attempted=${r.attempted} generated=${r.generated} rejected=${r.rejected} skipped=${r.skipped} reasons=${reasonSummary || 'none'}`,
       );
-      if (r.attempted > 0 && r.generated === 0 && r.rejected > 0) {
+      if (r.attempted > 0 && r.generated === 0 && r.rejected > 0 && r.skipped === 0) {
         const failedSites = r.perSite
           .filter((site) => site.status === 'rejected' || site.status === 'error')
           .slice(0, 6)

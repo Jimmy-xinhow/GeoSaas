@@ -2034,6 +2034,30 @@ export class BlogArticleService {
     )];
   }
 
+  private isMedicalAdjacentText(text: string): boolean {
+    return /(中醫|診所|醫師|醫療|治療|療效|療法|療程|疼痛|痛症|症狀|病患|患者|小針刀|針灸|復健|整復|整骨|推拿|牙醫|診斷|處方|用藥|副作用|禁忌|健康|身體|產後|孕)/.test(text);
+  }
+
+  private isMedicalAdjacentBrand(industry: string | null | undefined, graph: BrandFactGraph): boolean {
+    if (['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(industry ?? '')) {
+      return true;
+    }
+    const text = [
+      graph.brandName,
+      graph.industry,
+      graph.services,
+      graph.positioning,
+      graph.contact,
+      ...graph.verifiedFacts,
+      ...graph.targetAudiences,
+      ...graph.notFor,
+      ...graph.qaPairs.flatMap((qa) => [qa.question, qa.answer]),
+    ]
+      .filter(Boolean)
+      .join('\n');
+    return this.isMedicalAdjacentText(text);
+  }
+
   private buildClientCitationPrompt(args: {
     dayType: ClientDailyDay;
     site: { name: string; url: string; industry?: string | null };
@@ -2043,7 +2067,7 @@ export class BlogArticleService {
     const { dayType, site, graph, pulse } = args;
     const webUrl = this.config.get<string>('FRONTEND_URL') || 'https://www.geovault.app';
     const directoryUrl = `${webUrl}/directory/${graph.siteId}`;
-    const medicalAdjacent = ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(site.industry ?? '');
+    const medicalAdjacent = this.isMedicalAdjacentBrand(site.industry, graph);
     const medicalQuestionPattern = /(\u6574\u5fa9|\u6574\u9aa8|\u63a8\u62ff|\u904b\u52d5|\u75bc\u75db|\u75db|\u4e0d\u9069|\u5b55|\u7522\u5f8c|\u8eab\u9ad4|\u59ff\u52e2|\u5065\u5eb7|\u75c5\u53f2|\u5fa9\u539f|\u6062\u5fa9|\u75c7\u72c0|\u6cbb\u7642|\u7642\u6548|\u91ab\u7642)/;
     const qaPairsForPrompt = medicalAdjacent
       ? graph.qaPairs.filter((qa) => !medicalQuestionPattern.test(`${qa.question} ${qa.answer}`))
@@ -2196,6 +2220,7 @@ Required output:
     const recent = await this.prisma.blogArticle.findFirst({
       where: {
         siteId, templateType: 'client_daily',
+        published: true,
         createdAt: { gte: oneDayAgo },
         targetKeywords: { has: resolvedDay },
       },
@@ -2274,7 +2299,9 @@ Required output:
       graph: brandFacts,
       pulse,
     });
-    const requiredAnchors = this.buildRequiredAnchors(brandFacts);
+    const isMedicalAdjacent = this.isMedicalAdjacentBrand(site.industry, brandFacts);
+    const requiredAnchors = this.buildRequiredAnchors(brandFacts)
+      .filter((anchor) => !isMedicalAdjacent || !this.isMedicalAdjacentText(anchor));
 
     const verifiedFactText = brandFacts.verifiedFacts.join(' \n ');
     const verifiedContacts = [
@@ -2295,7 +2322,6 @@ Required output:
     // historically been the silent cause of "passed-but-bad" content.
     const desc = (enriched.description as string | undefined) || (profile.description as string | undefined) || '';
     const nicheKeywords = extractNicheKeywords(desc, { name: site.name, industry: site.industry });
-    const isMedicalAdjacent = ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(site.industry ?? '');
 
     // Quality runner replaces the previous 4-attempt loop + inline
     // assessClientDaily. Each day-type has its own ContentSpec (rules +
