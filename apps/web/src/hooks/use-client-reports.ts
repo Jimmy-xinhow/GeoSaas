@@ -335,6 +335,23 @@ export function useUpdateClientDailyArticleReview(slug: string) {
   });
 }
 
+export function useRepairClientDailyArticleReview(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.post<ClientDailyArticleReview>(
+        `/blog/client-daily/articles/${slug}/repair`,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client-reports', 'client-daily-review', slug] });
+      qc.invalidateQueries({ queryKey: ['client-reports', 'client-daily-list'] });
+      qc.invalidateQueries({ queryKey: ['client-reports', 'client-daily-stats'] });
+    },
+  });
+}
+
 export function useClientDailyList(siteId: string, page: number, limit = 30) {
   return useQuery({
     queryKey: ['client-reports', 'client-daily-list', siteId, page, limit],

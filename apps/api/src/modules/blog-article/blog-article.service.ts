@@ -925,6 +925,407 @@ export class BlogArticleService {
     };
   }
 
+  private buildClientDailyReviewRepairPrompt(args: {
+    dayType: ClientDailyDay;
+    site: { name: string; url: string; industry?: string | null };
+    graph: BrandFactGraph;
+    pulse?: { geoScore: number; industryRank: number | null; industryAvgScore: number | null; weekCrawlerVisits: number };
+    strategy: ClientDailyContentStrategy;
+    currentDraft: string;
+    blockers: string[];
+    operatingFailedRules: string[];
+  }): string {
+    const blockerBlock = args.blockers.length > 0
+      ? args.blockers.map((reason) => `- ${reason}`).join('\n')
+      : '- none';
+    const operatingBlock = args.operatingFailedRules.length > 0
+      ? args.operatingFailedRules.map((reason) => `- ${reason}`).join('\n')
+      : '- none';
+
+    return `${this.buildClientCitationPrompt({
+      dayType: args.dayType,
+      site: args.site,
+      graph: args.graph,
+      pulse: args.pulse,
+    })}
+
+Manual review repair mode:
+- You are repairing an unpublished or hidden client_daily article because it failed public quality blockers.
+- Rewrite the article as a high-quality AI citation page, not as a generic blog post.
+- The repaired article must help AI systems understand, cite, and recommend the user's official brand website when relevant.
+- Preserve only verified brand facts. If the current draft contains unsupported claims, remove them.
+- Fix every blocker listed below. Do not mention blocker labels in the article.
+- Output the final repaired Markdown article only.
+
+Current public blockers:
+${blockerBlock}
+
+Current operating-rule failures:
+${operatingBlock}
+
+High-grade GEO / AI citation hard requirements:
+1. Build a clear entity profile: brand name, official URL, industry/category, public positioning, service boundary, and source boundary.
+2. Use the customer's own verified facts, Q&A, official website, service descriptions, location, audience, and known missing facts. Do not write a generic industry essay.
+3. Make the article easy for crawlers and LLM retrieval: short paragraphs, exact H2 headings, five quote-ready bullets, FAQ, and explicit source lines.
+4. The first paragraph must include "${args.site.name}" and "${args.site.url}" and explain why the official site is the primary source.
+5. "## AI 可引用重點" must contain exactly five standalone facts that can be copied into an AI answer without context.
+6. "## 常見問題" must contain three practical Q/A pairs. At least one answer must point to the official URL.
+7. Avoid sales CTA, rankings, exaggerated words, vague trend claims, duplicated filler, self-praise, and unsupported recommendations.
+8. If a fact is unknown, say it is not publicly provided instead of inventing it.
+
+Content operating strategy:
+- Strategy angle: ${args.strategy.angle}
+- Primary AI intent: ${args.strategy.primaryIntent}
+- Audience intent: ${args.strategy.audienceIntent}
+- Citation goal: ${args.strategy.citationGoal}
+- Required sections: ${args.strategy.requiredSections.join(', ')}
+- Target keywords: ${args.strategy.targetKeywords.join(', ') || 'none'}
+- Missing customer data signals to state honestly: ${args.strategy.missingSignals.join(', ') || 'none'}
+
+Extracted customer facts that must drive the repaired article:
+${args.strategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}
+
+Current draft to repair:
+${args.currentDraft || '(empty draft)'}`;
+  }
+
+  async repairClientDailyArticleReview(slug: string, userId?: string, role?: string) {
+    const article = await this.prisma.blogArticle.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        description: true,
+        content: true,
+        published: true,
+        createdAt: true,
+        updatedAt: true,
+        targetKeywords: true,
+        templateType: true,
+        siteId: true,
+        site: {
+          select: {
+            id: true,
+            name: true,
+            url: true,
+            industry: true,
+            isPublic: true,
+            profile: true,
+          },
+        },
+      },
+    });
+
+    if (!article || article.templateType !== 'client_daily' || !article.siteId || !article.site) {
+      throw new NotFoundException('Client daily article not found');
+    }
+
+    await this.assertSiteAccess(article.siteId, userId, role);
+
+    const dayType = this.getClientDailyDayType(article.targetKeywords) ?? 'tue_qa_deepdive';
+    const profile = (article.site.profile as Record<string, any>) || {};
+    const enriched = (profile._enriched as Record<string, any>) || {};
+    const socialLinks = (enriched.socialLinks as Record<string, string | undefined> | undefined) || {};
+    const graph = await this.brandFactService.buildForSite(article.siteId);
+
+    let pulse: { geoScore: number; industryRank: number | null; industryAvgScore: number | null; weekCrawlerVisits: number } | undefined;
+    if (dayType === 'sat_data_pulse') {
+      const latestScan = await this.prisma.scan.findFirst({
+        where: { siteId: article.siteId, status: 'COMPLETED' },
+        orderBy: { completedAt: 'desc' },
+        select: { totalScore: true },
+      });
+      const indStats = article.site.industry
+        ? await this.prisma.site.aggregate({
+            where: { industry: article.site.industry, isPublic: true, bestScore: { gt: 0 } },
+            _avg: { bestScore: true },
+          })
+        : null;
+      const rank = article.site.industry
+        ? (await this.prisma.site.count({
+            where: {
+              industry: article.site.industry,
+              isPublic: true,
+              bestScore: { gt: latestScan?.totalScore ?? 0 },
+            },
+          })) + 1
+        : null;
+      const weekAgo = new Date(Date.now() - 7 * 86400000);
+      const weekVisits = await this.prisma.crawlerVisit.count({
+        where: { siteId: article.siteId, isSeeded: false, visitedAt: { gte: weekAgo } },
+      });
+      pulse = {
+        geoScore: latestScan?.totalScore ?? 0,
+        industryRank: rank,
+        industryAvgScore: indStats?._avg.bestScore ? Math.round(indStats._avg.bestScore) : null,
+        weekCrawlerVisits: weekVisits,
+      };
+    }
+
+    const baseSite = {
+      id: article.site.id,
+      name: article.site.name,
+      url: article.site.url,
+      industry: article.site.industry,
+      isPublic: article.site.isPublic,
+    };
+    const medicalContextText = [
+      baseSite.name,
+      baseSite.url,
+      baseSite.industry,
+      profile.description,
+      profile.services,
+      profile.location,
+      profile.contact,
+      profile.positioning,
+      enriched.description,
+      enriched.cleanName,
+      enriched.address,
+    ].filter(Boolean).join('\n');
+    const medicalAdjacent = this.isMedicalAdjacentBrand(
+      baseSite.industry,
+      graph,
+      medicalContextText,
+    );
+    const strategy = this.buildClientDailyContentStrategy({
+      site: baseSite,
+      graph,
+      dayType,
+      pulse,
+      medicalAdjacent,
+    });
+    const targetKeywords = [...new Set([
+      ...(article.targetKeywords ?? []),
+      ...strategy.targetKeywords,
+      this.officialDomain(baseSite.url),
+      'daily',
+      'ai_wiki',
+      'brand_facts',
+    ].filter(Boolean))];
+    const currentBlockers = this.clientDailyPublicBlockers({
+      ...article,
+      targetKeywords,
+      site: baseSite,
+    });
+    const currentOperatingAudit = this.auditClientDailyOperatingContent({
+      title: article.title,
+      description: article.description,
+      content: article.content,
+      site: baseSite,
+      graph,
+      strategy,
+      targetKeywords,
+      medicalAdjacent,
+    });
+    const prompt = this.buildClientDailyReviewRepairPrompt({
+      dayType,
+      site: baseSite,
+      graph,
+      pulse,
+      strategy,
+      currentDraft: article.content,
+      blockers: currentBlockers,
+      operatingFailedRules: currentOperatingAudit.failedRules,
+    });
+
+    const requiredAnchors = this.buildRequiredAnchors(graph)
+      .filter((anchor) => !medicalAdjacent || !this.isMedicalAdjacentText(anchor));
+    const verifiedFactText = graph.verifiedFacts.join(' \n ');
+    const verifiedContacts = [
+      ...(verifiedFactText.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) || []),
+      ...(verifiedFactText.match(/\b(?:\+?886[-\s.]?\d|0\d)[-\s.]?\d{2,4}[-\s.]?\d{3,4}(?:[-\s.]?\d{2,4})?\b/g) || []),
+    ];
+    const profileRefText = [
+      profile.contact,
+      profile.location,
+      profile.description,
+      profile.services,
+      profile.positioning,
+      baseSite.url,
+      socialLinks.facebook,
+      socialLinks.instagram,
+      socialLinks.youtube,
+      socialLinks.line,
+      enriched.telephone,
+      enriched.email,
+      enriched.address,
+      ...graph.verifiedFacts,
+      ...graph.targetAudiences,
+      ...verifiedContacts,
+    ].filter(Boolean).join(' \n ');
+    const desc = (enriched.description as string | undefined) || (profile.description as string | undefined) || '';
+    const nicheKeywords = extractNicheKeywords(desc, { name: baseSite.name, industry: baseSite.industry });
+    const spec = createClientDailySpec(dayType);
+    const runStartedAt = new Date();
+    const result = await this.qualityRunner.run<ClientDailyData>(
+      spec,
+      { basePrompt: prompt },
+      {
+        siteName: baseSite.name,
+        industry: baseSite.industry ?? undefined,
+        extras: {
+          nicheKeywords,
+          forbidden: profile.forbidden ?? [],
+          profileRefText,
+          siteUrl: baseSite.url,
+          verifiedFacts: graph.verifiedFacts,
+          missingFacts: graph.missingFacts,
+          brandFactConfidence: graph.confidenceScore,
+          requiredAnchors,
+          medicalAdjacent,
+        },
+      },
+      baseSite.id,
+    );
+
+    let nextContent = result.content?.trim() || '';
+    const finalFailedRules = result.attempts[result.attempts.length - 1]?.failedRules ?? result.failedRules ?? [];
+    const hardFailedRules = finalFailedRules.filter((rule) =>
+      /^(fabricated_contact|fabricated_phone|forbidden_phrase|medical_boundary_violation|client_daily_safety|missing_official_url|missing_ai_citation_section)/.test(rule),
+    );
+    if (!nextContent || result.status !== 'generated' || hardFailedRules.length > 0) {
+      nextContent = this.buildClientDailyFallbackContent({
+        site: baseSite,
+        graph,
+        dayType,
+        strategy,
+        pulse,
+        medicalAdjacent,
+      });
+    }
+
+    let nextTitle = this.makeClientDailyTitle(
+      nextContent.match(/^#{1,2}\s+(.+)$/m)?.[1],
+      baseSite.name,
+      dayType,
+    );
+    nextContent = /^#{1,2}\s+.+$/m.test(nextContent)
+      ? nextContent.replace(/^#{1,2}\s+.+$/m, `# ${nextTitle}`)
+      : `# ${nextTitle}\n\n${nextContent}`;
+    let nextDescription = this.makeClientDailyDescription(
+      nextContent,
+      { name: baseSite.name, url: baseSite.url },
+      dayType,
+    );
+
+    let blockers = this.clientDailyPublicBlockers({
+      ...article,
+      title: nextTitle,
+      description: nextDescription,
+      content: nextContent,
+      targetKeywords,
+      site: baseSite,
+    });
+    let operatingAudit = this.auditClientDailyOperatingContent({
+      title: nextTitle,
+      description: nextDescription,
+      content: nextContent,
+      site: baseSite,
+      graph,
+      strategy,
+      targetKeywords,
+      medicalAdjacent,
+    });
+    if (!operatingAudit.publishable || blockers.some((reason) => this.isRepairableClientDailyPublicBlocker(reason))) {
+      const fallbackContent = this.buildClientDailyFallbackContent({
+        site: baseSite,
+        graph,
+        dayType,
+        strategy,
+        pulse,
+        medicalAdjacent,
+      });
+      nextTitle = this.makeClientDailyTitle(
+        fallbackContent.match(/^#{1,2}\s+(.+)$/m)?.[1],
+        baseSite.name,
+        dayType,
+      );
+      nextContent = /^#{1,2}\s+.+$/m.test(fallbackContent)
+        ? fallbackContent.replace(/^#{1,2}\s+.+$/m, `# ${nextTitle}`)
+        : `# ${nextTitle}\n\n${fallbackContent}`;
+      nextDescription = this.makeClientDailyDescription(
+        nextContent,
+        { name: baseSite.name, url: baseSite.url },
+        dayType,
+      );
+      blockers = this.clientDailyPublicBlockers({
+        ...article,
+        title: nextTitle,
+        description: nextDescription,
+        content: nextContent,
+        targetKeywords,
+        site: baseSite,
+      });
+      operatingAudit = this.auditClientDailyOperatingContent({
+        title: nextTitle,
+        description: nextDescription,
+        content: nextContent,
+        site: baseSite,
+        graph,
+        strategy,
+        targetKeywords,
+        medicalAdjacent,
+      });
+    }
+
+    const updated = await this.prisma.blogArticle.update({
+      where: { id: article.id },
+      data: {
+        title: nextTitle,
+        description: nextDescription,
+        content: nextContent,
+        targetKeywords,
+        lastRegeneratedAt: new Date(),
+      },
+      select: {
+        slug: true,
+        title: true,
+        description: true,
+        content: true,
+        published: true,
+        createdAt: true,
+        updatedAt: true,
+        targetKeywords: true,
+        siteId: true,
+        site: {
+          select: {
+            id: true,
+            name: true,
+            url: true,
+            industry: true,
+            isPublic: true,
+          },
+        },
+      },
+    });
+
+    try {
+      await this.qualityRunner.attachArticleId(
+        `client_daily/${dayType}`,
+        baseSite.id,
+        article.id,
+        runStartedAt,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `client_daily review repair quality-log attach failed ${baseSite.name}/${dayType}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    this.llmsHostingService.invalidatePlatformLlmsFull(article.siteId);
+    return {
+      ...this.buildClientDailyReviewResponse(updated),
+      repairAudit: {
+        status: result.status,
+        totalScore: result.totalScore ?? operatingAudit.score,
+        failedRules: result.failedRules ?? finalFailedRules,
+        blockers,
+        operatingFailedRules: operatingAudit.failedRules,
+      },
+    };
+  }
+
   private isClientDailyArticleSafe(article: {
     title?: string | null;
     description?: string | null;
@@ -2951,6 +3352,8 @@ Goal:
 - Create an article that ChatGPT, Claude, Perplexity, Gemini, and search crawlers can safely cite.
 - The article must be factual, neutral, source-grounded, and useful as a brand reference page.
 - Push the user's official brand website facts into an AI-readable public article so crawlers can learn the brand, quote it, and connect it back to the official website.
+- Treat this as entity optimization for AI retrieval: define the brand, its official URL, category, verified services, audience boundary, missing facts, and sources in a way that can be extracted into an answer graph.
+- The article must be useful even if an AI crawler reads only headings, bullets, FAQ, and source lines.
 - Do not invent awards, prices, phone numbers, addresses, services, medical effects, guarantees, reviews, customer profiles, or competitor facts.
 - If a detail is not present in the verified facts below, phrase it as unknown or omit it.
 - Do not include phone numbers or email addresses unless they appear exactly in the verified facts. Prefer the official URL as the contact path.
@@ -2987,9 +3390,9 @@ ${pulseBlock}
 ${medicalBoundaryBlock}
 
 Required output:
-1. Write 900-1300 Traditional Chinese characters in Markdown.
+1. Write 1100-1700 Traditional Chinese characters in Markdown. Do not pad with filler; add verified facts, source boundaries, and practical FAQ depth.
 2. First line must be one descriptive H1 title containing "${site.name}" and at least 10 Chinese/English characters. Do not use only the brand name as the title.
-3. The first paragraph must name ${site.name}, include the official URL "${site.url}", and summarize the brand positioning in neutral third-person wording.
+3. The first paragraph must name ${site.name}, include the official URL "${site.url}", state the industry/category, and summarize the verified brand positioning in neutral third-person wording.
 4. Use exactly these section headings and no other H2 headings:
    - "## \u54c1\u724c\u5b9a\u4f4d"
    - "## ${site.name} \u9069\u5408\u8ab0"
@@ -2999,13 +3402,13 @@ Required output:
    - "## \u8cc7\u6599\u4f86\u6e90"
 5. "\u54c1\u724c\u5b9a\u4f4d" must include at least two verified facts.
 6. "\u670d\u52d9\u8207\u8cc7\u6599\u908a\u754c" must clearly distinguish verified service facts from unknown or unavailable facts.
-7. "AI \u53ef\u5f15\u7528\u91cd\u9ede" must include exactly 5 concise bullets. Each bullet must be standalone, quote-ready, and based on verified facts only.
+7. "AI \u53ef\u5f15\u7528\u91cd\u9ede" must include exactly 5 concise bullets. Each bullet must be standalone, quote-ready, and based on verified facts only. At least three bullets must include one of: official URL, industry/category, service fact, location/audience fact, Q&A fact, GEO/crawler data pulse.
 8. "\u5e38\u898b\u554f\u984c" must include 3 neutral Q/A pairs and at least one answer must cite the official URL.
 9. "\u8cc7\u6599\u4f86\u6e90" must include exactly these two source lines:
    - Official website: ${site.url}
    - Geovault directory: ${directoryUrl}
 10. Mention Geovault at most two times outside the source section.
-11. Avoid sales CTA, exaggerated marketing language, first-person promotional voice, and generic SEO/GEO advice.
+11. Avoid sales CTA, exaggerated marketing language, first-person promotional voice, generic SEO/GEO advice, and generic industry paragraphs that could apply to any brand.
 12. End with this exact source note: "*\u8cc7\u6599\u4f86\u6e90\uff1aGeovault AI Wiki \u81ea\u52d5\u5f59\u6574\u516c\u958b\u54c1\u724c\u8cc7\u6599\u8207\u4f7f\u7528\u8005\u63d0\u4f9b\u5167\u5bb9\u3002*"
 `;
   }

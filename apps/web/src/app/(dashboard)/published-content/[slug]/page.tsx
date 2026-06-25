@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, ExternalLink, Save } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, ExternalLink, Save, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useClientDailyArticleReview,
+  useRepairClientDailyArticleReview,
   useSetClientDailyPublication,
   useUpdateClientDailyArticleReview,
 } from '@/hooks/use-client-reports';
@@ -31,6 +32,7 @@ export default function PublishedContentReviewPage() {
   const slug = typeof params.slug === 'string' ? params.slug : '';
   const { data, isLoading, refetch } = useClientDailyArticleReview(slug);
   const updateMutation = useUpdateClientDailyArticleReview(slug);
+  const repairMutation = useRepairClientDailyArticleReview(slug);
   const publicationMutation = useSetClientDailyPublication();
 
   const [title, setTitle] = useState('');
@@ -58,6 +60,23 @@ export default function PublishedContentReviewPage() {
     try {
       await updateMutation.mutateAsync({ title, description, content });
       toast.success('已儲存並重新檢查');
+      await refetch();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    }
+  }
+
+  async function repairDraft() {
+    if (dirty) {
+      toast.error('請先儲存草稿，再重新修改');
+      return;
+    }
+    try {
+      const repaired = await repairMutation.mutateAsync();
+      setTitle(repaired.title || '');
+      setDescription(repaired.description || '');
+      setContent(repaired.content || '');
+      toast.success('已依阻擋原因重新修改，請檢查後再公開');
       await refetch();
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -117,7 +136,18 @@ export default function PublishedContentReviewPage() {
           <Button
             type="button"
             size="sm"
-            disabled={!canPublish || dirty || publicationMutation.isPending || publicVisible}
+            variant="outline"
+            disabled={dirty || repairMutation.isPending || publicVisible}
+            onClick={repairDraft}
+            className="border-blue-400/40 text-blue-100 hover:bg-blue-500/10"
+          >
+            <Wand2 className="mr-1 h-4 w-4" />
+            {repairMutation.isPending ? '重新修改中' : '依阻擋原因重新修改'}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!canPublish || dirty || publicationMutation.isPending || repairMutation.isPending || publicVisible}
             onClick={publishArticle}
           >
             <CheckCircle2 className="mr-1 h-4 w-4" />
@@ -171,6 +201,23 @@ export default function PublishedContentReviewPage() {
                 這些項目可由系統修復。確認內容無誤後可直接按「修復並公開」。
               </p>
             )}
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={dirty || repairMutation.isPending || publicVisible}
+                onClick={repairDraft}
+                className="border-blue-400/40 text-blue-100 hover:bg-blue-500/10"
+              >
+                <Wand2 className="mr-2 h-4 w-4" />
+                {repairMutation.isPending ? '重新修改中' : '依阻擋原因重新修改文章'}
+              </Button>
+              {dirty && (
+                <p className="mt-2 text-xs text-amber-100/70">
+                  目前有未儲存修改。先儲存草稿，系統才能用最新版本重新修復。
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -182,7 +229,12 @@ export default function PublishedContentReviewPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-200" htmlFor="client-daily-title">標題</label>
-            <Input id="client-daily-title" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <Input
+              id="client-daily-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="h-12 text-base"
+            />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-200" htmlFor="client-daily-description">摘要</label>
@@ -190,7 +242,8 @@ export default function PublishedContentReviewPage() {
               id="client-daily-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="min-h-[96px]"
+              rows={5}
+              className="min-h-[140px] resize-y text-base leading-7"
             />
           </div>
           <div className="space-y-2">
@@ -199,7 +252,8 @@ export default function PublishedContentReviewPage() {
               id="client-daily-content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="min-h-[560px] font-mono text-sm leading-6"
+              rows={34}
+              className="min-h-[620px] resize-y font-mono text-base leading-7 md:min-h-[760px]"
             />
           </div>
         </CardContent>
@@ -210,8 +264,8 @@ export default function PublishedContentReviewPage() {
           <CardTitle className="text-base">處理步驟</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-gray-300">
-          <p>1. 依阻擋原因改寫內容，特別是醫療、療效、保證、誇大、未驗證聯絡資訊。</p>
-          <p>2. 按「儲存草稿」，系統會重新計算 blocker。</p>
+          <p>1. 可先按「依阻擋原因重新修改」，系統會依 blocker、品牌資料與 AI 引用標準重寫草稿。</p>
+          <p>2. 若人工調整內容，按「儲存草稿」，系統會重新計算 blocker。</p>
           <p>3. blocker 清除後，按「修復並公開」。公開後才會出現在對外 blog、sitemap 與 llms-full。</p>
           <Link href="/published-content" className="inline-flex text-blue-300 hover:underline">
             回發布列表

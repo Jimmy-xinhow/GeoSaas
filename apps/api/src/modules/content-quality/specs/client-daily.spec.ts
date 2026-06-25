@@ -141,7 +141,10 @@ Citation-ready structure requirements:
 - Keep the exact H2 headings "## AI 可引用重點" and "## 資料來源".
 - Include the official website URL exactly as provided in the verified facts.
 - In "## AI 可引用重點", write five short, standalone bullets that an AI assistant can quote directly.
-- In "## 資料來源", list both the official website and Geovault directory data.`
+- In "## 資料來源", list both the official website and Geovault directory data.
+- The first paragraph must define the brand as an entity: brand name, official URL, industry/category, public positioning, and what is known vs unknown.
+- Prefer source-grounded facts, service boundaries, official links, Q&A answers, and concise citation bullets over generic SEO/GEO advice.
+- Remove any sentence that sounds like sales copy, a ranking promise, or a generic filler paragraph.`
     : '';
   const serviceSafetyBlock = args.failedRules.some((rule) => rule.startsWith('client_daily_safety:'))
     ? `
@@ -190,7 +193,7 @@ export function createClientDailySpec(
   const cfg = dayConfigs[dayType];
   return {
     templateType: `client_daily/${dayType}`,
-    promptVersion: 'v5-citation-source',
+    promptVersion: 'v6-ai-citation-entity',
     fullModel: 'gpt-4o',
     fullMaxTokens: 2000,
     buildFullPrompt: ({ data }) => data.basePrompt,

@@ -494,6 +494,24 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @Post('client-daily/articles/:slug/repair')
+  @ApiOperation({
+    summary:
+      'Rewrite a client_daily draft against its current blockers and high-grade AI citation requirements, then return the updated review payload.',
+  })
+  repairClientDailyReview(
+    @Param('slug') slug: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.repairClientDailyArticleReview(
+      normalizeRequiredText(slug, 'slug', 220),
+      userId,
+      role,
+    );
+  }
+
+  @ApiBearerAuth()
   @Patch('client-daily/articles/:slug/publication')
   @ApiOperation({
     summary:
