@@ -2529,13 +2529,14 @@ Required output:
       select: { industry: true, user: { select: { plan: true } }, profile: true },
     });
     const rows = await this.prisma.blogArticle.findMany({
-      where: { siteId, templateType: 'client_daily', published: true },
+      where: { siteId, templateType: 'client_daily' },
       orderBy: { createdAt: 'desc' },
       select: {
         slug: true,
         title: true,
         description: true,
         content: true,
+        published: true,
         createdAt: true,
         targetKeywords: true,
       },
@@ -2547,11 +2548,12 @@ Required output:
         site: { industry: site?.industry },
       }),
     }));
-    const safeRows = rowsWithSafety.filter((r) => r.safetyReasons.length === 0);
+    const publicVisibleRows = rowsWithSafety.filter((r) => r.published && r.safetyReasons.length === 0);
 
     const totalCount = rowsWithSafety.length;
-    const visibleCount = safeRows.length;
-    const hiddenUnsafeCount = totalCount - visibleCount;
+    const visibleCount = publicVisibleRows.length;
+    const unpublishedCount = rowsWithSafety.filter((r) => !r.published).length;
+    const hiddenUnsafeCount = rowsWithSafety.filter((r) => r.published && r.safetyReasons.length > 0).length;
     const monthCount = rowsWithSafety.filter((r) => r.createdAt >= monthStart).length;
     const weekCount = rowsWithSafety.filter((r) => r.createdAt >= weekStart).length;
     const recent = rowsWithSafety.slice(0, 10);
@@ -2563,6 +2565,7 @@ Required output:
     return {
       totalCount,
       visibleCount,
+      unpublishedCount,
       hiddenUnsafeCount,
       monthCount,
       weekCount,
@@ -2575,7 +2578,8 @@ Required output:
         title: r.title,
         createdAt: r.createdAt,
         dayType: r.targetKeywords.find((k) => this.daySequence.includes(k as ClientDailyDay)) || null,
-        publicVisible: r.safetyReasons.length === 0,
+        published: r.published,
+        publicVisible: r.published && r.safetyReasons.length === 0,
         safetyReasons: r.safetyReasons,
       })),
     };
@@ -2602,6 +2606,7 @@ Required output:
         createdAt: Date;
         charLength: number;
         url: string;
+        published: boolean;
         publicVisible: boolean;
         safetyReasons: string[];
       }>;
@@ -2614,12 +2619,13 @@ Required output:
       select: { industry: true },
     });
     const rows = await this.prisma.blogArticle.findMany({
-      where: { siteId, templateType: 'client_daily', published: true },
+      where: { siteId, templateType: 'client_daily' },
       orderBy: { createdAt: 'desc' },
       select: {
         slug: true,
         title: true,
         description: true,
+        published: true,
         createdAt: true,
         targetKeywords: true,
         content: true,
@@ -2650,7 +2656,8 @@ Required output:
         createdAt: r.createdAt,
         charLength: (r.content || '').replace(/\s+/g, '').length,
         url: `${webBase}/blog/${r.slug}`,
-        publicVisible: r.safetyReasons.length === 0,
+        published: r.published,
+        publicVisible: r.published && r.safetyReasons.length === 0,
         safetyReasons: r.safetyReasons,
       })),
     };

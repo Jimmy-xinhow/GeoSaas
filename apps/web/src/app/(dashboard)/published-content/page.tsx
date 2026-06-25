@@ -63,6 +63,7 @@ export default function PublishedContentPage() {
   const selectedSite = sortedSites.find((s) => s.id === selectedSiteId);
   const weeklyQuota = stats?.activeDaysPerWeek ?? 0;
   const isFreeOrUnentitled = stats && stats.activeDaysPerWeek === 0 && stats.totalCount === 0;
+  const nonPublicCount = (stats?.unpublishedCount ?? 0) + (stats?.hiddenUnsafeCount ?? 0);
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-hidden">
@@ -183,16 +184,18 @@ export default function PublishedContentPage() {
             </Card>
           )}
 
-          {(stats?.hiddenUnsafeCount ?? 0) > 0 && (
+          {nonPublicCount > 0 && (
             <Card className="border-amber-400/30 bg-amber-500/10">
               <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-start">
                 <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-300" />
                 <div>
                   <p className="text-sm font-medium text-amber-100">
-                    有 {stats?.hiddenUnsafeCount} 篇發布紀錄被品質閘門隱藏
+                    有 {nonPublicCount} 篇後台內容紀錄目前未公開
                   </p>
                   <p className="text-xs text-amber-100/70">
-                    這些內容已存在於後台紀錄，但因含有不適合公開引用的內容而沒有出現在 public blog。列表會標示原因，避免誤判成沒有發布。
+                    {stats?.unpublishedCount ? `${stats.unpublishedCount} 篇為未公開狀態。` : ''}
+                    {stats?.hiddenUnsafeCount ? `${stats.hiddenUnsafeCount} 篇因品質閘門未顯示於 public blog。` : ''}
+                    列表會保留後台紀錄，避免誤判成完全沒有生成。
                   </p>
                 </div>
               </CardContent>
@@ -234,6 +237,7 @@ export default function PublishedContentPage() {
                       {list.items.map((article) => {
                         const dayMeta = article.dayType ? DAY_LABELS[article.dayType] : null;
                         const publicVisible = article.publicVisible !== false;
+                        const isUnpublished = article.published === false;
                         const date = new Date(article.createdAt);
                         const dateStr = date.toLocaleDateString('zh-TW', {
                           year: 'numeric', month: '2-digit', day: '2-digit',
@@ -253,12 +257,16 @@ export default function PublishedContentPage() {
                                     {dayMeta.label}
                                   </span>
                                 )}
-                                {!publicVisible && (
+                                {isUnpublished ? (
+                                  <span className="inline-flex items-center gap-1 rounded border border-gray-400/30 bg-white/5 px-1.5 py-0.5 text-[10px] text-gray-300">
+                                    未公開
+                                  </span>
+                                ) : !publicVisible ? (
                                   <span className="inline-flex items-center gap-1 rounded border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">
                                     <AlertTriangle className="h-3 w-3" />
                                     品質閘門隱藏
                                   </span>
-                                )}
+                                ) : null}
                                 <span className="text-[10px] text-gray-400 flex items-center gap-1">
                                   <Calendar className="h-3 w-3" />
                                   {dateStr} {timeStr}
@@ -267,7 +275,7 @@ export default function PublishedContentPage() {
                                   {article.charLength} 字
                                 </span>
                               </div>
-                              {!publicVisible && article.safetyReasons?.length ? (
+                              {!isUnpublished && !publicVisible && article.safetyReasons?.length ? (
                                 <p className="mt-1 text-[10px] text-amber-100/70">
                                   原因：{article.safetyReasons.join('、')}
                                 </p>
