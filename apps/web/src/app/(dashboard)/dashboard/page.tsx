@@ -20,6 +20,7 @@ import {
   Sparkles,
   TrendingUp,
   Wrench,
+  X,
 } from 'lucide-react'
 import {
   Area,
@@ -41,6 +42,8 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageHeader } from '@/components/shared/page-header'
 import { useContents } from '@/hooks/use-content'
 import { useClientDailyStats } from '@/hooks/use-client-reports'
 import { useMonitorDashboard } from '@/hooks/use-monitor'
@@ -155,7 +158,7 @@ function StatusChip({ score }: { score: number }) {
 
 function StatCardSkeleton() {
   return (
-    <Card className="border-white/10 bg-white/5">
+    <Card>
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-3">
@@ -329,11 +332,13 @@ function OnboardingGuide({
   contents,
   monitorQueriesCount,
   isLoading,
+  onDismiss,
 }: {
   sites: any[] | undefined
   contents: any[] | undefined
   monitorQueriesCount: number
   isLoading: boolean
+  onDismiss?: () => void
 }) {
   const steps = useMemo(
     () => buildOnboardingSteps({ sites, contents, monitorQueriesCount }),
@@ -346,7 +351,7 @@ function OnboardingGuide({
 
   if (isLoading) {
     return (
-      <Card className="border-white/10 bg-white/5">
+      <Card>
         <CardContent className="p-5">
           <Skeleton className="h-5 w-36" />
           <Skeleton className="mt-4 h-24 w-full rounded-xl" />
@@ -356,11 +361,21 @@ function OnboardingGuide({
   }
 
   return (
-    <Card className="overflow-hidden border-blue-400/20 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.14),transparent_30%),rgba(15,23,42,0.82)]">
+    <Card className="relative overflow-hidden border-blue-400/20 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.14),transparent_30%),rgba(15,23,42,0.82)]">
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="隱藏新手引導"
+          className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
       <CardContent className="grid gap-5 p-5 lg:grid-cols-[0.9fr_1.35fr]">
         <div className="rounded-xl border border-white/10 bg-slate-950/35 p-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-bold text-blue-100">新手成功路徑</p>
+            <p className="text-sm font-bold text-blue-100">你的優化進度</p>
             <span className="rounded-full border border-blue-300/20 bg-blue-300/10 px-2.5 py-1 text-xs font-semibold text-blue-100">
               {completedCount}/{steps.length}
             </span>
@@ -432,6 +447,166 @@ function OnboardingGuide({
             )
           })}
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function getSiteNextStep(site: any): {
+  label: string
+  href: string
+  hint: string
+  primary: boolean
+} {
+  const id = site?.id
+  if (!hasCompletedScan(site)) {
+    return {
+      label: '開始掃描',
+      href: id ? `/sites/${id}` : '/sites',
+      hint: '尚未掃描',
+      primary: true,
+    }
+  }
+  const score = getSiteScore(site)
+  if (score < 80) {
+    return {
+      label: '去修復',
+      href: id ? `/sites/${id}/guided-fix` : '/sites',
+      hint: `GEO ${score}，還能再往上`,
+      primary: true,
+    }
+  }
+  return {
+    label: '產生內容',
+    href: '/content',
+    hint: `GEO ${score}，表現良好`,
+    primary: false,
+  }
+}
+
+function SiteNextActions({
+  sites,
+  isLoading,
+  url,
+  setUrl,
+  onQuickScan,
+  isScanning,
+}: {
+  sites: any[] | undefined
+  isLoading: boolean
+  url: string
+  setUrl: (v: string) => void
+  onQuickScan: () => void
+  isScanning: boolean
+}) {
+  const list = sites ?? []
+
+  return (
+    <Card>
+      <CardHeader className="pb-4">
+        <SectionTitle
+          icon={Globe}
+          title="我的網站"
+          description="每個品牌目前的狀態與建議的下一步，點一下直接前往。"
+        />
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Input
+            placeholder="輸入品牌官網網址，立即掃描，例：https://example.com"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && onQuickScan()}
+            disabled={isScanning}
+            className="h-11 flex-1"
+          />
+          <Button
+            className="h-11 min-w-[128px] bg-blue-600 text-white hover:bg-blue-700"
+            onClick={onQuickScan}
+            disabled={isScanning}
+          >
+            {isScanning ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                掃描中
+              </>
+            ) : (
+              <>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                新增並掃描
+              </>
+            )}
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <TableSkeleton />
+        ) : list.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-white/15 py-10 text-center">
+            <Globe className="mx-auto mb-3 h-10 w-10 text-slate-500" />
+            <p className="font-semibold text-white">還沒有網站</p>
+            <p className="mt-1 text-sm text-slate-500">
+              在上面輸入官網網址，開始第一次 GEO 掃描。
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {list.slice(0, 6).map((site: any) => {
+              const score = getSiteScore(site)
+              const scanned = hasCompletedScan(site)
+              const next = getSiteNextStep(site)
+              return (
+                <div
+                  key={site.id}
+                  className="flex flex-col gap-3 rounded-xl border border-white/10 bg-slate-950/35 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/8 text-blue-200">
+                      <Globe className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">
+                        {site.name || site.url}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">{site.url}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 sm:justify-end sm:gap-4">
+                    {scanned ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold text-white">{score}</span>
+                        <StatusChip score={score} />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-500">{next.hint}</span>
+                    )}
+                    <Link
+                      href={next.href}
+                      className={cn(
+                        'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-semibold transition-colors',
+                        next.primary
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'border border-white/15 text-slate-200 hover:bg-white/10',
+                      )}
+                    >
+                      {next.label}
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+              )
+            })}
+            {list.length > 6 && (
+              <Link
+                href="/sites"
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-white/10 py-3 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/5"
+              >
+                查看全部 {list.length} 個網站
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -599,42 +774,44 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_34%),rgba(255,255,255,0.04)] p-5 sm:p-6 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1 text-xs font-semibold text-blue-100">
-            <Sparkles className="h-3.5 w-3.5" />
-            AI 搜尋可見度工作台
-          </div>
-          <h1 className="text-2xl font-bold tracking-normal text-white sm:text-3xl">
-            Dashboard 總覽
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            集中查看品牌 GEO 分數、AI 引用、內容資產與近期掃描狀態。
-          </p>
-        </div>
-        <Link
-          href="/monitor/reports"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-blue-400/30 bg-blue-500/15 px-4 text-sm font-semibold text-blue-100 transition-colors hover:bg-blue-500/25"
-        >
-          查看成效報告
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-      </div>
+      <PageHeader
+        title="工作台"
+        description="依系統建議，一步步把品牌做到 AI 會主動引用。"
+        actions={
+          <Link
+            href="/monitor/reports"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-blue-400/30 bg-blue-500/15 px-4 text-sm font-semibold text-blue-100 transition-colors hover:bg-blue-500/25"
+          >
+            查看成效報告
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        }
+      />
 
-      <OnboardingGuide
+      <SiteNextActions
         sites={sites as any[] | undefined}
-        contents={contents as any[] | undefined}
-        monitorQueriesCount={monitorData?.queries?.length ?? 0}
-        isLoading={isLoading}
+        isLoading={sitesLoading}
+        url={url}
+        setUrl={setUrl}
+        onQuickScan={handleQuickScan}
+        isScanning={isScanning}
       />
 
       <PublishedContentBanner sites={sites as any[]} />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Tabs defaultValue="stats">
+        <TabsList className="bg-white/5">
+          <TabsTrigger value="stats">數據總覽</TabsTrigger>
+          <TabsTrigger value="trend">分數趨勢</TabsTrigger>
+          <TabsTrigger value="tasks">優化待辦</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="stats" className="mt-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {isLoading
           ? [1, 2, 3, 4].map((i) => <StatCardSkeleton key={i} />)
           : stats.map((stat) => (
-              <Card key={stat.label} className="overflow-hidden border-white/10 bg-white/5">
+              <Card key={stat.label} className="overflow-hidden">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -662,106 +839,11 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             ))}
-      </div>
-
-      <Card className="border-white/10 bg-white/5">
-        <CardHeader className="pb-4">
-          <SectionTitle
-            icon={Search}
-            title="快速新增掃描"
-            description="輸入品牌官網網址，立即建立網站並產生 GEO 掃描任務。"
-          />
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Input
-              placeholder="https://example.com"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleQuickScan()}
-              disabled={isScanning}
-              className="h-11 flex-1 border-white/10 bg-slate-950/60"
-            />
-            <Button
-              className="h-11 min-w-[128px] bg-blue-600 text-white hover:bg-blue-700"
-              onClick={handleQuickScan}
-              disabled={isScanning}
-            >
-              {isScanning ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  掃描中
-                </>
-              ) : (
-                <>
-                  開始掃描
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </>
-              )}
-            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <Card className="border-white/10 bg-white/5">
-          <CardHeader className="pb-4">
-            <SectionTitle
-              icon={Activity}
-              title="近期掃描狀態"
-              description="用進度條快速判斷哪些品牌需要優先補強。"
-            />
-          </CardHeader>
-          <CardContent>
-            {sitesLoading ? (
-              <TableSkeleton />
-            ) : recentScans.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-white/15 py-10 text-center">
-                <Globe className="mx-auto mb-3 h-10 w-10 text-slate-500" />
-                <p className="font-semibold text-white">尚未建立網站</p>
-                <p className="mt-1 text-sm text-slate-500">先新增一個品牌官網開始追蹤。</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentScans.map((scan) => {
-                  const tone = getScoreTone(scan.score)
-                  return (
-                    <div
-                      key={`${scan.name}-${scan.time}`}
-                      className="rounded-xl border border-white/10 bg-slate-950/35 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-white">
-                            {scan.name}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-slate-500">{scan.url}</p>
-                        </div>
-                        <StatusChip score={scan.score} />
-                      </div>
-                      <div className="mt-4 flex items-center gap-3">
-                        <span className="w-10 text-right text-lg font-bold text-white">
-                          {scan.score}
-                        </span>
-                        <div className="h-2 flex-1 rounded-full bg-white/8">
-                          <div
-                            className={cn('h-full rounded-full', scoreBarClass[tone])}
-                            style={{ width: `${scan.score}%` }}
-                          />
-                        </div>
-                        <span className="w-16 text-right text-xs text-slate-500">
-                          {scan.time}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-white/10 bg-white/5">
+        <TabsContent value="trend" className="mt-4">
+        <Card>
           <CardHeader className="pb-4">
             <SectionTitle
               icon={BarChart3}
@@ -828,9 +910,10 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+        </TabsContent>
 
-      <Card className="border-white/10 bg-white/5">
+        <TabsContent value="tasks" className="mt-4">
+      <Card>
         <CardHeader className="pb-4">
           <SectionTitle
             icon={ClipboardList}
@@ -909,6 +992,8 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

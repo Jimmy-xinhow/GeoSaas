@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SiteWorkspaceTabs } from '@/components/layout/site-workspace-tabs'
 import { ScoreGauge } from '@/components/scan/score-gauge'
 import { IndicatorCard } from '@/components/scan/indicator-card'
 import ScanHistoryChart from '@/components/scan/scan-history-chart'
@@ -318,7 +319,7 @@ function DetailSkeleton() {
             <Skeleton className="h-[160px] w-[160px] rounded-full" />
           </CardContent>
         </Card>
-        <Card className="lg:col-span-2 bg-white/5 border-white/10">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <Skeleton className="h-5 w-32" />
             <Skeleton className="h-4 w-48 mt-1" />
@@ -391,7 +392,7 @@ function BadgeSection({ siteId }: { siteId: string }) {
   }
 
   return (
-    <Card className="bg-white/5 border-white/10">
+    <Card>
       <CardHeader>
         <CardTitle>取得 Badge</CardTitle>
         <CardDescription>
@@ -475,7 +476,7 @@ function DeepAnalysisSection({ siteId }: { siteId: string }) {
   }
 
   return (
-    <Card className="bg-white/5 border-white/10">
+    <Card>
       <CardHeader>
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -605,7 +606,7 @@ function BrandFactReadinessSection({
   const updateProfile = useUpdateSiteProfile(siteId)
   if (isLoading) {
     return (
-      <Card className="bg-white/5 border-white/10">
+      <Card>
         <CardHeader>
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-4 w-64" />
@@ -628,7 +629,7 @@ function BrandFactReadinessSection({
       : 'text-red-400'
 
   return (
-    <Card id="ai-wiki-readiness" className="scroll-mt-24 bg-white/5 border-white/10">
+    <Card id="ai-wiki-readiness" className="scroll-mt-24">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -798,7 +799,7 @@ function ProfileFactsEditor({
   const fieldClass = 'w-full rounded-md border border-white/10 bg-gray-950 px-3 py-2 text-sm text-white outline-none focus:border-blue-500'
 
   return (
-    <Card id="brand-facts" className="scroll-mt-24 bg-white/5 border-white/10">
+    <Card id="brand-facts" className="scroll-mt-24">
       <CardHeader>
         <CardTitle>品牌事實資料</CardTitle>
         <CardDescription>
@@ -1071,15 +1072,10 @@ export default function SiteDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Back link + page header */}
+      <SiteWorkspaceTabs siteId={siteId} siteName={site.name} />
+
+      {/* page header */}
       <div>
-        <Link
-          href="/sites"
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-white transition-colors mb-4"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          返回網站列表
-        </Link>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -1229,7 +1225,7 @@ export default function SiteDetailPage() {
         </div>
       </div>
 
-      <Card className="border-blue-500/30 bg-blue-500/10">
+      <Card className="border-blue-500/30">
         <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-200">
@@ -1283,7 +1279,7 @@ export default function SiteDetailPage() {
       </Card>
 
       {isAfterCmsFix ? (
-        <Card className="border-green-500/30 bg-green-500/10">
+        <Card className="border-green-500/30">
           <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="font-semibold text-green-100">修復包已派送，請重新掃描驗證結果</p>
@@ -1322,7 +1318,7 @@ export default function SiteDetailPage() {
 
       {/* Scan progress banner */}
       {hasActiveScan && (
-        <Card className="border-blue-500/30 bg-blue-500/20">
+        <Card className="border-blue-500/30">
           <CardContent className="flex items-center gap-3 py-4">
             <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
             <div>
@@ -1340,7 +1336,7 @@ export default function SiteDetailPage() {
       {/* Score overview row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Big score gauge */}
-        <Card className="lg:col-span-1 bg-white/5 border-white/10">
+        <Card className="lg:col-span-1">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">GEO 分數</CardTitle>
           </CardHeader>
@@ -1373,7 +1369,7 @@ export default function SiteDetailPage() {
         </Card>
 
         {/* Right: Indicator results */}
-        <Card className="lg:col-span-2 bg-white/5 border-white/10">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>GEO 指標分析</CardTitle>
             <CardDescription>
@@ -1419,7 +1415,7 @@ export default function SiteDetailPage() {
       <DeepAnalysisSection siteId={siteId} />
 
       {/* Scan history chart */}
-      <Card className="bg-white/5 border-white/10">
+      <Card>
         <CardHeader>
           <CardTitle>掃描記錄</CardTitle>
           <CardDescription>歷次掃描分數變化趨勢</CardDescription>

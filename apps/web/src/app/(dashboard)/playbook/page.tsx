@@ -1,6 +1,7 @@
 'use client';
 
 import { BookOpen, Target, CheckCircle2, XCircle, AlertTriangle, Lightbulb, ArrowRight, Star, Zap, Shield } from 'lucide-react';
+import { PageHeader } from '@/components/shared/page-header';
 
 const goodQueries = [
   { q: '台北中山區推薦整復推拿', why: '具體地區 + 具體服務 = AI 回答精準度高' },
@@ -95,13 +96,11 @@ export default function PlaybookPage() {
   return (
     <div className="max-w-4xl space-y-10">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Shield className="h-6 w-6 text-blue-400" />
-          客戶操作手冊
-        </h1>
-        <p className="text-gray-400 mt-1">內部使用 — 如何幫客戶達成 AI 引用目標</p>
-      </div>
+      <PageHeader
+        title="客戶操作手冊"
+        description="內部使用 — 如何幫客戶達成 AI 引用目標"
+        icon={Shield}
+      />
 
       {/* Workflow */}
       <div>

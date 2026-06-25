@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/shared/page-header';
 import {
   useScheduledTasks, useUpdateTask, useRunTask,
   type ScheduledTask,
@@ -141,15 +142,11 @@ export default function SchedulerSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Settings2 className="h-6 w-6" />
-          自動化排程管理
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          管理所有自動化任務的排程時間，可隨時啟用、停用或調整
-        </p>
-      </div>
+      <PageHeader
+        title="自動化排程管理"
+        description="管理所有自動化任務的排程時間，可隨時啟用、停用或調整"
+        icon={Settings2}
+      />
 
       <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-4 text-sm text-blue-300">
         <strong>Cron 格式說明：</strong> 分 時 日 月 週 — 例如 <code className="bg-blue-500/30 px-1 rounded">0 2 * * *</code> = 每天凌晨 2:00，

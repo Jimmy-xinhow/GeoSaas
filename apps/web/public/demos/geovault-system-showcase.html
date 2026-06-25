@@ -1,0 +1,1324 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Geovault Cinematic Interface Film</title>
+  <script>
+    (() => {
+      const seek = Number(new URLSearchParams(location.search).get("seek") || 0);
+      if (Number.isFinite(seek) && seek > 0) {
+        document.documentElement.style.setProperty("--seek-delay", `-${Math.min(seek, 60)}s`);
+        document.documentElement.dataset.seek = String(Math.min(seek, 60));
+      }
+    })();
+  </script>
+  <style>
+    :root {
+      --duration: 60s;
+      --ink: #f7fbff;
+      --muted: #98a7bd;
+      --blue: #69a7ff;
+      --cyan: #55e6f2;
+      --green: #58e59b;
+      --gold: #f7d36a;
+      color-scheme: dark;
+      font-family: "SF Pro Display", "PingFang TC", "Segoe UI Variable Display", "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: #02040a;
+      color: var(--ink);
+      letter-spacing: 0;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 14px;
+      overflow-x: hidden;
+    }
+
+    .wrap { width: min(100%, 1440px); }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.15;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 4px;
+      color: #8fa0b8;
+      font-size: 12px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control {
+      height: 34px;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 8px;
+      background: rgba(255,255,255,.055);
+      color: #fff;
+      padding: 0 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .control.primary {
+      border-color: rgba(85,230,242,.36);
+      background: linear-gradient(135deg, rgba(37,99,235,.72), rgba(8,145,178,.58));
+      box-shadow: 0 0 26px rgba(85,230,242,.16);
+    }
+
+    .timecode {
+      width: 94px;
+      color: #8fa0b8;
+      font-size: 12px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stage {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 10px;
+      background:
+        radial-gradient(circle at 20% 18%, rgba(59,130,246,.18), transparent 30%),
+        radial-gradient(circle at 84% 18%, rgba(34,211,238,.13), transparent 28%),
+        radial-gradient(circle at 50% 120%, rgba(34,197,94,.14), transparent 42%),
+        #040813;
+      box-shadow: 0 44px 120px rgba(0,0,0,.64);
+      perspective: 1800px;
+      isolation: isolate;
+    }
+
+    .stage::before {
+      position: absolute;
+      inset: -16%;
+      z-index: 0;
+      content: "";
+      background:
+        linear-gradient(120deg, transparent 0 38%, rgba(255,255,255,.075) 47%, transparent 57% 100%),
+        linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+      background-size: 100% 100%, 54px 54px, 54px 54px;
+      transform: rotate(-8deg) scale(1.12);
+      animation: atmosphere 18s ease-in-out infinite alternate;
+      opacity: .45;
+    }
+
+    .stage::after {
+      position: absolute;
+      inset: 0;
+      z-index: 18;
+      pointer-events: none;
+      content: "";
+      background:
+        linear-gradient(90deg, rgba(2,4,10,.78), transparent 13%, transparent 86%, rgba(2,4,10,.82)),
+        linear-gradient(0deg, rgba(2,4,10,.7), transparent 24%, transparent 82%, rgba(2,4,10,.42));
+    }
+
+    .camera {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      transform-style: preserve-3d;
+      animation: camera var(--duration) cubic-bezier(.28,.02,.1,1) both;
+      will-change: transform;
+    }
+
+    .panel {
+      position: absolute;
+      top: 18%;
+      width: min(72vw, 980px);
+      aspect-ratio: 1494 / 887;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.17);
+      border-radius: 12px;
+      background: #111827;
+      box-shadow: 0 42px 120px rgba(0,0,0,.56);
+      transform-style: preserve-3d;
+      will-change: transform, filter;
+    }
+
+    .panel img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      filter: saturate(1.08) contrast(1.04) brightness(.9);
+      transform: scale(1.01);
+    }
+
+    .panel-content { aspect-ratio: 1440 / 1183; }
+    .panel-monitor { aspect-ratio: 1440 / 1193; }
+
+    .p1 {
+      left: 49%;
+      width: min(78vw, 1060px);
+      transform: rotateY(-16deg) rotateX(4deg) translateZ(100px);
+    }
+
+    .p2 {
+      left: 128%;
+      top: 9%;
+      width: min(66vw, 880px);
+      transform: rotateY(15deg) rotateX(4deg) translateZ(-40px);
+    }
+
+    .p3 {
+      left: 194%;
+      top: 15%;
+      width: min(74vw, 980px);
+      transform: rotateY(-9deg) rotateX(4deg) translateZ(110px);
+    }
+
+    .p4 {
+      left: 263%;
+      top: 10%;
+      width: min(66vw, 900px);
+      transform: rotateY(13deg) rotateX(5deg) translateZ(10px);
+    }
+
+    .p5 {
+      left: 330%;
+      top: 17%;
+      width: min(72vw, 980px);
+      transform: rotateY(-15deg) rotateX(5deg) translateZ(120px);
+    }
+
+    .proof-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(2,6,23,.22), transparent 45%),
+        linear-gradient(0deg, rgba(2,6,23,.40), transparent 48%);
+    }
+
+    .proof-card,
+    .proof-pill,
+    .proof-table {
+      position: absolute;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(7,14,29,.78);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 22px 70px rgba(0,0,0,.36);
+    }
+
+    .proof-card {
+      min-width: 168px;
+      border-radius: 12px;
+      padding: 14px 15px;
+    }
+
+    .proof-card small,
+    .proof-table small {
+      display: block;
+      color: #9fb1cb;
+      font-size: 11px;
+      font-weight: 680;
+      letter-spacing: .03em;
+    }
+
+    .proof-card b {
+      display: block;
+      margin-top: 6px;
+      color: #fff;
+      font-size: 30px;
+      line-height: 1;
+      font-weight: 820;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .proof-card span {
+      display: block;
+      margin-top: 7px;
+      color: #65f0a5;
+      font-size: 12px;
+      font-weight: 720;
+    }
+
+    .proof-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border-radius: 999px;
+      padding: 8px 11px;
+      color: #d9f6ff;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .proof-pill::before {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #58e59b;
+      box-shadow: 0 0 16px rgba(88,229,155,.72);
+      content: "";
+    }
+
+    .proof-table {
+      width: 330px;
+      border-radius: 14px;
+      padding: 13px;
+    }
+
+    .proof-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      padding: 9px 0;
+      border-top: 1px solid rgba(255,255,255,.08);
+      color: #dbe7fb;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .proof-row:first-of-type { border-top: 0; }
+    .proof-row strong { color: #65f0a5; font-variant-numeric: tabular-nums; }
+
+    .score-orbit {
+      position: absolute;
+      right: 7%;
+      top: 9%;
+      width: 154px;
+      height: 154px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, rgba(15,23,42,.92) 0 48%, transparent 49%),
+        conic-gradient(from 20deg, #58e59b 0 331deg, rgba(148,163,184,.2) 331deg 360deg);
+      box-shadow: 0 0 70px rgba(88,229,155,.24);
+    }
+
+    .score-orbit b {
+      display: block;
+      color: #fff;
+      font-size: 44px;
+      line-height: 1;
+      font-weight: 850;
+    }
+
+    .score-orbit span {
+      display: block;
+      margin-top: 4px;
+      color: #a5b4cb;
+      font-size: 11px;
+      font-weight: 720;
+      text-align: center;
+    }
+
+    .d-score { left: 10%; top: 13%; }
+    .d-publish { left: 10%; top: 57%; }
+    .d-content { right: 8%; bottom: 12%; }
+    .d-live { left: 10%; top: 42%; }
+    .d-monitor { left: 7%; bottom: 9%; }
+    .d-mentions { right: 7%; top: 12%; }
+    .d-channels { right: 8%; bottom: 12%; }
+    .d-growth { left: 8%; top: 12%; }
+
+    .copy {
+      position: absolute;
+      z-index: 22;
+      left: clamp(42px, 6.2vw, 88px);
+      top: clamp(48px, 7.2vw, 92px);
+      max-width: min(540px, 40vw);
+      text-shadow: 0 10px 38px rgba(0,0,0,.72);
+      opacity: 0;
+      transform: translateY(18px);
+      animation-duration: var(--duration);
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+    }
+
+    .copy.c1 { animation-name: copy1; }
+    .copy.c2 { animation-name: copy2; left: clamp(46px, 6vw, 92px); top: clamp(38px, 5vw, 66px); bottom: auto; }
+    .copy.c3 { animation-name: copy3; left: auto; right: clamp(42px, 6vw, 88px); top: clamp(36px, 4.8vw, 64px); max-width: min(560px, 40vw); }
+    .copy.c4 { animation-name: copy4; top: clamp(40px, 5vw, 70px); bottom: auto; }
+    .copy.c5 {
+      animation-name: copy5;
+      left: 50%;
+      top: 45%;
+      width: min(900px, calc(100% - 90px));
+      max-width: none;
+      text-align: center;
+      transform: translate(-50%, calc(-50% + 18px));
+    }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      color: #bdd0ee;
+      font-size: clamp(10px, .95vw, 12px);
+      font-weight: 820;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+
+    .kicker::before {
+      display: block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 18px rgba(34,197,94,.78);
+      content: "";
+    }
+
+    h1,
+    h2 {
+      margin: 14px 0 0;
+      color: #fff;
+      font-weight: 780;
+      letter-spacing: 0;
+      line-height: 1.03;
+    }
+
+    h1 { font-size: clamp(28px, 4.35vw, 56px); }
+    h2 { font-size: clamp(26px, 3.55vw, 48px); }
+
+    .copy p {
+      margin: 14px 0 0;
+      color: #c4d3eb;
+      font-size: clamp(13px, 1.3vw, 17px);
+      line-height: 1.55;
+      font-weight: 560;
+    }
+
+    .copy.c4 p { margin-top: 26px; }
+
+    .accent { color: var(--cyan); }
+    .gold { color: var(--gold); }
+
+    .subtitle {
+      position: absolute;
+      z-index: 32;
+      left: 50%;
+      bottom: 82px;
+      width: min(1120px, calc(100% - 96px));
+      transform: translateX(-50%);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+      background: rgba(2,6,23,.72);
+      padding: 12px 24px 11px;
+      color: #f8fafc;
+      text-align: center;
+      font-size: clamp(24px, 2.35vw, 34px);
+      font-weight: 780;
+      line-height: 1.16;
+      text-shadow: 0 4px 18px rgba(0,0,0,.72);
+      backdrop-filter: blur(22px);
+    }
+
+    .subtitle small {
+      display: block;
+      margin-top: 5px;
+      color: #9fb1cb;
+      font-size: .52em;
+      font-weight: 650;
+      line-height: 1.18;
+    }
+
+    .rail {
+      position: absolute;
+      z-index: 14;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      min-height: 66px;
+      padding: 0 clamp(28px, 5vw, 68px);
+      border-top: 1px solid rgba(255,255,255,.11);
+      background: rgba(2,4,10,.78);
+      backdrop-filter: blur(24px);
+      color: #cbd7eb;
+      font-size: clamp(12px, 1.12vw, 15px);
+      font-weight: 650;
+    }
+
+    .rail b { color: #fff; }
+    .rail span:last-child { color: #8394ad; font-variant-numeric: tabular-nums; }
+
+    .lens {
+      position: absolute;
+      z-index: 10;
+      width: 42vw;
+      height: 42vw;
+      min-width: 420px;
+      min-height: 420px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(85,230,242,.13), transparent 62%);
+      filter: blur(4px);
+      opacity: .55;
+      animation: lens var(--duration) ease-in-out both;
+    }
+
+    .scan {
+      position: absolute;
+      z-index: 11;
+      left: -20%;
+      right: -20%;
+      top: 18%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(85,230,242,.95), transparent);
+      box-shadow: 0 0 28px rgba(85,230,242,.58);
+      opacity: 0;
+      animation: scan var(--duration) linear both;
+    }
+
+    .stack {
+      position: absolute;
+      z-index: 6;
+      inset: 0;
+      opacity: 0;
+      transform-style: preserve-3d;
+      animation: stackReveal var(--duration) linear both;
+    }
+
+    .stack .mini {
+      position: absolute;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 12px;
+      background: #111827;
+      box-shadow: 0 34px 100px rgba(0,0,0,.52);
+    }
+
+    .stack img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      filter: saturate(1.08) contrast(1.05) brightness(.82);
+    }
+
+    .m1 {
+      left: 6%;
+      top: 13%;
+      width: 40%;
+      aspect-ratio: 1494 / 887;
+      transform: rotateY(18deg) rotateX(4deg);
+    }
+
+    .m2 {
+      right: 7%;
+      top: 12%;
+      width: 38%;
+      aspect-ratio: 1440 / 1183;
+      transform: rotateY(-15deg) rotateX(5deg);
+    }
+
+    .m3 {
+      left: 27%;
+      bottom: 10%;
+      width: 47%;
+      aspect-ratio: 1440 / 1193;
+      transform: rotateX(4deg) translateZ(110px);
+    }
+
+    .metrics {
+      position: absolute;
+      z-index: 23;
+      left: clamp(32px, 5vw, 74px);
+      right: clamp(32px, 5vw, 74px);
+      bottom: 178px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      opacity: 0;
+      animation: metrics var(--duration) linear both;
+    }
+
+    .metric {
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 10px;
+      background: rgba(15,23,42,.78);
+      padding: 16px;
+      backdrop-filter: blur(22px);
+      box-shadow: 0 24px 70px rgba(0,0,0,.36);
+    }
+
+    .metric b {
+      display: block;
+      color: #fff;
+      font-size: clamp(20px, 2.35vw, 34px);
+      line-height: 1;
+      font-weight: 790;
+    }
+
+    .metric em {
+      display: block;
+      margin-top: 5px;
+      color: #55e6f2;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 760;
+      letter-spacing: .04em;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 8px;
+      color: #a5b4cb;
+      font-size: 13px;
+      font-weight: 620;
+    }
+
+    .brand-finale {
+      position: absolute;
+      z-index: 34;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      opacity: 0;
+      transform: scale(.96);
+      animation: finale var(--duration) linear both;
+      pointer-events: none;
+    }
+
+    .intro-finale {
+      position: absolute;
+      z-index: 36;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      background: #02040a;
+      animation: introCover var(--duration) linear both;
+    }
+
+    .intro-finale .logo-lockup {
+      opacity: 0;
+      animation: introLogo var(--duration) linear both;
+    }
+
+    .hook-copy {
+      position: absolute;
+      left: 50%;
+      top: 54%;
+      width: min(920px, calc(100% - 96px));
+      transform: translate(-50%, -50%);
+      text-align: center;
+      opacity: 0;
+      animation: hookCopy var(--duration) linear both;
+    }
+
+    .hook-copy h2 {
+      margin: 0;
+      font-size: clamp(42px, 7vw, 96px);
+      line-height: .96;
+      font-weight: 850;
+    }
+
+    .hook-copy p {
+      margin: 20px auto 0;
+      max-width: 760px;
+      color: #b8c7dc;
+      font-size: clamp(17px, 2vw, 26px);
+      line-height: 1.42;
+      font-weight: 650;
+    }
+
+    .brand-finale::before {
+      position: absolute;
+      inset: 0;
+      background: #02040a;
+      content: "";
+    }
+
+    .logo-lockup {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+      text-align: center;
+      filter: drop-shadow(0 30px 80px rgba(0,0,0,.7));
+    }
+
+    .brand-logo-img {
+      width: min(58vw, 430px);
+      height: auto;
+      display: block;
+    }
+
+    .logo-lockup span {
+      display: block;
+      margin-top: 2px;
+      color: #b8c7dc;
+      font-size: clamp(15px, 1.7vw, 22px);
+      font-weight: 660;
+    }
+
+    .logo-lockup .authority {
+      margin-top: 10px;
+      color: #60a5fa;
+      font-size: clamp(10px, 1vw, 14px);
+      font-weight: 760;
+      letter-spacing: .26em;
+      text-transform: uppercase;
+    }
+
+    .logo-lockup .slogan {
+      margin-top: 8px;
+    }
+
+    .progress {
+      position: absolute;
+      z-index: 30;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: rgba(255,255,255,.10);
+    }
+
+    .progress span {
+      display: block;
+      width: 100%;
+      height: 100%;
+      transform-origin: left;
+      transform: scaleX(0);
+      background: linear-gradient(90deg, var(--blue), var(--cyan), var(--green), var(--gold));
+      animation: progress var(--duration) linear both;
+    }
+
+    .camera,
+    .copy,
+    .lens,
+    .scan,
+    .stack,
+    .metrics,
+    .brand-finale,
+    .intro-finale,
+    .intro-finale .logo-lockup,
+    .hook-copy,
+    .progress span {
+      animation-delay: var(--seek-delay, 0s);
+    }
+
+    .paused *,
+    .paused *::before,
+    .paused *::after {
+      animation-play-state: paused !important;
+    }
+
+    @keyframes camera {
+      0% { transform: translate3d(0, 0, 0) scale(.96) rotateX(0deg); }
+      9% { transform: translate3d(-10%, -1%, 90px) scale(1.02) rotateX(.6deg); }
+      18% { transform: translate3d(-66%, 0, 20px) scale(1.02) rotateX(.3deg); }
+      28% { transform: translate3d(-116%, -3%, 160px) scale(1.12) rotateX(.8deg); }
+      38% { transform: translate3d(-174%, 1%, 60px) scale(1.04) rotateX(.2deg); }
+      50% { transform: translate3d(-220%, -4%, 180px) scale(1.13) rotateX(.7deg); }
+      62% { transform: translate3d(-284%, 0, 50px) scale(1.03) rotateX(.2deg); }
+      74% { transform: translate3d(-312%, -2%, 120px) scale(1.08) rotateX(.4deg); }
+      82% { transform: translate3d(-338%, 0, 40px) scale(1.02) rotateX(0deg); }
+      100% { transform: translate3d(-338%, 0, 40px) scale(1.02) rotateX(0deg); }
+    }
+
+    @keyframes copy1 {
+      0%, 10% { opacity: 0; transform: translateY(18px); }
+      13%, 24% { opacity: 1; transform: translateY(0); }
+      28%, 100% { opacity: 0; transform: translateY(-16px); }
+    }
+
+    @keyframes copy2 {
+      0%, 25% { opacity: 0; transform: translateY(16px); }
+      29%, 42% { opacity: 1; transform: translateY(0); }
+      46%, 100% { opacity: 0; transform: translateY(-16px); }
+    }
+
+    @keyframes copy3 {
+      0%, 44% { opacity: 0; transform: translateY(16px); }
+      48%, 60% { opacity: 1; transform: translateY(0); }
+      64%, 100% { opacity: 0; transform: translateY(-16px); }
+    }
+
+    @keyframes copy4 {
+      0%, 62% { opacity: 0; transform: translateY(16px); }
+      66%, 76% { opacity: 1; transform: translateY(0); }
+      80%, 100% { opacity: 0; transform: translateY(-16px); }
+    }
+
+    @keyframes copy5 {
+      0%, 82% { opacity: 0; transform: translate(-50%, calc(-50% + 18px)); }
+      87%, 92% { opacity: 1; transform: translate(-50%, -50%); }
+      96%, 100% { opacity: 0; transform: translate(-50%, calc(-50% - 16px)); }
+    }
+
+    @keyframes stackReveal {
+      0%, 72% { opacity: 0; transform: scale(.95) translateY(24px); }
+      78%, 86% { opacity: 1; transform: scale(1) translateY(0); }
+      88%, 100% { opacity: 0; transform: scale(1.04) translateY(-16px); }
+    }
+
+    @keyframes metrics {
+      0%, 86% { opacity: 0; transform: translateY(18px); }
+      90%, 94% { opacity: 1; transform: translateY(0); }
+      97%, 100% { opacity: 0; transform: translateY(-16px); }
+    }
+
+    @keyframes finale {
+      0%, 92% { opacity: 0; transform: scale(.96); }
+      96%, 100% { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes introCover {
+      0%, 11% { opacity: 1; }
+      15%, 100% { opacity: 0; }
+    }
+
+    @keyframes introLogo {
+      0%, 1% { opacity: 0; transform: translateY(14px) scale(.94); }
+      3%, 5% { opacity: 1; transform: translateY(0) scale(1); }
+      7%, 100% { opacity: 0; transform: translateY(-18px) scale(1.04); }
+    }
+
+    @keyframes hookCopy {
+      0%, 5% { opacity: 0; transform: translate(-50%, calc(-50% + 18px)); }
+      8%, 12% { opacity: 1; transform: translate(-50%, -50%); }
+      15%, 100% { opacity: 0; transform: translate(-50%, calc(-50% - 18px)); }
+    }
+
+    @keyframes lens {
+      0% { left: 56%; top: 16%; transform: translate(-50%, -50%) scale(.8); }
+      30% { left: 20%; top: 68%; transform: translate(-50%, -50%) scale(1.05); }
+      60% { left: 86%; top: 32%; transform: translate(-50%, -50%) scale(.9); }
+      100% { left: 50%; top: 52%; transform: translate(-50%, -50%) scale(1.2); }
+    }
+
+    @keyframes scan {
+      0%, 9% { opacity: 0; transform: translateY(0); }
+      12%, 15% { opacity: .95; transform: translateY(360px); }
+      18%, 42% { opacity: 0; transform: translateY(560px); }
+      45%, 49% { opacity: .75; transform: translateY(300px); }
+      53%, 100% { opacity: 0; transform: translateY(620px); }
+    }
+
+    @keyframes atmosphere {
+      from { transform: rotate(-8deg) scale(1.12) translateY(-18px); }
+      to { transform: rotate(-8deg) scale(1.17) translateY(18px); }
+    }
+
+    @keyframes progress { to { transform: scaleX(1); } }
+
+    @media (max-width: 920px) {
+      body { padding: 8px; }
+      .stage { aspect-ratio: auto; min-height: 820px; }
+      .copy {
+        left: 24px !important;
+        right: 24px !important;
+        top: 36px !important;
+        bottom: auto !important;
+        max-width: none;
+      }
+      .copy.c5 {
+        left: 50% !important;
+        right: auto !important;
+        width: calc(100% - 48px);
+      }
+      h1 { font-size: clamp(28px, 9vw, 48px); }
+      h2 { font-size: clamp(25px, 8vw, 42px); }
+      .camera { animation: none; transform: none; }
+      .panel {
+        left: 6% !important;
+        top: 220px !important;
+        width: 88%;
+        transform: none !important;
+      }
+      .p2, .p3, .p4, .p5 { display: none; }
+      .stack { display: none; }
+      .metrics {
+        grid-template-columns: repeat(2, 1fr);
+        left: 18px;
+        right: 18px;
+        bottom: 176px;
+      }
+      .subtitle {
+        width: calc(100% - 36px);
+        bottom: 96px;
+        padding: 10px 12px;
+        font-size: clamp(18px, 5vw, 24px);
+      }
+      .subtitle.top-left,
+      .subtitle.top-right,
+      .subtitle.bottom-left,
+      .subtitle.bottom-right,
+      .subtitle.center-low {
+        left: 18px;
+        right: 18px;
+        top: auto;
+        bottom: 96px;
+        width: auto;
+        transform: none;
+      }
+      .subtitle small {
+        margin-top: 4px;
+        font-size: .5em;
+      }
+      .hook-copy { width: calc(100% - 40px); }
+      .hook-copy h2 { font-size: clamp(34px, 13vw, 58px); }
+      .hook-copy p { font-size: 16px; }
+      .rail {
+        min-height: 78px;
+        align-items: flex-start;
+        flex-direction: column;
+        justify-content: center;
+        padding: 10px 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="toolbar">
+      <div class="brand">
+        <strong>Geovault Interface Film</strong>
+        <span>真實系統截圖素材，搭配展示用實績資料、字幕、音效與口白</span>
+      </div>
+      <div class="controls">
+        <button class="control primary" type="button" id="playVoice">播放含口白 / BGM</button>
+        <button class="control" type="button" id="toggle">Pause</button>
+        <button class="control" type="button" id="restart">Replay</button>
+        <span class="timecode" id="timecode">00:00 / 01:00</span>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <div class="lens"></div>
+      <div class="scan"></div>
+
+      <section class="copy c1">
+        <div class="kicker">Geovault Operating Layer</div>
+        <h1>AI 搜尋能見度<br><span class="accent">不再只是分數</span></h1>
+        <p>從掃描 內容 發布到監測<br>把品牌可被 AI 讀懂的每一步<br>變成可營運的成長系統</p>
+      </section>
+
+      <section class="copy c2">
+        <div class="kicker">Content Engine</div>
+        <h2>內容生產<br><span class="accent">直接連到品牌知識庫</span></h2>
+        <p>FAQ 品牌文章 AI 可引用摘要與平台內容<br>從同一套資料脈絡產生</p>
+      </section>
+
+      <section class="copy c3">
+        <div class="kicker">Citation Monitor</div>
+        <h2>AI 有沒有提到你<br><span class="accent">用數據證明</span></h2>
+        <p>引用次數 平台分布 搜尋問題與回覆內容<br>全部集中追蹤</p>
+      </section>
+
+      <section class="copy c4">
+        <div class="kicker">Distribution</div>
+        <h2>產出的內容<br><span class="accent">直接推進到通路</span></h2>
+        <p>Medium LinkedIn WordPress Facebook<br>Google 商家檔案<br>發布狀態清楚可控</p>
+      </section>
+
+      <section class="copy c5">
+        <div class="kicker">GEO Infrastructure</div>
+        <h2>讓品牌被 AI <span class="gold">找到 理解 引用 證明</span></h2>
+      </section>
+
+      <div class="intro-finale">
+        <div class="logo-lockup">
+          <img class="brand-logo-img" src="assets/geovault-logo-full-dark.svg" alt="Geovault APAC GEO Authority">
+          <div>
+            <span>讓 AI 主動理解並推薦你的品牌</span>
+          </div>
+        </div>
+        <div class="hook-copy">
+          <h2>免費掃描<br><span class="accent">讓 AI 自動找到你</span></h2>
+          <p>不用先猜問題在哪<br>輸入網址 Geovault 直接告訴你<br>品牌現在能不能被 AI 讀懂 引用 推薦</p>
+        </div>
+      </div>
+
+      <div class="camera">
+        <figure class="panel p1">
+          <img src="assets/publish-sidebar.png" alt="Geovault 多平台發布真實系統畫面">
+          <div class="proof-layer">
+            <div class="score-orbit d-score"><div><b>92</b><span>GEO Score<br>Platinum</span></div></div>
+            <div class="proof-card d-publish"><small>本月 AI 引用</small><b>148</b><span>較上月 +63%</span></div>
+            <div class="proof-pill d-live">5 個平台內容已同步</div>
+          </div>
+        </figure>
+
+        <figure class="panel panel-content p2">
+          <img src="assets/content-engine.png" alt="Geovault AI 內容生成真實系統畫面">
+          <div class="proof-layer">
+            <div class="proof-card d-content"><small>AI 可引用內容</small><b>326</b><span>已發布資產</span></div>
+            <div class="proof-table d-growth">
+              <small>內容引擎實績</small>
+              <div class="proof-row"><span>FAQ 知識點</span><strong>182</strong></div>
+              <div class="proof-row"><span>品牌文章</span><strong>74</strong></div>
+              <div class="proof-row"><span>引用摘要</span><strong>96%</strong></div>
+            </div>
+          </div>
+        </figure>
+
+        <figure class="panel panel-monitor p3">
+          <img src="assets/monitor-grouping-demo.png" alt="Geovault AI 引用監控最新真實系統畫面">
+        </figure>
+
+        <figure class="panel p4">
+          <img src="assets/publish-sidebar.png" alt="Geovault 多平台發布真實系統畫面">
+          <div class="proof-layer">
+            <div class="proof-card d-channels"><small>發布成功率</small><b>98%</b><span>12 個任務完成</span></div>
+            <div class="proof-pill d-live">Medium / LinkedIn / WordPress / Google 已送出</div>
+          </div>
+        </figure>
+
+        <figure class="panel panel-content p5">
+          <img src="assets/content-engine.png" alt="Geovault 內容引擎真實系統畫面">
+          <div class="proof-layer">
+            <div class="proof-card d-content"><small>商機提問成長</small><b>236</b><span>AI 搜尋來源</span></div>
+            <div class="proof-pill d-live">品牌資料已進入 llms-full.txt</div>
+          </div>
+        </figure>
+      </div>
+
+      <div class="stack">
+        <figure class="mini m1"><img src="assets/publish-sidebar.png" alt="多平台發布畫面"></figure>
+        <figure class="mini m2"><img src="assets/content-engine.png" alt="內容引擎畫面"></figure>
+        <figure class="mini m3"><img src="assets/monitor-grouping-demo.png" alt="AI 監控最新畫面"></figure>
+      </div>
+
+      <div class="metrics">
+        <div class="metric"><b>掃描</b><em>Scan</em><span>找出 AI 讀不懂的缺口</span></div>
+        <div class="metric"><b>建置</b><em>Build</em><span>建立品牌知識與引用資產</span></div>
+        <div class="metric"><b>發布</b><em>Push</em><span>推進多平台內容通路</span></div>
+        <div class="metric"><b>證明</b><em>Prove</em><span>追蹤 AI 是否真的引用</span></div>
+      </div>
+
+      <div class="brand-finale">
+        <div class="logo-lockup">
+          <img class="brand-logo-img" src="assets/geovault-logo-full-dark.svg" alt="Geovault APAC GEO Authority">
+          <div>
+            <span>讓 AI 主動理解並推薦你的品牌</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="subtitle" id="subtitle">
+        Geovault 把 AI 搜尋能見度變成完整成長系統 <small>Voiceover and bilingual subtitles enabled</small>
+      </div>
+
+      <div class="rail">
+        <span><b>展示資料層：</b>真實系統截圖 + Demo 實績數據，用於客戶簡報與影片錄製</span>
+        <span>60 秒</span>
+      </div>
+      <div class="progress"><span></span></div>
+    </main>
+  </div>
+
+  <script>
+    const DURATION = 60000;
+    const stage = document.getElementById("stage");
+    const toggle = document.getElementById("toggle");
+    const restart = document.getElementById("restart");
+    const playVoice = document.getElementById("playVoice");
+    const timecode = document.getElementById("timecode");
+    const subtitle = document.getElementById("subtitle");
+
+    const initialSeek = Number(document.documentElement.dataset.seek || 0) * 1000;
+    let startedAt = performance.now() - initialSeek;
+    let pausedAt = 0;
+    let paused = false;
+    let raf = 0;
+    let audioEnabled = false;
+    let audioCtx = null;
+    let masterGain = null;
+    let ambientOsc = null;
+    let bgmNodes = [];
+    let fxPlayed = new Set();
+    let spokenCueIndex = -1;
+    let musicStep = -1;
+    let preferredVoice = null;
+
+    const captions = [
+      {
+        start: 0,
+        end: 8500,
+        text: "免費掃描讓 AI 自動找到你",
+        sub: "Free scan lets AI find your brand"
+      },
+      {
+        start: 8500,
+        end: 19000,
+        text: "Geovault 把一次掃描變成持續成長系統",
+        sub: "One scan becomes an operating layer"
+      },
+      {
+        start: 19000,
+        end: 31000,
+        text: "內容生產直接連到品牌知識庫",
+        sub: "Content connects to a brand knowledge base"
+      },
+      {
+        start: 31000,
+        end: 40000,
+        text: "引用監控用真實數據證明成效",
+        sub: "Citation monitoring proves lift with data"
+      },
+      {
+        start: 40000,
+        end: 51500,
+        text: "發布流程同步推進到多平台",
+        sub: "Distribution pushes assets across channels"
+      },
+      {
+        start: 51500,
+        end: 56500,
+        text: "掃描 建置 發布 證明",
+        sub: "Scan Build Push Prove"
+      },
+      {
+        start: 56500,
+        end: 60000,
+        text: "Geovault 讓 AI 主動理解並推薦你的品牌",
+        sub: "The operating layer for AI visibility"
+      }
+    ];
+
+    const fxCues = [
+      { at: 900, type: "rise" },
+      { at: 11600, type: "whoosh" },
+      { at: 23800, type: "pulse" },
+      { at: 36600, type: "whoosh" },
+      { at: 48600, type: "pulse" },
+      { at: 56600, type: "logo" }
+    ];
+
+    function format(ms) {
+      const seconds = Math.max(0, Math.min(60, Math.floor(ms / 1000)));
+      return "00:" + String(seconds).padStart(2, "0") + " / 01:00";
+    }
+
+    function currentElapsed(now) {
+      return paused ? pausedAt : now - startedAt;
+    }
+
+    function updateCaption(elapsed) {
+      const cue = captions.find((item) => elapsed >= item.start && elapsed < item.end) || captions[captions.length - 1];
+      subtitle.className = "subtitle";
+      subtitle.innerHTML = cue.text + "<small>" + cue.sub + "</small>";
+    }
+
+    function ensureAudio() {
+      if (audioCtx) return;
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      audioCtx = new AudioContextClass();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.22;
+      masterGain.connect(audioCtx.destination);
+
+      createBgmLayer();
+    }
+
+    function createBgmLayer() {
+      if (!audioCtx || !masterGain || bgmNodes.length > 0) return;
+      const layers = [
+        { freq: 46.25, type: "sine", gain: 0.045 },
+        { freq: 138.59, type: "triangle", gain: 0.018 },
+        { freq: 207.65, type: "sine", gain: 0.014 },
+        { freq: 277.18, type: "triangle", gain: 0.010 }
+      ];
+      for (const layer of layers) {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = layer.type;
+        osc.frequency.value = layer.freq;
+        g.gain.value = layer.gain;
+        osc.connect(g);
+        g.connect(masterGain);
+        osc.start();
+        bgmNodes.push({ osc, gain: g });
+      }
+      ambientOsc = bgmNodes[0]?.osc || null;
+    }
+
+    function playTone(freq, duration, gain, type) {
+      if (!audioCtx || !masterGain) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = type || "sine";
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(30, freq * 1.8), now + duration);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(gain, now + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + duration + 0.05);
+    }
+
+    function playSfx(type) {
+      if (!audioEnabled) return;
+      ensureAudio();
+      if (!audioCtx) return;
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      if (type === "rise") {
+        playTone(92, 1.4, 0.12, "sine");
+        playTone(184, 1.1, 0.05, "triangle");
+      } else if (type === "whoosh") {
+        playTone(160, 0.55, 0.10, "sawtooth");
+      } else if (type === "pulse") {
+        playTone(260, 0.18, 0.12, "triangle");
+        setTimeout(() => playTone(390, 0.16, 0.08, "triangle"), 140);
+      } else if (type === "logo") {
+        playTone(196, 0.9, 0.10, "sine");
+        setTimeout(() => playTone(392, 1.1, 0.08, "sine"), 180);
+        setTimeout(() => playTone(588, 1.25, 0.06, "sine"), 360);
+      }
+    }
+
+    function chooseVoice() {
+      if (!("speechSynthesis" in window)) return;
+      const voices = window.speechSynthesis.getVoices();
+      preferredVoice =
+        voices.find((voice) => /zh-TW|zh_Hant|Taiwan/i.test(voice.lang + voice.name)) ||
+        voices.find((voice) => /zh|Chinese|Hant/i.test(voice.lang + voice.name)) ||
+        null;
+    }
+
+    function speakCue(index) {
+      if (!audioEnabled || !("speechSynthesis" in window)) return;
+      if (index < 0 || index >= captions.length || index === spokenCueIndex) return;
+      spokenCueIndex = index;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(captions[index].text);
+      utterance.lang = "zh-TW";
+      utterance.rate = 0.9;
+      utterance.pitch = 0.86;
+      utterance.volume = 0.92;
+      if (!preferredVoice) chooseVoice();
+      if (preferredVoice) utterance.voice = preferredVoice;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function updateVoiceover(elapsed) {
+      if (!audioEnabled || paused) return;
+      const index = captions.findIndex((item) => elapsed >= item.start && elapsed < item.end);
+      if (index >= 0) speakCue(index);
+    }
+
+    function updateMusicBed(elapsed) {
+      if (!audioEnabled || paused) return;
+      ensureAudio();
+      if (!audioCtx) return;
+      const step = Math.floor(elapsed / 1500);
+      if (step === musicStep) return;
+      musicStep = step;
+      const notes = [185, 233, 277, 349, 415, 554, 466, 349];
+      const note = notes[step % notes.length];
+      playTone(note, 0.72, 0.030, "triangle");
+      if (step % 4 === 0) playTone(92.5, 0.38, 0.055, "sine");
+      if (step % 8 === 6) playTone(note * 1.5, 0.42, 0.025, "sine");
+    }
+
+    function restartFilm(withVoice) {
+      cancelAnimationFrame(raf);
+      paused = false;
+      pausedAt = 0;
+      startedAt = performance.now();
+      fxPlayed = new Set();
+      spokenCueIndex = -1;
+      musicStep = -1;
+      document.body.classList.remove("paused");
+      stage.style.display = "none";
+      void stage.offsetHeight;
+      stage.style.display = "";
+      toggle.textContent = "Pause";
+      if (withVoice) {
+        audioEnabled = true;
+        ensureAudio();
+        if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+        if ("speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+          chooseVoice();
+        }
+        playVoice.textContent = "口白與 BGM 已啟用";
+      } else if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      raf = requestAnimationFrame(tick);
+    }
+
+    function tick(now) {
+      const elapsed = currentElapsed(now);
+      timecode.textContent = format(elapsed);
+      updateCaption(elapsed);
+      if (audioEnabled && !paused) {
+        updateVoiceover(elapsed);
+        updateMusicBed(elapsed);
+        for (const cue of fxCues) {
+          if (elapsed >= cue.at && !fxPlayed.has(cue.at)) {
+            fxPlayed.add(cue.at);
+            playSfx(cue.type);
+          }
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    }
+
+    toggle.addEventListener("click", () => {
+      if (paused) {
+        paused = false;
+        startedAt = performance.now() - pausedAt;
+        document.body.classList.remove("paused");
+        toggle.textContent = "Pause";
+        if ("speechSynthesis" in window) window.speechSynthesis.resume();
+        if (masterGain) masterGain.gain.value = 0.22;
+      } else {
+        paused = true;
+        pausedAt = performance.now() - startedAt;
+        document.body.classList.add("paused");
+        toggle.textContent = "Play";
+        if ("speechSynthesis" in window) window.speechSynthesis.pause();
+        if (masterGain) masterGain.gain.value = 0;
+      }
+    });
+
+    restart.addEventListener("click", () => restartFilm(audioEnabled));
+    playVoice.addEventListener("click", () => restartFilm(true));
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.onvoiceschanged = chooseVoice;
+    }
+
+    updateCaption(initialSeek);
+    raf = requestAnimationFrame(tick);
+  </script>
+</body>
+</html>

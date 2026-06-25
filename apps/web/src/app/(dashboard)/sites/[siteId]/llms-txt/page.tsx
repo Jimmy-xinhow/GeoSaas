@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/shared/page-header'
 import {
   Card,
   CardContent,
@@ -115,47 +116,43 @@ export default function LlmsTxtPage() {
           <ArrowLeft className="h-4 w-4 mr-1" />
           返回網站詳情
         </Link>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <FileText className="h-6 w-6 text-blue-600" />
-            <div>
-              <h1 className="text-2xl font-bold text-white">llms.txt 託管</h1>
-              <p className="text-muted-foreground mt-1">
-                {site.name} — 管理您的 llms.txt 檔案
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={handleGenerate}
-              disabled={generateMutation.isPending}
-            >
-              {generateMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4 mr-2" />
-              )}
-              AI 生成
-            </Button>
-            <Button
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={handleSave}
-              disabled={updateMutation.isPending}
-            >
-              {updateMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              儲存
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          title="llms.txt 託管"
+          description={`${site.name} — 管理您的 llms.txt 檔案`}
+          icon={FileText}
+          actions={
+            <>
+              <Button
+                variant="outline"
+                onClick={handleGenerate}
+                disabled={generateMutation.isPending}
+              >
+                {generateMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-2" />
+                )}
+                AI 生成
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleSave}
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                儲存
+              </Button>
+            </>
+          }
+        />
       </div>
 
       {/* Hosted URL */}
-      <Card className="bg-white/5 border-white/10">
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">託管網址</CardTitle>
           <CardDescription>此為您的 llms.txt 公開託管網址</CardDescription>
@@ -194,7 +191,7 @@ export default function LlmsTxtPage() {
         </TabsList>
 
         <TabsContent value="editor">
-          <Card className="bg-white/5 border-white/10">
+          <Card>
             <CardContent className="pt-6">
               <textarea
                 value={content}
@@ -207,7 +204,7 @@ export default function LlmsTxtPage() {
         </TabsContent>
 
         <TabsContent value="preview">
-          <Card className="bg-white/5 border-white/10">
+          <Card>
             <CardContent className="pt-6">
               <pre className="w-full h-[400px] p-4 bg-white/5 rounded-lg overflow-auto whitespace-pre-wrap text-sm font-mono">
                 {content || '(尚無內容)'}
@@ -217,7 +214,7 @@ export default function LlmsTxtPage() {
         </TabsContent>
 
         <TabsContent value="install">
-          <Card className="bg-white/5 border-white/10">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">安裝方式</CardTitle>
               <CardDescription>

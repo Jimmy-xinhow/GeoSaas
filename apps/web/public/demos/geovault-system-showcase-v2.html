@@ -1,0 +1,1309 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Geovault Showcase Film V2</title>
+  <script>
+    (() => {
+      const seek = Number(new URLSearchParams(location.search).get("seek") || 0);
+      if (Number.isFinite(seek) && seek > 0) {
+        document.documentElement.style.setProperty("--seek-delay", `-${Math.min(seek, 45)}s`);
+        document.documentElement.dataset.seek = String(Math.min(seek, 45));
+      }
+    })();
+  </script>
+  <style>
+    :root {
+      --duration: 45s;
+      --bg: #02040a;
+      --ink: #f8fbff;
+      --muted: #9fb1ca;
+      --cyan: #52e6f0;
+      --blue: #67a5ff;
+      --green: #5df0a2;
+      --gold: #f4cf69;
+      color-scheme: dark;
+      font-family: "SF Pro Display", "PingFang TC", "Segoe UI Variable Display", "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      letter-spacing: 0;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 14px;
+      overflow-x: hidden;
+    }
+
+    .wrap { width: min(100%, 1440px); }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 14px;
+      font-weight: 780;
+      line-height: 1.15;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 4px;
+      color: #8fa0b8;
+      font-size: 12px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control {
+      height: 34px;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 8px;
+      background: rgba(255,255,255,.055);
+      color: #fff;
+      padding: 0 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .control.primary {
+      border-color: rgba(82,230,240,.36);
+      background: linear-gradient(135deg, rgba(37,99,235,.72), rgba(8,145,178,.58));
+      box-shadow: 0 0 26px rgba(82,230,240,.16);
+    }
+
+    .timecode {
+      width: 94px;
+      color: #8fa0b8;
+      font-size: 12px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stage {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 10px;
+      background:
+        radial-gradient(circle at 82% 18%, rgba(34,211,238,.16), transparent 30%),
+        radial-gradient(circle at 18% 82%, rgba(37,99,235,.20), transparent 34%),
+        linear-gradient(115deg, #02040a 0%, #061020 58%, #030610 100%);
+      box-shadow: 0 44px 120px rgba(0,0,0,.64);
+      isolation: isolate;
+    }
+
+    .stage::before {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      content: "";
+      background:
+        linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px),
+        linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: linear-gradient(90deg, transparent, #000 16%, #000 88%, transparent);
+      opacity: .52;
+      animation: gridDrift 18s ease-in-out infinite alternate;
+    }
+
+    .stage::after {
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      pointer-events: none;
+      content: "";
+      background:
+        linear-gradient(90deg, rgba(2,4,10,.58), transparent 18%, transparent 88%, rgba(2,4,10,.68)),
+        linear-gradient(0deg, rgba(2,4,10,.74), transparent 23%, transparent 80%, rgba(2,4,10,.48));
+    }
+
+    .brand-open,
+    .brand-close {
+      position: absolute;
+      z-index: 50;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: #02040a;
+      pointer-events: none;
+    }
+
+    .brand-open { animation: brandOpen var(--duration) linear both; }
+    .brand-close { opacity: 0; animation: brandClose var(--duration) linear both; }
+
+    .logo-lockup {
+      display: grid;
+      justify-items: center;
+      gap: 20px;
+      transform: scale(.98);
+    }
+
+    .brand-logo-img {
+      width: min(360px, 48vw);
+      height: auto;
+      filter: drop-shadow(0 28px 70px rgba(82,230,240,.12));
+    }
+
+    .corner-logo {
+      position: absolute;
+      z-index: 42;
+      top: clamp(22px, 3.1vw, 40px);
+      left: clamp(24px, 4.8vw, 68px);
+      display: flex;
+      align-items: center;
+      pointer-events: none;
+      opacity: .96;
+      filter: drop-shadow(0 16px 38px rgba(0,0,0,.44));
+    }
+
+    .corner-logo img {
+      width: clamp(112px, 11vw, 168px);
+      height: auto;
+    }
+
+    .logo-lockup span {
+      color: #c8d5e9;
+      font-size: clamp(18px, 1.75vw, 25px);
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+
+    .brand-close .logo-lockup {
+      gap: 16px;
+      max-width: min(860px, calc(100% - 64px));
+      text-align: center;
+    }
+
+    .brand-close .brand-logo-img {
+      width: min(320px, 40vw);
+    }
+
+    .cta-title {
+      margin: 12px 0 0;
+      color: #f8fbff;
+      font-size: clamp(34px, 5.8vw, 76px);
+      font-weight: 930;
+      line-height: .98;
+      letter-spacing: 0;
+    }
+
+    .cta-title span { color: var(--cyan); }
+
+    .cta-sub {
+      max-width: 720px;
+      margin: 2px 0 8px;
+      color: #c8d5e9;
+      font-size: clamp(17px, 1.7vw, 24px);
+      font-weight: 720;
+      line-height: 1.35;
+    }
+
+    .cta-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 52px;
+      margin-top: 4px;
+      padding: 0 28px;
+      border: 1px solid rgba(82,230,240,.48);
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(82,230,240,.94), rgba(93,240,162,.82));
+      color: #031018;
+      font-size: clamp(18px, 1.55vw, 22px);
+      font-weight: 900;
+      box-shadow: 0 22px 70px rgba(82,230,240,.24);
+    }
+
+    .layout {
+      position: absolute;
+      z-index: 3;
+      inset: 0;
+      display: grid;
+      grid-template-columns: minmax(340px, 36%) minmax(0, 1fr);
+      align-items: center;
+      gap: clamp(24px, 4vw, 64px);
+      padding: clamp(44px, 6vw, 78px) clamp(44px, 6vw, 78px) 128px;
+    }
+
+    .story {
+      position: relative;
+      z-index: 22;
+      min-height: 430px;
+    }
+
+    .story-scene {
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: min(520px, 100%);
+      opacity: 0;
+      transform: translateY(18px);
+      animation-duration: var(--duration);
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+    }
+
+    .story-scene.s1 { animation-name: story1; }
+    .story-scene.s2 { animation-name: story2; }
+    .story-scene.s3 { animation-name: story3; }
+    .story-scene.s4 { animation-name: story4; }
+    .story-scene.s5 { animation-name: story5; }
+    .story-scene.s6 { animation-name: story6; }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      color: #bdd0ee;
+      font-size: clamp(10px, .95vw, 12px);
+      font-weight: 820;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+
+    .kicker::before {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--green);
+      box-shadow: 0 0 18px rgba(93,240,162,.78);
+      content: "";
+    }
+
+    h1,
+    h2 {
+      margin: 16px 0 0;
+      color: #fff;
+      font-weight: 810;
+      letter-spacing: 0;
+      line-height: 1.02;
+      text-shadow: 0 18px 46px rgba(0,0,0,.72);
+    }
+
+    h1 { font-size: clamp(42px, 5vw, 76px); }
+    h2 { font-size: clamp(34px, 4.2vw, 62px); }
+
+    .accent { color: var(--cyan); }
+    .gold { color: var(--gold); }
+
+    .story-scene p {
+      margin: 22px 0 0;
+      max-width: 38ch;
+      color: #c7d4e9;
+      font-size: clamp(15px, 1.35vw, 19px);
+      line-height: 1.62;
+      font-weight: 570;
+    }
+
+    .stat-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .stat {
+      min-width: 132px;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 10px;
+      background: rgba(7,14,29,.72);
+      padding: 13px 14px;
+      box-shadow: 0 22px 70px rgba(0,0,0,.28);
+      backdrop-filter: blur(18px);
+    }
+
+    .stat b {
+      display: block;
+      color: #fff;
+      font-size: 26px;
+      line-height: 1;
+      font-weight: 830;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 7px;
+      color: #9fb1ca;
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .visual {
+      position: relative;
+      z-index: 4;
+      min-height: min(72vh, 620px);
+      perspective: 1500px;
+    }
+
+    .product-frame {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      width: min(62vw, 900px);
+      max-width: 100%;
+      transform: translateY(-50%) rotateY(-8deg) rotateX(3deg);
+      transform-origin: center;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 16px;
+      background: #111827;
+      box-shadow: 0 40px 130px rgba(0,0,0,.56);
+      opacity: 0;
+      animation-duration: var(--duration);
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+    }
+
+    .product-frame img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      filter: saturate(1.08) contrast(1.04) brightness(.86);
+      transform: scale(1.01);
+    }
+
+    .product-frame.f1 { aspect-ratio: 1494 / 887; animation-name: frame1; }
+    .product-frame.f2 { aspect-ratio: 1440 / 1183; animation-name: frame2; }
+    .product-frame.f3 { aspect-ratio: 1440 / 1193; animation-name: frame3; }
+    .product-frame.f4 { aspect-ratio: 1494 / 887; animation-name: frame4; }
+    .product-frame.f5 { aspect-ratio: 1440 / 1183; animation-name: frame5; }
+
+    .product-frame::after {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      content: "";
+      background:
+        linear-gradient(90deg, rgba(2,6,23,.30), transparent 40%, rgba(2,6,23,.16)),
+        linear-gradient(0deg, rgba(2,6,23,.24), transparent 46%);
+    }
+
+    .cta-transition {
+      position: absolute;
+      right: -14%;
+      top: 46%;
+      width: min(68vw, 980px);
+      transform: translateY(-46%) rotateY(-5deg) rotateX(2deg) scale(1);
+      transform-origin: center;
+      overflow: visible;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
+      opacity: 0;
+      animation: ctaTransition var(--duration) linear both;
+    }
+
+    .cta-transition::before {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      content: "";
+      display: none;
+    }
+
+    .cta-transition > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .alliance-image {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      object-position: center;
+      border-radius: 0;
+      opacity: .88;
+      filter: saturate(1.12) contrast(1.08) brightness(.9);
+      mix-blend-mode: screen;
+      mask-image: radial-gradient(ellipse at 62% 50%, #000 0 48%, rgba(0,0,0,.7) 60%, transparent 78%);
+      -webkit-mask-image: radial-gradient(ellipse at 62% 50%, #000 0 48%, rgba(0,0,0,.7) 60%, transparent 78%);
+    }
+
+    .flow-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      mix-blend-mode: screen;
+      opacity: .95;
+      mask-image: radial-gradient(ellipse at 55% 52%, #000 0 54%, transparent 82%);
+      -webkit-mask-image: radial-gradient(ellipse at 55% 52%, #000 0 54%, transparent 82%);
+    }
+
+    .flow-streak {
+      position: absolute;
+      left: var(--x);
+      top: var(--y);
+      width: var(--w);
+      height: 7px;
+      border-radius: 999px;
+      background:
+        linear-gradient(90deg, transparent 0%, rgba(82,230,240,.18) 20%, rgba(93,240,162,.95) 48%, rgba(82,230,240,.46) 66%, transparent 100%);
+      box-shadow: 0 0 18px rgba(82,230,240,.70), 0 0 36px rgba(93,240,162,.24);
+      transform: rotate(var(--r)) translateX(-46%);
+      transform-origin: center;
+      animation: flowTravel 1.65s ease-in-out infinite;
+      animation-delay: var(--d);
+    }
+
+    .flow-streak::after {
+      position: absolute;
+      left: 44%;
+      top: 50%;
+      width: 14px;
+      height: 14px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 18px rgba(82,230,240,.9);
+      content: "";
+    }
+
+    .operation-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 24;
+      pointer-events: none;
+    }
+
+    .process-panel {
+      position: absolute;
+      z-index: 28;
+      right: 6%;
+      width: min(360px, 28vw);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 14px;
+      background: rgba(3,8,19,.84);
+      box-shadow: 0 24px 74px rgba(0,0,0,.42);
+      padding: 14px 15px;
+      opacity: 0;
+      transform: translateY(12px);
+      backdrop-filter: blur(20px);
+      animation-duration: var(--duration);
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+    }
+
+    .process-panel h3 {
+      margin: 0;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 820;
+      line-height: 1.2;
+    }
+
+    .process-panel p {
+      margin: 6px 0 0;
+      color: #9fb1ca;
+      font-size: 12px;
+      font-weight: 640;
+      line-height: 1.45;
+    }
+
+    .op-scan { top: 28%; animation-name: opScan; }
+    .op-generate { top: 22%; animation-name: opGenerate; }
+    .op-monitor { top: 23%; animation-name: opMonitor; }
+    .op-publish { top: 24%; animation-name: opPublish; }
+    .op-loop { top: 24%; animation-name: opLoop; }
+
+    .url-field {
+      margin-top: 12px;
+      border: 1px solid rgba(82,230,240,.18);
+      border-radius: 9px;
+      background: rgba(15,23,42,.74);
+      padding: 9px 10px;
+      color: #dff8ff;
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .url-field span {
+      display: inline-block;
+      max-width: 100%;
+      overflow: hidden;
+      border-right: 2px solid var(--cyan);
+      animation: typing 2.4s steps(22) infinite alternate;
+    }
+
+    .check-list,
+    .queue-list,
+    .stream-list,
+    .monitor-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .check-row,
+    .queue-row,
+    .monitor-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 8px;
+      color: #dbeafe;
+      font-size: 12px;
+      font-weight: 720;
+    }
+
+    .check-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: rgba(93,240,162,.18);
+      box-shadow: inset 0 0 0 1px rgba(93,240,162,.32);
+      position: relative;
+    }
+
+    .check-dot::after {
+      position: absolute;
+      inset: 4px;
+      border-radius: inherit;
+      background: var(--green);
+      content: "";
+      animation: dotConfirm 1.3s ease-in-out infinite;
+    }
+
+    .check-row em,
+    .queue-row em,
+    .monitor-row em {
+      color: var(--green);
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 820;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .score-build {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .score-build b {
+      color: #fff;
+      font-size: 34px;
+      line-height: 1;
+      font-weight: 860;
+    }
+
+    .score-build i,
+    .queue-row i,
+    .monitor-row i {
+      display: block;
+      height: 5px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+    }
+
+    .score-build i::before,
+    .queue-row i::before,
+    .monitor-row i::before {
+      display: block;
+      width: var(--fill, 72%);
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--green), var(--gold));
+      transform-origin: left center;
+      animation: fillRun 2.2s ease-in-out infinite alternate;
+      content: "";
+    }
+
+    .stream-line {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.10);
+      overflow: hidden;
+    }
+
+    .stream-line::before {
+      display: block;
+      width: var(--w, 72%);
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, rgba(82,230,240,.18), rgba(82,230,240,.88), rgba(93,240,162,.78));
+      animation: streamPulse 1.6s ease-in-out infinite alternate;
+      content: "";
+    }
+
+    .token-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      margin-top: 12px;
+    }
+
+    .token-grid span {
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 8px;
+      background: rgba(255,255,255,.055);
+      padding: 8px 6px;
+      color: #dbeafe;
+      font-size: 11px;
+      font-weight: 760;
+      text-align: center;
+    }
+
+    .loop-path {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 7px;
+      margin-top: 13px;
+    }
+
+    .loop-path span {
+      border: 1px solid rgba(82,230,240,.16);
+      border-radius: 9px;
+      background: rgba(15,23,42,.72);
+      padding: 9px 6px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 820;
+      text-align: center;
+      animation: loopStep 1.8s ease-in-out infinite;
+    }
+
+    .loop-path span:nth-child(2) { animation-delay: .18s; }
+    .loop-path span:nth-child(3) { animation-delay: .36s; }
+    .loop-path span:nth-child(4) { animation-delay: .54s; }
+
+    .scan-line {
+      position: absolute;
+      left: 43%;
+      right: 4%;
+      height: 2px;
+      opacity: 0;
+      background: linear-gradient(90deg, transparent, rgba(82,230,240,.92), transparent);
+      box-shadow: 0 0 28px rgba(82,230,240,.64);
+      animation: scanLine var(--duration) linear both;
+    }
+
+    .status-chip {
+      position: absolute;
+      right: 6%;
+      bottom: 17%;
+      z-index: 28;
+      min-width: 286px;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 12px;
+      background: rgba(3,8,19,.82);
+      box-shadow: 0 24px 74px rgba(0,0,0,.42);
+      padding: 13px 15px;
+      opacity: 0;
+      backdrop-filter: blur(20px);
+      animation: chipFlow var(--duration) linear both;
+    }
+
+    .status-chip b {
+      display: block;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 780;
+    }
+
+    .status-chip span {
+      display: block;
+      margin-top: 5px;
+      color: #9fb1ca;
+      font-size: 12px;
+      font-weight: 640;
+    }
+
+    .status-chip i {
+      display: block;
+      height: 3px;
+      margin-top: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+    }
+
+    .status-chip i::before {
+      display: block;
+      width: 42%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--green), var(--gold));
+      animation: progressSweep 2.2s ease-in-out infinite;
+      content: "";
+    }
+
+    .subtitle {
+      position: absolute;
+      z-index: 36;
+      left: 50%;
+      bottom: 74px;
+      width: min(1020px, calc(100% - 96px));
+      transform: translateX(-50%);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+      background: rgba(2,6,23,.72);
+      padding: 12px 24px 11px;
+      color: #f8fafc;
+      text-align: center;
+      font-size: clamp(23px, 2.25vw, 32px);
+      font-weight: 780;
+      line-height: 1.16;
+      text-shadow: 0 4px 18px rgba(0,0,0,.72);
+      backdrop-filter: blur(22px);
+    }
+
+    .subtitle small {
+      display: block;
+      margin-top: 5px;
+      color: #9fb1cb;
+      font-size: .52em;
+      font-weight: 650;
+      line-height: 1.18;
+    }
+
+    .rail {
+      position: absolute;
+      z-index: 34;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      min-height: 58px;
+      padding: 0 clamp(28px, 5vw, 68px);
+      border-top: 1px solid rgba(255,255,255,.10);
+      background: rgba(2,4,10,.78);
+      backdrop-filter: blur(24px);
+      color: #cbd7eb;
+      font-size: clamp(12px, 1.05vw, 14px);
+      font-weight: 650;
+    }
+
+    .rail span:last-child { color: #8394ad; font-variant-numeric: tabular-nums; }
+
+    .progress {
+      position: absolute;
+      z-index: 38;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: rgba(255,255,255,.10);
+    }
+
+    .progress span {
+      display: block;
+      width: 100%;
+      height: 100%;
+      transform-origin: left center;
+      transform: scaleX(0);
+      background: linear-gradient(90deg, #52e6f0, #5df0a2, #f4cf69);
+      animation: progress var(--duration) linear both;
+    }
+
+    .stage.paused *,
+    .stage.paused *::before,
+    .stage.paused *::after { animation-play-state: paused !important; }
+
+    .brand-open,
+    .brand-close,
+    .story-scene,
+    .product-frame,
+    .cta-transition,
+    .process-panel,
+    .scan-line,
+    .status-chip,
+    .progress span {
+      animation-delay: var(--seek-delay, 0s);
+    }
+
+    @keyframes gridDrift {
+      from { transform: translate3d(0,0,0); opacity: .42; }
+      to { transform: translate3d(-22px, 14px, 0); opacity: .62; }
+    }
+
+    @keyframes brandOpen {
+      0%, 5.8% { opacity: 1; }
+      7.6% { opacity: 0; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes brandClose {
+      0%, 96% { opacity: 0; }
+      98.2%, 100% { opacity: 1; }
+    }
+
+    @keyframes story1 { 0%, 6.5% { opacity: 0; transform: translateY(20px); } 7.6%, 20% { opacity: 1; transform: translateY(0); } 21.2%, 100% { opacity: 0; transform: translateY(-14px); } }
+    @keyframes story2 { 0%, 20% { opacity: 0; transform: translateY(20px); } 21.2%, 36.7% { opacity: 1; transform: translateY(0); } 38.2%, 100% { opacity: 0; transform: translateY(-14px); } }
+    @keyframes story3 { 0%, 36.7% { opacity: 0; transform: translateY(20px); } 38.2%, 53.3% { opacity: 1; transform: translateY(0); } 55%, 100% { opacity: 0; transform: translateY(-14px); } }
+    @keyframes story4 { 0%, 53.3% { opacity: 0; transform: translateY(20px); } 55%, 70% { opacity: 1; transform: translateY(0); } 71.5%, 100% { opacity: 0; transform: translateY(-14px); } }
+    @keyframes story5 { 0%, 70% { opacity: 0; transform: translateY(20px); } 71.5%, 86.7% { opacity: 1; transform: translateY(0); } 88.2%, 100% { opacity: 0; transform: translateY(-14px); } }
+    @keyframes story6 { 0%, 86.7% { opacity: 0; transform: translateY(20px); } 88.2%, 96% { opacity: 1; transform: translateY(0); } 97.2%, 100% { opacity: 0; transform: translateY(-14px); } }
+
+    @keyframes frame1 { 0%, 6.5% { opacity: 0; transform: translateY(-45%) rotateY(-12deg) rotateX(4deg) scale(.94); } 7.6%, 20% { opacity: 1; transform: translateY(-50%) rotateY(-8deg) rotateX(3deg) scale(1); } 21.2%, 100% { opacity: 0; transform: translateY(-54%) rotateY(-4deg) rotateX(2deg) scale(.98); } }
+    @keyframes frame2 { 0%, 20% { opacity: 0; transform: translateY(-45%) rotateY(-12deg) rotateX(4deg) scale(.94); } 21.2%, 36.7% { opacity: 1; transform: translateY(-50%) rotateY(-8deg) rotateX(3deg) scale(1); } 38.2%, 100% { opacity: 0; transform: translateY(-54%) rotateY(-4deg) rotateX(2deg) scale(.98); } }
+    @keyframes frame3 { 0%, 36.7% { opacity: 0; transform: translateY(-45%) rotateY(-12deg) rotateX(4deg) scale(.94); } 38.2%, 53.3% { opacity: 1; transform: translateY(-50%) rotateY(-8deg) rotateX(3deg) scale(1); } 55%, 100% { opacity: 0; transform: translateY(-54%) rotateY(-4deg) rotateX(2deg) scale(.98); } }
+    @keyframes frame4 { 0%, 53.3% { opacity: 0; transform: translateY(-45%) rotateY(-12deg) rotateX(4deg) scale(.94); } 55%, 70% { opacity: 1; transform: translateY(-50%) rotateY(-8deg) rotateX(3deg) scale(1); } 71.5%, 100% { opacity: 0; transform: translateY(-54%) rotateY(-4deg) rotateX(2deg) scale(.98); } }
+    @keyframes frame5 { 0%, 70% { opacity: 0; transform: translateY(-45%) rotateY(-12deg) rotateX(4deg) scale(.94); } 71.5%, 86.7% { opacity: 1; transform: translateY(-50%) rotateY(-8deg) rotateX(3deg) scale(1); } 88.2%, 100% { opacity: 0; transform: translateY(-54%) rotateY(-4deg) rotateX(2deg) scale(.98); } }
+
+    @keyframes opScan { 0%, 6.5% { opacity: 0; transform: translateY(12px); } 8.2%, 19.5% { opacity: 1; transform: translateY(0); } 21.2%, 100% { opacity: 0; transform: translateY(-8px); } }
+    @keyframes opGenerate { 0%, 20% { opacity: 0; transform: translateY(12px); } 22%, 36% { opacity: 1; transform: translateY(0); } 38.2%, 100% { opacity: 0; transform: translateY(-8px); } }
+    @keyframes opMonitor { 0%, 36.7% { opacity: 0; transform: translateY(12px); } 39%, 52.5% { opacity: 1; transform: translateY(0); } 55%, 100% { opacity: 0; transform: translateY(-8px); } }
+    @keyframes opPublish { 0%, 53.3% { opacity: 0; transform: translateY(12px); } 55.5%, 69.2% { opacity: 1; transform: translateY(0); } 71.5%, 100% { opacity: 0; transform: translateY(-8px); } }
+    @keyframes opLoop { 0%, 70% { opacity: 0; transform: translateY(12px); } 72%, 86% { opacity: 1; transform: translateY(0); } 88.2%, 100% { opacity: 0; transform: translateY(-8px); } }
+
+    @keyframes ctaTransition {
+      0%, 86.7% { opacity: 0; transform: translateY(-42%) rotateY(-10deg) rotateX(3deg) scale(.95); }
+      88.2%, 96% { opacity: 1; transform: translateY(-50%) rotateY(-5deg) rotateX(2deg) scale(1); }
+      97.2%, 100% { opacity: 0; transform: translateY(-54%) rotateY(-3deg) rotateX(1deg) scale(.98); }
+    }
+
+    @keyframes flowTravel {
+      0% { opacity: 0; transform: rotate(var(--r)) translateX(-54%) scaleX(.62); filter: blur(.4px); }
+      18% { opacity: 1; }
+      58% { opacity: 1; transform: rotate(var(--r)) translateX(8%) scaleX(1.02); filter: blur(0); }
+      100% { opacity: 0; transform: rotate(var(--r)) translateX(54%) scaleX(.72); filter: blur(.8px); }
+    }
+
+    @keyframes scanLine {
+      0%, 20% { opacity: 0; top: 25%; }
+      24%, 36.7% { opacity: .95; top: 76%; }
+      39%, 53.3% { opacity: .78; top: 34%; }
+      56%, 100% { opacity: 0; top: 72%; }
+    }
+
+    @keyframes chipFlow {
+      0%, 14% { opacity: 0; transform: translateY(10px); }
+      16%, 30% { opacity: 1; transform: translateY(0); }
+      31.7%, 33% { opacity: 0; transform: translateY(10px); }
+      35%, 50% { opacity: 1; transform: translateY(0); }
+      51.7%, 53% { opacity: 0; transform: translateY(10px); }
+      55%, 65% { opacity: 1; transform: translateY(0); }
+      66.7%, 68% { opacity: 0; transform: translateY(10px); }
+      70%, 84% { opacity: 1; transform: translateY(0); }
+      85.8%, 100% { opacity: 0; transform: translateY(10px); }
+    }
+
+    @keyframes typing {
+      from { width: 38%; }
+      to { width: 100%; }
+    }
+
+    @keyframes dotConfirm {
+      0%, 30% { transform: scale(.45); opacity: .42; }
+      55%, 100% { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes fillRun {
+      from { transform: scaleX(.32); }
+      to { transform: scaleX(1); }
+    }
+
+    @keyframes streamPulse {
+      from { transform: translateX(-10%) scaleX(.74); opacity: .55; }
+      to { transform: translateX(0) scaleX(1); opacity: 1; }
+    }
+
+    @keyframes loopStep {
+      0%, 100% { border-color: rgba(82,230,240,.16); transform: translateY(0); }
+      50% { border-color: rgba(93,240,162,.52); transform: translateY(-3px); }
+    }
+
+    @keyframes progressSweep {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(260%); }
+    }
+
+    @keyframes progress {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
+    }
+
+    @media (max-width: 900px) {
+      body { padding: 0; }
+      .wrap { width: 100%; }
+      .toolbar {
+        padding: 10px 12px;
+        margin: 0;
+      }
+      .brand span { display: none; }
+      .control { height: 32px; padding: 0 9px; font-size: 12px; }
+      .timecode { display: none; }
+      .stage {
+        min-height: 100svh;
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+        aspect-ratio: auto;
+      }
+      .layout {
+        grid-template-columns: 1fr;
+        align-content: start;
+        gap: 18px;
+        padding: 42px 18px 178px;
+      }
+      .story { min-height: 230px; }
+      .story-scene { width: 100%; }
+      h1 { font-size: clamp(34px, 11vw, 54px); }
+      h2 { font-size: clamp(30px, 9.8vw, 48px); }
+      .story-scene p { max-width: none; font-size: 15px; }
+      .visual { min-height: 42svh; }
+      .product-frame {
+        left: 0;
+        right: auto;
+        width: 100%;
+        transform: translateY(-50%) rotateY(0) rotateX(0) !important;
+      }
+      .cta-transition {
+        left: 18px;
+        right: -80px;
+        top: 58%;
+        width: auto;
+        padding: 0;
+      }
+      .alliance-image { min-height: 330px; }
+      .process-panel,
+      .scan-line,
+      .status-chip { display: none; }
+      .corner-logo {
+        top: 18px;
+        left: 18px;
+      }
+      .corner-logo img { width: 116px; }
+      .subtitle {
+        width: calc(100% - 36px);
+        bottom: 88px;
+        padding: 10px 12px;
+        font-size: clamp(18px, 5vw, 24px);
+      }
+      .subtitle small { font-size: .5em; }
+      .rail {
+        min-height: 76px;
+        align-items: flex-start;
+        flex-direction: column;
+        justify-content: center;
+        padding: 10px 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="toolbar">
+      <div class="brand">
+        <strong>Geovault Interface Film V2</strong>
+        <span>左側敘事文字 + 右側真實系統操作感畫面</span>
+      </div>
+      <div class="controls">
+        <button class="control" id="toggle" type="button">Pause</button>
+        <button class="control" id="restart" type="button">Replay</button>
+        <div class="timecode" id="timecode">00:00 / 00:45</div>
+      </div>
+    </header>
+
+    <main class="stage" id="stage" aria-label="Geovault 第二版展示影片">
+      <div class="brand-open">
+        <div class="logo-lockup">
+          <img class="brand-logo-img" src="assets/geovault-logo-full-dark.svg" alt="Geovault">
+          <span>讓 AI 主動理解並推薦你的品牌</span>
+        </div>
+      </div>
+
+      <div class="corner-logo" aria-hidden="true">
+        <img src="assets/geovault-logo-full-dark.svg" alt="">
+      </div>
+
+      <section class="layout">
+        <div class="story">
+          <article class="story-scene s1">
+            <div class="kicker">Free Scan</div>
+            <h1>免費掃描<br><span class="accent">讓 AI 自動找到你</span></h1>
+            <p>輸入網站後，Geovault 直接檢查品牌是否能被 AI 讀懂、引用、推薦，不必先猜問題在哪。</p>
+            <div class="stat-row">
+              <div class="stat"><b>92</b><span>GEO Score</span></div>
+              <div class="stat"><b>5</b><span>平台同步</span></div>
+            </div>
+          </article>
+
+          <article class="story-scene s2">
+            <div class="kicker">Content Engine</div>
+            <h2>內容生產<br><span class="accent">直接連到品牌知識庫</span></h2>
+            <p>FAQ、品牌文章、AI 可引用摘要與平台內容，從同一套資料脈絡產生，形成可被模型理解的品牌資料層。</p>
+            <div class="stat-row">
+              <div class="stat"><b>326</b><span>AI 可引用內容</span></div>
+              <div class="stat"><b>96%</b><span>資料完整度</span></div>
+            </div>
+          </article>
+
+          <article class="story-scene s3">
+            <div class="kicker">Citation Monitor</div>
+            <h2>AI 有沒有提到你<br><span class="accent">用數據證明</span></h2>
+            <p>引用次數、平台分布、搜尋問題與回覆內容集中追蹤，讓品牌成長不只停在感覺。</p>
+            <div class="stat-row">
+              <div class="stat"><b>72%</b><span>Perplexity 引用率</span></div>
+              <div class="stat"><b>68%</b><span>ChatGPT 引用率</span></div>
+            </div>
+          </article>
+
+          <article class="story-scene s4">
+            <div class="kicker">Distribution</div>
+            <h2>產出的內容<br><span class="accent">直接推進到通路</span></h2>
+            <p>Medium、LinkedIn、WordPress、Facebook、Google 商家檔案，發布狀態在同一個工作流程裡控管。</p>
+            <div class="stat-row">
+              <div class="stat"><b>98%</b><span>發布成功率</span></div>
+              <div class="stat"><b>12</b><span>任務完成</span></div>
+            </div>
+          </article>
+
+          <article class="story-scene s5">
+            <div class="kicker">GEO Loop</div>
+            <h2>一體化成型的<br><span class="gold">GEO 經營系統</span></h2>
+            <p>掃描、建置、發布、證明一次串起，讓品牌不是只被搜尋，而是持續被 AI 理解與推薦。</p>
+          </article>
+
+          <article class="story-scene s6">
+            <div class="kicker">Geovault Alliance</div>
+            <h2>加入聯盟行銷<br><span class="accent">一起推廣好系統</span></h2>
+            <p>讓更多網站被 AI 看見，也讓 AI 更願意來你的網站抓資料。推廣 Geovault，就是一起把 AI 時代的品牌入口做大。</p>
+          </article>
+        </div>
+
+        <div class="visual" aria-hidden="true">
+          <figure class="product-frame f1">
+            <img src="assets/publish-sidebar.png" alt="">
+          </figure>
+          <figure class="product-frame f2">
+            <img src="assets/content-engine.png" alt="">
+          </figure>
+          <figure class="product-frame f3">
+            <img src="assets/monitor-grouping-demo.png" alt="">
+          </figure>
+          <figure class="product-frame f4">
+            <img src="assets/publish-sidebar.png" alt="">
+          </figure>
+          <figure class="product-frame f5">
+            <img src="assets/content-engine.png" alt="">
+          </figure>
+          <div class="cta-transition">
+            <img class="alliance-image" src="assets/geovault-alliance-ai-visibility.png" alt="">
+            <div class="flow-layer">
+              <span class="flow-streak" style="--x:37%; --y:44%; --w:28%; --r:18deg; --d:0s"></span>
+              <span class="flow-streak" style="--x:53%; --y:38%; --w:26%; --r:-28deg; --d:.24s"></span>
+              <span class="flow-streak" style="--x:49%; --y:58%; --w:30%; --r:31deg; --d:.48s"></span>
+              <span class="flow-streak" style="--x:67%; --y:52%; --w:25%; --r:-12deg; --d:.72s"></span>
+              <span class="flow-streak" style="--x:41%; --y:64%; --w:24%; --r:-35deg; --d:.96s"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="operation-layer">
+        <div class="scan-line"></div>
+        <div class="process-panel op-scan">
+          <h3>掃描任務正在跑</h3>
+          <p>從網址讀取品牌可被 AI 理解的資料線索</p>
+          <div class="url-field"><span>https://geovault.tw</span></div>
+          <div class="check-list">
+            <div class="check-row"><i class="check-dot"></i><span>JSON-LD 結構化資料</span><em>PASS</em></div>
+            <div class="check-row"><i class="check-dot"></i><span>llms.txt AI 可讀入口</span><em>PASS</em></div>
+            <div class="check-row"><i class="check-dot"></i><span>FAQ Schema 與品牌摘要</span><em>READY</em></div>
+          </div>
+          <div class="score-build">
+            <b>92</b>
+            <i style="--fill:92%"></i>
+          </div>
+        </div>
+
+        <div class="process-panel op-generate">
+          <h3>AI 正在產出資料層</h3>
+          <p>FAQ、品牌文章與可引用摘要同步生成</p>
+          <div class="stream-list">
+            <div class="stream-line" style="--w:86%"></div>
+            <div class="stream-line" style="--w:72%"></div>
+            <div class="stream-line" style="--w:94%"></div>
+            <div class="stream-line" style="--w:64%"></div>
+          </div>
+          <div class="token-grid">
+            <span>FAQ 182</span>
+            <span>摘要 74</span>
+            <span>文章 36</span>
+          </div>
+        </div>
+
+        <div class="process-panel op-monitor">
+          <h3>引用監控正在檢查</h3>
+          <p>逐題比對 AI 回覆是否提到品牌</p>
+          <div class="monitor-list">
+            <div class="monitor-row"><span>ChatGPT</span><i style="--fill:68%"></i><em>68%</em></div>
+            <div class="monitor-row"><span>Claude</span><i style="--fill:54%"></i><em>54%</em></div>
+            <div class="monitor-row"><span>Perplexity</span><i style="--fill:72%"></i><em>72%</em></div>
+            <div class="monitor-row"><span>Gemini</span><i style="--fill:47%"></i><em>47%</em></div>
+          </div>
+        </div>
+
+        <div class="process-panel op-publish">
+          <h3>發布佇列正在送出</h3>
+          <p>內容推進到多平台並回寫任務狀態</p>
+          <div class="queue-list">
+            <div class="queue-row"><span>Medium</span><i style="--fill:100%"></i><em>DONE</em></div>
+            <div class="queue-row"><span>LinkedIn</span><i style="--fill:92%"></i><em>SYNC</em></div>
+            <div class="queue-row"><span>WordPress</span><i style="--fill:86%"></i><em>POST</em></div>
+            <div class="queue-row"><span>Google 商家</span><i style="--fill:74%"></i><em>QUEUE</em></div>
+          </div>
+        </div>
+
+        <div class="process-panel op-loop">
+          <h3>GEO 閉環已串起</h3>
+          <p>下一輪監控會把 AI 引用成效回寫到系統</p>
+          <div class="loop-path">
+            <span>掃描</span>
+            <span>建置</span>
+            <span>發布</span>
+            <span>證明</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="brand-close">
+        <div class="logo-lockup">
+          <img class="brand-logo-img" src="assets/geovault-logo-full-dark.svg" alt="Geovault">
+          <h2 class="cta-title">加入 Geovault 聯盟<br><span>一起推廣好系統</span></h2>
+          <p class="cta-sub">推廣 AI 看得懂的網站，也讓 AI 更容易看見你的內容</p>
+          <div class="cta-button">加入推廣計畫</div>
+        </div>
+      </div>
+
+      <div class="subtitle" id="subtitle">
+        你的品牌 AI 找得到嗎
+        <small>Can AI find your brand?</small>
+      </div>
+
+      <div class="rail">
+        <span>FB 廣告版：真實系統截圖 + Demo 實績數據，用於免費掃描導流</span>
+        <span>45 秒</span>
+      </div>
+      <div class="progress"><span></span></div>
+    </main>
+  </div>
+
+  <script>
+    const DURATION = 45000;
+    const stage = document.getElementById("stage");
+    const toggle = document.getElementById("toggle");
+    const restart = document.getElementById("restart");
+    const timecode = document.getElementById("timecode");
+    const subtitle = document.getElementById("subtitle");
+
+    const initialSeek = Number(document.documentElement.dataset.seek || 0) * 1000;
+    let startedAt = performance.now() - initialSeek;
+    let pausedAt = 0;
+    let paused = false;
+    let raf = 0;
+
+    const captions = [
+      { start: 0, end: 3400, text: "你的品牌 AI 找得到嗎", sub: "Can AI find your brand?" },
+      { start: 3400, end: 9500, text: "免費掃描 直接看見 AI 讀不懂哪裡", sub: "Run a free scan and find the gaps" },
+      { start: 9500, end: 17000, text: "內容自動變成 AI 可引用資料層", sub: "Turn content into AI-citable data" },
+      { start: 17000, end: 24750, text: "ChatGPT Perplexity Claude 引用率直接追", sub: "Track AI citations across platforms" },
+      { start: 24750, end: 32000, text: "發布到多平台 讓資料層持續擴散", sub: "Push brand data across channels" },
+      { start: 32000, end: 39600, text: "一體化成型的 GEO 經營系統", sub: "One operating system for GEO growth" },
+      { start: 39600, end: 45000, text: "加入聯盟行銷 一起把好系統推廣出去", sub: "Join the alliance and grow AI visibility together" }
+    ];
+
+    function format(ms) {
+      const seconds = Math.max(0, Math.min(45, Math.floor(ms / 1000)));
+      return "00:" + String(seconds).padStart(2, "0") + " / 00:45";
+    }
+
+    function currentElapsed(now) {
+      return paused ? pausedAt : now - startedAt;
+    }
+
+    function activeCue(elapsed) {
+      return captions.find((item) => elapsed >= item.start && elapsed < item.end) || captions[captions.length - 1];
+    }
+
+    function updateCaption(elapsed) {
+      const cue = activeCue(elapsed);
+      subtitle.innerHTML = cue.text + "<small>" + cue.sub + "</small>";
+    }
+
+    function tick(now) {
+      const elapsed = Math.max(0, Math.min(DURATION, currentElapsed(now)));
+      timecode.textContent = format(elapsed);
+      updateCaption(elapsed);
+
+      if (!paused && elapsed >= DURATION) {
+        paused = true;
+        pausedAt = DURATION;
+        stage.classList.add("paused");
+        toggle.textContent = "Play";
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    }
+
+    toggle.addEventListener("click", () => {
+      paused = !paused;
+      if (paused) {
+        pausedAt = performance.now() - startedAt;
+        stage.classList.add("paused");
+        toggle.textContent = "Play";
+      } else {
+        startedAt = performance.now() - pausedAt;
+        stage.classList.remove("paused");
+        toggle.textContent = "Pause";
+      }
+    });
+
+    restart.addEventListener("click", () => {
+      paused = false;
+      pausedAt = 0;
+      startedAt = performance.now();
+      stage.classList.remove("paused");
+      toggle.textContent = "Pause";
+      stage.getAnimations({ subtree: true }).forEach((animation) => {
+        animation.cancel();
+        animation.play();
+      });
+    });
+
+    raf = requestAnimationFrame(tick);
+    window.addEventListener("beforeunload", () => {
+      cancelAnimationFrame(raf);
+    });
+  </script>
+</body>
+</html>

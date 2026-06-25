@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Geovault Product Feature Cards</title>
+  <style>
+    :root {
+      --bg: #02040a;
+      --ink: #f8fbff;
+      --muted: #b7c4d8;
+      --cyan: #52e6f0;
+      --green: #5df0a2;
+      --gold: #f4cf69;
+      font-family: "SF Pro Display", "PingFang TC", "Segoe UI Variable Display", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #05070d;
+      color: var(--ink);
+    }
+
+    .card {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(circle at 76% 18%, rgba(82,230,240,.16), transparent 34%),
+        radial-gradient(circle at 18% 82%, rgba(93,240,162,.10), transparent 31%),
+        linear-gradient(117deg, #02040a 0%, #071124 58%, #02040a 100%);
+    }
+
+    .card::before {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      content: "";
+      background:
+        linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px),
+        linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px);
+      background-size: 74px 74px;
+      mask-image: linear-gradient(90deg, transparent, #000 14%, #000 84%, transparent);
+      opacity: .52;
+    }
+
+    .card::after {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      content: "";
+      background:
+        linear-gradient(90deg, rgba(2,4,10,.62), transparent 26%, transparent 82%, rgba(2,4,10,.62)),
+        linear-gradient(0deg, rgba(2,4,10,.70), transparent 24%, transparent 78%, rgba(2,4,10,.28));
+    }
+
+    .logo {
+      position: absolute;
+      z-index: 12;
+      left: 92px;
+      top: 74px;
+      width: 188px;
+      height: auto;
+      filter: drop-shadow(0 16px 40px rgba(0,0,0,.45));
+    }
+
+    .copy {
+      position: absolute;
+      z-index: 14;
+      left: 92px;
+      top: 205px;
+      width: 720px;
+    }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      color: #bcd0ee;
+      font-size: 20px;
+      font-weight: 860;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+
+    .kicker::before {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 24px rgba(93,240,162,.78);
+      content: "";
+    }
+
+    h1 {
+      margin: 0;
+      color: #fff;
+      font-size: 92px;
+      font-weight: 950;
+      line-height: .98;
+      letter-spacing: 0;
+      text-shadow: 0 22px 64px rgba(0,0,0,.72);
+    }
+
+    h1 span { color: var(--cyan); }
+    h1 .gold { color: var(--gold); }
+
+    .lead {
+      max-width: 620px;
+      margin: 34px 0 0;
+      color: #cad6e8;
+      font-size: 28px;
+      font-weight: 680;
+      line-height: 1.48;
+    }
+
+    .proof-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 42px;
+    }
+
+    .proof {
+      min-width: 178px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 14px;
+      background: rgba(3,8,19,.70);
+      padding: 18px 20px;
+      box-shadow: 0 28px 80px rgba(0,0,0,.30);
+      backdrop-filter: blur(18px);
+    }
+
+    .proof b {
+      display: block;
+      color: #fff;
+      font-size: 42px;
+      font-weight: 920;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .proof small {
+      display: block;
+      margin-top: 10px;
+      color: #9fb1ca;
+      font-size: 17px;
+      font-weight: 760;
+    }
+
+    .visual {
+      position: absolute;
+      z-index: 10;
+      right: -70px;
+      top: 168px;
+      width: 1100px;
+      height: 720px;
+      perspective: 1500px;
+    }
+
+    .shot {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 22px;
+      background: #08111f;
+      box-shadow: 0 58px 160px rgba(0,0,0,.58);
+      transform: rotateY(-8deg) rotateX(3deg);
+      transform-origin: center;
+    }
+
+    .shot img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      filter: saturate(1.08) contrast(1.05) brightness(.86);
+    }
+
+    .shot::after {
+      position: absolute;
+      inset: 0;
+      content: "";
+      background:
+        linear-gradient(90deg, rgba(2,6,23,.20), transparent 42%, rgba(2,6,23,.10)),
+        linear-gradient(0deg, rgba(2,6,23,.24), transparent 48%);
+      pointer-events: none;
+    }
+
+    .floating-metric {
+      position: absolute;
+      z-index: 12;
+      right: 80px;
+      top: 84px;
+      min-width: 260px;
+      border: 1px solid rgba(82,230,240,.25);
+      border-radius: 18px;
+      background: rgba(2,6,23,.76);
+      padding: 22px 24px;
+      box-shadow: 0 34px 100px rgba(0,0,0,.48), 0 0 72px rgba(82,230,240,.12);
+      backdrop-filter: blur(18px);
+    }
+
+    .floating-metric b {
+      display: block;
+      color: #fff;
+      font-size: 60px;
+      font-weight: 950;
+      line-height: .95;
+    }
+
+    .floating-metric span {
+      display: block;
+      margin-top: 10px;
+      color: var(--green);
+      font-size: 19px;
+      font-weight: 840;
+    }
+
+    .bottom-line {
+      position: absolute;
+      z-index: 16;
+      left: 92px;
+      right: 92px;
+      bottom: 66px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid rgba(255,255,255,.10);
+      padding-top: 22px;
+      color: #8ea0b8;
+      font-size: 19px;
+      font-weight: 680;
+    }
+
+    .cta {
+      display: inline-flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--cyan), var(--green));
+      color: #031018;
+      padding: 0 25px;
+      font-size: 20px;
+      font-weight: 930;
+      box-shadow: 0 18px 60px rgba(82,230,240,.18);
+    }
+
+    .card.alt .visual {
+      right: -155px;
+      top: 112px;
+      width: 1230px;
+      height: 790px;
+    }
+
+    .card.alt .shot {
+      transform: rotateY(-6deg) rotateX(2deg);
+    }
+
+    .card.alliance .visual {
+      right: -170px;
+      top: 112px;
+      width: 1280px;
+      height: 820px;
+      perspective: none;
+    }
+
+    .card.alliance .shot {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      transform: none;
+      mix-blend-mode: screen;
+      mask-image: radial-gradient(ellipse at 62% 50%, #000 0 50%, rgba(0,0,0,.68) 64%, transparent 82%);
+      -webkit-mask-image: radial-gradient(ellipse at 62% 50%, #000 0 50%, rgba(0,0,0,.68) 64%, transparent 82%);
+    }
+
+    .card.alliance .shot::after { display: none; }
+
+    .card.alliance .shot img {
+      filter: saturate(1.15) contrast(1.08) brightness(.92);
+    }
+
+    .feature-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 42px;
+      max-width: 620px;
+    }
+
+    .feature-list div {
+      border-left: 3px solid var(--cyan);
+      background: rgba(255,255,255,.045);
+      padding: 14px 16px;
+      color: #d9e5f6;
+      font-size: 20px;
+      font-weight: 780;
+    }
+  </style>
+</head>
+<body>
+  <section class="card" id="card-01">
+    <img class="logo" src="assets/geovault-logo-full-dark.svg" alt="Geovault" />
+    <div class="copy">
+      <div class="kicker">Free GEO Scan</div>
+      <h1>AI 看不看得懂你<br><span>30 秒看見答案</span></h1>
+      <p class="lead">輸入網站，直接診斷品牌是否能被 AI 讀懂、引用、推薦，不再靠猜。</p>
+      <div class="proof-row">
+        <div class="proof"><b>92</b><small>GEO Score</small></div>
+        <div class="proof"><b>8</b><small>AI 可讀指標</small></div>
+      </div>
+    </div>
+    <div class="visual">
+      <div class="shot"><img src="assets/publish-sidebar.png" alt=""></div>
+      <div class="floating-metric"><b>30s</b><span>完成初步診斷</span></div>
+    </div>
+    <div class="bottom-line"><span>差異化：不是只做 SEO，而是檢查 AI 是否真的能理解品牌</span><span class="cta">免費掃描</span></div>
+  </section>
+
+  <section class="card alt" id="card-02">
+    <img class="logo" src="assets/geovault-logo-full-dark.svg" alt="Geovault" />
+    <div class="copy">
+      <div class="kicker">Content Engine</div>
+      <h1>內容不是貼文<br><span>是 AI 可引用資料層</span></h1>
+      <p class="lead">FAQ、品牌文章、摘要與知識庫同源產生，讓 AI 抓到的是一致、完整、可引用的品牌脈絡。</p>
+      <div class="feature-list">
+        <div>FAQ 自動整理</div>
+        <div>品牌知識庫連動</div>
+        <div>AI 引用摘要</div>
+        <div>內容資產沉澱</div>
+      </div>
+    </div>
+    <div class="visual">
+      <div class="shot"><img src="assets/content-engine.png" alt=""></div>
+    </div>
+    <div class="bottom-line"><span>差異化：一次內容生產，直接進入 AI 能讀的資料結構</span><span class="cta">建立資料層</span></div>
+  </section>
+
+  <section class="card" id="card-03">
+    <img class="logo" src="assets/geovault-logo-full-dark.svg" alt="Geovault" />
+    <div class="copy">
+      <div class="kicker">Citation Monitor</div>
+      <h1>AI 有沒有提到你<br><span>用數據直接證明</span></h1>
+      <p class="lead">ChatGPT、Claude、Perplexity、Gemini 引用率集中追蹤，品牌成效不再只看感覺。</p>
+      <div class="proof-row">
+        <div class="proof"><b>72%</b><small>Perplexity 引用率</small></div>
+        <div class="proof"><b>68%</b><small>ChatGPT 引用率</small></div>
+      </div>
+    </div>
+    <div class="visual">
+      <div class="shot"><img src="assets/monitor-grouping-demo.png" alt=""></div>
+      <div class="floating-metric"><b>41.8%</b><span>跨平台平均</span></div>
+    </div>
+    <div class="bottom-line"><span>差異化：不是曝光報表，而是 AI 是否引用你的品牌證據</span><span class="cta">追蹤引用</span></div>
+  </section>
+
+  <section class="card alt" id="card-04">
+    <img class="logo" src="assets/geovault-logo-full-dark.svg" alt="Geovault" />
+    <div class="copy">
+      <div class="kicker">GEO Loop</div>
+      <h1>掃描 建置 發布 證明<br><span class="gold">一體化成型</span></h1>
+      <p class="lead">從診斷、內容資料層、多平台發布到 AI 引用監控，全部串成同一個 GEO 經營流程。</p>
+      <div class="proof-row">
+        <div class="proof"><b>98%</b><small>發布成功率</small></div>
+        <div class="proof"><b>12</b><small>任務完成</small></div>
+      </div>
+    </div>
+    <div class="visual">
+      <div class="shot"><img src="assets/publish-sidebar.png" alt=""></div>
+    </div>
+    <div class="bottom-line"><span>差異化：不是單點工具，而是一套持續運轉的 GEO 經營系統</span><span class="cta">看見閉環</span></div>
+  </section>
+
+  <section class="card alliance" id="card-05">
+    <img class="logo" src="assets/geovault-logo-full-dark.svg" alt="Geovault" />
+    <div class="copy">
+      <div class="kicker">Geovault Alliance</div>
+      <h1>加入聯盟行銷<br><span>一起推廣好系統</span></h1>
+      <p class="lead">讓更多網站被 AI 看見，也讓 AI 更願意來網站抓資料。推廣 Geovault，就是一起把 AI 時代的品牌入口做大。</p>
+      <div class="proof-row">
+        <div class="proof"><b>AI</b><small>更容易看見網站</small></div>
+        <div class="proof"><b>GEO</b><small>共同推廣新市場</small></div>
+      </div>
+    </div>
+    <div class="visual">
+      <div class="shot"><img src="assets/geovault-alliance-ai-visibility.png" alt=""></div>
+    </div>
+    <div class="bottom-line"><span>差異化：系統能幫自己被 AI 看見，也能幫更多網站被 AI 看見</span><span class="cta">加入推廣</span></div>
+  </section>
+</body>
+</html>

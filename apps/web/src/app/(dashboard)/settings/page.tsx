@@ -32,6 +32,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { PageHeader } from '@/components/shared/page-header'
 import {
   useProfile,
   useUpdateProfile,
@@ -204,7 +205,7 @@ function ManagedRefundRequestCard({
   }
 
   return (
-    <Card className="bg-white/5 border-white/10">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-amber-300" />
@@ -394,7 +395,7 @@ function ActiveSubscriptionsCard({
   if (subscriptions.length === 0) return null
 
   return (
-    <Card className="bg-white/5 border-white/10">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-white">
           <CreditCard className="h-5 w-5 text-blue-300" />
@@ -546,13 +547,10 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 overflow-hidden">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">設定</h1>
-        <p className="text-muted-foreground mt-1">管理您的帳號和偏好設定</p>
-      </div>
+      <PageHeader title="設定" description="管理您的帳號和偏好設定" />
 
       {/* Profile card */}
-      <Card className="bg-white/5 border-white/10">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
@@ -637,7 +635,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Subscription card */}
-      <Card className="bg-white/5 border-white/10">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
@@ -973,7 +971,7 @@ export default function SettingsPage() {
       )}
 
       {/* Credits card */}
-      <Card id="credits" className="bg-white/5 border-white/10">
+      <Card id="credits">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Coins className="h-5 w-5 text-yellow-400" />
@@ -1106,7 +1104,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Password card */}
-      <Card className="bg-white/5 border-white/10">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Lock className="h-5 w-5" />

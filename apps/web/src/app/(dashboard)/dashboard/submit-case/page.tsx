@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScreenshotUpload } from '@/components/ui/screenshot-upload';
+import { PageHeader } from '@/components/shared/page-header';
 
 const PLATFORMS = [
   { value: 'chatgpt', label: 'ChatGPT' },
@@ -151,15 +152,11 @@ export default function SubmitCasePage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Trophy className="h-6 w-6 text-yellow-400" /> 提交成功案例
-        </h1>
-        <p className="text-sm text-gray-400 mt-1">
-          你的品牌被 AI 引用過嗎？分享真實案例，通過審核後我們會為你免費生成一篇 AI
-          分析文章，放在 geovault.app 供 AI 爬蟲引用，增加更多曝光。
-        </p>
-      </div>
+      <PageHeader
+        title="提交成功案例"
+        description="你的品牌被 AI 引用過嗎？分享真實案例，通過審核後我們會為你免費生成一篇 AI 分析文章，放在 geovault.app 供 AI 爬蟲引用，增加更多曝光。"
+        icon={Trophy}
+      />
 
       {/* Steps indicator */}
       <div className="flex items-center gap-2">

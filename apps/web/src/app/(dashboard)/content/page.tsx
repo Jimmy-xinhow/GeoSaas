@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/shared/page-header'
 import { cn } from '@/lib/utils'
 import { useContents, useDeleteContent } from '@/hooks/use-content'
 
@@ -35,13 +36,18 @@ function getStatusBadgeStyle(status: string) {
   switch (status) {
     case '已發布':
     case 'published':
+    case 'PUBLISHED':
       return 'bg-green-500/20 text-green-300'
     case '草稿':
     case 'draft':
+    case 'DRAFT':
       return 'bg-white/5 text-gray-300'
     case '審核中':
     case 'review':
+    case 'REVIEW':
       return 'bg-yellow-500/20 text-yellow-300'
+    case 'ARCHIVED':
+      return 'bg-gray-500/20 text-gray-300'
     default:
       return 'bg-white/5 text-gray-300'
   }
@@ -50,11 +56,16 @@ function getStatusBadgeStyle(status: string) {
 function getStatusLabel(status: string) {
   switch (status) {
     case 'published':
+    case 'PUBLISHED':
       return '已發布'
     case 'draft':
+    case 'DRAFT':
       return '草稿'
     case 'review':
+    case 'REVIEW':
       return '審核中'
+    case 'ARCHIVED':
+      return '已封存'
     default:
       return status
   }
@@ -63,8 +74,10 @@ function getStatusLabel(status: string) {
 function getTypeLabel(type: string) {
   switch (type) {
     case 'article':
+    case 'ARTICLE':
       return '文章'
     case 'knowledge-base':
+    case 'KNOWLEDGE_BASE':
       return '知識庫'
     case 'faq':
     case 'FAQ':
@@ -121,19 +134,23 @@ export default function ContentPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.16),transparent_30%),rgba(255,255,255,0.04)] p-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">內容引擎</h1>
-          <p className="text-muted-foreground mt-1">管理和生成 AI 優化內容</p>
-        </div>
-        <Link href="/content/new">
-          <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white">
-            <Sparkles className="h-4 w-4 mr-2" />
-            AI 生成
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="內容引擎"
+        description="管理和生成 AI 優化內容"
+        actions={
+          <>
+            <Link href="/published-content">
+              <Button variant="outline">Geovault 為您發布</Button>
+            </Link>
+            <Link href="/content/new">
+              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white">
+                <Sparkles className="h-4 w-4 mr-2" />
+                AI 生成
+              </Button>
+            </Link>
+          </>
+        }
+      />
 
       {/* Content cards */}
       {isLoading ? (

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Bell, CreditCard, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,28 +14,6 @@ import {
 import { useLogout } from '@/hooks/use-auth'
 import { useMarkNotificationRead, useNotifications, type NotificationItem } from '@/hooks/use-notifications'
 import useAuthStore from '@/stores/auth-store'
-
-const pathTitles: Record<string, string> = {
-  '/dashboard': '總覽',
-  '/sites': '我的網站',
-  '/sites/new': '新增網站',
-  '/content': '內容資產',
-  '/content/new': 'AI 內容生成',
-  '/monitor': 'AI 引用監控',
-  '/publish': '發布設定',
-  '/settings': '設定',
-  '/settings/billing/result': '付款結果',
-  '/support': '客服支援',
-}
-
-function getPageTitle(pathname: string): string {
-  if (pathTitles[pathname]) return pathTitles[pathname]
-  if (pathname.startsWith('/sites/') && pathname.endsWith('/fix')) return 'AI 修復建議'
-  if (pathname.startsWith('/sites/') && pathname.endsWith('/knowledge')) return '知識庫 Q&A'
-  if (pathname.startsWith('/sites/') && pathname.endsWith('/llms-txt')) return 'llms.txt'
-  if (pathname.startsWith('/sites/')) return '網站詳情'
-  return 'Geovault'
-}
 
 function formatNotificationTime(createdAt: string) {
   const time = new Date(createdAt).getTime()
@@ -57,9 +35,7 @@ function routeForNotification(item: NotificationItem) {
 }
 
 export default function Header() {
-  const pathname = usePathname()
   const router = useRouter()
-  const title = getPageTitle(pathname)
   const user = useAuthStore((s) => s.user)
   const logoutMutation = useLogout()
   const { data: notifications = [], isLoading } = useNotifications(Boolean(user))
@@ -85,9 +61,7 @@ export default function Header() {
   }
 
   return (
-    <header className="h-16 border-b border-white/5 bg-gray-900 flex items-center justify-between px-6 shrink-0">
-      <h2 className="text-lg font-semibold text-white">{title}</h2>
-
+    <header className="h-16 border-b border-white/5 bg-gray-900 flex items-center justify-end px-6 shrink-0">
       <div className="flex items-center gap-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

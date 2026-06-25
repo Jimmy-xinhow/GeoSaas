@@ -21,6 +21,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/shared/page-header'
+import { SiteWorkspaceTabs } from '@/components/layout/site-workspace-tabs'
 import {
   Card,
   CardContent,
@@ -333,26 +335,14 @@ export default function CrawlerPage() {
 
   return (
     <div className="space-y-6">
+      <SiteWorkspaceTabs siteId={siteId} siteName={site?.name} />
       {/* Header */}
       <div>
-        <Link
-          href={`/sites/${siteId}`}
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-white transition-colors mb-4"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          返回網站詳情
-        </Link>
-        <div className="flex items-center gap-3">
-          <Bot className="h-6 w-6 text-blue-600" />
-          <div>
-            <h1 className="text-2xl font-bold text-white">
-              AI 爬蟲追蹤
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              {site.name} — 監控 AI 爬蟲對您網站的造訪
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          title="AI 爬蟲追蹤"
+          description={`${site.name} — 監控 AI 爬蟲對您網站的造訪`}
+          icon={Bot}
+        />
       </div>
 
       {/* Summary cards */}

@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/shared/page-header'
+import { SiteWorkspaceTabs } from '@/components/layout/site-workspace-tabs'
 import {
   Card,
   CardContent,
@@ -361,24 +363,14 @@ export default function FixPage() {
 
   return (
     <div className="space-y-6">
-      {/* Back link + page header */}
+      <SiteWorkspaceTabs siteId={siteId} siteName={site?.name} />
+      {/* Page header */}
       <div>
-        <Link
-          href={`/sites/${siteId}`}
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-white transition-colors mb-4"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          返回網站詳情
-        </Link>
-        <div className="flex items-center gap-3">
-          <Wrench className="h-6 w-6 text-blue-600" />
-          <div>
-            <h1 className="text-2xl font-bold text-white">修復工具</h1>
-            <p className="text-muted-foreground mt-1">
-              {site.name} -- 根據掃描結果，以下是建議修復的項目
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          title="修復工具"
+          description={`${site.name} -- 根據掃描結果，以下是建議修復的項目`}
+          icon={Wrench}
+        />
       </div>
 
       {/* Summary badges */}

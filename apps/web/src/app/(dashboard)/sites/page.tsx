@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/shared/page-header'
 import { useSites, useCreateSite, useDeleteSite, useUpdateSite } from '@/hooks/use-sites'
 import { useTriggerScan } from '@/hooks/use-scan'
 import { clearPendingGuestScan, loadPendingGuestScan, type PendingGuestScan } from '@/lib/pending-guest-scan'
@@ -269,20 +270,19 @@ export default function SitesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_30%),rgba(255,255,255,0.04)] p-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">我的網站</h1>
-          <p className="text-muted-foreground mt-1">管理和監控您的網站 GEO 分數</p>
-        </div>
-        <Button
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-          onClick={() => setShowAddForm(!showAddForm)}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          新增網站
-        </Button>
-      </div>
+      <PageHeader
+        title="我的網站"
+        description="管理和監控您的網站 GEO 分數"
+        actions={
+          <Button
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => setShowAddForm(!showAddForm)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            新增網站
+          </Button>
+        }
+      />
 
       {/* Search */}
       <div className="relative rounded-xl border border-white/10 bg-white/5 p-3">
@@ -302,7 +302,7 @@ export default function SitesPage() {
 
       {/* Add site form */}
       {showAddForm && (
-        <Card className="bg-white/5 border-white/10">
+        <Card>
           <CardContent className="p-6">
             <div className="space-y-3">
               {pendingGuestScan ? (
@@ -360,7 +360,7 @@ export default function SitesPage() {
           ))}
         </div>
       ) : filteredSites.length === 0 ? (
-        <Card className="bg-white/5 border-white/10">
+        <Card>
           <CardContent className="p-12">
             <div className="text-center">
               <Globe className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

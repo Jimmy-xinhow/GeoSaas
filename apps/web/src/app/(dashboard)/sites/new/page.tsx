@@ -17,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { PageHeader } from '@/components/shared/page-header'
 import { useCreateSite } from '@/hooks/use-sites'
 import { useTriggerScan } from '@/hooks/use-scan'
 import { clearPendingGuestScan, loadPendingGuestScan, type PendingGuestScan } from '@/lib/pending-guest-scan'
@@ -90,15 +91,9 @@ export default function NewSitePage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">新增網站</h1>
-        <p className="text-muted-foreground mt-1">
-          新增網站並立即開始 GEO 掃描
-        </p>
-      </div>
+      <PageHeader title="新增網站" description="新增網站並立即開始 GEO 掃描" />
 
-      <Card className="max-w-xl bg-white/5 border-white/10">
+      <Card className="max-w-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Globe className="h-5 w-5" />

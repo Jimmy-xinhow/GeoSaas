@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/shared/page-header';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useSites } from '@/hooks/use-sites';
@@ -148,16 +149,14 @@ export default function SupportPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">客服中心</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          你的方案：{user?.plan || 'FREE'}。PRO 會優先由工作人員接手，其他方案會先由 AI 協助整理與排查。
-        </p>
-      </div>
+      <PageHeader
+        title="客服中心"
+        description={`你的方案：${user?.plan || 'FREE'}。PRO 會優先由工作人員接手，其他方案會先由 AI 協助整理與排查。`}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <div className="space-y-4">
-          <Card className="border-white/10 bg-white/5">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <MessageSquarePlus className="h-4 w-4" />
@@ -211,7 +210,7 @@ export default function SupportPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-white/10 bg-white/5">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">我的對話</CardTitle>
             </CardHeader>
@@ -225,7 +224,7 @@ export default function SupportPage() {
           </Card>
         </div>
 
-        <Card className="min-h-[640px] border-white/10 bg-white/5">
+        <Card className="min-h-[640px]">
           <CardHeader>
             <div className="flex items-center gap-3">
               <CardTitle className="text-lg">{activeConversation?.subject || '選擇一個客服對話'}</CardTitle>

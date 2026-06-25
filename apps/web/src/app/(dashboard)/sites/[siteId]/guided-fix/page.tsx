@@ -34,6 +34,8 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageHeader } from '@/components/shared/page-header'
+import { SiteWorkspaceTabs } from '@/components/layout/site-workspace-tabs'
 import {
   useCompletionReport,
   useEngineerHandoff,
@@ -395,34 +397,24 @@ export default function GuidedFixPage() {
 
   return (
     <div className="space-y-6">
+      <SiteWorkspaceTabs siteId={siteId} siteName={plan.site.name} />
       <div>
-        <Link
-          href={`/sites/${siteId}`}
-          className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-white"
-        >
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          返回網站詳情
-        </Link>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <Sparkles className="h-7 w-7 text-blue-300" />
-              <h1 className="text-2xl font-bold text-white">最快 GEO 提升方案</h1>
-            </div>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              不需要先理解技術名詞。這裡只列出最短路徑：能一鍵處理的先做，不能自動處理的再交給工程師或代裝。
-            </p>
-          </div>
-          <a href={plan.site.url} target="_blank" rel="noopener noreferrer">
-            <Button variant="outline">
-              <ExternalLink className="mr-2 h-4 w-4" />
-              開啟網站
-            </Button>
-          </a>
-        </div>
+        <PageHeader
+          title="最快 GEO 提升方案"
+          description="不需要先理解技術名詞。這裡只列出最短路徑：能一鍵處理的先做，不能自動處理的再交給工程師或代裝。"
+          icon={Sparkles}
+          actions={
+            <a href={plan.site.url} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline">
+                <ExternalLink className="mr-2 h-4 w-4" />
+                開啟網站
+              </Button>
+            </a>
+          }
+        />
       </div>
 
-      <Card className="border-white/10 bg-white/[0.04]">
+      <Card>
         <CardContent className="p-5">
           <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
@@ -506,7 +498,7 @@ export default function GuidedFixPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-blue-500/30 bg-blue-500/10">
+      <Card className="border-blue-500/30">
         <CardContent className="grid gap-6 p-6 lg:grid-cols-[1.1fr_.9fr]">
           <div>
             <Badge className="mb-3 bg-blue-500/20 text-blue-200">建議第一步</Badge>
@@ -553,7 +545,7 @@ export default function GuidedFixPage() {
       </Card>
 
       {needsPostFixScan ? (
-        <Card className="border-green-500/30 bg-green-500/10">
+        <Card className="border-green-500/30">
           <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
             <div>
               <Badge className="mb-2 bg-green-500/20 text-green-200">已進入驗證階段</Badge>
@@ -578,7 +570,7 @@ export default function GuidedFixPage() {
           </CardContent>
         </Card>
       ) : hasPostFixScan ? (
-        <Card className="border-blue-500/30 bg-blue-500/10">
+        <Card className="border-blue-500/30">
           <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
             <div>
               <Badge className="mb-2 bg-blue-500/20 text-blue-200">已完成驗證掃描</Badge>

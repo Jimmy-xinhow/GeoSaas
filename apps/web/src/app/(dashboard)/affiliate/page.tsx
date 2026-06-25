@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/shared/page-header'
 import {
   useAffiliateDashboard,
   useAffiliateReferralDetails,
@@ -120,12 +121,10 @@ export default function AffiliatePage() {
   if (!statusQuery.data?.hasApplication || affiliate?.status === 'rejected' || affiliate?.status === 'suspended') {
     return (
       <div className="mx-auto max-w-5xl space-y-6 p-6">
-        <div>
-          <h1 className="text-3xl font-bold text-white">聯盟行銷</h1>
-          <p className="mt-2 text-sm text-slate-300">
-            分享 Geovault 給客戶或社群，對方完成付費後，你可以取得佣金。
-          </p>
-        </div>
+        <PageHeader
+          title="聯盟行銷"
+          description="分享 Geovault 給客戶或社群，對方完成付費後，你可以取得佣金。"
+        />
         {affiliate?.status === 'rejected' && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
             上次申請未通過：{affiliate.rejectionReason || '未提供原因'}。你可以修正資料後重新送出。
@@ -136,7 +135,7 @@ export default function AffiliatePage() {
             目前帳號已暫停聯盟資格，請聯絡管理員。
           </div>
         )}
-        <Card className="border-slate-700 bg-slate-900 text-white">
+        <Card className="text-white">
           <CardHeader>
             <CardTitle>級距條件</CardTitle>
             <CardDescription className="text-slate-400">
@@ -156,7 +155,7 @@ export default function AffiliatePage() {
             ))}
           </CardContent>
         </Card>
-        <Card className="border-slate-700 bg-slate-900 text-white">
+        <Card className="text-white">
           <CardHeader>
             <CardTitle>申請成為聯盟夥伴</CardTitle>
             <CardDescription className="text-slate-400">
@@ -213,7 +212,7 @@ export default function AffiliatePage() {
   if (affiliate?.status === 'pending') {
     return (
       <div className="mx-auto max-w-4xl p-6">
-        <Card className="border-slate-700 bg-slate-900 text-white">
+        <Card className="text-white">
           <CardHeader>
             <CardTitle>聯盟申請審核中</CardTitle>
             <CardDescription className="text-slate-400">
@@ -229,31 +228,31 @@ export default function AffiliatePage() {
   const referralDetails = referralDetailsQuery.data
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white">聯盟行銷</h1>
-        <p className="mt-2 text-sm text-slate-300">你的專屬追蹤碼：{affiliate?.affiliateCode}</p>
-      </div>
+      <PageHeader
+        title="聯盟行銷"
+        description={`你的專屬追蹤碼：${affiliate?.affiliateCode ?? ''}`}
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-slate-700 bg-slate-900 text-white">
+        <Card className="text-white">
           <CardHeader><CardTitle className="text-sm">點擊</CardTitle></CardHeader>
           <CardContent className="text-2xl font-bold">{affiliate?.totalClicks || 0}</CardContent>
         </Card>
-        <Card className="border-slate-700 bg-slate-900 text-white">
+        <Card className="text-white">
           <CardHeader><CardTitle className="text-sm">註冊</CardTitle></CardHeader>
           <CardContent className="text-2xl font-bold">{affiliate?.totalSignups || 0}</CardContent>
         </Card>
-        <Card className="border-slate-700 bg-slate-900 text-white">
+        <Card className="text-white">
           <CardHeader><CardTitle className="text-sm">累積佣金</CardTitle></CardHeader>
           <CardContent className="text-2xl font-bold">{money(affiliate?.totalCommissionEarned)}</CardContent>
         </Card>
-        <Card className="border-slate-700 bg-slate-900 text-white">
+        <Card className="text-white">
           <CardHeader><CardTitle className="text-sm">可提領</CardTitle></CardHeader>
           <CardContent className="text-2xl font-bold">{money(dashboard?.availableCommission)}</CardContent>
         </Card>
       </div>
 
-      <Card className="border-slate-700 bg-slate-900 text-white">
+      <Card className="text-white">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Link2 className="h-5 w-5" /> 專屬推廣連結</CardTitle>
         </CardHeader>
@@ -265,7 +264,7 @@ export default function AffiliatePage() {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-700 bg-slate-900 text-white">
+      <Card className="text-white">
         <CardHeader>
           <CardTitle>推薦明細與連結使用狀態</CardTitle>
           <CardDescription className="text-slate-400">
@@ -420,7 +419,7 @@ export default function AffiliatePage() {
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <Card className="border-slate-700 bg-slate-900 text-white">
+        <Card className="text-white">
           <CardHeader>
             <CardTitle>最近佣金</CardTitle>
           </CardHeader>
@@ -438,7 +437,7 @@ export default function AffiliatePage() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-700 bg-slate-900 text-white">
+        <Card className="text-white">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><HandCoins className="h-5 w-5" /> 申請提領</CardTitle>
             <CardDescription className="text-slate-400">已過 14 天保留期的佣金才能提領。</CardDescription>

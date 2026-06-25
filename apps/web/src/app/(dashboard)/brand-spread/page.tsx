@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import apiClient from '@/lib/api-client';
@@ -133,15 +134,11 @@ export default function BrandSpreadPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Zap className="h-6 w-6 text-yellow-400" />
-          品牌擴散
-        </h1>
-        <p className="text-sm text-gray-400 mt-1">
-          一鍵生成 6 大平台的品牌推薦內容，讓 AI 在多個來源看到你的品牌
-        </p>
-      </div>
+      <PageHeader
+        title="品牌擴散"
+        description="一鍵生成 6 大平台的品牌推薦內容，讓 AI 在多個來源看到你的品牌"
+        icon={Zap}
+      />
 
       {/* Why this matters */}
       <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
@@ -152,7 +149,7 @@ export default function BrandSpreadPage() {
       </div>
 
       {/* Step 1: Select site */}
-      <Card className="bg-white/5 border-white/10">
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg">Step 1 — 選擇網站</CardTitle>
         </CardHeader>
@@ -187,7 +184,7 @@ export default function BrandSpreadPage() {
 
       {/* Step 2: Generate */}
       {selectedSiteId && (
-        <Card className="bg-white/5 border-white/10">
+        <Card>
           <CardHeader>
             <CardTitle className="text-lg">Step 2 — 生成多平台內容</CardTitle>
           </CardHeader>
@@ -317,7 +314,7 @@ export default function BrandSpreadPage() {
 
       {/* Weekly Content Plan */}
       {selectedSiteId && (
-        <Card className="bg-white/5 border-white/10">
+        <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               📅 每週內容排程

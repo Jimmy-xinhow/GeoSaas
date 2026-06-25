@@ -11,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { PageHeader } from '@/components/shared/page-header'
+import { SiteWorkspaceTabs } from '@/components/layout/site-workspace-tabs'
 
 const pluginDownloadUrl = '/downloads/geovault-auto-fix-0.1.2.zip'
 
@@ -78,34 +80,24 @@ export default function CmsFixGuidePage() {
 
   return (
     <div className="space-y-6">
+      <SiteWorkspaceTabs siteId={siteId} />
       <div>
-        <Link
-          href={`/sites/${siteId}/cms-fix`}
-          className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-white"
-        >
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          返回 CMS 一鍵結構修復
-        </Link>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <PlugZap className="h-7 w-7 text-blue-400" />
-              <h1 className="text-2xl font-bold text-white">WordPress 外掛安裝圖解</h1>
-            </div>
-            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              依照實際 WordPress 後台畫面操作。這裡只負責教學安裝與貼上綁定設定，最後的外部主機連線需要使用公開 API 或 tunnel 才能完成。
-            </p>
-          </div>
-          <a href={pluginDownloadUrl} download>
-            <Button className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto">
-              <Download className="mr-2 h-4 w-4" />
-              下載 WordPress 外掛
-            </Button>
-          </a>
-        </div>
+        <PageHeader
+          title="WordPress 外掛安裝圖解"
+          description="依照實際 WordPress 後台畫面操作。這裡只負責教學安裝與貼上綁定設定，最後的外部主機連線需要使用公開 API 或 tunnel 才能完成。"
+          icon={PlugZap}
+          actions={
+            <a href={pluginDownloadUrl} download>
+              <Button className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto">
+                <Download className="mr-2 h-4 w-4" />
+                下載 WordPress 外掛
+              </Button>
+            </a>
+          }
+        />
       </div>
 
-      <Card className="border-yellow-500/30 bg-yellow-500/10">
+      <Card className="border-yellow-500/30">
         <CardContent className="py-4 text-sm text-yellow-100">
           如果 WordPress 主機在外部網路，而 API URL 是 <code>192.168.x.x</code> 或 <code>localhost</code>，外掛同步會連不到本機 API。正式測試時要改用公開 API 網址或 tunnel。
         </CardContent>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Copy, FileText, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import ContentTypeSelector from '@/components/content/content-type-selector'
+import { PageHeader } from '@/components/shared/page-header'
 import { useGenerateContent } from '@/hooks/use-content'
 import { useBrandFactReadiness, useSites } from '@/hooks/use-sites'
 import { useKnowledge } from '@/hooks/use-knowledge'
@@ -29,6 +30,8 @@ import { isBillingRequiredError } from '@/lib/billing-error'
 
 export default function ContentNewPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const presetSiteId = searchParams.get('siteId')
   const generateContent = useGenerateContent()
   const { data: sites = [], isLoading: isSitesLoading } = useSites()
 
@@ -52,9 +55,12 @@ export default function ContentNewPage() {
 
   useEffect(() => {
     if (!selectedSiteId && sites.length > 0) {
-      setSelectedSiteId(sites[0].id)
+      const preset = presetSiteId && sites.some((s) => s.id === presetSiteId)
+        ? presetSiteId
+        : sites[0].id
+      setSelectedSiteId(preset)
     }
-  }, [selectedSiteId, sites])
+  }, [selectedSiteId, sites, presetSiteId])
 
   const mapContentType = (frontendType: string): 'FAQ' | 'ARTICLE' => {
     switch (frontendType) {
@@ -138,12 +144,10 @@ export default function ContentNewPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">AI 內容生成</h1>
-        <p className="text-muted-foreground mt-1">
-          內容會綁定你的品牌網站與知識庫，不需要手動填品牌資料。
-        </p>
-      </div>
+      <PageHeader
+        title="AI 內容生成"
+        description="內容會綁定你的品牌網站與知識庫，不需要手動填品牌資料。"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <div className="space-y-6 min-w-0">
@@ -158,7 +162,7 @@ export default function ContentNewPage() {
             <h3 className="text-sm font-medium text-muted-foreground mb-3">
               步驟 2：綁定品牌知識庫
             </h3>
-            <Card className="bg-white/5 border-white/10">
+            <Card>
               <CardHeader>
                 <CardTitle>品牌資料來源</CardTitle>
                 <CardDescription>
@@ -278,7 +282,7 @@ export default function ContentNewPage() {
 
         <div className="lg:sticky lg:top-6 min-w-0">
           {generatedResult ? (
-            <Card className="bg-white/5 border-white/10">
+            <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-blue-400" />
@@ -317,7 +321,7 @@ export default function ContentNewPage() {
               </CardContent>
             </Card>
           ) : generateContent.isPending ? (
-            <Card className="border-blue-500/30 bg-blue-500/10">
+            <Card className="border-blue-500/30">
               <CardContent className="flex flex-col items-center justify-center text-center gap-4 min-h-[60vh] py-10">
                 <Loader2 className="h-12 w-12 text-blue-400 animate-spin" />
                 <div>
@@ -329,7 +333,7 @@ export default function ContentNewPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="border-dashed border-white/10 bg-white/[0.02]">
+            <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center text-center gap-3 min-h-[60vh] py-10 text-gray-400">
                 <FileText className="h-12 w-12 text-gray-600" />
                 <div>

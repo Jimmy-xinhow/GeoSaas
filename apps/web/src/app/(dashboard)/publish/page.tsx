@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/shared/page-header'
 import { cn } from '@/lib/utils'
 import { usePublications, usePublishContent, usePublishPlatforms } from '@/hooks/use-publish'
 import { useContents } from '@/hooks/use-content'
@@ -134,12 +135,10 @@ export default function PublishPage() {
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold text-white">多平台佈局</h1>
-        <p className="text-muted-foreground mt-1">
-          只有完成平台授權或 API 設定的平台，才會開放一鍵發布。
-        </p>
-      </div>
+      <PageHeader
+        title="多平台佈局"
+        description="只有完成平台授權或 API 設定的平台，才會開放一鍵發布。"
+      />
 
       <Card className="bg-amber-500/10 border-amber-500/30">
         <CardContent className="flex gap-3 p-4 text-sm text-amber-100">
@@ -151,7 +150,7 @@ export default function PublishPage() {
         </CardContent>
       </Card>
 
-      <Card className="bg-white/5 border-white/10">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Send className="h-5 w-5" />
@@ -233,7 +232,7 @@ export default function PublishPage() {
               <Card
                 key={platform.key}
                 className={cn(
-                  'bg-white/5 transition-shadow hover:shadow-lg hover:shadow-blue-500/5',
+                  'transition-shadow hover:shadow-lg hover:shadow-blue-500/5',
                   configured ? 'border-green-500/30' : 'border-white/10'
                 )}
               >
@@ -280,7 +279,7 @@ export default function PublishPage() {
         </div>
       </div>
 
-      <Card className="bg-white/5 border-white/10">
+      <Card>
         <CardHeader>
           <CardTitle>發布記錄</CardTitle>
           <CardDescription>所有平台的內容發布歷史</CardDescription>

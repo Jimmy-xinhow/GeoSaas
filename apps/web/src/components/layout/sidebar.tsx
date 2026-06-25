@@ -37,30 +37,35 @@ const navGroups: NavGroup[] = [
     label: '主要',
     defaultOpen: true,
     items: [
-      { href: '/dashboard', icon: LayoutDashboard, label: '總覽' },
+      { href: '/dashboard', icon: LayoutDashboard, label: '工作台' },
       { href: '/sites', icon: Globe, label: '我的網站' },
-      { href: '/support', icon: MessageSquare, label: '客服中心' },
     ],
   },
   {
-    label: 'AI 工具',
-    defaultOpen: true,
+    label: '全站總覽',
+    defaultOpen: false,
     items: [
-      { href: '/content', icon: FileText, label: '內容引擎' },
-      { href: '/published-content', icon: FileText, label: 'Geovault 為您發布' },
-      { href: '/monitor', icon: Eye, label: 'AI 監控' },
+      { href: '/content', icon: FileText, label: '內容總表' },
+      { href: '/monitor', icon: Eye, label: 'AI 監控總表' },
       { href: '/monitor/reports', icon: ClipboardCheck, label: '驗收報告' },
     ],
   },
   {
-    label: '推廣',
+    label: '推廣擴散',
     defaultOpen: false,
     items: [
+      { href: '/publish', icon: Share2, label: '多平台發佈' },
       { href: '/brand-spread', icon: Zap, label: '品牌擴散' },
       { href: '/affiliate', icon: HandCoins, label: '聯盟行銷' },
-      { href: '/publish', icon: Share2, label: '多平台發佈' },
+    ],
+  },
+  {
+    label: '資源',
+    defaultOpen: false,
+    items: [
       { href: '/directory', icon: Trophy, label: '公開目錄' },
-      { href: '/dashboard/submit-case', icon: Trophy, label: '提交成功案例' },
+      { href: '/cases', icon: Trophy, label: '成功案例' },
+      { href: '/support', icon: MessageSquare, label: '客服中心' },
     ],
   },
 ]

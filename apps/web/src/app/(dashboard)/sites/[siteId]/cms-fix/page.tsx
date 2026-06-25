@@ -30,6 +30,8 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/shared/page-header'
+import { SiteWorkspaceTabs } from '@/components/layout/site-workspace-tabs'
 import { useSite } from '@/hooks/use-sites'
 import {
   useCmsFixStatus,
@@ -311,35 +313,25 @@ export default function CmsFixPage() {
 
   return (
     <div className="space-y-6">
+      <SiteWorkspaceTabs siteId={siteId} siteName={site?.name} />
       <div>
-        <Link
-          href={`/sites/${siteId}/guided-fix`}
-          className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-white"
-        >
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          返回引導頁面
-        </Link>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <PlugZap className="h-7 w-7 text-blue-400" />
-              <h1 className="text-2xl font-bold text-white">CMS 一鍵結構修復</h1>
-            </div>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              先安裝 WordPress 外掛，再由 Geovault 產生修復包並派送。外掛會處理 JSON-LD、FAQ Schema、OG/Meta、llms.txt、GEO Badge 與 AI 爬蟲追蹤。
-            </p>
-          </div>
-          <a href={siteUrl} target="_blank" rel="noopener noreferrer">
-            <Button variant="outline">
-              <ExternalLink className="mr-2 h-4 w-4" />
-              開啟網站
-            </Button>
-          </a>
-        </div>
+        <PageHeader
+          title="CMS 一鍵結構修復"
+          description="先安裝 WordPress 外掛，再由 Geovault 產生修復包並派送。外掛會處理 JSON-LD、FAQ Schema、OG/Meta、llms.txt、GEO Badge 與 AI 爬蟲追蹤。"
+          icon={PlugZap}
+          actions={
+            <a href={siteUrl} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline">
+                <ExternalLink className="mr-2 h-4 w-4" />
+                開啟網站
+              </Button>
+            </a>
+          }
+        />
       </div>
 
       {statusError ? (
-        <Card className="border-red-500/30 bg-red-500/10">
+        <Card className="border-red-500/30">
           <CardContent className="py-4 text-sm text-red-100">
             CMS 狀態讀取失敗。請重新整理頁面；如果仍失敗，表示後端或資料庫 migration 尚未完成。
           </CardContent>
@@ -347,7 +339,7 @@ export default function CmsFixPage() {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="border-white/10 bg-white/[0.04]">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <ShieldCheck className="h-5 w-5 text-green-400" />
@@ -370,7 +362,7 @@ export default function CmsFixPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-white/10 bg-white/[0.04]">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Wrench className="h-5 w-5 text-blue-400" />
@@ -393,7 +385,7 @@ export default function CmsFixPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-white/10 bg-white/[0.04]">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <CheckCircle2 className="h-5 w-5 text-cyan-400" />

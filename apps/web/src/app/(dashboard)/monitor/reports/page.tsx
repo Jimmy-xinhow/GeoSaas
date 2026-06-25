@@ -12,6 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PageHeader } from '@/components/shared/page-header';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSites } from '@/hooks/use-sites';
 import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport, useGeoComprehensive, useReportQuota, useClientDailyStats, type ClientDailyDayType } from '@/hooks/use-client-reports';
@@ -604,28 +605,24 @@ export default function ClientReportsPage() {
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-hidden">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <FileText className="h-6 w-6" />
-            驗收報告
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            一鍵查詢問題集在 5 大 AI 平台的引用狀態，即時追蹤進度
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            queryClient.invalidateQueries({ queryKey: ['client-reports'] });
-            toast.success('已刷新');
-          }}
-        >
-          <RefreshCw className="h-4 w-4 mr-1" />
-          刷新
-        </Button>
-      </div>
+      <PageHeader
+        icon={FileText}
+        title="驗收報告"
+        description="一鍵查詢問題集在 5 大 AI 平台的引用狀態，即時追蹤進度"
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['client-reports'] });
+              toast.success('已刷新');
+            }}
+          >
+            <RefreshCw className="h-4 w-4 mr-1" />
+            刷新
+          </Button>
+        }
+      />
 
       {/* Site Selector: Search + Dropdown */}
       <Card>
