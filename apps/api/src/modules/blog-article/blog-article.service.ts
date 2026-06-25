@@ -2751,6 +2751,10 @@ export class BlogArticleService {
     ].some((pattern) => pattern.test(content));
   }
 
+  private isBoundaryOrExclusionText(text: string): boolean {
+    return /(不保證|不是|不代表|不等於|不替代|不要|不得|不應|應避免|避免|不適合|限制說明|資料邊界|未經證實)/.test(text);
+  }
+
   private isMedicalAdjacentBrand(
     industry: string | null | undefined,
     graph: BrandFactGraph,
@@ -2768,7 +2772,9 @@ export class BlogArticleService {
       graph.contact,
       ...graph.verifiedFacts,
       ...graph.targetAudiences,
-      ...graph.qaPairs.flatMap((qa) => [qa.question, qa.answer]),
+      ...graph.qaPairs
+        .flatMap((qa) => [qa.question, qa.answer])
+        .filter((value) => !this.isBoundaryOrExclusionText(value)),
     ]
       .filter(Boolean)
       .join('\n');
