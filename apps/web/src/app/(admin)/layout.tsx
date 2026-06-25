@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
+  Activity,
   Clock,
   Database,
   FileText,
@@ -33,6 +34,7 @@ const adminNavGroups = [
     label: '內容與資料',
     items: [
       { href: '/admin/articles', icon: FileText, label: '文章管理' },
+      { href: '/admin/content-automation', icon: Activity, label: '內容自動化' },
       { href: '/admin/cases', icon: Trophy, label: '成功案例' },
       { href: '/admin/seeds', icon: Database, label: 'Seed 資料' },
       { href: '/admin/scheduler', icon: Clock, label: '排程管理' },

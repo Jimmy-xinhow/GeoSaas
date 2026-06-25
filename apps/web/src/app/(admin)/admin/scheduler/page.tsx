@@ -26,6 +26,7 @@ export default function AdminSchedulerPage() {
 
   const runTask = useMutation({
     mutationFn: (taskKey: string) => apiClient.post(`/admin/scheduler/tasks/${taskKey}/run`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-scheduler'] }),
   });
 
   const TASK_LABELS: Record<string, string> = {
@@ -36,6 +37,16 @@ export default function AdminSchedulerPage() {
     weekly_industry_insights: '每週產業洞察',
     robots_check: 'Robots.txt 檢查',
     crawler_monthly_cleanup: '每月爬蟲資料清理',
+    auto_rescan: '自動重新掃描',
+    indexnow_batch_submit: 'IndexNow 批量推送',
+    directory_seo_recovery: '目錄 SEO 修復',
+    retry_failed_seeds: '失敗 Seed 重試',
+    auto_discover_businesses: '自動探索品牌',
+    enrich_industry_content: '產業內容補強',
+    auto_fill_qa: '知識庫 Q&A 自動補齊',
+    auto_fill_articles: '品牌文章自動補齊',
+    client_daily_content: '客戶每日內容',
+    client_daily_sentinel: '客戶每日內容哨兵',
   };
 
   if (isLoading) {
@@ -79,6 +90,11 @@ export default function AdminSchedulerPage() {
                       <span>Cron: <code className="bg-white/10 px-1 rounded">{task.cronExpr}</code></span>
                       {task.lastRunAt && <span>上次: {new Date(task.lastRunAt).toLocaleString('zh-TW')}</span>}
                       {task.nextRunAt && <span>下次: {new Date(task.nextRunAt).toLocaleString('zh-TW')}</span>}
+                      {task.lastResult && (
+                        <span className={task.lastResult.startsWith('error:') ? 'text-red-300' : 'text-emerald-300'}>
+                          結果: {task.lastResult}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2 ml-4">

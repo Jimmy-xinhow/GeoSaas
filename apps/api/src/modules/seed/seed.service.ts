@@ -34,7 +34,18 @@ export class SeedService {
       };
     }
 
-    const [total, scanned, pending, failed, publicSites, users, blogArticles] = await Promise.all([
+    const [
+      total,
+      scanned,
+      pending,
+      failed,
+      publicSites,
+      users,
+      blogArticles,
+      lowQualityPublicSeeds,
+      eligiblePublicSeedSites,
+      privateLowQualitySeedSites,
+    ] = await Promise.all([
       this.prisma.seedSource.count(),
       this.prisma.seedSource.count({ where: { status: 'scanned' } }),
       this.prisma.seedSource.count({ where: { status: 'pending' } }),
@@ -42,6 +53,33 @@ export class SeedService {
       this.prisma.site.count({ where: { isPublic: true } }),
       this.prisma.user.count(),
       this.prisma.blogArticle.count({ where: { published: true } }),
+      this.prisma.site.count({
+        where: {
+          isPublic: true,
+          isClient: false,
+          bestScore: { lt: this.publicSeedScoreThreshold },
+          user: { is: { email: 'system@geovault.local' } },
+          seedSource: { is: { status: 'scanned' } },
+        },
+      }),
+      this.prisma.site.count({
+        where: {
+          isPublic: true,
+          isClient: false,
+          bestScore: { gte: this.publicSeedScoreThreshold },
+          user: { is: { email: 'system@geovault.local' } },
+          seedSource: { is: { status: 'scanned' } },
+        },
+      }),
+      this.prisma.site.count({
+        where: {
+          isPublic: false,
+          isClient: false,
+          bestScore: { lt: this.publicSeedScoreThreshold },
+          user: { is: { email: 'system@geovault.local' } },
+          seedSource: { is: { status: 'scanned' } },
+        },
+      }),
     ]);
 
     const byIndustry = await this.prisma.seedSource.groupBy({
@@ -97,6 +135,12 @@ export class SeedService {
       },
       sites: {
         public: publicSites,
+      },
+      seedQuality: {
+        publicScoreThreshold: this.publicSeedScoreThreshold,
+        lowQualityPublicSeeds,
+        eligiblePublicSeedSites,
+        privateLowQualitySeedSites,
       },
       users: {
         total: users,

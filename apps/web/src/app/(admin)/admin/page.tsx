@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import apiClient from '@/lib/api-client';
-import { Globe, FileText, Users, Database, RefreshCw, Zap, BarChart3, Activity, Bot, Eye, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Globe, FileText, Users, Database, RefreshCw, Zap, BarChart3, Activity, Bot, Eye, Clock, AlertTriangle, ExternalLink, ShieldAlert } from 'lucide-react';
 import { INDUSTRIES } from '@geovault/shared';
 
 const INDUSTRY_LABEL: Record<string, string> = Object.fromEntries(
@@ -391,6 +391,10 @@ export default function AdminDashboard() {
             <Button variant="outline" className="h-auto py-3 flex-col gap-1 text-amber-300 hover:text-amber-200" disabled={!!actionLoading} onClick={() => handleAction('audit', '/blog/quality-audit?threshold=85', 'delete')}>
               <BarChart3 className="h-5 w-5" />
               <span className="text-xs">{actionLoading === 'audit' ? '審計中...' : '品質審計下架 (85)'}</span>
+            </Button>
+            <Button variant="outline" className="h-auto py-3 flex-col gap-1 text-amber-300 hover:text-amber-200" disabled={!!actionLoading} onClick={() => handleAction('seed-quarantine', '/admin/seed/quarantine-low-quality')}>
+              <ShieldAlert className="h-5 w-5" />
+              <span className="text-xs">{actionLoading === 'seed-quarantine' ? '隔離中...' : '隔離低品質 Seed'}</span>
             </Button>
             <Button variant="outline" className="h-auto py-3 flex-col gap-1" disabled={!!actionLoading} onClick={() => handleAction('insights', '/blog/insights/generate-all')}>
               <BarChart3 className="h-5 w-5" />

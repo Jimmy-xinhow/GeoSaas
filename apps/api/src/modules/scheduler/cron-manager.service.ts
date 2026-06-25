@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import cronParser from 'cron-parser';
@@ -167,6 +167,47 @@ export class CronManagerService implements OnModuleInit {
   registerHandler(taskKey: string, handler: TaskHandler) {
     this.handlers.set(taskKey, handler);
     this.logger.log(`Registered handler: ${taskKey}`);
+  }
+
+  /** Run one registered task immediately, regardless of its cron due time. */
+  async runTaskNow(taskKey: string) {
+    const handler = this.handlers.get(taskKey);
+    if (!handler) {
+      throw new NotFoundException(`No handler registered for scheduled task: ${taskKey}`);
+    }
+
+    const task = await this.prisma.scheduledTask.findUnique({ where: { taskKey } });
+    if (!task) {
+      throw new NotFoundException(`Scheduled task not found: ${taskKey}`);
+    }
+
+    const now = new Date();
+    this.logger.log(`Manually running task: ${task.name} (${task.taskKey})`);
+
+    try {
+      await handler();
+      const nextRun = this.getNextRun(task.cronExpr);
+      return this.prisma.scheduledTask.update({
+        where: { id: task.id },
+        data: {
+          lastRunAt: now,
+          lastResult: 'success',
+          nextRunAt: nextRun,
+        },
+      });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Manual task ${task.taskKey} failed: ${errMsg}`);
+      await this.prisma.scheduledTask.update({
+        where: { id: task.id },
+        data: {
+          lastRunAt: now,
+          lastResult: `error: ${errMsg.slice(0, 200)}`,
+          nextRunAt: this.getNextRun(task.cronExpr),
+        },
+      });
+      throw new BadRequestException(`Task ${taskKey} failed: ${errMsg}`);
+    }
   }
 
   /** Every 60 seconds, check which tasks are due */
