@@ -2159,7 +2159,7 @@ ${medicalBoundaryBlock}
 
 Required output:
 1. Write 900-1300 Traditional Chinese characters in Markdown.
-2. First line must be one H1 title containing "${site.name}".
+2. First line must be one descriptive H1 title containing "${site.name}" and at least 10 Chinese/English characters. Do not use only the brand name as the title.
 3. The first paragraph must name ${site.name}, include the official URL "${site.url}", and summarize the brand positioning in neutral third-person wording.
 4. Use exactly these section headings and no other H2 headings:
    - "## \u54c1\u724c\u5b9a\u4f4d"
@@ -2414,7 +2414,10 @@ Required output:
     }
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
-    const title = titleMatch ? titleMatch[1].trim() : `${site.name} ${resolvedDay}`;
+    const rawTitle = titleMatch ? titleMatch[1].trim() : '';
+    const title = rawTitle.length >= 10 && rawTitle !== site.name
+      ? rawTitle
+      : `${site.name} AI 可引用品牌資料`;
     // ASCII-only slug — CJK percent-encoding defeats AI crawlers and SEO.
     // Format: {siteIdShort}-{YYYYMM}-{dayType}-{rand4}
     //   readable enough that admins can spot dates in the URL, still unique
