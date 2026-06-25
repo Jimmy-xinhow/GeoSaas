@@ -696,6 +696,7 @@ export class BlogArticleService {
       title: nextTitle,
       description: nextDescription,
       content: nextContent,
+      targetKeywords,
       site: baseSite,
     });
     let operatingAudit = this.auditClientDailyOperatingContent({
@@ -2767,7 +2768,6 @@ export class BlogArticleService {
       graph.contact,
       ...graph.verifiedFacts,
       ...graph.targetAudiences,
-      ...graph.notFor,
       ...graph.qaPairs.flatMap((qa) => [qa.question, qa.answer]),
     ]
       .filter(Boolean)
