@@ -10,6 +10,13 @@ const AI_BOT_PATTERNS = [...AI_BOTS].sort((a, b) => b.uaPattern.length - a.uaPat
 const GONE_PATHS = new Set([
   '/blog/cmn908gxe0-202604-sat-data-pulse-icfq',
 ]);
+const STATIC_BLOG_SLUGS = new Set([
+  'what-is-geo',
+  'llms-txt-guide',
+  'json-ld-for-ai',
+  'ai-crawler-tracking',
+  'geo-vs-seo',
+]);
 const LEGACY_PUBLIC_REDIRECTS = new Map<string, string>([
   ['/about', '/'],
   ['/contact', '/'],
@@ -20,38 +27,45 @@ const LEGACY_PUBLIC_REDIRECTS = new Map<string, string>([
   ['/%E6%9C%88', '/'],
   ['/月', '/'],
 ]);
-const DB_BLOG_SLUG_MARKERS = [
-  'brand-showcase',
-  'brand_reputation',
-  'buyer-guide',
-  'client-daily',
-  'competitor_comparison',
-  'geo_overview',
-  'improvement_tips',
-  'industry_benchmark',
-  'industry-top10',
-  'score-breakdown',
-];
+function publicNotFoundResponse(): NextResponse {
+  return new NextResponse('Not Found', {
+    status: 404,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Robots-Tag': 'noindex, follow',
+      'Cache-Control': 'public, max-age=300',
+    },
+  });
+}
 
-async function getMissingPublicRecordRedirect(pathname: string): Promise<string | null> {
+async function getMissingPublicBlogResponse(pathname: string): Promise<NextResponse | null> {
   const blogMatch = pathname.match(/^\/blog\/([^/]+)$/);
   if (blogMatch) {
     const slug = blogMatch[1];
-    if (!DB_BLOG_SLUG_MARKERS.some((marker) => slug.includes(marker))) {
+    let decodedSlug: string;
+    try {
+      decodedSlug = decodeURIComponent(slug);
+    } catch {
+      return publicNotFoundResponse();
+    }
+    if (STATIC_BLOG_SLUGS.has(decodedSlug)) {
       return null;
     }
 
     try {
-      const decodedSlug = decodeURIComponent(slug);
       const res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(decodedSlug)}`, {
         cache: 'no-store',
       });
-      return res.status === 404 ? '/blog' : null;
+      return res.status === 404 ? publicNotFoundResponse() : null;
     } catch {
       return null;
     }
   }
 
+  return null;
+}
+
+async function getMissingPublicRecordRedirect(pathname: string): Promise<string | null> {
   const directoryMatch = pathname.match(/^\/directory\/([^/]+)$/);
   if (directoryMatch) {
     const siteId = directoryMatch[1];
@@ -88,14 +102,6 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     return NextResponse.redirect(url, 301);
   }
 
-  const missingRecordDestination = await getMissingPublicRecordRedirect(pathname);
-  if (missingRecordDestination) {
-    const url = request.nextUrl.clone();
-    url.pathname = missingRecordDestination;
-    url.search = '';
-    return NextResponse.redirect(url, 301);
-  }
-
   if (GONE_PATHS.has(pathname)) {
     return new NextResponse('Gone', {
       status: 410,
@@ -105,6 +111,19 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
         'Cache-Control': 'public, max-age=3600',
       },
     });
+  }
+
+  const missingBlogResponse = await getMissingPublicBlogResponse(pathname);
+  if (missingBlogResponse) {
+    return missingBlogResponse;
+  }
+
+  const missingRecordDestination = await getMissingPublicRecordRedirect(pathname);
+  if (missingRecordDestination) {
+    const url = request.nextUrl.clone();
+    url.pathname = missingRecordDestination;
+    url.search = '';
+    return NextResponse.redirect(url, 301);
   }
 
   // ─── Link headers for AI crawlers ───
