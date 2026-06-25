@@ -278,6 +278,10 @@ export interface ClientDailyListItem {
   published?: boolean;
   publicVisible?: boolean;
   safetyReasons?: string[];
+  repairableReasons?: string[];
+  hardBlockers?: string[];
+  canPublish?: boolean;
+  publicationAction?: 'publish' | 'repair_and_publish' | 'manual_required' | null;
 }
 
 export interface ClientDailyList {

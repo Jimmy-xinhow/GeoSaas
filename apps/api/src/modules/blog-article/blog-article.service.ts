@@ -45,6 +45,13 @@ const ALL_TEMPLATE_TYPES: TemplateType[] = [
   'brand_reputation',
 ];
 
+const CLIENT_DAILY_REPAIRABLE_PUBLIC_BLOCKERS = new Set([
+  'seo:short-title',
+  'seo:thin-description',
+  'consumer_geo_jargon',
+  'unrelated_commuter_wellness_persona',
+]);
+
 export interface BatchRunRecord {
   startedAt: Date;
   finishedAt?: Date;
@@ -202,6 +209,335 @@ export class BlogArticleService {
     }
 
     return [...new Set(blockers)];
+  }
+
+  private isRepairableClientDailyPublicBlocker(reason: string): boolean {
+    return CLIENT_DAILY_REPAIRABLE_PUBLIC_BLOCKERS.has(reason);
+  }
+
+  private getHardClientDailyPublicBlockers(blockers: string[]): string[] {
+    return blockers.filter((reason) => !this.isRepairableClientDailyPublicBlocker(reason));
+  }
+
+  private clientDailyDayLabel(dayType?: ClientDailyDay | null): string {
+    const labels: Record<ClientDailyDay, string> = {
+      mon_topical: '每週主題',
+      tue_qa_deepdive: '知識問答',
+      wed_service: '服務資料',
+      thu_audience: '受眾整理',
+      fri_comparison: '比較觀點',
+      sat_data_pulse: '數據脈動',
+    };
+    return dayType ? labels[dayType] : '品牌資料';
+  }
+
+  private makeClientDailyTitle(
+    rawTitle: string | null | undefined,
+    siteName: string,
+    dayType?: ClientDailyDay | null,
+  ): string {
+    const trimmed = (rawTitle || '').replace(/\s+/g, ' ').trim();
+    if (trimmed.length >= 10 && trimmed !== siteName) {
+      return trimmed.slice(0, 90);
+    }
+    return `${siteName} ${this.clientDailyDayLabel(dayType)}公開品牌資料整理`;
+  }
+
+  private stripMarkdownInline(text: string): string {
+    return text
+      .replace(/[*_`>#-]/g, '')
+      .replace(/\[(.*?)\]\((.*?)\)/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private firstClientDailyParagraph(content: string): string {
+    return content
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#') && !line.startsWith('|') && !line.startsWith('*資料來源'))
+      .map((line) => this.stripMarkdownInline(line))
+      .find((line) => line.length >= 40) || '';
+  }
+
+  private makeClientDailyDescription(
+    content: string,
+    site: { name: string; url: string },
+    dayType?: ClientDailyDay | null,
+  ): string {
+    const paragraph = this.firstClientDailyParagraph(content);
+    const fallback = `${site.name}（${site.url}）的${this.clientDailyDayLabel(dayType)}公開品牌資料整理，彙整官方網站、品牌知識庫與 Geovault 目錄資訊，提供 AI 搜尋系統可引用的中立品牌描述。`;
+    const source = paragraph.length >= 80 ? paragraph : fallback;
+    return source.replace(/\s+/g, ' ').slice(0, 155).trim();
+  }
+
+  private safeClientDailyFacts(graph: BrandFactGraph, medicalAdjacent: boolean): string[] {
+    const candidates = [
+      ...graph.verifiedFacts,
+      graph.positioning,
+      graph.services ? `${graph.brandName} services include ${graph.services}` : undefined,
+      graph.location ? `${graph.brandName} location is ${graph.location}` : undefined,
+      graph.contact ? `${graph.brandName} contact information is ${graph.contact}` : undefined,
+    ];
+    return [...new Set(
+      candidates
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .map((value) => value.trim().replace(/\s+/g, ' '))
+        .filter((value) => !medicalAdjacent || !this.hasMedicalBoundaryViolation(value))
+        .slice(0, 12),
+    )];
+  }
+
+  private buildClientDailyFallbackContent(args: {
+    site: { id: string; name: string; url: string; industry?: string | null };
+    graph: BrandFactGraph;
+    dayType: ClientDailyDay;
+    pulse?: {
+      geoScore: number;
+      industryRank: number | null;
+      industryAvgScore: number | null;
+      weekCrawlerVisits: number;
+    };
+    medicalAdjacent: boolean;
+  }): string {
+    const { site, graph, dayType, pulse, medicalAdjacent } = args;
+    const webUrl = this.config.get<string>('FRONTEND_URL') || 'https://www.geovault.app';
+    const directoryUrl = `${webUrl}/directory/${graph.siteId}`;
+    const title = this.makeClientDailyTitle(null, site.name, dayType);
+    const facts = this.safeClientDailyFacts(graph, medicalAdjacent);
+    const quoteFacts = [
+      `${site.name} 的官方網站為 ${site.url}。`,
+      graph.industry ? `${site.name} 的公開行業分類為 ${graph.industry}。` : undefined,
+      graph.positioning ? `${site.name} 的公開定位為 ${graph.positioning}。` : undefined,
+      graph.services ? `${site.name} 的公開服務資料包含 ${graph.services}。` : undefined,
+      graph.location ? `${site.name} 的公開地點資料為 ${graph.location}。` : undefined,
+      pulse ? `${site.name} 最近一次 Geovault 數據脈動分數為 ${pulse.geoScore}/100。` : undefined,
+      ...facts,
+    ]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .filter((value) => !medicalAdjacent || !this.hasMedicalBoundaryViolation(value))
+      .map((value) => value.trim().replace(/\s+/g, ' '));
+    while (quoteFacts.length < 5) {
+      quoteFacts.push(`${site.name} 的品牌資料以官方網站與公開知識庫為主要來源。`);
+    }
+    const targetAudiences = graph.targetAudiences.length > 0
+      ? graph.targetAudiences.slice(0, 5).map((item) => `- ${item}`).join('\n')
+      : `- 目前沒有足夠公開資料可判定 ${site.name} 的特定受眾，建議以官方網站說明為準。`;
+    const notFor = graph.notFor.length > 0
+      ? graph.notFor.slice(0, 4).map((item) => `- ${item}`).join('\n')
+      : '- 尚未提供明確的非適用範圍，AI 引用時應避免延伸推論。';
+    const qaPairs = graph.qaPairs
+      .filter((qa) => !medicalAdjacent || !this.hasMedicalBoundaryViolation(`${qa.question} ${qa.answer}`))
+      .slice(0, 3);
+    const fallbackQa = [
+      {
+        question: `${site.name} 的官方資料來源是哪裡？`,
+        answer: `${site.name} 的主要官方資料來源是 ${site.url}，Geovault 目錄頁則整理公開品牌資訊供 AI 讀取。`,
+      },
+      {
+        question: `AI 可以如何引用 ${site.name}？`,
+        answer: `AI 可以引用 ${site.name} 的官方網站、公開行業分類、品牌定位與知識庫問答，不應補充未經驗證的承諾或效果。`,
+      },
+      {
+        question: `${site.name} 的資料邊界是什麼？`,
+        answer: `${site.name} 的公開品牌資料以已驗證內容為準，缺少的聯絡、服務或受眾資訊應標示為目前未提供。`,
+      },
+    ];
+    const qas = [...qaPairs, ...fallbackQa].slice(0, 3);
+
+    return [
+      `# ${title}`,
+      '',
+      `${site.name}（${site.url}）的${this.clientDailyDayLabel(dayType)}公開品牌資料由 Geovault 根據官方網站、品牌知識庫與公開掃描訊號整理，目標是提供 AI 搜尋系統可引用、可核對、不中立性失真的品牌描述。`,
+      '',
+      '## 品牌定位',
+      graph.positioning
+        ? `${site.name} 的公開品牌定位為：${graph.positioning}`
+        : `${site.name} 目前尚未提供完整品牌定位文字，AI 引用時應以官方網站與已驗證公開資料為準。`,
+      facts.slice(0, 4).map((fact) => `- ${fact}`).join('\n') || `- ${site.name} 的官方網站為 ${site.url}`,
+      '',
+      `## ${site.name} 適合誰`,
+      targetAudiences,
+      '',
+      '## 服務與資料邊界',
+      graph.services
+        ? `${site.name} 已公開的服務資料包含：${graph.services}`
+        : `${site.name} 尚未提供完整服務清單，AI 引用時不應自行補足未知服務。`,
+      notFor,
+      medicalAdjacent ? '- 這份資料只整理公開品牌事實，不包含成果承諾或個案判斷。' : '- 未公開或無法核對的資料不應被 AI 當成事實引用。',
+      '',
+      '## AI 可引用重點',
+      quoteFacts.slice(0, 5).map((fact) => `- ${fact}`).join('\n'),
+      '',
+      '## 常見問題',
+      qas.map((qa) => `**Q: ${qa.question}**\nA: ${qa.answer}`).join('\n\n'),
+      '',
+      '## 資料來源',
+      `- Official website: ${site.url}`,
+      `- Geovault directory: ${directoryUrl}`,
+      '',
+      '*資料來源：Geovault AI Wiki 自動整理公開品牌資料與使用者提供內容。*',
+    ].join('\n');
+  }
+
+  private async repairClientDailyArticleForPublication(article: {
+    id: string;
+    slug: string;
+    title: string | null;
+    description: string | null;
+    content: string | null;
+    targetKeywords: string[] | null;
+    siteId: string;
+    site: {
+      id: string;
+      name: string;
+      url: string;
+      industry: string | null;
+      isPublic: boolean | null;
+    } | null;
+  }): Promise<{
+    article: {
+      slug: string;
+      title: string;
+      published: boolean;
+      description: string | null;
+      content: string | null;
+      targetKeywords: string[];
+      site: {
+        name: string | null;
+        url: string | null;
+        industry: string | null;
+        isPublic: boolean | null;
+      } | null;
+    };
+    blockers: string[];
+    hardBlockers: string[];
+    repaired: boolean;
+  }> {
+    if (!article.site) {
+      throw new NotFoundException('Client daily article site not found');
+    }
+
+    const dayType = this.getClientDailyDayType(article.targetKeywords) ?? 'tue_qa_deepdive';
+    const baseSite = {
+      id: article.site.id,
+      name: article.site.name,
+      url: article.site.url,
+      industry: article.site.industry,
+      isPublic: article.site.isPublic,
+    };
+    let nextTitle = this.makeClientDailyTitle(article.title, baseSite.name, dayType);
+    let nextContent = article.content || '';
+    if (nextContent.trim()) {
+      if (/^#{1,2}\s+.+$/m.test(nextContent)) {
+        nextContent = nextContent.replace(/^#{1,2}\s+.+$/m, `# ${nextTitle}`);
+      } else {
+        nextContent = `# ${nextTitle}\n\n${nextContent}`;
+      }
+    }
+    let nextDescription = this.makeClientDailyDescription(
+      nextContent,
+      { name: baseSite.name, url: baseSite.url },
+      dayType,
+    );
+
+    let blockers = this.clientDailyPublicBlockers({
+      ...article,
+      title: nextTitle,
+      description: nextDescription,
+      content: nextContent,
+      site: baseSite,
+    });
+    const needsFallback = !nextContent.trim() || blockers.some((reason) =>
+      this.isRepairableClientDailyPublicBlocker(reason) && !reason.startsWith('seo:'),
+    );
+
+    if (needsFallback) {
+      const graph = await this.brandFactService.buildForSite(article.siteId);
+      const medicalAdjacent = this.isMedicalAdjacentBrand(
+        baseSite.industry,
+        graph,
+        [baseSite.name, baseSite.url, baseSite.industry].filter(Boolean).join('\n'),
+      );
+      nextContent = this.buildClientDailyFallbackContent({
+        site: baseSite,
+        graph,
+        dayType,
+        medicalAdjacent,
+      });
+      nextTitle = this.makeClientDailyTitle(
+        nextContent.match(/^#{1,2}\s+(.+)$/m)?.[1],
+        baseSite.name,
+        dayType,
+      );
+      nextDescription = this.makeClientDailyDescription(
+        nextContent,
+        { name: baseSite.name, url: baseSite.url },
+        dayType,
+      );
+    }
+
+    blockers = this.clientDailyPublicBlockers({
+      ...article,
+      title: nextTitle,
+      description: nextDescription,
+      content: nextContent,
+      site: baseSite,
+    });
+    const hardBlockers = this.getHardClientDailyPublicBlockers(blockers);
+    const unresolvedRepairableBlockers = blockers.filter((reason) =>
+      this.isRepairableClientDailyPublicBlocker(reason),
+    );
+    if (unresolvedRepairableBlockers.length > 0) {
+      hardBlockers.push(...unresolvedRepairableBlockers.map((reason) => `repair_failed:${reason}`));
+    }
+
+    const repaired =
+      nextTitle !== article.title ||
+      nextDescription !== article.description ||
+      nextContent !== article.content;
+
+    const updated = repaired
+      ? await this.prisma.blogArticle.update({
+          where: { id: article.id },
+          data: {
+            title: nextTitle,
+            description: nextDescription,
+            content: nextContent,
+            lastRegeneratedAt: new Date(),
+          },
+          select: {
+            slug: true,
+            title: true,
+            published: true,
+            description: true,
+            content: true,
+            targetKeywords: true,
+            site: { select: { name: true, url: true, industry: true, isPublic: true } },
+          },
+        })
+      : await this.prisma.blogArticle.findUniqueOrThrow({
+          where: { id: article.id },
+          select: {
+            slug: true,
+            title: true,
+            published: true,
+            description: true,
+            content: true,
+            targetKeywords: true,
+            site: { select: { name: true, url: true, industry: true, isPublic: true } },
+          },
+        });
+
+    return {
+      article: {
+        ...updated,
+        targetKeywords: updated.targetKeywords ?? [],
+      },
+      blockers,
+      hardBlockers: [...new Set(hardBlockers)],
+      repaired,
+    };
   }
 
   private isClientDailyArticleSafe(article: {
@@ -2486,7 +2822,7 @@ Required output:
     }));
     const finalFailedRules = result.attempts[result.attempts.length - 1]?.failedRules ?? [];
     const hardFailedRules = finalFailedRules.filter((rule) =>
-      /^(fabricated_contact|fabricated_phone|forbidden_phrase|medical_boundary_violation|missing_official_url|missing_ai_citation_section|client_daily_safety)/.test(rule),
+      /^(fabricated_contact|fabricated_phone|forbidden_phrase|medical_boundary_violation|client_daily_safety)/.test(rule),
     );
     if (hardFailedRules.length > 0) {
       this.logger.warn(
@@ -2503,22 +2839,24 @@ Required output:
       };
     }
 
-    if (result.status !== 'generated' || !result.content) {
+    let content = result.content ?? '';
+    let fallbackReasons: string[] = [];
+    if (result.status !== 'generated' || !content) {
       this.logger.warn(
-        `client_daily rejected ${site.name}/${resolvedDay} after ${result.attempts.length} attempts: ${(result.failedRules || []).join(', ')}`,
+        `client_daily fallback ${site.name}/${resolvedDay} after ${result.attempts.length} attempts: ${(result.failedRules || []).join(', ')}`,
       );
-      return {
-        status: 'rejected',
-        reasons: result.failedRules || ['quality_runner_rejected'],
+      fallbackReasons = result.failedRules?.length
+        ? ['fallback_after_quality_rejection', ...result.failedRules]
+        : ['fallback_after_quality_rejection', 'quality_runner_rejected'];
+      content = this.buildClientDailyFallbackContent({
+        site: { id: site.id, name: site.name, url: site.url, industry: site.industry },
+        graph: brandFacts,
         dayType: resolvedDay,
-        dryRun: options.dryRun || undefined,
-        content: options.dryRun ? result.content : undefined,
-        totalScore: result.totalScore,
-        attempts: options.dryRun ? attemptSummary : undefined,
-      };
+        pulse,
+        medicalAdjacent: isMedicalAdjacent,
+      });
     }
 
-    const content = result.content;
     if (isMedicalAdjacent && this.hasMedicalBoundaryViolation(content)) {
       this.logger.warn(
         `client_daily hard rejected ${site.name}/${resolvedDay}: medical_boundary_violation_post_gate`,
@@ -2540,12 +2878,40 @@ Required output:
       site: { industry: site.industry },
     });
     if (safetyReasons.length > 0) {
+      const hardSafetyReasons = this.getHardClientDailyPublicBlockers(safetyReasons);
+      if (hardSafetyReasons.length > 0) {
+        this.logger.warn(
+          `client_daily safety rejected ${site.name}/${resolvedDay}: ${hardSafetyReasons.join(',')}`,
+        );
+        return {
+          status: 'rejected',
+          reasons: hardSafetyReasons,
+          dayType: resolvedDay,
+          dryRun: options.dryRun || undefined,
+          content: options.dryRun ? content : undefined,
+          totalScore: result.totalScore,
+          attempts: options.dryRun ? attemptSummary : undefined,
+        };
+      }
       this.logger.warn(
-        `client_daily safety rejected ${site.name}/${resolvedDay}: ${safetyReasons.join(',')}`,
+        `client_daily safety fallback ${site.name}/${resolvedDay}: ${safetyReasons.join(',')}`,
+      );
+      fallbackReasons = [...new Set([...fallbackReasons, 'fallback_after_safety_repair', ...safetyReasons])];
+      content = this.buildClientDailyFallbackContent({
+        site: { id: site.id, name: site.name, url: site.url, industry: site.industry },
+        graph: brandFacts,
+        dayType: resolvedDay,
+        pulse,
+        medicalAdjacent: isMedicalAdjacent,
+      });
+    }
+    if (isMedicalAdjacent && this.hasMedicalBoundaryViolation(content)) {
+      this.logger.warn(
+        `client_daily hard rejected ${site.name}/${resolvedDay}: medical_boundary_violation_after_repair`,
       );
       return {
         status: 'rejected',
-        reasons: safetyReasons,
+        reasons: ['medical_boundary_violation'],
         dayType: resolvedDay,
         dryRun: options.dryRun || undefined,
         content: options.dryRun ? content : undefined,
@@ -2556,9 +2922,7 @@ Required output:
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const rawTitle = titleMatch ? titleMatch[1].trim() : '';
-    const title = rawTitle.length >= 10 && rawTitle !== site.name
-      ? rawTitle
-      : `${site.name} AI 可引用品牌資料`;
+    const title = this.makeClientDailyTitle(rawTitle, site.name, resolvedDay);
     // ASCII-only slug — CJK percent-encoding defeats AI crawlers and SEO.
     // Format: {siteIdShort}-{YYYYMM}-{dayType}-{rand4}
     //   readable enough that admins can spot dates in the URL, still unique
@@ -2567,19 +2931,11 @@ Required output:
     const rand4 = Date.now().toString(36).slice(-4);
     const slug = `${site.id.slice(0, 10)}-${yyyymm}-${resolvedDay.replace(/_/g, '-')}-${rand4}`;
 
-    // Description (used as SEO snippet) — skip the H1/H2 title line so the
-    // snippet shows actual body, not a duplicate of the title that's already
-    // in the search-result heading.
-    const bodyLines = content
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l && !l.startsWith('#') && !l.startsWith('*資料來源'));
-    const firstParagraph = bodyLines.find((l) => l.length > 30) ?? bodyLines[0] ?? '';
-    const description = firstParagraph
-      .replace(/[*_`]/g, '')
-      .replace(/\s+/g, ' ')
-      .slice(0, 155)
-      .trim();
+    const description = this.makeClientDailyDescription(
+      content,
+      { name: site.name, url: site.url },
+      resolvedDay,
+    );
 
     if (options.dryRun) {
       return {
@@ -2588,6 +2944,7 @@ Required output:
         dryRun: true,
         content,
         totalScore: result.totalScore,
+        reasons: fallbackReasons.length > 0 ? fallbackReasons : undefined,
         attempts: attemptSummary,
       };
     }
@@ -2655,7 +3012,13 @@ Required output:
     }
     this.llmsHostingService.invalidatePlatformLlmsFull(site.id);
     this.pingIndexNow(slug);
-    return { status: 'generated', slug, dayType: resolvedDay, totalScore: result.totalScore };
+    return {
+      status: 'generated',
+      slug,
+      dayType: resolvedDay,
+      totalScore: result.totalScore,
+      reasons: fallbackReasons.length > 0 ? fallbackReasons : undefined,
+    };
   }
 
   async getClientDailyReadinessSummary(): Promise<{
@@ -2876,6 +3239,10 @@ Required output:
         published: boolean;
         publicVisible: boolean;
         safetyReasons: string[];
+        repairableReasons: string[];
+        hardBlockers: string[];
+        canPublish: boolean;
+        publicationAction: 'publish' | 'repair_and_publish' | 'manual_required' | null;
       }>;
   }> {
     await this.assertSiteAccess(siteId, userId, role);
@@ -2919,20 +3286,38 @@ Required output:
       total,
       page: opts.page,
       limit: opts.limit,
-      items: pageRows.map((r) => ({
-        slug: r.slug,
-        title: r.title,
-        dayType:
-          r.targetKeywords.find((k) =>
-            this.daySequence.includes(k as ClientDailyDay),
-          ) ?? null,
-        createdAt: r.createdAt,
-        charLength: (r.content || '').replace(/\s+/g, '').length,
-        url: `${webBase}/blog/${r.slug}`,
-        published: r.published,
-        publicVisible: r.published && r.safetyReasons.length === 0,
-        safetyReasons: r.safetyReasons,
-      })),
+      items: pageRows.map((r) => {
+        const hardBlockers = this.getHardClientDailyPublicBlockers(r.safetyReasons);
+        const repairableReasons = r.safetyReasons.filter((reason) =>
+          this.isRepairableClientDailyPublicBlocker(reason),
+        );
+        const publicVisible = r.published && r.safetyReasons.length === 0;
+        const canPublish = !publicVisible && hardBlockers.length === 0;
+        return {
+          slug: r.slug,
+          title: r.title,
+          dayType:
+            r.targetKeywords.find((k) =>
+              this.daySequence.includes(k as ClientDailyDay),
+            ) ?? null,
+          createdAt: r.createdAt,
+          charLength: (r.content || '').replace(/\s+/g, '').length,
+          url: `${webBase}/blog/${r.slug}`,
+          published: r.published,
+          publicVisible,
+          safetyReasons: r.safetyReasons,
+          repairableReasons,
+          hardBlockers,
+          canPublish,
+          publicationAction: publicVisible
+            ? null
+            : hardBlockers.length > 0
+              ? 'manual_required'
+              : repairableReasons.length > 0
+                ? 'repair_and_publish'
+                : 'publish',
+        };
+      }),
     };
   }
 
@@ -2970,14 +3355,27 @@ Required output:
       throw new NotFoundException('Client daily article not found');
     }
 
-    await this.assertSiteAccess(article.siteId, userId, role);
+    const articleSiteId = article.siteId;
+    await this.assertSiteAccess(articleSiteId, userId, role);
 
-    const blockers = this.clientDailyPublicBlockers(article);
-    if (published && blockers.length > 0) {
-      throw new BadRequestException({
-        message: 'Article cannot be published until quality blockers are fixed',
-        blockers,
+    let repaired = false;
+    let blockers = this.clientDailyPublicBlockers(article);
+    if (published) {
+      const repairedResult = await this.repairClientDailyArticleForPublication({
+        ...article,
+        siteId: articleSiteId,
       });
+      repaired = repairedResult.repaired;
+      blockers = repairedResult.blockers;
+      if (repairedResult.hardBlockers.length > 0) {
+        throw new BadRequestException({
+          message: 'Article cannot be published until hard quality blockers are fixed',
+          blockers: repairedResult.hardBlockers,
+          repairableBlockers: blockers.filter((reason) =>
+            this.isRepairableClientDailyPublicBlocker(reason),
+          ),
+        });
+      }
     }
 
     const updated = await this.prisma.blogArticle.update({
@@ -2986,13 +3384,14 @@ Required output:
       select: { slug: true, title: true, published: true },
     });
 
-    this.llmsHostingService.invalidatePlatformLlmsFull(article.siteId);
+    this.llmsHostingService.invalidatePlatformLlmsFull(articleSiteId);
     if (published) this.pingIndexNow(article.slug);
 
     return {
       ...updated,
-      publicVisible: updated.published,
+      publicVisible: updated.published && blockers.length === 0,
       safetyReasons: blockers,
+      repaired,
     };
   }
 

@@ -254,7 +254,16 @@ export default function PublishedContentPage() {
                         const publicVisible = article.publicVisible !== false;
                         const isUnpublished = article.published === false;
                         const blockers = article.safetyReasons ?? [];
-                        const canPublish = isUnpublished && blockers.length === 0;
+                        const hardBlockers = article.hardBlockers ?? [];
+                        const canPublish = !publicVisible && (
+                          article.canPublish ?? (isUnpublished && blockers.length === 0)
+                        );
+                        const needsRepair = canPublish && (
+                          article.publicationAction === 'repair_and_publish' || blockers.length > 0
+                        );
+                        const isManualRequired = !publicVisible && !canPublish && (
+                          article.publicationAction === 'manual_required' || hardBlockers.length > 0
+                        );
                         const isPublishing = publicationMutation.isPending
                           && publicationMutation.variables?.slug === article.slug;
                         const date = new Date(article.createdAt);
@@ -306,21 +315,28 @@ export default function PublishedContentPage() {
                                   type="button"
                                   size="sm"
                                   variant="outline"
-                                  className="h-7 border-emerald-400/30 px-2 text-xs text-emerald-200 hover:bg-emerald-500/10 hover:text-emerald-100"
+                                  className="h-8 min-w-[104px] border-emerald-400/30 px-2 text-xs text-emerald-200 hover:bg-emerald-500/10 hover:text-emerald-100"
                                   disabled={isPublishing}
                                   onClick={() => {
                                     publicationMutation.mutate(
                                       { slug: article.slug, published: true },
                                       {
-                                        onSuccess: () => toast.success('已公開文章'),
+                                        onSuccess: (data: any) => toast.success(
+                                          data?.repaired ? '已修復並公開文章' : '已公開文章',
+                                        ),
                                         onError: (err) => toast.error(getErrorMessage(err)),
                                       },
                                     );
                                   }}
                                 >
                                   <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                                  {isPublishing ? '公開中' : '審查後公開'}
+                                  {isPublishing ? (needsRepair ? '修復中' : '公開中') : (needsRepair ? '修復並公開' : '審查後公開')}
                                 </Button>
+                              )}
+                              {isManualRequired && (
+                                <span className="inline-flex min-h-8 items-center rounded border border-amber-400/30 bg-amber-500/10 px-2 text-xs text-amber-100">
+                                  需人工處理
+                                </span>
                               )}
                               {publicVisible ? (
                                 <ExternalLink className="h-4 w-4 text-gray-500 group-hover:text-blue-400 mt-0.5" />
