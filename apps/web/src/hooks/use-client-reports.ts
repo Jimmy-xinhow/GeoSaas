@@ -284,11 +284,55 @@ export interface ClientDailyListItem {
   publicationAction?: 'publish' | 'repair_and_publish' | 'manual_required' | null;
 }
 
+export interface ClientDailyArticleReview extends ClientDailyListItem {
+  description: string;
+  content: string;
+  updatedAt: string;
+  site?: {
+    id: string;
+    name: string;
+    url: string;
+    industry?: string | null;
+    isPublic?: boolean;
+  } | null;
+}
+
 export interface ClientDailyList {
   total: number;
   page: number;
   limit: number;
   items: ClientDailyListItem[];
+}
+
+export function useClientDailyArticleReview(slug: string) {
+  return useQuery({
+    queryKey: ['client-reports', 'client-daily-review', slug],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ClientDailyArticleReview>(
+        `/blog/client-daily/articles/${slug}/review`,
+      );
+      return data;
+    },
+    enabled: !!slug,
+  });
+}
+
+export function useUpdateClientDailyArticleReview(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { title: string; description: string; content: string }) => {
+      const { data } = await apiClient.patch<ClientDailyArticleReview>(
+        `/blog/client-daily/articles/${slug}/review`,
+        payload,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client-reports', 'client-daily-review', slug] });
+      qc.invalidateQueries({ queryKey: ['client-reports', 'client-daily-list'] });
+      qc.invalidateQueries({ queryKey: ['client-reports', 'client-daily-stats'] });
+    },
+  });
 }
 
 export function useClientDailyList(siteId: string, page: number, limit = 30) {

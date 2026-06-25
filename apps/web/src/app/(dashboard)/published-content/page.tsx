@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, FileText, ExternalLink, Calendar, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -334,9 +335,28 @@ export default function PublishedContentPage() {
                                 </Button>
                               )}
                               {isManualRequired && (
-                                <span className="inline-flex min-h-8 items-center rounded border border-amber-400/30 bg-amber-500/10 px-2 text-xs text-amber-100">
-                                  需人工處理
-                                </span>
+                                <Link href={`/published-content/${article.slug}`}>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 min-w-[96px] border-amber-400/40 px-2 text-xs text-amber-100 hover:bg-amber-500/10 hover:text-amber-50"
+                                  >
+                                    人工處理
+                                  </Button>
+                                </Link>
+                              )}
+                              {!publicVisible && !isManualRequired && !canPublish && (
+                                <Link href={`/published-content/${article.slug}`}>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 min-w-[96px] border-amber-400/40 px-2 text-xs text-amber-100 hover:bg-amber-500/10 hover:text-amber-50"
+                                  >
+                                    查看草稿
+                                  </Button>
+                                </Link>
                               )}
                               {publicVisible ? (
                                 <ExternalLink className="h-4 w-4 text-gray-500 group-hover:text-blue-400 mt-0.5" />

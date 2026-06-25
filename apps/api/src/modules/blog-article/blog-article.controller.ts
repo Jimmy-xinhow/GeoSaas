@@ -456,6 +456,44 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @Get('client-daily/articles/:slug/review')
+  @ApiOperation({
+    summary:
+      'Internal review payload for one client_daily article, including unpublished drafts and quality blockers.',
+  })
+  getClientDailyReview(
+    @Param('slug') slug: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getClientDailyArticleReview(
+      normalizeRequiredText(slug, 'slug', 220),
+      userId,
+      role,
+    );
+  }
+
+  @ApiBearerAuth()
+  @Patch('client-daily/articles/:slug/review')
+  @ApiOperation({
+    summary:
+      'Update title, description, or content for an unpublished/problematic client_daily article before attempting publication.',
+  })
+  updateClientDailyReview(
+    @Param('slug') slug: string,
+    @Body() body: { title?: unknown; description?: unknown; content?: unknown },
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.updateClientDailyArticleReview(
+      normalizeRequiredText(slug, 'slug', 220),
+      body,
+      userId,
+      role,
+    );
+  }
+
+  @ApiBearerAuth()
   @Patch('client-daily/articles/:slug/publication')
   @ApiOperation({
     summary:

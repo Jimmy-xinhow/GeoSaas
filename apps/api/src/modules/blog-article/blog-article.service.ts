@@ -3867,6 +3867,163 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     };
   }
 
+  private buildClientDailyReviewResponse(article: {
+    slug: string;
+    title: string;
+    description: string;
+    content: string;
+    published: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    targetKeywords: string[];
+    siteId: string | null;
+    site: { id: string; name: string; url: string; industry: string | null; isPublic: boolean } | null;
+  }) {
+    const safetyReasons = this.clientDailyPublicBlockers(article);
+    const hardBlockers = this.getHardClientDailyPublicBlockers(safetyReasons);
+    const repairableReasons = safetyReasons.filter((reason) =>
+      this.isRepairableClientDailyPublicBlocker(reason),
+    );
+    const publicVisible = article.published && safetyReasons.length === 0;
+    const canPublish = !publicVisible && hardBlockers.length === 0;
+    const webBase = this.config.get<string>('WEB_URL') || 'https://www.geovault.app';
+
+    return {
+      slug: article.slug,
+      title: article.title,
+      description: article.description,
+      content: article.content,
+      dayType: this.getClientDailyDayType(article.targetKeywords),
+      createdAt: article.createdAt,
+      updatedAt: article.updatedAt,
+      charLength: (article.content || '').replace(/\s+/g, '').length,
+      url: `${webBase}/blog/${article.slug}`,
+      published: article.published,
+      publicVisible,
+      safetyReasons,
+      repairableReasons,
+      hardBlockers,
+      canPublish,
+      publicationAction: publicVisible
+        ? null
+        : hardBlockers.length > 0
+          ? 'manual_required'
+          : repairableReasons.length > 0
+            ? 'repair_and_publish'
+            : 'publish',
+      site: article.site,
+    };
+  }
+
+  async getClientDailyArticleReview(slug: string, userId?: string, role?: string) {
+    const article = await this.prisma.blogArticle.findUnique({
+      where: { slug },
+      select: {
+        slug: true,
+        title: true,
+        description: true,
+        content: true,
+        published: true,
+        createdAt: true,
+        updatedAt: true,
+        targetKeywords: true,
+        templateType: true,
+        siteId: true,
+        site: {
+          select: {
+            id: true,
+            name: true,
+            url: true,
+            industry: true,
+            isPublic: true,
+          },
+        },
+      },
+    });
+
+    if (!article || article.templateType !== 'client_daily' || !article.siteId) {
+      throw new NotFoundException('Client daily article not found');
+    }
+
+    await this.assertSiteAccess(article.siteId, userId, role);
+    return this.buildClientDailyReviewResponse(article);
+  }
+
+  async updateClientDailyArticleReview(
+    slug: string,
+    body: { title?: unknown; description?: unknown; content?: unknown },
+    userId?: string,
+    role?: string,
+  ) {
+    const existing = await this.prisma.blogArticle.findUnique({
+      where: { slug },
+      select: { id: true, templateType: true, siteId: true },
+    });
+
+    if (!existing || existing.templateType !== 'client_daily' || !existing.siteId) {
+      throw new NotFoundException('Client daily article not found');
+    }
+
+    await this.assertSiteAccess(existing.siteId, userId, role);
+
+    const data: { title?: string; description?: string; content?: string } = {};
+    if (body.title !== undefined) {
+      if (typeof body.title !== 'string') throw new BadRequestException('title must be a string');
+      const title = body.title.trim();
+      if (title.length < 2 || title.length > 160) {
+        throw new BadRequestException('title must be between 2 and 160 characters');
+      }
+      data.title = title;
+    }
+    if (body.description !== undefined) {
+      if (typeof body.description !== 'string') throw new BadRequestException('description must be a string');
+      const description = body.description.trim();
+      if (description.length < 20 || description.length > 500) {
+        throw new BadRequestException('description must be between 20 and 500 characters');
+      }
+      data.description = description;
+    }
+    if (body.content !== undefined) {
+      if (typeof body.content !== 'string') throw new BadRequestException('content must be a string');
+      const content = body.content.trim();
+      if (content.length < 200 || content.length > 50000) {
+        throw new BadRequestException('content must be between 200 and 50000 characters');
+      }
+      data.content = content;
+    }
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No review fields provided');
+    }
+
+    const updated = await this.prisma.blogArticle.update({
+      where: { id: existing.id },
+      data,
+      select: {
+        slug: true,
+        title: true,
+        description: true,
+        content: true,
+        published: true,
+        createdAt: true,
+        updatedAt: true,
+        targetKeywords: true,
+        siteId: true,
+        site: {
+          select: {
+            id: true,
+            name: true,
+            url: true,
+            industry: true,
+            isPublic: true,
+          },
+        },
+      },
+    });
+
+    this.llmsHostingService.invalidatePlatformLlmsFull(existing.siteId);
+    return this.buildClientDailyReviewResponse(updated);
+  }
+
   async setClientDailyArticlePublished(
     slug: string,
     published: boolean,
