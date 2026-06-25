@@ -35,6 +35,58 @@ interface DaySpecConfig {
   rules: ScoringRule[];
 }
 
+function hasOfficialSourceUrl(weight: number): ScoringRule {
+  return {
+    key: 'official_source_url',
+    weight,
+    description: 'Article must include the verified official website URL.',
+    evaluate(content, ctx) {
+      const siteUrl = ctx.extras?.siteUrl as string | undefined;
+      if (!siteUrl || content.includes(siteUrl)) return { score: weight };
+      return { score: 0, reason: 'missing_official_url' };
+    },
+  };
+}
+
+function hasCitationReadyStructure(weight: number): ScoringRule {
+  return {
+    key: 'citation_ready_structure',
+    weight,
+    description: 'Article must expose AI citation bullets and source section.',
+    evaluate(content) {
+      const hasCitationBullets = content.includes('## AI 可引用重點');
+      const hasSourceSection = content.includes('## 資料來源');
+      if (hasCitationBullets && hasSourceSection) return { score: weight };
+      const missing = [
+        !hasCitationBullets && 'ai_citation_points',
+        !hasSourceSection && 'source_section',
+      ].filter(Boolean).join('|');
+      return { score: 0, reason: `missing_ai_citation_section:${missing}` };
+    },
+  };
+}
+
+function clientDailyPostSafetyGate(weight: number): ScoringRule {
+  return {
+    key: 'client_daily_post_safety',
+    weight,
+    description: 'Mirror service-level safety rejection inside the retryable quality runner.',
+    evaluate(content, ctx) {
+      const isTechnology = ctx.industry === 'technology';
+      if (
+        isTechnology &&
+        /(每日通勤族|通勤路線|智能行程|行程規劃|冥想課程|放鬆練習|壓力管理資源|心智健康)/.test(content)
+      ) {
+        return {
+          score: 0,
+          reason: 'client_daily_safety:unrelated_commuter_wellness_persona',
+        };
+      }
+      return { score: weight };
+    },
+  };
+}
+
 function commonRules(opts: { withSelfPromoFaq: boolean }): ScoringRule[] {
   const list: ScoringRule[] = [
     brandSaturation(6, 5),
@@ -43,14 +95,17 @@ function commonRules(opts: { withSelfPromoFaq: boolean }): ScoringRule[] {
     forbiddenPhrases(8),
     noOutdatedNarrative(6),
     noFabricatedPersona(5),
-    geovaultAttribution(2),
+    geovaultAttribution(1),
     noMojibake(3),
-    noHyperbole(7),
+    noHyperbole(6),
     noFirstPersonPromo(7),
     noCTABoilerplate(5),
-    hasSpecificFacts(6, 2),
+    hasSpecificFacts(5, 2),
     firstHandDataAnchors(10, 3),
     medicalBoundary(8),
+    hasOfficialSourceUrl(1),
+    hasCitationReadyStructure(1),
+    clientDailyPostSafetyGate(1),
   ];
 
   if (opts.withSelfPromoFaq) {
@@ -78,6 +133,22 @@ function buildPatch(args: {
   failedRules: string[];
   medicalAdjacent?: boolean;
 }): string {
+  const citationBlock = args.failedRules.some((rule) =>
+    /^(missing_official_url|missing_ai_citation_section)/.test(rule),
+  )
+    ? `
+Citation-ready structure requirements:
+- Keep the exact H2 headings "## AI 可引用重點" and "## 資料來源".
+- Include the official website URL exactly as provided in the verified facts.
+- In "## AI 可引用重點", write five short, standalone bullets that an AI assistant can quote directly.
+- In "## 資料來源", list both the official website and Geovault directory data.`
+    : '';
+  const serviceSafetyBlock = args.failedRules.some((rule) => rule.startsWith('client_daily_safety:'))
+    ? `
+Service-level safety rewrite requirements:
+- Remove unrelated commuter, route-planning, wellness, meditation, pressure-management, and mental-health personas unless those facts are explicitly in the verified brand data.
+- Re-ground the article in the verified brand facts, official website, services, location, target audiences, and Q&A only.`
+    : '';
   const medicalBlock = args.medicalAdjacent
     ? `
 Medical-adjacent rewrite requirements:
@@ -100,6 +171,8 @@ ${args.previousContent}
 
 Failed quality rules:
 ${args.failedRules.map((r) => `- ${r}`).join('\n')}
+${citationBlock}
+${serviceSafetyBlock}
 ${medicalBlock}
 
 Rewrite the draft in place. Keep the article factual, neutral, citation-ready, and grounded only in the verified brand facts. Do not invent contact details, locations, services, awards, guarantees, medical effects, competitors, or customer stories. Remove any phone number or email address that is not shown exactly in the verified facts; prefer the official URL as the contact path.`;
@@ -117,7 +190,7 @@ export function createClientDailySpec(
   const cfg = dayConfigs[dayType];
   return {
     templateType: `client_daily/${dayType}`,
-    promptVersion: 'v4-ai-wiki-facts',
+    promptVersion: 'v5-citation-source',
     fullModel: 'gpt-4o',
     fullMaxTokens: 2000,
     buildFullPrompt: ({ data }) => data.basePrompt,
@@ -129,6 +202,9 @@ export function createClientDailySpec(
       'fabricated_phone',
       'forbidden_phrase',
       'medical_boundary_violation',
+      'missing_official_url',
+      'missing_ai_citation_section',
+      'client_daily_safety',
     ],
     maxFullRetries: 1,
     maxPatchRetries: 2,

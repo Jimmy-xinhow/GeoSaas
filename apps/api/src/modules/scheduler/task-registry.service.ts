@@ -209,9 +209,22 @@ export class TaskRegistryService implements OnModuleInit {
     // missed run on the next 60s tick.
     this.cronManager.registerHandler('client_daily_content', async () => {
       const r = await this.blogArticleService.runClientDailyBatch();
+      const reasonSummary = Object.entries(r.rejectedReasons)
+        .map(([reason, count]) => `${reason}:${count}`)
+        .join(',');
       this.logger.log(
-        `client_daily batch: attempted=${r.attempted} generated=${r.generated} rejected=${r.rejected} skipped=${r.skipped}`,
+        `client_daily batch: attempted=${r.attempted} generated=${r.generated} rejected=${r.rejected} skipped=${r.skipped} reasons=${reasonSummary || 'none'}`,
       );
+      if (r.attempted > 0 && r.generated === 0 && r.rejected > 0) {
+        const failedSites = r.perSite
+          .filter((site) => site.status === 'rejected' || site.status === 'error')
+          .slice(0, 6)
+          .map((site) => `${site.name}:${(site.reasons ?? ['unknown']).join('|')}`)
+          .join('; ');
+        throw new Error(
+          `client_daily generated 0 articles; rejected=${r.rejected}; reasons=${reasonSummary || 'unknown'}; sites=${failedSites}`,
+        );
+      }
     });
 
     // --- Sentinel: verify today's client_daily articles actually landed ---

@@ -6,6 +6,7 @@ import { BlogTemplateService, TemplateType, BrandShowcaseContext, IndustryTop10R
 import { BrandFactGraph, BrandFactService } from './brand-fact.service';
 import { extractNicheKeywords } from './niche-keyword.util';
 import { IndexNowService } from '../indexnow/indexnow.service';
+import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
 import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
 import { ContentQualityRunner } from '../content-quality/content-quality.runner';
 import {
@@ -71,6 +72,25 @@ export interface ClientDailyGenerationResult {
   }>;
 }
 
+export interface ClientDailyBatchSiteResult {
+  siteId: string;
+  name: string;
+  status: string;
+  dayType?: string;
+  slug?: string;
+  totalScore?: number;
+  reasons?: string[];
+}
+
+export interface ClientDailyBatchResult {
+  attempted: number;
+  generated: number;
+  rejected: number;
+  skipped: number;
+  rejectedReasons: Record<string, number>;
+  perSite: ClientDailyBatchSiteResult[];
+}
+
 @Injectable()
 export class BlogArticleService {
   private readonly logger = new Logger(BlogArticleService.name);
@@ -84,6 +104,7 @@ export class BlogArticleService {
     private readonly config: ConfigService,
     private readonly templateService: BlogTemplateService,
     private readonly indexNowService: IndexNowService,
+    private readonly llmsHostingService: LlmsHostingService,
     private readonly profileEnrichment: ProfileEnrichmentService,
     private readonly qualityRunner: ContentQualityRunner,
     private readonly brandFactService: BrandFactService,
@@ -105,6 +126,11 @@ export class BlogArticleService {
   private getClientDailyDayType(keywords?: string[] | null): ClientDailyDay | null {
     const dayType = (keywords || []).find((k) => this.daySequence.includes(k as ClientDailyDay));
     return (dayType as ClientDailyDay | undefined) ?? null;
+  }
+
+  private bucketClientDailyReason(reason?: string): string {
+    if (!reason) return 'unknown';
+    return reason.split(':')[0] || 'unknown';
   }
 
   private clientDailySafetyReasons(article: {
@@ -156,7 +182,15 @@ export class BlogArticleService {
    */
   private pingIndexNow(slug: string) {
     const webUrl = this.config.get('FRONTEND_URL') || 'https://www.geovault.app';
-    const paths = [`/blog/${slug}`, '/blog', '/feed', '/feed.json'];
+    const paths = [
+      `/blog/${slug}`,
+      '/blog',
+      '/feed',
+      '/feed.json',
+      '/llms.txt',
+      '/llms-full.txt',
+      '/sitemap.xml',
+    ];
     for (const path of paths) {
       this.indexNowService.submitUrl(`${webUrl}${path}`).catch(() => {});
     }
@@ -2007,6 +2041,8 @@ export class BlogArticleService {
     pulse?: { geoScore: number; industryRank: number | null; industryAvgScore: number | null; weekCrawlerVisits: number };
   }): string {
     const { dayType, site, graph, pulse } = args;
+    const webUrl = this.config.get<string>('FRONTEND_URL') || 'https://www.geovault.app';
+    const directoryUrl = `${webUrl}/directory/${graph.siteId}`;
     const medicalAdjacent = ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(site.industry ?? '');
     const medicalQuestionPattern = /(\u6574\u5fa9|\u6574\u9aa8|\u63a8\u62ff|\u904b\u52d5|\u75bc\u75db|\u75db|\u4e0d\u9069|\u5b55|\u7522\u5f8c|\u8eab\u9ad4|\u59ff\u52e2|\u5065\u5eb7|\u75c5\u53f2|\u5fa9\u539f|\u6062\u5fa9|\u75c7\u72c0|\u6cbb\u7642|\u7642\u6548|\u91ab\u7642)/;
     const qaPairsForPrompt = medicalAdjacent
@@ -2061,6 +2097,7 @@ You are writing a citation-ready AI Wiki article in Traditional Chinese for Geov
 Goal:
 - Create an article that ChatGPT, Claude, Perplexity, Gemini, and search crawlers can safely cite.
 - The article must be factual, neutral, source-grounded, and useful as a brand reference page.
+- Push the user's official brand website facts into an AI-readable public article so crawlers can learn the brand, quote it, and connect it back to the official website.
 - Do not invent awards, prices, phone numbers, addresses, services, medical effects, guarantees, reviews, customer profiles, or competitor facts.
 - If a detail is not present in the verified facts below, phrase it as unknown or omit it.
 - Do not include phone numbers or email addresses unless they appear exactly in the verified facts. Prefer the official URL as the contact path.
@@ -2072,6 +2109,7 @@ Article type:
 Brand identity:
 - Brand: ${site.name}
 - Official URL: ${site.url}
+- Geovault directory URL: ${directoryUrl}
 - Industry: ${site.industry ?? 'unknown'}
 - Fact confidence score: ${graph.confidenceScore}/100
 
@@ -2098,23 +2136,24 @@ ${medicalBoundaryBlock}
 Required output:
 1. Write 900-1300 Traditional Chinese characters in Markdown.
 2. First line must be one H1 title containing "${site.name}".
-3. Use exactly these section headings and no other H2 headings:
+3. The first paragraph must name ${site.name}, include the official URL "${site.url}", and summarize the brand positioning in neutral third-person wording.
+4. Use exactly these section headings and no other H2 headings:
    - "## \u54c1\u724c\u5b9a\u4f4d"
    - "## ${site.name} \u9069\u5408\u8ab0"
    - "## \u670d\u52d9\u8207\u8cc7\u6599\u908a\u754c"
    - "## AI \u53ef\u5f15\u7528\u91cd\u9ede"
    - "## \u5e38\u898b\u554f\u984c"
    - "## \u8cc7\u6599\u4f86\u6e90"
-4. "\u54c1\u724c\u5b9a\u4f4d" must include at least two verified facts.
-5. "\u670d\u52d9\u8207\u8cc7\u6599\u908a\u754c" must clearly distinguish verified service facts from unknown or unavailable facts.
-6. "AI \u53ef\u5f15\u7528\u91cd\u9ede" must include 5 concise bullets, each based on verified facts only.
-7. "\u5e38\u898b\u554f\u984c" must include 3 neutral Q/A pairs and at least one answer must cite the official URL.
-8. "\u8cc7\u6599\u4f86\u6e90" must include:
+5. "\u54c1\u724c\u5b9a\u4f4d" must include at least two verified facts.
+6. "\u670d\u52d9\u8207\u8cc7\u6599\u908a\u754c" must clearly distinguish verified service facts from unknown or unavailable facts.
+7. "AI \u53ef\u5f15\u7528\u91cd\u9ede" must include exactly 5 concise bullets. Each bullet must be standalone, quote-ready, and based on verified facts only.
+8. "\u5e38\u898b\u554f\u984c" must include 3 neutral Q/A pairs and at least one answer must cite the official URL.
+9. "\u8cc7\u6599\u4f86\u6e90" must include exactly these two source lines:
    - Official website: ${site.url}
-   - Geovault directory data
-9. Mention Geovault at most two times outside the source section.
-10. Avoid sales CTA, exaggerated marketing language, first-person promotional voice, and generic SEO/GEO advice.
-11. End with this exact source note: "*\u8cc7\u6599\u4f86\u6e90\uff1aGeovault AI Wiki \u81ea\u52d5\u5f59\u6574\u516c\u958b\u54c1\u724c\u8cc7\u6599\u8207\u4f7f\u7528\u8005\u63d0\u4f9b\u5167\u5bb9\u3002*"
+   - Geovault directory: ${directoryUrl}
+10. Mention Geovault at most two times outside the source section.
+11. Avoid sales CTA, exaggerated marketing language, first-person promotional voice, and generic SEO/GEO advice.
+12. End with this exact source note: "*\u8cc7\u6599\u4f86\u6e90\uff1aGeovault AI Wiki \u81ea\u52d5\u5f59\u6574\u516c\u958b\u54c1\u724c\u8cc7\u6599\u8207\u4f7f\u7528\u8005\u63d0\u4f9b\u5167\u5bb9\u3002*"
 `;
   }
 
@@ -2294,9 +2333,12 @@ Required output:
     }));
     const finalFailedRules = result.attempts[result.attempts.length - 1]?.failedRules ?? [];
     const hardFailedRules = finalFailedRules.filter((rule) =>
-      /^(fabricated_contact|fabricated_phone|forbidden_phrase|medical_boundary_violation)/.test(rule),
+      /^(fabricated_contact|fabricated_phone|forbidden_phrase|medical_boundary_violation|missing_official_url|missing_ai_citation_section|client_daily_safety)/.test(rule),
     );
     if (hardFailedRules.length > 0) {
+      this.logger.warn(
+        `client_daily hard rejected ${site.name}/${resolvedDay}: ${hardFailedRules.join(',')}`,
+      );
       return {
         status: 'rejected',
         reasons: hardFailedRules,
@@ -2380,32 +2422,70 @@ Required output:
       };
     }
 
-    const article = await this.prisma.blogArticle.create({
-      data: {
-        slug, title,
-        description,
-        content,
-        category: 'client-daily',
-        siteId: site.id,
-        templateType: 'client_daily',
-        industrySlug: site.industry ?? undefined,
-        targetKeywords: [site.name, site.industry ?? '', resolvedDay, 'daily', 'ai_wiki'].filter(Boolean),
-        readingTimeMinutes: this.templateService.estimateReadingTime('client_daily'),
-        readTime: `${this.templateService.estimateReadingTime('client_daily')} 分鐘`,
-        published: true,
-        lastRegeneratedAt: new Date(),
-      },
-    });
+    const officialDomain = (() => {
+      try {
+        return new URL(site.url).hostname.replace(/^www\./, '');
+      } catch {
+        return '';
+      }
+    })();
+
+    let article: { id: string };
+    try {
+      article = await this.prisma.blogArticle.create({
+        data: {
+          slug, title,
+          description,
+          content,
+          category: 'client-daily',
+          siteId: site.id,
+          templateType: 'client_daily',
+          industrySlug: site.industry ?? undefined,
+          targetKeywords: [
+            site.name,
+            site.industry ?? '',
+            resolvedDay,
+            officialDomain,
+            'daily',
+            'ai_wiki',
+            'brand_facts',
+          ].filter(Boolean),
+          readingTimeMinutes: this.templateService.estimateReadingTime('client_daily'),
+          readTime: `${this.templateService.estimateReadingTime('client_daily')} 分鐘`,
+          published: true,
+          lastRegeneratedAt: new Date(),
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `client_daily persist failed ${site.name}/${resolvedDay}: ${message}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      return {
+        status: 'rejected',
+        reasons: [`persist_failed:${message.slice(0, 160)}`],
+        dayType: resolvedDay,
+        totalScore: result.totalScore,
+      };
+    }
     // Back-fill articleId on every quality-log row from this run so the
     // dashboard can join attempts to the article that ultimately landed.
-    await this.qualityRunner.attachArticleId(
-      `client_daily/${resolvedDay}`,
-      site.id,
-      article.id,
-      runStartedAt,
-    );
+    try {
+      await this.qualityRunner.attachArticleId(
+        `client_daily/${resolvedDay}`,
+        site.id,
+        article.id,
+        runStartedAt,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `client_daily quality-log attach failed ${site.name}/${resolvedDay}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+    this.llmsHostingService.invalidatePlatformLlmsFull(site.id);
     this.pingIndexNow(slug);
-    return { status: 'generated', slug, dayType: resolvedDay };
+    return { status: 'generated', slug, dayType: resolvedDay, totalScore: result.totalScore };
   }
 
   async getClientDailyReadinessSummary(): Promise<{
@@ -2466,18 +2546,12 @@ Required output:
   // was in-memory only and silently stopped firing whenever Railway
   // redeployed/restarted the API service, which is what caused the
   // 4/27 → 4/30 gap on prod.
-  async runClientDailyBatch(): Promise<{
-    attempted: number;
-    generated: number;
-    rejected: number;
-    skipped: number;
-    perSite: Array<{ siteId: string; name: string; status: string; dayType?: string; reasons?: string[] }>;
-  }> {
+  async runClientDailyBatch(): Promise<ClientDailyBatchResult> {
     const today = new Date();
     const dayType = this.dayTypeFor(today);
     if (!dayType) {
       this.logger.log('client_daily batch: Sunday off');
-      return { attempted: 0, generated: 0, rejected: 0, skipped: 0, perSite: [] };
+      return { attempted: 0, generated: 0, rejected: 0, skipped: 0, rejectedReasons: {}, perSite: [] };
     }
 
     const sites = await this.prisma.site.findMany({
@@ -2487,7 +2561,8 @@ Required output:
     this.logger.log(`client_daily batch start: ${sites.length} clients, dayType=${dayType}`);
 
     const queue = pLimit(2);
-    const perSite: Array<{ siteId: string; name: string; status: string; dayType?: string; reasons?: string[] }> = [];
+    const perSite: ClientDailyBatchSiteResult[] = [];
+    const rejectedReasons: Record<string, number> = {};
     let attempted = 0, generated = 0, rejected = 0, skipped = 0;
 
     await Promise.all(
@@ -2496,20 +2571,36 @@ Required output:
           attempted++;
           try {
             const r = await this.generateClientDailyContent(s.id, dayType);
-            perSite.push({ siteId: s.id, name: s.name, status: r.status, dayType: r.dayType, reasons: r.reasons });
+            perSite.push({
+              siteId: s.id,
+              name: s.name,
+              status: r.status,
+              dayType: r.dayType,
+              slug: r.slug,
+              totalScore: r.totalScore,
+              reasons: r.reasons,
+            });
             if (r.status === 'generated') generated++;
-            else if (r.status === 'rejected') rejected++;
-            else skipped++;
+            else if (r.status === 'rejected') {
+              rejected++;
+              for (const reason of r.reasons ?? ['rejected']) {
+                const bucket = this.bucketClientDailyReason(reason);
+                rejectedReasons[bucket] = (rejectedReasons[bucket] ?? 0) + 1;
+              }
+            } else skipped++;
           } catch (err) {
             rejected++;
+            rejectedReasons.exception = (rejectedReasons.exception ?? 0) + 1;
             perSite.push({ siteId: s.id, name: s.name, status: 'error', reasons: [String(err)] });
           }
         }),
       ),
     );
 
-    this.logger.log(`client_daily batch done: ${generated} generated, ${rejected} rejected, ${skipped} skipped`);
-    return { attempted, generated, rejected, skipped, perSite };
+    this.logger.log(
+      `client_daily batch done: ${generated} generated, ${rejected} rejected, ${skipped} skipped; reasons=${JSON.stringify(rejectedReasons)}`,
+    );
+    return { attempted, generated, rejected, skipped, rejectedReasons, perSite };
   }
 
   /**
