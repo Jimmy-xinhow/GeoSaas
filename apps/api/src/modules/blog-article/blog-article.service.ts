@@ -767,10 +767,17 @@ export class BlogArticleService {
       hardBlockers.push(...unresolvedRepairableBlockers.map((reason) => `repair_failed:${reason}`));
     }
 
+    const nextTargetKeywords = [...new Set(targetKeywords)];
+    const currentTargetKeywords = [...new Set(article.targetKeywords ?? [])];
+    const targetKeywordsChanged =
+      nextTargetKeywords.length !== currentTargetKeywords.length ||
+      nextTargetKeywords.some((keyword, index) => currentTargetKeywords[index] !== keyword);
+
     const repaired =
       nextTitle !== article.title ||
       nextDescription !== article.description ||
-      nextContent !== article.content;
+      nextContent !== article.content ||
+      targetKeywordsChanged;
 
     const updated = repaired
       ? await this.prisma.blogArticle.update({
@@ -779,7 +786,7 @@ export class BlogArticleService {
             title: nextTitle,
             description: nextDescription,
             content: nextContent,
-            targetKeywords: [...new Set(targetKeywords)],
+            targetKeywords: nextTargetKeywords,
             lastRegeneratedAt: new Date(),
           },
           select: {
