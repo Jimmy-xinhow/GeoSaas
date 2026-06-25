@@ -747,6 +747,7 @@ export class BlogArticleService {
       title: nextTitle,
       description: nextDescription,
       content: nextContent,
+      targetKeywords,
       site: baseSite,
     });
     const hardBlockers = this.getHardClientDailyPublicBlockers(blockers);
@@ -777,6 +778,7 @@ export class BlogArticleService {
             title: nextTitle,
             description: nextDescription,
             content: nextContent,
+            targetKeywords: [...new Set(targetKeywords)],
             lastRegeneratedAt: new Date(),
           },
           select: {
