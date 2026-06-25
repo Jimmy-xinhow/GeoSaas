@@ -178,6 +178,14 @@ export class BlogArticleService {
       isPublic?: boolean | null;
     } | null;
   }): string[] {
+    const articleText = [article.title, article.description, article.content].filter(Boolean).join('\n');
+    const medicalSubjectText = [
+      article.site?.industry,
+      article.site?.name,
+      article.title,
+      article.description,
+      ...(article.targetKeywords ?? []),
+    ].filter(Boolean).join('\n');
     const blockers = [
       ...this.clientDailySafetyReasons(article),
       ...getPublicBlogArticleSeoIssues(article).map((issue) => `seo:${issue}`),
@@ -185,6 +193,12 @@ export class BlogArticleService {
 
     if (article.site?.isPublic === false) {
       blockers.push('non_public_site');
+    }
+    if (
+      this.isMedicalAdjacentText(medicalSubjectText) &&
+      this.hasMedicalBoundaryViolation(articleText)
+    ) {
+      blockers.push('medical_boundary_violation');
     }
 
     return [...new Set(blockers)];
@@ -2085,11 +2099,56 @@ export class BlogArticleService {
     return /(中醫|診所|醫師|醫療|治療|療效|療法|療程|疼痛|痛症|症狀|病患|患者|小針刀|針灸|復健|整復|整骨|推拿|牙醫|診斷|處方|用藥|副作用|禁忌|健康|身體|產後|孕)/.test(text);
   }
 
-  private isMedicalAdjacentBrand(industry: string | null | undefined, graph: BrandFactGraph): boolean {
+  private hasMedicalBoundaryViolation(content: string): boolean {
+    return [
+      /治療/,
+      /療效/,
+      /療法/,
+      /療程/,
+      /治癒/,
+      /根治/,
+      /診斷/,
+      /處方/,
+      /用藥/,
+      /醫療/,
+      /副作用/,
+      /禁忌/,
+      /健康(?:資訊|信息|情況|效果)/,
+      /身體不適/,
+      /不適症狀/,
+      /紓解/,
+      /改善(?:身體|健康|問題|症狀|不適|疼痛|病症)/,
+      /疼痛(?:緩解|改善|消除)/,
+      /緩解/,
+      /減輕/,
+      /促進血液循環/,
+      /順利復原/,
+      /幫助復原/,
+      /術後復原/,
+      /恢復/,
+      /身體機能/,
+      /姿勢矯正/,
+      /柔軟度/,
+      /病史/,
+      /受傷/,
+      /運動建議/,
+      /替代(?:醫師|醫療|治療)/,
+      /不需(?:看醫生|就醫|醫師)/,
+      /保證治癒/,
+      /醫療級/,
+    ].some((pattern) => pattern.test(content));
+  }
+
+  private isMedicalAdjacentBrand(
+    industry: string | null | undefined,
+    graph: BrandFactGraph,
+    extraText = '',
+  ): boolean {
     if (['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(industry ?? '')) {
       return true;
     }
     const text = [
+      extraText,
       graph.brandName,
       graph.industry,
       graph.services,
@@ -2114,7 +2173,11 @@ export class BlogArticleService {
     const { dayType, site, graph, pulse } = args;
     const webUrl = this.config.get<string>('FRONTEND_URL') || 'https://www.geovault.app';
     const directoryUrl = `${webUrl}/directory/${graph.siteId}`;
-    const medicalAdjacent = this.isMedicalAdjacentBrand(site.industry, graph);
+    const medicalAdjacent = this.isMedicalAdjacentBrand(
+      site.industry,
+      graph,
+      [site.name, site.url, site.industry].filter(Boolean).join('\n'),
+    );
     const medicalQuestionPattern = /(\u6574\u5fa9|\u6574\u9aa8|\u63a8\u62ff|\u904b\u52d5|\u75bc\u75db|\u75db|\u4e0d\u9069|\u5b55|\u7522\u5f8c|\u8eab\u9ad4|\u59ff\u52e2|\u5065\u5eb7|\u75c5\u53f2|\u5fa9\u539f|\u6062\u5fa9|\u75c7\u72c0|\u6cbb\u7642|\u7642\u6548|\u91ab\u7642)/;
     const qaPairsForPrompt = medicalAdjacent
       ? graph.qaPairs.filter((qa) => !medicalQuestionPattern.test(`${qa.question} ${qa.answer}`))
@@ -2346,7 +2409,24 @@ Required output:
       graph: brandFacts,
       pulse,
     });
-    const isMedicalAdjacent = this.isMedicalAdjacentBrand(site.industry, brandFacts);
+    const medicalContextText = [
+      site.name,
+      site.url,
+      site.industry,
+      ctx.description,
+      ctx.services,
+      ctx.location,
+      ctx.contact,
+      ctx.positioning,
+      enriched.description,
+      enriched.cleanName,
+      enriched.address,
+    ].filter(Boolean).join('\n');
+    const isMedicalAdjacent = this.isMedicalAdjacentBrand(
+      site.industry,
+      brandFacts,
+      medicalContextText,
+    );
     const requiredAnchors = this.buildRequiredAnchors(brandFacts)
       .filter((anchor) => !isMedicalAdjacent || !this.isMedicalAdjacentText(anchor));
 
@@ -2439,6 +2519,20 @@ Required output:
     }
 
     const content = result.content;
+    if (isMedicalAdjacent && this.hasMedicalBoundaryViolation(content)) {
+      this.logger.warn(
+        `client_daily hard rejected ${site.name}/${resolvedDay}: medical_boundary_violation_post_gate`,
+      );
+      return {
+        status: 'rejected',
+        reasons: ['medical_boundary_violation'],
+        dayType: resolvedDay,
+        dryRun: options.dryRun || undefined,
+        content: options.dryRun ? content : undefined,
+        totalScore: result.totalScore,
+        attempts: options.dryRun ? attemptSummary : undefined,
+      };
+    }
     const safetyReasons = this.clientDailySafetyReasons({
       title: content.match(/^#{1,2}\s+(.+)$/m)?.[1] ?? '',
       content,
