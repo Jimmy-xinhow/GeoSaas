@@ -269,6 +269,31 @@ export class KnowledgeService implements OnModuleDestroy {
     return deleted;
   }
 
+  async removeMany(qaIds: string[], siteId: string, userId: string, role?: string) {
+    await this.verifySiteOwnership(siteId, userId, role);
+    const ids = [...new Set(qaIds.map((id) => id.trim()).filter(Boolean))];
+    if (ids.length === 0) {
+      throw new BadRequestException('請至少選擇一筆 Q&A');
+    }
+
+    const result = await this.prisma.siteQa.deleteMany({
+      where: {
+        siteId,
+        id: { in: ids },
+      },
+    });
+
+    if (result.count === 0) {
+      throw new NotFoundException('Q&A not found');
+    }
+
+    this.pingKnowledgeUpdate(siteId);
+    return {
+      requested: ids.length,
+      deleted: result.count,
+    };
+  }
+
   private isPrivilegedRole(role?: string | null): boolean {
     return role === 'STAFF' || role === 'ADMIN' || role === 'SUPER_ADMIN';
   }

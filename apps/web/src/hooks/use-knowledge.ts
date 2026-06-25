@@ -116,6 +116,22 @@ export function useDeleteQa(siteId: string) {
   });
 }
 
+export function useDeleteQas(siteId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { data } = await apiClient.post<{ requested: number; deleted: number }>(
+        `/sites/${siteId}/knowledge/batch-delete`,
+        { ids },
+      );
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['knowledge', siteId] });
+    },
+  });
+}
+
 export interface GeneratedQa {
   question: string;
   answer: string;

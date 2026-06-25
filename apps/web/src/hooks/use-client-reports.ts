@@ -235,6 +235,8 @@ export type ClientDailyDayType =
 
 export interface ClientDailyStats {
   totalCount: number;
+  visibleCount?: number;
+  hiddenUnsafeCount?: number;
   monthCount: number;
   weekCount: number;
   plan: string;
@@ -246,6 +248,8 @@ export interface ClientDailyStats {
     title: string;
     createdAt: string;
     dayType: ClientDailyDayType | null;
+    publicVisible?: boolean;
+    safetyReasons?: string[];
   }>;
 }
 
@@ -269,6 +273,8 @@ export interface ClientDailyListItem {
   createdAt: string;
   charLength: number;
   url: string;
+  publicVisible?: boolean;
+  safetyReasons?: string[];
 }
 
 export interface ClientDailyList {

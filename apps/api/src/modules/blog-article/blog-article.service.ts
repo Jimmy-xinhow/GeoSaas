@@ -2528,7 +2528,7 @@ Required output:
       where: { id: siteId },
       select: { industry: true, user: { select: { plan: true } }, profile: true },
     });
-    const safeRows = (await this.prisma.blogArticle.findMany({
+    const rows = await this.prisma.blogArticle.findMany({
       where: { siteId, templateType: 'client_daily', published: true },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -2539,15 +2539,22 @@ Required output:
         createdAt: true,
         targetKeywords: true,
       },
-    })).filter((r) => this.isClientDailyArticleSafe({
+    });
+    const rowsWithSafety = rows.map((r) => ({
       ...r,
-      site: { industry: site?.industry },
+      safetyReasons: this.clientDailySafetyReasons({
+        ...r,
+        site: { industry: site?.industry },
+      }),
     }));
+    const safeRows = rowsWithSafety.filter((r) => r.safetyReasons.length === 0);
 
-    const totalCount = safeRows.length;
-    const monthCount = safeRows.filter((r) => r.createdAt >= monthStart).length;
-    const weekCount = safeRows.filter((r) => r.createdAt >= weekStart).length;
-    const recent = safeRows.slice(0, 10);
+    const totalCount = rowsWithSafety.length;
+    const visibleCount = safeRows.length;
+    const hiddenUnsafeCount = totalCount - visibleCount;
+    const monthCount = rowsWithSafety.filter((r) => r.createdAt >= monthStart).length;
+    const weekCount = rowsWithSafety.filter((r) => r.createdAt >= weekStart).length;
+    const recent = rowsWithSafety.slice(0, 10);
     const plan = site?.user?.plan || 'FREE';
     const prof = (site?.profile as Record<string, any>) || {};
     const paused = !!prof.dailyContentPaused;
@@ -2555,6 +2562,8 @@ Required output:
 
     return {
       totalCount,
+      visibleCount,
+      hiddenUnsafeCount,
       monthCount,
       weekCount,
       plan,
@@ -2566,6 +2575,8 @@ Required output:
         title: r.title,
         createdAt: r.createdAt,
         dayType: r.targetKeywords.find((k) => this.daySequence.includes(k as ClientDailyDay)) || null,
+        publicVisible: r.safetyReasons.length === 0,
+        safetyReasons: r.safetyReasons,
       })),
     };
   }
@@ -2584,14 +2595,16 @@ Required output:
     total: number;
     page: number;
     limit: number;
-    items: Array<{
-      slug: string;
-      title: string;
-      dayType: string | null;
-      createdAt: Date;
-      charLength: number;
-      url: string;
-    }>;
+      items: Array<{
+        slug: string;
+        title: string;
+        dayType: string | null;
+        createdAt: Date;
+        charLength: number;
+        url: string;
+        publicVisible: boolean;
+        safetyReasons: string[];
+      }>;
   }> {
     await this.assertSiteAccess(siteId, userId, role);
 
@@ -2600,7 +2613,7 @@ Required output:
       where: { id: siteId },
       select: { industry: true },
     });
-    const rows = (await this.prisma.blogArticle.findMany({
+    const rows = await this.prisma.blogArticle.findMany({
       where: { siteId, templateType: 'client_daily', published: true },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -2611,12 +2624,16 @@ Required output:
         targetKeywords: true,
         content: true,
       },
-    })).filter((r) => this.isClientDailyArticleSafe({
+    });
+    const rowsWithSafety = rows.map((r) => ({
       ...r,
-      site: { industry: site?.industry },
+      safetyReasons: this.clientDailySafetyReasons({
+        ...r,
+        site: { industry: site?.industry },
+      }),
     }));
-    const total = rows.length;
-    const pageRows = rows.slice(skip, skip + opts.limit);
+    const total = rowsWithSafety.length;
+    const pageRows = rowsWithSafety.slice(skip, skip + opts.limit);
 
     const webBase = this.config.get<string>('WEB_URL') || 'https://www.geovault.app';
     return {
@@ -2633,6 +2650,8 @@ Required output:
         createdAt: r.createdAt,
         charLength: (r.content || '').replace(/\s+/g, '').length,
         url: `${webBase}/blog/${r.slug}`,
+        publicVisible: r.safetyReasons.length === 0,
+        safetyReasons: r.safetyReasons,
       })),
     };
   }

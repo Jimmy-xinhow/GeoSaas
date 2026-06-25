@@ -16,7 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { KnowledgeService } from './knowledge.service';
 import { CreditService } from '../billing/credit.service';
-import { CreateQaDto, UpdateQaDto, BatchCreateQaDto, AiGenerateQaDto, CommitKnowledgeImportDto } from './dto';
+import { CreateQaDto, UpdateQaDto, BatchCreateQaDto, DeleteQasDto, AiGenerateQaDto, CommitKnowledgeImportDto } from './dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 
@@ -121,6 +121,17 @@ export class KnowledgeController {
     @CurrentUser('role') role: string,
   ) {
     return this.knowledgeService.update(qaId, siteId, dto, userId, role);
+  }
+
+  @Post('batch-delete')
+  @ApiOperation({ summary: 'Delete multiple Q&A pairs' })
+  removeMany(
+    @Param('siteId') siteId: string,
+    @Body() dto: DeleteQasDto,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.knowledgeService.removeMany(dto.ids, siteId, userId, role);
   }
 
   @Delete(':qaId')

@@ -79,6 +79,13 @@ const DEFAULT_TASKS: Array<{
     enabled: true,
   },
   {
+    taskKey: 'directory_seo_recovery',
+    name: '目錄 SEO 可索引性修復',
+    description: '每天補齊接近可索引的公開站點資料與基礎 Q&A，避免 sitemap 可收錄頁面因資料不足下滑',
+    cronExpr: '0 7 * * *',
+    enabled: true,
+  },
+  {
     taskKey: 'retry_failed_seeds',
     name: '自動重試失敗 Seed',
     description: '每週自動重試所有失敗的 seed 掃描',
@@ -128,6 +135,16 @@ const DEFAULT_TASKS: Array<{
     enabled: true,
   },
 ];
+
+const FORCE_ENABLED_TASKS = new Set([
+  'auto_rescan',
+  'indexnow_batch_submit',
+  'directory_seo_recovery',
+  'auto_fill_qa',
+  'auto_fill_articles',
+  'client_daily_content',
+  'client_daily_sentinel',
+]);
 
 @Injectable()
 export class CronManagerService implements OnModuleInit {
@@ -232,7 +249,13 @@ export class CronManagerService implements OnModuleInit {
     for (const task of DEFAULT_TASKS) {
       await this.prisma.scheduledTask.upsert({
         where: { taskKey: task.taskKey },
-        update: {},
+        update: {
+          name: task.name,
+          description: task.description,
+          cronExpr: task.cronExpr,
+          ...(FORCE_ENABLED_TASKS.has(task.taskKey) ? { enabled: true } : {}),
+          nextRunAt: this.getNextRun(task.cronExpr),
+        },
         create: {
           ...task,
           nextRunAt: this.getNextRun(task.cronExpr),

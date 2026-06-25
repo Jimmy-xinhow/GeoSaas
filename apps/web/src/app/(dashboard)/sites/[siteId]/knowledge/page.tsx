@@ -59,6 +59,7 @@ import {
   useBatchCreateQa,
   useUpdateQa,
   useDeleteQa,
+  useDeleteQas,
   useAiGenerateQa,
   useExportKnowledgeXlsx,
   useKnowledgeImportQuota,
@@ -1454,10 +1455,12 @@ export default function KnowledgePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [selectedQaIds, setSelectedQaIds] = useState<Set<string>>(new Set())
 
   const aiGenerate = useAiGenerateQa(siteId)
   const previewImport = usePreviewKnowledgeImport(siteId)
   const deleteMutation = useDeleteQa(siteId)
+  const deleteManyMutation = useDeleteQas(siteId)
   const exportKnowledge = useExportKnowledgeXlsx(siteId)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -1472,6 +1475,15 @@ export default function KnowledgePage() {
       setEditingQaId(null)
     }
   }, [qas, editingQaId])
+
+  useEffect(() => {
+    if (!qas) return
+    const validIds = new Set(qas.map((qa) => qa.id))
+    setSelectedQaIds((prev) => {
+      const next = new Set([...prev].filter((id) => validIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [qas])
 
   const handleAiGenerate = async () => {
     setShowAddForm(false)
@@ -1587,6 +1599,10 @@ export default function KnowledgePage() {
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE,
   )
+  const paginatedQaIds = paginatedQas.map((qa) => qa.id)
+  const selectedCount = selectedQaIds.size
+  const allPageSelected =
+    paginatedQaIds.length > 0 && paginatedQaIds.every((id) => selectedQaIds.has(id))
 
   // Reset page when search/category changes
   const handleSearch = (value: string) => {
@@ -1596,6 +1612,41 @@ export default function KnowledgePage() {
   const handleCategoryFilter = (cat: string | null) => {
     setActiveCategory(cat)
     setCurrentPage(1)
+  }
+
+  const toggleQaSelection = (qaId: string) => {
+    setSelectedQaIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(qaId)) next.delete(qaId)
+      else next.add(qaId)
+      return next
+    })
+  }
+
+  const togglePageSelection = () => {
+    setSelectedQaIds((prev) => {
+      const next = new Set(prev)
+      if (allPageSelected) {
+        paginatedQaIds.forEach((id) => next.delete(id))
+      } else {
+        paginatedQaIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
+  const handleDeleteSelected = async () => {
+    const ids = [...selectedQaIds]
+    if (ids.length === 0) return
+    if (!window.confirm(`確定要刪除選取的 ${ids.length} 筆 Q&A 嗎？此動作無法復原。`)) return
+    try {
+      const result = await deleteManyMutation.mutateAsync(ids)
+      setSelectedQaIds(new Set())
+      if (editingQaId && ids.includes(editingQaId)) setEditingQaId(null)
+      toast.success(`已刪除 ${result.deleted} 筆 Q&A`)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || '批次刪除失敗')
+    }
   }
 
   const openManualForm = () => {
@@ -1801,6 +1852,22 @@ export default function KnowledgePage() {
               </Badge>
             </div>
             <div className="flex flex-wrap gap-2 flex-shrink-0 lg:justify-end">
+              {qaCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDeleteSelected}
+                  disabled={selectedCount === 0 || deleteManyMutation.isPending}
+                  className="text-red-300 hover:text-red-200"
+                >
+                  {deleteManyMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                  )}
+                  刪除選取{selectedCount > 0 ? ` (${selectedCount})` : ''}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -1943,9 +2010,31 @@ export default function KnowledgePage() {
             </div>
           ) : (
             <>
+              <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 self-start px-2 text-xs text-gray-300"
+                  onClick={togglePageSelection}
+                >
+                  {allPageSelected ? (
+                    <CheckSquare className="h-4 w-4 mr-1.5 text-blue-300" />
+                  ) : (
+                    <Square className="h-4 w-4 mr-1.5 text-gray-400" />
+                  )}
+                  {allPageSelected ? '取消選取本頁' : '選取本頁'}
+                </Button>
+                {selectedCount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    已選取 {selectedCount} 筆，可批次刪除
+                  </p>
+                )}
+              </div>
               <div className="border border-white/10 rounded-lg overflow-hidden divide-y divide-white/5">
                 {paginatedQas.map((qa, i) => {
                   const isEditing = editingQaId === qa.id
+                  const isSelected = selectedQaIds.has(qa.id)
                   const globalIndex = (currentPage - 1) * PAGE_SIZE + i + 1
                   return (
                     <div
@@ -1961,6 +2050,21 @@ export default function KnowledgePage() {
                         setEditingQaId(isEditing ? null : qa.id)
                       }}
                     >
+                      <button
+                        type="button"
+                        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-white/10 hover:text-blue-300"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleQaSelection(qa.id)
+                        }}
+                        aria-label={isSelected ? `取消選取 ${qa.question}` : `選取 ${qa.question}`}
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="h-4 w-4 text-blue-300" />
+                        ) : (
+                          <Square className="h-4 w-4" />
+                        )}
+                      </button>
                       <span className="text-xs text-muted-foreground w-6 text-right flex-shrink-0">
                         {globalIndex}
                       </span>

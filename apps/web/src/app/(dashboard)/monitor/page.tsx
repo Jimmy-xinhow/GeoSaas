@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Plus,
   TrendingUp,
@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/shared/page-header'
 import { cn } from '@/lib/utils'
 import { useMonitorDashboard, useCreateMonitor, useCheckCitation, useDeleteMonitor } from '@/hooks/use-monitor'
 import { useSites } from '@/hooks/use-sites'
@@ -86,6 +87,11 @@ const PLATFORM_OPTIONS = [
   { value: 'copilot', label: 'Copilot' },
 ]
 
+function getPlatformLabel(value: string) {
+  const normalized = value.toLowerCase()
+  return PLATFORM_OPTIONS.find((item) => item.value === normalized)?.label ?? value
+}
+
 export default function MonitorPage() {
   const { data: monitorData, isLoading, error } = useMonitorDashboard()
   const { data: sites } = useSites()
@@ -97,6 +103,7 @@ export default function MonitorPage() {
   const [checkingId, setCheckingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [selectedMonitorSiteId, setSelectedMonitorSiteId] = useState('')
   const [selectedSiteId, setSelectedSiteId] = useState('')
   const [queryText, setQueryText] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState('')
@@ -105,12 +112,74 @@ export default function MonitorPage() {
     toast.error('無法載入監控資料', { id: 'monitor-error' })
   }
 
-  const platforms = monitorData?.platforms ?? []
-  const queries = monitorData?.queries ?? []
+  const rawQueries = monitorData?.queries
+  const queries = useMemo(() => rawQueries ?? [], [rawQueries])
   type MonitorQuery = (typeof queries)[number]
   const siteLookup = useMemo(() => {
     return new Map((sites ?? []).map((site: any) => [site.id, site]))
   }, [sites])
+
+  const sortedSites = useMemo(() => {
+    return [...((sites as any[]) ?? [])].sort((a, b) => {
+      if (a.isClient !== b.isClient) return a.isClient ? -1 : 1
+      return (a.name ?? '').localeCompare(b.name ?? '', 'zh-Hant')
+    })
+  }, [sites])
+
+  useEffect(() => {
+    if (sortedSites.length === 0) return
+    if (selectedMonitorSiteId && sortedSites.some((site: any) => site.id === selectedMonitorSiteId)) return
+
+    const siteWithQueries = sortedSites.find((site: any) =>
+      queries.some((query: any) => query.siteId === site.id),
+    )
+    const firstClient = sortedSites.find((site: any) => site.isClient)
+    setSelectedMonitorSiteId((siteWithQueries ?? firstClient ?? sortedSites[0]).id)
+  }, [queries, selectedMonitorSiteId, sortedSites])
+
+  useEffect(() => {
+    if (!selectedSiteId && selectedMonitorSiteId) {
+      setSelectedSiteId(selectedMonitorSiteId)
+    }
+  }, [selectedMonitorSiteId, selectedSiteId])
+
+  const visibleQueries = useMemo(() => {
+    if (!selectedMonitorSiteId) return []
+    return queries.filter((query: any) => query.siteId === selectedMonitorSiteId)
+  }, [queries, selectedMonitorSiteId])
+
+  const platforms = useMemo(() => {
+    const groups = new Map<string, {
+      name: string
+      total: number
+      checked: number
+      mentioned: number
+      errorCount: number
+      rate: number
+    }>()
+
+    visibleQueries.forEach((query: any) => {
+      const name = getPlatformLabel(query.platform)
+      const existing = groups.get(name) ?? {
+        name,
+        total: 0,
+        checked: 0,
+        mentioned: 0,
+        errorCount: 0,
+        rate: 0,
+      }
+      existing.total += 1
+      if (query.status === 'checked') existing.checked += 1
+      if (query.cited) existing.mentioned += 1
+      if (query.status === 'error') existing.errorCount += 1
+      existing.rate = existing.checked > 0
+        ? Math.round((existing.mentioned / existing.checked) * 100)
+        : 0
+      groups.set(name, existing)
+    })
+
+    return Array.from(groups.values())
+  }, [visibleQueries])
 
   const groupedQueries = useMemo(() => {
     const groups = new Map<string, {
@@ -126,7 +195,7 @@ export default function MonitorPage() {
       platformCount: number
     }>()
 
-    queries.forEach((query) => {
+    visibleQueries.forEach((query) => {
       const siteId = query.siteId || 'unknown'
       const site = siteLookup.get(siteId) as any
       const siteName = query.siteName || site?.name || site?.url || '未指定網站'
@@ -159,7 +228,7 @@ export default function MonitorPage() {
       if (a.pending !== b.pending) return b.pending - a.pending
       return a.siteName.localeCompare(b.siteName, 'zh-Hant')
     })
-  }, [queries, siteLookup])
+  }, [visibleQueries, siteLookup])
 
   const handleCreateMonitor = async () => {
     if (!selectedSiteId) { toast.error('請選擇一個網站'); return }
@@ -173,7 +242,7 @@ export default function MonitorPage() {
       })
       toast.success('監控查詢新增成功！')
       setShowForm(false)
-      setSelectedSiteId('')
+      setSelectedMonitorSiteId(selectedSiteId)
       setQueryText('')
       setSelectedPlatform('')
     } catch (err: any) {
@@ -208,28 +277,71 @@ export default function MonitorPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.16),transparent_30%),rgba(255,255,255,0.04)] p-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">AI 引用監控</h1>
-          <p className="text-muted-foreground mt-1">
-            追蹤您的品牌在各大 AI 平台的引用狀況
-          </p>
-        </div>
-        <Button
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-          onClick={() => setShowForm((prev) => !prev)}
-        >
-          {showForm ? (
-            <><X className="h-4 w-4 mr-2" />取消</>
-          ) : (
-            <><Plus className="h-4 w-4 mr-2" />新增查詢</>
-          )}
-        </Button>
-      </div>
+      <PageHeader
+        title="AI 引用監控"
+        description="追蹤您的品牌在各大 AI 平台的引用狀況"
+        actions={
+          <Button
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => {
+              setShowForm((prev) => {
+                const next = !prev
+                if (!prev && selectedMonitorSiteId) setSelectedSiteId(selectedMonitorSiteId)
+                return next
+              })
+            }}
+          >
+            {showForm ? (
+              <><X className="h-4 w-4 mr-2" />取消</>
+            ) : (
+              <><Plus className="h-4 w-4 mr-2" />新增查詢</>
+            )}
+          </Button>
+        }
+      />
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">選擇客戶</p>
+              <p className="text-xs text-muted-foreground">
+                平台引用率與查詢列表只顯示目前選取客戶
+              </p>
+            </div>
+            <Select
+              value={selectedMonitorSiteId}
+              onValueChange={(value) => {
+                setSelectedMonitorSiteId(value)
+                setSelectedSiteId(value)
+                setExpandedId(null)
+              }}
+            >
+              <SelectTrigger className="w-full md:w-[360px]">
+                <SelectValue placeholder="選擇要查看的客戶" />
+              </SelectTrigger>
+              <SelectContent>
+                {sortedSites.map((site: any) => (
+                  <SelectItem key={site.id} value={site.id}>
+                    <span className="flex items-center gap-2">
+                      {site.name}
+                      {site.isClient && (
+                        <span className="rounded border border-green-400/30 px-1.5 py-0.5 text-[10px] text-green-300">
+                          客戶
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Add query form */}
       {showForm && (
-        <Card className="border-blue-500/30 bg-blue-500/10">
+        <Card>
           <CardHeader>
             <CardTitle className="text-lg">新增監控查詢</CardTitle>
             <CardDescription>選擇網站和平台，輸入要追蹤的查詢內容</CardDescription>
@@ -241,7 +353,7 @@ export default function MonitorPage() {
                 <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
                   <SelectTrigger><SelectValue placeholder="選擇網站" /></SelectTrigger>
                   <SelectContent>
-                    {(sites ?? []).map((site: any) => (
+                    {sortedSites.map((site: any) => (
                       <SelectItem key={site.id} value={site.id}>{site.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -333,11 +445,11 @@ export default function MonitorPage() {
             <div className="space-y-3">
               {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 w-full" />)}
             </div>
-          ) : queries.length === 0 ? (
+          ) : visibleQueries.length === 0 ? (
             <div className="text-center py-8">
               <Radio className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
               <p className="text-muted-foreground">尚無監控查詢</p>
-              <p className="text-sm text-muted-foreground mt-1">點擊「新增查詢」開始追蹤 AI 引用狀態</p>
+              <p className="text-sm text-muted-foreground mt-1">點擊「新增查詢」開始追蹤此客戶的 AI 引用狀態</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -378,7 +490,8 @@ export default function MonitorPage() {
                   <div className="divide-y divide-white/5">
                     {group.queries.map((q: any) => {
                 const isExpanded = expandedId === q.id
-                const meta = platformMeta[q.platform] || defaultPlatformMeta
+                const platformLabel = getPlatformLabel(q.platform)
+                const meta = platformMeta[platformLabel] || defaultPlatformMeta
                 return (
                   <div key={q.id}>
                     {/* Row */}
@@ -400,7 +513,7 @@ export default function MonitorPage() {
                       </div>
 
                       <Badge className={cn('text-[10px] flex-shrink-0', meta.bgColor, meta.textColor)}>
-                        {q.platform}
+                        {platformLabel}
                       </Badge>
 
                       {/* Position */}
@@ -460,7 +573,7 @@ export default function MonitorPage() {
                     {isExpanded && (
                       <div className="px-4 pb-4 pt-1 bg-white/5 border-t border-dashed border-white/10">
                         <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
-                          <span>平台：{q.platform}</span>
+                          <span>平台：{platformLabel}</span>
                           {q.position != null && <span>引用位置：{q.position}/10{q.position <= 3 ? '（靠前）' : q.position >= 8 ? '（靠後）' : '（中段）'}</span>}
                           <span>狀態：{q.status === 'checked' ? (q.cited ? '已引用' : '未引用') : q.status === 'error' ? '檢測失敗' : '待檢測'}</span>
                         </div>

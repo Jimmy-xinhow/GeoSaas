@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { FileText, ExternalLink, Calendar, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { AlertTriangle, FileText, ExternalLink, Calendar, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { PageHeader } from '@/components/shared/page-header';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSites } from '@/hooks/use-sites';
 import {
@@ -44,13 +45,13 @@ export default function PublishedContentPage() {
     });
   }, [sites]);
 
-  // Default-select the first paid client site once data loads
-  if (selectedSiteId === '' && sortedSites.length > 0) {
+  useEffect(() => {
+    if (selectedSiteId !== '' || sortedSites.length === 0) return;
     const firstClient = sortedSites.find((s) => s.isClient) ?? sortedSites[0];
     if (firstClient) {
       setSelectedSiteId(firstClient.id);
     }
-  }
+  }, [selectedSiteId, sortedSites]);
 
   const { data: stats, isLoading: statsLoading } = useClientDailyStats(selectedSiteId);
   const { data: list, isLoading: listLoading, isFetching } = useClientDailyList(selectedSiteId, page, PAGE_SIZE);
@@ -65,30 +66,25 @@ export default function PublishedContentPage() {
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-hidden">
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.15),transparent_30%),rgba(255,255,255,0.04)] p-5 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <FileText className="h-6 w-6" />
-            Geovault 為您發布的內容
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            您訂閱方案內含的每日 AI 可引用內容,Geovault 自動為您撰寫並發布在 geovault.app/blog/...,
-            專為 ChatGPT、Claude、Perplexity 等 AI 引用而設計。所有發布記錄完整透明列出。
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            queryClient.invalidateQueries({ queryKey: ['client-reports', 'client-daily-list'] });
-            queryClient.invalidateQueries({ queryKey: ['client-reports', 'client-daily-stats'] });
-            toast.success('已刷新');
-          }}
-        >
-          <RefreshCw className="h-4 w-4 mr-1" />
-          刷新
-        </Button>
-      </div>
+      <PageHeader
+        icon={FileText}
+        title="Geovault 為您發布的內容"
+        description="您訂閱方案內含的每日 AI 可引用內容,Geovault 自動為您撰寫並發布在 geovault.app/blog/...,專為 ChatGPT、Claude、Perplexity 等 AI 引用而設計。所有發布記錄完整透明列出。"
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['client-reports', 'client-daily-list'] });
+              queryClient.invalidateQueries({ queryKey: ['client-reports', 'client-daily-stats'] });
+              toast.success('已刷新');
+            }}
+          >
+            <RefreshCw className="h-4 w-4 mr-1" />
+            刷新
+          </Button>
+        }
+      />
 
       {/* Site selector */}
       <Card>
@@ -187,6 +183,22 @@ export default function PublishedContentPage() {
             </Card>
           )}
 
+          {(stats?.hiddenUnsafeCount ?? 0) > 0 && (
+            <Card className="border-amber-400/30 bg-amber-500/10">
+              <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-start">
+                <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-300" />
+                <div>
+                  <p className="text-sm font-medium text-amber-100">
+                    有 {stats?.hiddenUnsafeCount} 篇發布紀錄被品質閘門隱藏
+                  </p>
+                  <p className="text-xs text-amber-100/70">
+                    這些內容已存在於後台紀錄，但因含有不適合公開引用的內容而沒有出現在 public blog。列表會標示原因，避免誤判成沒有發布。
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Article list */}
           {!isFreeOrUnentitled && (
             <Card>
@@ -221,6 +233,7 @@ export default function PublishedContentPage() {
                     <div className={`space-y-2 ${isFetching ? 'opacity-60' : ''}`}>
                       {list.items.map((article) => {
                         const dayMeta = article.dayType ? DAY_LABELS[article.dayType] : null;
+                        const publicVisible = article.publicVisible !== false;
                         const date = new Date(article.createdAt);
                         const dateStr = date.toLocaleDateString('zh-TW', {
                           year: 'numeric', month: '2-digit', day: '2-digit',
@@ -228,7 +241,46 @@ export default function PublishedContentPage() {
                         const timeStr = date.toLocaleTimeString('zh-TW', {
                           hour: '2-digit', minute: '2-digit',
                         });
-                        return (
+                        const inner = (
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-white truncate group-hover:text-blue-300 transition-colors">
+                                {article.title}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                {dayMeta && (
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${dayMeta.color}`}>
+                                    {dayMeta.label}
+                                  </span>
+                                )}
+                                {!publicVisible && (
+                                  <span className="inline-flex items-center gap-1 rounded border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    品質閘門隱藏
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  {dateStr} {timeStr}
+                                </span>
+                                <span className="text-[10px] text-gray-500">
+                                  {article.charLength} 字
+                                </span>
+                              </div>
+                              {!publicVisible && article.safetyReasons?.length ? (
+                                <p className="mt-1 text-[10px] text-amber-100/70">
+                                  原因：{article.safetyReasons.join('、')}
+                                </p>
+                              ) : null}
+                            </div>
+                            {publicVisible ? (
+                              <ExternalLink className="h-4 w-4 text-gray-500 group-hover:text-blue-400 shrink-0 mt-0.5" />
+                            ) : (
+                              <AlertTriangle className="h-4 w-4 text-amber-300 shrink-0 mt-0.5" />
+                            )}
+                          </div>
+                        );
+                        return publicVisible ? (
                           <a
                             key={article.slug}
                             href={article.url}
@@ -236,29 +288,15 @@ export default function PublishedContentPage() {
                             rel="noopener noreferrer"
                             className="block p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-blue-500/30 transition-colors group"
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-white truncate group-hover:text-blue-300 transition-colors">
-                                  {article.title}
-                                </p>
-                                <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                                  {dayMeta && (
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${dayMeta.color}`}>
-                                      {dayMeta.label}
-                                    </span>
-                                  )}
-                                  <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    {dateStr} {timeStr}
-                                  </span>
-                                  <span className="text-[10px] text-gray-500">
-                                    {article.charLength} 字
-                                  </span>
-                                </div>
-                              </div>
-                              <ExternalLink className="h-4 w-4 text-gray-500 group-hover:text-blue-400 shrink-0 mt-0.5" />
-                            </div>
+                            {inner}
                           </a>
+                        ) : (
+                          <div
+                            key={article.slug}
+                            className="block rounded-lg border border-amber-400/20 bg-amber-500/10 p-3"
+                          >
+                            {inner}
+                          </div>
                         );
                       })}
                     </div>

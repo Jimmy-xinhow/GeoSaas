@@ -113,6 +113,17 @@ export class TaskRegistryService implements OnModuleInit {
       this.logger.log(`IndexNow batch: submitted ${urls.length} URLs`);
     });
 
+    this.cronManager.registerHandler('directory_seo_recovery', async () => {
+      const result = await this.directoryService.recoverDirectorySeo({
+        apply: true,
+        limit: 10,
+        includeArticles: false,
+      });
+      this.logger.log(
+        `Directory SEO recovery: scanned=${result.scanned} attempted=${result.attempted} enriched=${result.enriched} qaCreated=${result.qaCreated} stillBlocked=${result.stillBlocked}`,
+      );
+    });
+
     this.cronManager.registerHandler('retry_failed_seeds', async () => {
       const result = await this.seedService.retryFailed();
       this.logger.log(`Retry failed seeds: reset ${result.reset} to pending`);

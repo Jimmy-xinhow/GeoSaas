@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ContentStatus } from '@prisma/client';
 
 export class UpdateContentDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
@@ -15,4 +16,8 @@ export class UpdateContentDto {
   @MinLength(1)
   @MaxLength(20000)
   body?: string;
+
+  @IsOptional()
+  @IsEnum(ContentStatus)
+  status?: ContentStatus;
 }

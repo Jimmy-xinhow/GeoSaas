@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 
-interface ContentItem {
+export interface ContentItem {
   id: string;
   title: string;
   type: string;
   status: string;
   body?: string;
+  siteId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -16,6 +17,13 @@ interface GenerateContentPayload {
   siteId: string;
   keywords?: string[];
   language?: string;
+}
+
+interface UpdateContentPayload {
+  id: string;
+  title?: string;
+  body?: string;
+  status?: 'DRAFT' | 'REVIEW' | 'PUBLISHED' | 'ARCHIVED';
 }
 
 export function useContents() {
@@ -63,11 +71,7 @@ export function useUpdateContent() {
     mutationFn: async ({
       id,
       ...data
-    }: {
-      id: string;
-      title?: string;
-      body?: string;
-    }) => {
+    }: UpdateContentPayload) => {
       const { data: result } = await apiClient.put<ContentItem>(
         `/contents/${id}`,
         data
