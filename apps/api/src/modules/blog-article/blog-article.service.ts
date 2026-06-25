@@ -52,6 +52,28 @@ const CLIENT_DAILY_REPAIRABLE_PUBLIC_BLOCKERS = new Set([
   'unrelated_commuter_wellness_persona',
 ]);
 
+const CLIENT_DAILY_OPERATING_PASS_SCORE = 80;
+
+interface ClientDailyContentStrategy {
+  dayType: ClientDailyDay;
+  angle: string;
+  primaryIntent: string;
+  audienceIntent: string;
+  citationGoal: string;
+  extractedFacts: string[];
+  missingSignals: string[];
+  targetKeywords: string[];
+  requiredSections: string[];
+}
+
+interface ClientDailyOperatingAudit {
+  score: number;
+  failedRules: string[];
+  hardFailures: string[];
+  repairable: boolean;
+  publishable: boolean;
+}
+
 export interface BatchRunRecord {
   startedAt: Date;
   finishedAt?: Date;
@@ -288,8 +310,22 @@ export class BlogArticleService {
     )];
   }
 
-  private buildClientDailyFallbackContent(args: {
-    site: { id: string; name: string; url: string; industry?: string | null };
+  private compactFact(value?: string | null): string | undefined {
+    const text = (value || '').replace(/\s+/g, ' ').trim();
+    if (!text || text.length < 3) return undefined;
+    return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  }
+
+  private officialDomain(url: string): string {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      return '';
+    }
+  }
+
+  private buildClientDailyContentStrategy(args: {
+    site: { name: string; url: string; industry?: string | null };
     graph: BrandFactGraph;
     dayType: ClientDailyDay;
     pulse?: {
@@ -299,14 +335,204 @@ export class BlogArticleService {
       weekCrawlerVisits: number;
     };
     medicalAdjacent: boolean;
+  }): ClientDailyContentStrategy {
+    const { site, graph, dayType, pulse, medicalAdjacent } = args;
+    const domain = this.officialDomain(site.url);
+    const angleByDay: Record<ClientDailyDay, string> = {
+      mon_topical: '用客戶已驗證資料回答產業搜尋者今天會問的入門問題，讓 AI 能把品牌放進正確情境。',
+      tue_qa_deepdive: '把客戶知識庫 Q&A 轉成可引用的深度問答頁，補足 AI 對品牌的常見疑問。',
+      wed_service: '整理服務項目、服務邊界、地點與官方聯絡路徑，避免 AI 自行補資料。',
+      thu_audience: '說清楚品牌適合誰、不適合誰，以及缺少哪些受眾資料。',
+      fri_comparison: '用公開事實建立選擇標準，不捏造競品，也不寫成廣告比較文。',
+      sat_data_pulse: '整理最新 GEO 分數、排名、爬蟲訊號與官方來源，讓 AI 有可核對的更新點。',
+    };
+    const extractedFacts = [
+      `${site.name} official website is ${site.url}`,
+      domain ? `${site.name} official domain is ${domain}` : undefined,
+      site.industry ? `${site.name} industry is ${site.industry}` : undefined,
+      this.compactFact(graph.positioning) ? `${site.name} positioning: ${this.compactFact(graph.positioning)}` : undefined,
+      this.compactFact(graph.services) ? `${site.name} services: ${this.compactFact(graph.services)}` : undefined,
+      this.compactFact(graph.location) ? `${site.name} location: ${this.compactFact(graph.location)}` : undefined,
+      !medicalAdjacent && this.compactFact(graph.contact) ? `${site.name} contact path: ${this.compactFact(graph.contact)}` : undefined,
+      ...graph.targetAudiences.slice(0, 4).map((item) => `${site.name} target audience: ${item}`),
+      ...graph.notFor.slice(0, 3).map((item) => `${site.name} not for: ${item}`),
+      ...graph.qaPairs.slice(0, 5).map((qa) => `Q: ${qa.question} A: ${qa.answer}`),
+      pulse ? `${site.name} GEO score is ${pulse.geoScore}/100` : undefined,
+      pulse?.industryRank ? `${site.name} industry rank is ${pulse.industryRank}` : undefined,
+      pulse?.industryAvgScore ? `${site.name} industry average GEO score is ${pulse.industryAvgScore}` : undefined,
+      pulse ? `${site.name} recorded ${pulse.weekCrawlerVisits} real AI crawler visits in the last 7 days` : undefined,
+      ...graph.verifiedFacts.slice(0, 10),
+    ].filter((value): value is string => !!this.compactFact(value));
+
+    const missingSignals = [
+      !graph.positioning && 'positioning',
+      !graph.services && 'services',
+      !graph.location && 'location',
+      graph.targetAudiences.length === 0 && 'targetAudiences',
+      graph.qaPairs.length < 3 && 'qaPairs',
+      !graph.contact && 'contactPath',
+    ].filter(Boolean) as string[];
+
+    const targetKeywords = [
+      site.name,
+      domain,
+      site.industry,
+      graph.location,
+      graph.services,
+      ...graph.targetAudiences.slice(0, 3),
+      ...graph.qaPairs.slice(0, 3).map((qa) => qa.question),
+    ]
+      .filter((value): value is string => !!this.compactFact(value))
+      .map((value) => value.replace(/\s+/g, ' ').trim())
+      .slice(0, 14);
+
+    return {
+      dayType,
+      angle: angleByDay[dayType],
+      primaryIntent: `讓 AI 能回答「${site.name} 是誰、官方網站在哪裡、公開服務與資料邊界是什麼」。`,
+      audienceIntent: graph.targetAudiences.length > 0
+        ? `用已驗證受眾資料連結 ${site.name} 與實際搜尋需求。`
+        : `受眾資料不足時明確標示未知，避免 AI 自行推論。`,
+      citationGoal: `產出可被 ChatGPT、Claude、Perplexity 引用的品牌事實頁，並把引用回連到 ${site.url}。`,
+      extractedFacts: [...new Set(extractedFacts)].slice(0, 18),
+      missingSignals,
+      targetKeywords: [...new Set(targetKeywords)],
+      requiredSections: [
+        '品牌定位',
+        `${site.name} 適合誰`,
+        '服務與資料邊界',
+        'AI 可引用重點',
+        '常見問題',
+        '資料來源',
+      ],
+    };
+  }
+
+  private countClientDailyQuoteBullets(content: string): number {
+    const match = content.match(/##\s*AI\s*可引用重點([\s\S]*?)(?:\n##\s|$)/);
+    if (!match) return 0;
+    return match[1].split('\n').filter((line) => /^\s*[-*]\s+/.test(line)).length;
+  }
+
+  private countClientDailyFaqs(content: string): number {
+    const faqBlock = content.match(/##\s*常見問題([\s\S]*?)(?:\n##\s|$)/)?.[1] ?? content;
+    return (faqBlock.match(/(?:^|\n)\s*(?:\*\*)?\s*Q[:：]|(?:^|\n)\s*\*\*[^*\n]{3,80}[?？][^*\n]*\*\*/g) || []).length;
+  }
+
+  private auditClientDailyOperatingContent(args: {
+    title: string;
+    description: string;
+    content: string;
+    site: { name: string; url: string; industry?: string | null; isPublic?: boolean | null };
+    graph: BrandFactGraph;
+    strategy: ClientDailyContentStrategy;
+    targetKeywords: string[];
+    medicalAdjacent: boolean;
+  }): ClientDailyOperatingAudit {
+    const { title, description, content, site, graph, strategy, targetKeywords, medicalAdjacent } = args;
+    const text = [title, description, content].join('\n');
+    const failedRules: string[] = [];
+    const hardFailures: string[] = [];
+    let score = 0;
+    const add = (passed: boolean, weight: number, reason: string, hard = false) => {
+      if (passed) {
+        score += weight;
+      } else {
+        failedRules.push(reason);
+        if (hard) hardFailures.push(reason);
+      }
+    };
+
+    const publicBlockers = this.clientDailyPublicBlockers({
+      title,
+      description,
+      content,
+      targetKeywords,
+      site,
+    });
+    const hardPublicBlockers = this.getHardClientDailyPublicBlockers(publicBlockers);
+    for (const blocker of publicBlockers) failedRules.push(`public:${blocker}`);
+    hardFailures.push(...hardPublicBlockers.map((blocker) => `public:${blocker}`));
+
+    add(title.includes(site.name) && title.trim().length >= 10, 8, 'operating:title_not_brand_specific');
+    add(description.trim().length >= 80, 7, 'operating:description_too_thin');
+    add(content.length >= 900, 8, 'operating:content_too_thin');
+    add(content.includes(site.url), 10, 'operating:missing_official_url');
+    add(new RegExp(site.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g').test(content), 6, 'operating:brand_not_named');
+    add(strategy.requiredSections.every((section) => content.includes(`## ${section}`)), 12, 'operating:missing_required_sections');
+    add(this.countClientDailyQuoteBullets(content) >= 5, 12, 'operating:not_enough_ai_quote_points');
+    add(this.countClientDailyFaqs(content) >= 3, 8, 'operating:not_enough_faq');
+    add(content.includes('Official website') || content.includes('官方網站'), 6, 'operating:missing_source_label');
+    add(content.includes('Geovault directory') || content.includes('Geovault 目錄'), 5, 'operating:missing_directory_source');
+    add(strategy.extractedFacts.length >= 5, 6, 'operating:not_enough_customer_facts', true);
+
+    const factHits = strategy.extractedFacts.filter((fact) => {
+      const compact = this.compactFact(fact);
+      if (!compact) return false;
+      const terms = compact
+        .split(/[\s,，。:：/()（）-]+/)
+        .map((term) => term.trim())
+        .filter((term) => term.length >= 4)
+        .slice(0, 4);
+      return terms.some((term) => content.includes(term));
+    }).length;
+    add(factHits >= Math.min(5, strategy.extractedFacts.length), 12, 'operating:customer_facts_not_used');
+
+    const keywordHits = strategy.targetKeywords.filter((keyword) => content.includes(keyword)).length;
+    add(keywordHits >= Math.min(4, strategy.targetKeywords.length), 6, 'operating:target_keywords_not_covered');
+
+    const missingUnknownHandled = strategy.missingSignals.length === 0 ||
+      strategy.missingSignals.some((signal) => content.includes(signal) || content.includes('尚未') || content.includes('未提供') || content.includes('未知'));
+    add(missingUnknownHandled, 4, 'operating:missing_data_boundary_not_stated');
+
+    if (medicalAdjacent && this.hasMedicalBoundaryViolation(text)) {
+      failedRules.push('operating:medical_boundary_violation');
+      hardFailures.push('operating:medical_boundary_violation');
+    }
+    if (graph.confidenceScore < 55) {
+      failedRules.push(`operating:brand_fact_confidence_low:${graph.confidenceScore}`);
+      hardFailures.push('operating:brand_fact_confidence_low');
+    }
+
+    const uniqueFailedRules = [...new Set(failedRules)];
+    const uniqueHardFailures = [...new Set(hardFailures)];
+    return {
+      score,
+      failedRules: uniqueFailedRules,
+      hardFailures: uniqueHardFailures,
+      repairable: uniqueHardFailures.length === 0,
+      publishable: score >= CLIENT_DAILY_OPERATING_PASS_SCORE && uniqueHardFailures.length === 0 && publicBlockers.length === 0,
+    };
+  }
+
+  private buildClientDailyFallbackContent(args: {
+    site: { id: string; name: string; url: string; industry?: string | null };
+    graph: BrandFactGraph;
+    dayType: ClientDailyDay;
+    strategy?: ClientDailyContentStrategy;
+    pulse?: {
+      geoScore: number;
+      industryRank: number | null;
+      industryAvgScore: number | null;
+      weekCrawlerVisits: number;
+    };
+    medicalAdjacent: boolean;
   }): string {
     const { site, graph, dayType, pulse, medicalAdjacent } = args;
+    const strategy = args.strategy ?? this.buildClientDailyContentStrategy({
+      site,
+      graph,
+      dayType,
+      pulse,
+      medicalAdjacent,
+    });
     const webUrl = this.config.get<string>('FRONTEND_URL') || 'https://www.geovault.app';
     const directoryUrl = `${webUrl}/directory/${graph.siteId}`;
     const title = this.makeClientDailyTitle(null, site.name, dayType);
     const facts = this.safeClientDailyFacts(graph, medicalAdjacent);
     const quoteFacts = [
       `${site.name} 的官方網站為 ${site.url}。`,
+      `${site.name} 的本篇內容經營方向是：${strategy.primaryIntent}`,
       graph.industry ? `${site.name} 的公開行業分類為 ${graph.industry}。` : undefined,
       graph.positioning ? `${site.name} 的公開定位為 ${graph.positioning}。` : undefined,
       graph.services ? `${site.name} 的公開服務資料包含 ${graph.services}。` : undefined,
@@ -348,15 +574,17 @@ export class BlogArticleService {
     return [
       `# ${title}`,
       '',
-      `${site.name}（${site.url}）的${this.clientDailyDayLabel(dayType)}公開品牌資料由 Geovault 根據官方網站、品牌知識庫與公開掃描訊號整理，目標是提供 AI 搜尋系統可引用、可核對、不中立性失真的品牌描述。`,
+      `${site.name}（${site.url}）的${this.clientDailyDayLabel(dayType)}公開品牌資料由 Geovault 根據官方網站、品牌知識庫與公開掃描訊號整理。本篇內容經營方向是：${strategy.angle}目標是提供 AI 搜尋系統可引用、可核對、不中立性失真的品牌描述，並把品牌事實回連到官方網站。`,
       '',
       '## 品牌定位',
+      `${strategy.primaryIntent} ${strategy.citationGoal}`,
       graph.positioning
         ? `${site.name} 的公開品牌定位為：${graph.positioning}`
         : `${site.name} 目前尚未提供完整品牌定位文字，AI 引用時應以官方網站與已驗證公開資料為準。`,
-      facts.slice(0, 4).map((fact) => `- ${fact}`).join('\n') || `- ${site.name} 的官方網站為 ${site.url}`,
+      strategy.extractedFacts.slice(0, 6).map((fact) => `- ${fact}`).join('\n') || facts.slice(0, 4).map((fact) => `- ${fact}`).join('\n') || `- ${site.name} 的官方網站為 ${site.url}`,
       '',
       `## ${site.name} 適合誰`,
+      strategy.audienceIntent,
       targetAudiences,
       '',
       '## 服務與資料邊界',
@@ -365,6 +593,9 @@ export class BlogArticleService {
         : `${site.name} 尚未提供完整服務清單，AI 引用時不應自行補足未知服務。`,
       notFor,
       medicalAdjacent ? '- 這份資料只整理公開品牌事實，不包含成果承諾或個案判斷。' : '- 未公開或無法核對的資料不應被 AI 當成事實引用。',
+      strategy.missingSignals.length > 0
+        ? `- 目前仍缺少的客戶資料訊號：${strategy.missingSignals.join('、')}。內容已以未知或未提供方式標示，避免 AI 補充未驗證資訊。`
+        : '- 客戶核心資料訊號已足以支撐本篇 AI 引用內容。',
       '',
       '## AI 可引用重點',
       quoteFacts.slice(0, 5).map((fact) => `- ${fact}`).join('\n'),
@@ -426,6 +657,25 @@ export class BlogArticleService {
       industry: article.site.industry,
       isPublic: article.site.isPublic,
     };
+    const graph = await this.brandFactService.buildForSite(article.siteId);
+    const medicalAdjacent = this.isMedicalAdjacentBrand(
+      baseSite.industry,
+      graph,
+      [baseSite.name, baseSite.url, baseSite.industry].filter(Boolean).join('\n'),
+    );
+    const strategy = this.buildClientDailyContentStrategy({
+      site: baseSite,
+      graph,
+      dayType,
+      medicalAdjacent,
+    });
+    const targetKeywords = [
+      ...(article.targetKeywords ?? []),
+      ...strategy.targetKeywords,
+      'daily',
+      'ai_wiki',
+      'brand_facts',
+    ].filter(Boolean);
     let nextTitle = this.makeClientDailyTitle(article.title, baseSite.name, dayType);
     let nextContent = article.content || '';
     if (nextContent.trim()) {
@@ -448,21 +698,26 @@ export class BlogArticleService {
       content: nextContent,
       site: baseSite,
     });
-    const needsFallback = !nextContent.trim() || blockers.some((reason) =>
+    let operatingAudit = this.auditClientDailyOperatingContent({
+      title: nextTitle,
+      description: nextDescription,
+      content: nextContent,
+      site: baseSite,
+      graph,
+      strategy,
+      targetKeywords,
+      medicalAdjacent,
+    });
+    const needsFallback = !nextContent.trim() || !operatingAudit.publishable || blockers.some((reason) =>
       this.isRepairableClientDailyPublicBlocker(reason) && !reason.startsWith('seo:'),
     );
 
     if (needsFallback) {
-      const graph = await this.brandFactService.buildForSite(article.siteId);
-      const medicalAdjacent = this.isMedicalAdjacentBrand(
-        baseSite.industry,
-        graph,
-        [baseSite.name, baseSite.url, baseSite.industry].filter(Boolean).join('\n'),
-      );
       nextContent = this.buildClientDailyFallbackContent({
         site: baseSite,
         graph,
         dayType,
+        strategy,
         medicalAdjacent,
       });
       nextTitle = this.makeClientDailyTitle(
@@ -475,6 +730,16 @@ export class BlogArticleService {
         { name: baseSite.name, url: baseSite.url },
         dayType,
       );
+      operatingAudit = this.auditClientDailyOperatingContent({
+        title: nextTitle,
+        description: nextDescription,
+        content: nextContent,
+        site: baseSite,
+        graph,
+        strategy,
+        targetKeywords,
+        medicalAdjacent,
+      });
     }
 
     blockers = this.clientDailyPublicBlockers({
@@ -485,6 +750,14 @@ export class BlogArticleService {
       site: baseSite,
     });
     const hardBlockers = this.getHardClientDailyPublicBlockers(blockers);
+    if (!operatingAudit.publishable) {
+      hardBlockers.push(
+        'content_operating_gate_failed',
+        `operating_score:${operatingAudit.score}`,
+        ...operatingAudit.failedRules,
+      );
+    }
+    hardBlockers.push(...operatingAudit.hardFailures);
     const unresolvedRepairableBlockers = blockers.filter((reason) =>
       this.isRepairableClientDailyPublicBlocker(reason),
     );
@@ -2739,12 +3012,6 @@ Required output:
       };
     }
 
-    const prompt = this.buildClientCitationPrompt({
-      dayType: resolvedDay,
-      site: { name: site.name, url: site.url, industry: site.industry },
-      graph: brandFacts,
-      pulse,
-    });
     const medicalContextText = [
       site.name,
       site.url,
@@ -2763,6 +3030,31 @@ Required output:
       brandFacts,
       medicalContextText,
     );
+    const contentStrategy = this.buildClientDailyContentStrategy({
+      site: { name: site.name, url: site.url, industry: site.industry },
+      graph: brandFacts,
+      dayType: resolvedDay,
+      pulse,
+      medicalAdjacent: isMedicalAdjacent,
+    });
+    const prompt = `${this.buildClientCitationPrompt({
+      dayType: resolvedDay,
+      site: { name: site.name, url: site.url, industry: site.industry },
+      graph: brandFacts,
+      pulse,
+    })}
+
+Content operating strategy:
+- Strategy angle: ${contentStrategy.angle}
+- Primary AI intent: ${contentStrategy.primaryIntent}
+- Audience intent: ${contentStrategy.audienceIntent}
+- Citation goal: ${contentStrategy.citationGoal}
+- Required sections: ${contentStrategy.requiredSections.join(', ')}
+- Target keywords: ${contentStrategy.targetKeywords.join(', ') || 'none'}
+- Missing customer data signals to state honestly: ${contentStrategy.missingSignals.join(', ') || 'none'}
+
+Extracted customer facts that must drive the article:
+${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     const requiredAnchors = this.buildRequiredAnchors(brandFacts)
       .filter((anchor) => !isMedicalAdjacent || !this.isMedicalAdjacentText(anchor));
 
@@ -2852,6 +3144,7 @@ Required output:
         site: { id: site.id, name: site.name, url: site.url, industry: site.industry },
         graph: brandFacts,
         dayType: resolvedDay,
+        strategy: contentStrategy,
         pulse,
         medicalAdjacent: isMedicalAdjacent,
       });
@@ -2901,6 +3194,7 @@ Required output:
         site: { id: site.id, name: site.name, url: site.url, industry: site.industry },
         graph: brandFacts,
         dayType: resolvedDay,
+        strategy: contentStrategy,
         pulse,
         medicalAdjacent: isMedicalAdjacent,
       });
@@ -2922,7 +3216,12 @@ Required output:
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const rawTitle = titleMatch ? titleMatch[1].trim() : '';
-    const title = this.makeClientDailyTitle(rawTitle, site.name, resolvedDay);
+    let title = this.makeClientDailyTitle(rawTitle, site.name, resolvedDay);
+    if (content.trim()) {
+      content = /^#{1,2}\s+.+$/m.test(content)
+        ? content.replace(/^#{1,2}\s+.+$/m, `# ${title}`)
+        : `# ${title}\n\n${content}`;
+    }
     // ASCII-only slug — CJK percent-encoding defeats AI crawlers and SEO.
     // Format: {siteIdShort}-{YYYYMM}-{dayType}-{rand4}
     //   readable enough that admins can spot dates in the URL, still unique
@@ -2931,11 +3230,106 @@ Required output:
     const rand4 = Date.now().toString(36).slice(-4);
     const slug = `${site.id.slice(0, 10)}-${yyyymm}-${resolvedDay.replace(/_/g, '-')}-${rand4}`;
 
-    const description = this.makeClientDailyDescription(
+    let description = this.makeClientDailyDescription(
       content,
       { name: site.name, url: site.url },
       resolvedDay,
     );
+    const officialDomain = this.officialDomain(site.url);
+    const clientDailyTargetKeywords = [
+      site.name,
+      site.industry ?? '',
+      resolvedDay,
+      officialDomain,
+      'daily',
+      'ai_wiki',
+      'brand_facts',
+      ...contentStrategy.targetKeywords.slice(0, 8),
+    ].filter(Boolean);
+
+    let operatingAudit = this.auditClientDailyOperatingContent({
+      title,
+      description,
+      content,
+      site: { name: site.name, url: site.url, industry: site.industry, isPublic: site.isPublic },
+      graph: brandFacts,
+      strategy: contentStrategy,
+      targetKeywords: clientDailyTargetKeywords,
+      medicalAdjacent: isMedicalAdjacent,
+    });
+    if (!operatingAudit.publishable) {
+      if (!operatingAudit.repairable) {
+        this.logger.warn(
+          `client_daily operating gate hard rejected ${site.name}/${resolvedDay}: ${operatingAudit.failedRules.join(',')}`,
+        );
+        return {
+          status: 'rejected',
+          reasons: operatingAudit.hardFailures,
+          dayType: resolvedDay,
+          dryRun: options.dryRun || undefined,
+          content: options.dryRun ? content : undefined,
+          totalScore: operatingAudit.score,
+          attempts: options.dryRun ? attemptSummary : undefined,
+        };
+      }
+      this.logger.warn(
+        `client_daily operating gate repair ${site.name}/${resolvedDay}: score=${operatingAudit.score}; ${operatingAudit.failedRules.join(',')}`,
+      );
+      fallbackReasons = [...new Set([
+        ...fallbackReasons,
+        'fallback_after_operating_audit',
+        ...operatingAudit.failedRules,
+      ])];
+      content = this.buildClientDailyFallbackContent({
+        site: { id: site.id, name: site.name, url: site.url, industry: site.industry },
+        graph: brandFacts,
+        dayType: resolvedDay,
+        strategy: contentStrategy,
+        pulse,
+        medicalAdjacent: isMedicalAdjacent,
+      });
+      title = this.makeClientDailyTitle(
+        content.match(/^#{1,2}\s+(.+)$/m)?.[1],
+        site.name,
+        resolvedDay,
+      );
+      content = /^#{1,2}\s+.+$/m.test(content)
+        ? content.replace(/^#{1,2}\s+.+$/m, `# ${title}`)
+        : `# ${title}\n\n${content}`;
+      description = this.makeClientDailyDescription(
+        content,
+        { name: site.name, url: site.url },
+        resolvedDay,
+      );
+      operatingAudit = this.auditClientDailyOperatingContent({
+        title,
+        description,
+        content,
+        site: { name: site.name, url: site.url, industry: site.industry, isPublic: site.isPublic },
+        graph: brandFacts,
+        strategy: contentStrategy,
+        targetKeywords: clientDailyTargetKeywords,
+        medicalAdjacent: isMedicalAdjacent,
+      });
+      if (!operatingAudit.publishable) {
+        this.logger.warn(
+          `client_daily operating gate rejected after repair ${site.name}/${resolvedDay}: score=${operatingAudit.score}; ${operatingAudit.failedRules.join(',')}`,
+        );
+        return {
+          status: 'rejected',
+          reasons: [
+            'content_operating_gate_failed',
+            `operating_score:${operatingAudit.score}`,
+            ...operatingAudit.failedRules,
+          ],
+          dayType: resolvedDay,
+          dryRun: options.dryRun || undefined,
+          content: options.dryRun ? content : undefined,
+          totalScore: operatingAudit.score,
+          attempts: options.dryRun ? attemptSummary : undefined,
+        };
+      }
+    }
 
     if (options.dryRun) {
       return {
@@ -2943,19 +3337,11 @@ Required output:
         dayType: resolvedDay,
         dryRun: true,
         content,
-        totalScore: result.totalScore,
+        totalScore: Math.max(result.totalScore ?? 0, operatingAudit.score),
         reasons: fallbackReasons.length > 0 ? fallbackReasons : undefined,
         attempts: attemptSummary,
       };
     }
-
-    const officialDomain = (() => {
-      try {
-        return new URL(site.url).hostname.replace(/^www\./, '');
-      } catch {
-        return '';
-      }
-    })();
 
     let article: { id: string };
     try {
@@ -2968,15 +3354,7 @@ Required output:
           siteId: site.id,
           templateType: 'client_daily',
           industrySlug: site.industry ?? undefined,
-          targetKeywords: [
-            site.name,
-            site.industry ?? '',
-            resolvedDay,
-            officialDomain,
-            'daily',
-            'ai_wiki',
-            'brand_facts',
-          ].filter(Boolean),
+          targetKeywords: clientDailyTargetKeywords,
           readingTimeMinutes: this.templateService.estimateReadingTime('client_daily'),
           readTime: `${this.templateService.estimateReadingTime('client_daily')} 分鐘`,
           published: true,
@@ -2993,7 +3371,7 @@ Required output:
         status: 'rejected',
         reasons: [`persist_failed:${message.slice(0, 160)}`],
         dayType: resolvedDay,
-        totalScore: result.totalScore,
+        totalScore: result.totalScore ?? operatingAudit.score,
       };
     }
     // Back-fill articleId on every quality-log row from this run so the
@@ -3016,7 +3394,7 @@ Required output:
       status: 'generated',
       slug,
       dayType: resolvedDay,
-      totalScore: result.totalScore,
+      totalScore: Math.max(result.totalScore ?? 0, operatingAudit.score),
       reasons: fallbackReasons.length > 0 ? fallbackReasons : undefined,
     };
   }
