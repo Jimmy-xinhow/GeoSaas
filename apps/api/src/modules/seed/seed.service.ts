@@ -16,6 +16,7 @@ interface CsvRow {
 @Injectable()
 export class SeedService {
   private readonly logger = new Logger(SeedService.name);
+  private readonly publicSeedScoreThreshold = 60;
   private isRunning = false;
   private statusCache: { expiresAt: number; data: any } | null = null;
 
@@ -219,7 +220,7 @@ export class SeedService {
                     name: seed.brandName,
                     userId: systemUser!.id,
                     industry: seed.industry,
-                    isPublic: true,
+                    isPublic: false,
                   },
                 });
               }
@@ -231,9 +232,30 @@ export class SeedService {
 
               await this.scanPipeline.executeScan(scan.id, seed.url);
 
+              const scoredSite = await this.prisma.site.findUnique({
+                where: { id: site.id },
+                select: { bestScore: true, userId: true, isClient: true },
+              });
+              const score = scoredSite?.bestScore ?? 0;
+              const seedManagedSite = scoredSite?.userId === systemUser!.id && scoredSite?.isClient !== true;
+              const shouldPublish = score >= this.publicSeedScoreThreshold;
+
+              if (seedManagedSite) {
+                await this.prisma.site.update({
+                  where: { id: site.id },
+                  data: { isPublic: shouldPublish },
+                });
+              }
+
               await this.prisma.seedSource.update({
                 where: { id: seed.id },
-                data: { status: 'scanned', siteId: site.id },
+                data: {
+                  status: 'scanned',
+                  siteId: site.id,
+                  failReason: shouldPublish
+                    ? null
+                    : `Scanned but kept private: GEO score ${score}/100 is below public threshold ${this.publicSeedScoreThreshold}/100`,
+                },
               });
 
               scanned++;
@@ -321,6 +343,24 @@ export class SeedService {
       site: { id: site.id, url: site.url, name: site.name },
       scan: { id: scan.id, status: scan.status },
     };
+  }
+
+  async quarantineLowQualityPublicSeeds(): Promise<{ threshold: number; quarantined: number }> {
+    this.statusCache = null;
+    const result = await this.prisma.site.updateMany({
+      where: {
+        isPublic: true,
+        isClient: false,
+        bestScore: { lt: this.publicSeedScoreThreshold },
+        user: { is: { email: 'system@geovault.local' } },
+        seedSource: { is: { status: 'scanned' } },
+      },
+      data: { isPublic: false },
+    });
+    this.logger.log(
+      `Quarantined ${result.count} low-quality public seed sites below ${this.publicSeedScoreThreshold}/100`,
+    );
+    return { threshold: this.publicSeedScoreThreshold, quarantined: result.count };
   }
 
   /** Retry all failed seeds */

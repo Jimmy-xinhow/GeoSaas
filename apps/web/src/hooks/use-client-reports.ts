@@ -300,3 +300,20 @@ export function useClientDailyList(siteId: string, page: number, limit = 30) {
     placeholderData: (prev) => prev,
   });
 }
+
+export function useSetClientDailyPublication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { slug: string; published: boolean }) => {
+      const { data } = await apiClient.patch(
+        `/blog/client-daily/articles/${payload.slug}/publication`,
+        { published: payload.published },
+      );
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client-reports', 'client-daily-list'] });
+      qc.invalidateQueries({ queryKey: ['client-reports', 'client-daily-stats'] });
+    },
+  });
+}

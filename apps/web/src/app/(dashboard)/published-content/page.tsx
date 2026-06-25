@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { AlertTriangle, FileText, ExternalLink, Calendar, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileText, ExternalLink, Calendar, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,6 +16,7 @@ import { useSites } from '@/hooks/use-sites';
 import {
   useClientDailyStats,
   useClientDailyList,
+  useSetClientDailyPublication,
   type ClientDailyDayType,
 } from '@/hooks/use-client-reports';
 
@@ -30,9 +31,23 @@ const DAY_LABELS: Record<ClientDailyDayType, { label: string; color: string }> =
 
 const PAGE_SIZE = 30;
 
+function getErrorMessage(err: unknown): string {
+  const data = (err as any)?.response?.data;
+  const message = data?.message;
+  if (typeof message === 'string') return message;
+  if (message?.blockers?.length) {
+    return `仍有阻擋原因：${message.blockers.join('、')}`;
+  }
+  if (data?.blockers?.length) {
+    return `仍有阻擋原因：${data.blockers.join('、')}`;
+  }
+  return '公開失敗，請稍後再試';
+}
+
 export default function PublishedContentPage() {
   const queryClient = useQueryClient();
   const { data: sites } = useSites();
+  const publicationMutation = useSetClientDailyPublication();
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
   const [page, setPage] = useState(1);
 
@@ -238,6 +253,10 @@ export default function PublishedContentPage() {
                         const dayMeta = article.dayType ? DAY_LABELS[article.dayType] : null;
                         const publicVisible = article.publicVisible !== false;
                         const isUnpublished = article.published === false;
+                        const blockers = article.safetyReasons ?? [];
+                        const canPublish = isUnpublished && blockers.length === 0;
+                        const isPublishing = publicationMutation.isPending
+                          && publicationMutation.variables?.slug === article.slug;
                         const date = new Date(article.createdAt);
                         const dateStr = date.toLocaleDateString('zh-TW', {
                           year: 'numeric', month: '2-digit', day: '2-digit',
@@ -275,17 +294,40 @@ export default function PublishedContentPage() {
                                   {article.charLength} 字
                                 </span>
                               </div>
-                              {!isUnpublished && !publicVisible && article.safetyReasons?.length ? (
+                              {!publicVisible && blockers.length > 0 ? (
                                 <p className="mt-1 text-[10px] text-amber-100/70">
-                                  原因：{article.safetyReasons.join('、')}
+                                  原因：{blockers.join('、')}
                                 </p>
                               ) : null}
                             </div>
-                            {publicVisible ? (
-                              <ExternalLink className="h-4 w-4 text-gray-500 group-hover:text-blue-400 shrink-0 mt-0.5" />
-                            ) : (
-                              <AlertTriangle className="h-4 w-4 text-amber-300 shrink-0 mt-0.5" />
-                            )}
+                            <div className="flex shrink-0 items-center gap-2">
+                              {canPublish && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 border-emerald-400/30 px-2 text-xs text-emerald-200 hover:bg-emerald-500/10 hover:text-emerald-100"
+                                  disabled={isPublishing}
+                                  onClick={() => {
+                                    publicationMutation.mutate(
+                                      { slug: article.slug, published: true },
+                                      {
+                                        onSuccess: () => toast.success('已公開文章'),
+                                        onError: (err) => toast.error(getErrorMessage(err)),
+                                      },
+                                    );
+                                  }}
+                                >
+                                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                                  {isPublishing ? '公開中' : '審查後公開'}
+                                </Button>
+                              )}
+                              {publicVisible ? (
+                                <ExternalLink className="h-4 w-4 text-gray-500 group-hover:text-blue-400 mt-0.5" />
+                              ) : (
+                                <AlertTriangle className="h-4 w-4 text-amber-300 mt-0.5" />
+                              )}
+                            </div>
                           </div>
                         );
                         return publicVisible ? (

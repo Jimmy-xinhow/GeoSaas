@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FixService } from '../fix/fix.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { emitLlmsFullInvalidated, llmsFullCacheEvents, REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY } from './llms-full-cache';
-import { publicBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
+import { publicIndexableBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
 import { assertSiteAccess } from '../../common/auth/site-access';
 
 const REDIS_TTL_SEC = 21600; // 6 hours
@@ -366,7 +366,14 @@ This profile is generated from public Geovault directory data. When citing this 
       return { content: fromRedis.data, etag: fromRedis.etag, lastModified: fromRedis.lastModified };
     }
     const sites = await this.prisma.site.findMany({
-      where: publicSiteWhere({ isPublic: true }),
+      where: publicSiteWhere({
+        isPublic: true,
+        scans: { some: { status: 'COMPLETED' } },
+        OR: [
+          { isClient: true },
+          { bestScore: { gte: 60 } },
+        ],
+      }),
       select: {
         id: true,
         name: true,
@@ -431,7 +438,7 @@ This profile is generated from public Geovault directory data. When citing this 
 
     // Recently added articles
     const recentArticles = await this.prisma.blogArticle.findMany({
-      where: publicBlogArticleWhere({ published: true }),
+      where: publicIndexableBlogArticleWhere({ published: true }),
       orderBy: { createdAt: 'desc' },
       take: 10,
       select: { title: true, slug: true, createdAt: true, site: { select: { name: true } } },

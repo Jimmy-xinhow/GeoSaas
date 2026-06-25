@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import apiClient from '@/lib/api-client';
-import { FileText, Trash2, Zap, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { FileText, Zap, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 
 export default function AdminArticlesPage() {
   const [page, setPage] = useState(1);
@@ -71,9 +71,9 @@ export default function AdminArticlesPage() {
             <FileText className="h-4 w-4 mr-1" />
             {bulkGenerate.isPending ? '生成中...' : '批量生成'}
           </Button>
-          <Button size="sm" variant="destructive" onClick={() => qualityAudit.mutate()} disabled={qualityAudit.isPending}>
+          <Button size="sm" variant="outline" onClick={() => qualityAudit.mutate()} disabled={qualityAudit.isPending}>
             <AlertTriangle className="h-4 w-4 mr-1" />
-            {qualityAudit.isPending ? '審計中...' : '品質審計'}
+            {qualityAudit.isPending ? '審計中...' : '品質審計下架'}
           </Button>
         </div>
       </div>
@@ -81,7 +81,7 @@ export default function AdminArticlesPage() {
       {auditResult && (
         <Card className="border-yellow-500/30 bg-yellow-500/20">
           <CardContent className="p-4 text-sm">
-            品質審計完成：保留 <strong>{auditResult.kept}</strong> 篇，刪除 <strong>{auditResult.deleted}</strong> 篇（門檻 {auditResult.threshold} 分）
+            品質審計完成：保留 <strong>{auditResult.kept}</strong> 篇，下架 <strong>{auditResult.unpublished ?? 0}</strong> 篇，刪除 <strong>{auditResult.deleted ?? 0}</strong> 篇（門檻 {auditResult.threshold} 分）
             <Button variant="ghost" size="sm" className="ml-2" onClick={() => setAuditResult(null)}>關閉</Button>
           </CardContent>
         </Card>

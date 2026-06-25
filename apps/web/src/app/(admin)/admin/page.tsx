@@ -388,9 +388,9 @@ export default function AdminDashboard() {
               <FileText className="h-5 w-5" />
               <span className="text-xs">{actionLoading === 'bulk' ? '生成中...' : '批量生成文章'}</span>
             </Button>
-            <Button variant="outline" className="h-auto py-3 flex-col gap-1 text-red-400 hover:text-red-300" disabled={!!actionLoading} onClick={() => handleAction('audit', '/blog/quality-audit?threshold=85', 'delete')}>
+            <Button variant="outline" className="h-auto py-3 flex-col gap-1 text-amber-300 hover:text-amber-200" disabled={!!actionLoading} onClick={() => handleAction('audit', '/blog/quality-audit?threshold=85', 'delete')}>
               <BarChart3 className="h-5 w-5" />
-              <span className="text-xs">{actionLoading === 'audit' ? '清理中...' : '品質審計 (85)'}</span>
+              <span className="text-xs">{actionLoading === 'audit' ? '審計中...' : '品質審計下架 (85)'}</span>
             </Button>
             <Button variant="outline" className="h-auto py-3 flex-col gap-1" disabled={!!actionLoading} onClick={() => handleAction('insights', '/blog/insights/generate-all')}>
               <BarChart3 className="h-5 w-5" />

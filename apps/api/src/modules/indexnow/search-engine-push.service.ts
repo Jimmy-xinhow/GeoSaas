@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IndexNowService } from './indexnow.service';
-import { publicBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
+import { publicIndexableBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
 
 /**
  * Proactively push URLs to Google Indexing API and Bing URL Submission API
@@ -44,7 +44,7 @@ export class SearchEnginePushService {
 
     // Recently published articles
     const articles = await this.prisma.blogArticle.findMany({
-      where: publicBlogArticleWhere({ published: true, createdAt: { gte: since } }),
+      where: publicIndexableBlogArticleWhere({ published: true, createdAt: { gte: since } }),
       select: { slug: true },
       take: 100,
     });

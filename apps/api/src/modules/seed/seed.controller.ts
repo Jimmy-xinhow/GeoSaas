@@ -51,6 +51,12 @@ export class SeedController {
     return { ...result, message: 'Reset and rescanning started' };
   }
 
+  @Post('quarantine-low-quality')
+  @ApiOperation({ summary: 'Hide low-score public seed sites from the public directory and llms-full pool' })
+  async quarantineLowQuality() {
+    return this.service.quarantineLowQualityPublicSeeds();
+  }
+
   @Post('geovault-self')
   @ApiOperation({ summary: 'Register www.geovault.app as a scannable site and trigger initial scan' })
   async seedGeovaultSelf() {

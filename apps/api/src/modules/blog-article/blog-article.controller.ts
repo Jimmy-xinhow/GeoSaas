@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, NotFoundException, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, NotFoundException, Post, Delete, Patch, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -183,7 +183,7 @@ export class BlogArticleController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   @Delete('quality-audit')
-  @ApiOperation({ summary: 'Delete articles below quality threshold and return stats' })
+  @ApiOperation({ summary: 'Unpublish articles below quality threshold and return stats' })
   async qualityAudit(@Query('threshold') threshold?: string) {
     const minScore = parseBoundedInt(threshold, 'threshold', 85, 0, 100);
     return this.service.qualityAudit(minScore);
@@ -453,6 +453,29 @@ export class BlogArticleController {
       page: parseBoundedInt(page, 'page', 1, 1, 10000),
       limit: parseBoundedInt(limit, 'limit', 30, 1, 100),
     }, userId, role);
+  }
+
+  @ApiBearerAuth()
+  @Patch('client-daily/articles/:slug/publication')
+  @ApiOperation({
+    summary:
+      'Toggle publication for one client_daily article owned by the current user. Publishing is blocked if public quality gates fail.',
+  })
+  setClientDailyPublication(
+    @Param('slug') slug: string,
+    @Body('published') published: unknown,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    if (typeof published !== 'boolean') {
+      throw new BadRequestException('published must be a boolean');
+    }
+    return this.service.setClientDailyArticlePublished(
+      normalizeRequiredText(slug, 'slug', 220),
+      published,
+      userId,
+      role,
+    );
   }
 
   @ApiBearerAuth()

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
 
 const QA_TEMPLATE_TYPE = 'post_publish_long_tail_qa';
 const QA_PROMPT_VERSION = 'v1';
@@ -78,6 +79,7 @@ export class LongTailArticleQaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly llmsHosting: LlmsHostingService,
   ) {
     const apiKey = this.config.get<string>('OPENAI_API_KEY');
     if (apiKey) this.openai = new OpenAI({ apiKey });
@@ -128,6 +130,7 @@ export class LongTailArticleQaService {
 
       if (!initial.safeToAutoRepair) {
         result.manualRequired++;
+        await this.unpublishFailedArticle(article, initial.failedRules);
         result.issues.push(this.issue(article, 'manual_required', initial));
         continue;
       }
@@ -150,6 +153,7 @@ export class LongTailArticleQaService {
         };
         result.repairFailed++;
         await this.persistQualityLog(article, 'patch', 1, failed, Date.now() - repairStartedAt, this.repairModel());
+        await this.unpublishFailedArticle(article, failed.failedRules);
         result.issues.push(this.issue(article, 'repair_failed', failed));
         continue;
       }
@@ -166,6 +170,7 @@ export class LongTailArticleQaService {
 
       if (!secondPass.passed) {
         result.repairFailed++;
+        await this.unpublishFailedArticle(article, secondPass.failedRules);
         result.issues.push(this.issue(article, 'repair_failed', secondPass));
         continue;
       }
@@ -424,6 +429,17 @@ ${article.content.slice(0, 9000)}
         message,
       })),
     });
+  }
+
+  private async unpublishFailedArticle(article: ArticleForQa, failedRules: string[]): Promise<void> {
+    await this.prisma.blogArticle.update({
+      where: { id: article.id },
+      data: { published: false, lastRegeneratedAt: new Date() },
+    });
+    this.llmsHosting.invalidatePlatformLlmsFull(article.siteId ?? undefined);
+    this.logger.warn(
+      `Long-tail QA unpublished ${article.slug}: ${failedRules.join(', ') || 'quality_failed'}`,
+    );
   }
 
   private issue(

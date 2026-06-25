@@ -182,7 +182,7 @@ export class TaskRegistryService implements OnModuleInit {
         select: {
           id: true,
           name: true,
-          _count: { select: { blogArticles: true } },
+          _count: { select: { blogArticles: { where: { published: true } } } },
         },
       });
 

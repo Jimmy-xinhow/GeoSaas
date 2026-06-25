@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -28,6 +28,7 @@ import {
 import OpenAI from 'openai';
 import pLimit from '@/common/utils/p-limit';
 import {
+  getPublicBlogArticleSeoIssues,
   isIndexablePublicBlogArticle,
   isPublicSafeArticle,
   publicIndexableBlogArticleWhere,
@@ -162,6 +163,31 @@ export class BlogArticleService {
     }
 
     return reasons;
+  }
+
+  private clientDailyPublicBlockers(article: {
+    title?: string | null;
+    description?: string | null;
+    slug?: string | null;
+    content?: string | null;
+    targetKeywords?: string[] | null;
+    site?: {
+      name?: string | null;
+      url?: string | null;
+      industry?: string | null;
+      isPublic?: boolean | null;
+    } | null;
+  }): string[] {
+    const blockers = [
+      ...this.clientDailySafetyReasons(article),
+      ...getPublicBlogArticleSeoIssues(article).map((issue) => `seo:${issue}`),
+    ];
+
+    if (article.site?.isPublic === false) {
+      blockers.push('non_public_site');
+    }
+
+    return [...new Set(blockers)];
   }
 
   private isClientDailyArticleSafe(article: {
@@ -567,7 +593,7 @@ export class BlogArticleService {
             results: { select: { indicator: true, score: true, status: true } },
           },
         },
-        blogArticles: { select: { templateType: true } },
+        blogArticles: { where: { published: true }, select: { templateType: true } },
       },
     });
 
@@ -690,7 +716,7 @@ export class BlogArticleService {
       },
       select: {
         id: true,
-        _count: { select: { blogArticles: true } },
+        _count: { select: { blogArticles: { where: { published: true } } } },
       },
     });
 
@@ -789,9 +815,9 @@ export class BlogArticleService {
   }
 
   /**
-   * Cron: 每天凌晨 3 點，批量淘汰不符合新引用規範的舊文章（每天 100 篇）
+   * Cron: 每天凌晨 3 點，批量下架不符合新引用規範的舊文章（每天 100 篇）
    * 判斷標準：缺少「關鍵數據摘要」或 Geovault 品牌歸因不足 3 次
-   * 被刪除的文章會由凌晨 2 點的 bulk generation cron 重新生成
+   * 被下架的文章會由 bulk generation 以「已公開文章數不足」重新補齊。
    */
   @Cron('0 3 * * *', { name: 'article-citation-upgrade' })
   async scheduledCitationUpgrade(): Promise<void> {
@@ -815,19 +841,28 @@ export class BlogArticleService {
     }
 
     const batch = nonCompliant.slice(0, 100);
-    this.logger.log(`Found ${nonCompliant.length} non-compliant articles, deleting ${batch.length}`);
+    this.logger.log(`Found ${nonCompliant.length} non-compliant articles, unpublishing ${batch.length}`);
 
-    let deleted = 0;
+    let unpublished = 0;
     for (const article of batch) {
       try {
-        await this.prisma.blogArticle.delete({ where: { id: article.id } });
-        deleted++;
+        await this.prisma.blogArticle.update({
+          where: { id: article.id },
+          data: { published: false, lastRegeneratedAt: new Date() },
+        });
+        unpublished++;
       } catch (err) {
-        this.logger.warn(`Failed to delete article ${article.id}: ${err}`);
+        this.logger.warn(`Failed to unpublish article ${article.id}: ${err}`);
       }
     }
 
-    this.logger.log(`Citation upgrade: deleted ${deleted} old articles (${nonCompliant.length - deleted} remaining)`);
+    if (unpublished > 0) {
+      this.llmsHostingService.invalidatePlatformLlmsFull();
+    }
+
+    this.logger.log(
+      `Citation upgrade: unpublished ${unpublished} old articles (${nonCompliant.length - unpublished} remaining)`,
+    );
   }
 
   /**
@@ -884,14 +919,22 @@ export class BlogArticleService {
     for (const article of batch) {
       if (!article.siteId || !article.templateType) continue;
       try {
-        // Stamp before delete so the cooldown applies to whatever new
-        // articles get written for this site in the regen step below.
+        // Hide before regeneration so weak content stops being crawled even
+        // if the replacement fails. generateArticlesForSite only counts
+        // published articles, so this site becomes eligible for refill.
         refreshedSiteIds.add(article.siteId);
-        await this.prisma.blogArticle.delete({ where: { id: article.id } });
-        this.logger.log(`Deleted old article: ${article.slug} (${article.site?.name})`);
+        await this.prisma.blogArticle.update({
+          where: { id: article.id },
+          data: { published: false, lastRegeneratedAt: new Date() },
+        });
+        this.logger.log(`Unpublished old article: ${article.slug} (${article.site?.name})`);
       } catch (err) {
-        this.logger.warn(`Failed to delete ${article.slug}: ${err}`);
+        this.logger.warn(`Failed to unpublish ${article.slug}: ${err}`);
       }
+    }
+
+    if (refreshedSiteIds.size > 0) {
+      this.llmsHostingService.invalidatePlatformLlmsFull();
     }
 
     // Regenerate for affected sites (deduped)
@@ -1157,9 +1200,6 @@ export class BlogArticleService {
       where: { siteId: site.id, templateType: 'brand_showcase' },
       select: { id: true },
     });
-    if (existing) {
-      await this.prisma.blogArticle.delete({ where: { id: existing.id } });
-    }
 
     const created = await this.prisma.blogArticle.create({
       data: {
@@ -1182,6 +1222,9 @@ export class BlogArticleService {
         lastRegeneratedAt: new Date(),
       },
     });
+    if (existing) {
+      await this.prisma.blogArticle.delete({ where: { id: existing.id } });
+    }
     await this.qualityRunner.attachArticleId(
       'brand_showcase',
       site.id,
@@ -1575,11 +1618,6 @@ export class BlogArticleService {
       : `${new Date().getFullYear()} ${industryLabel}推薦 Top ${rows.length}`;
     const slug = `${industrySlug}-top10-${Date.now().toString(36)}`;
 
-    // Replace any existing industry_top10 for this industry
-    await this.prisma.blogArticle.deleteMany({
-      where: { templateType: 'industry_top10', industrySlug },
-    });
-
     const top10Article = await this.prisma.blogArticle.create({
       data: {
         slug,
@@ -1601,6 +1639,11 @@ export class BlogArticleService {
         published: true,
         lastRegeneratedAt: new Date(),
       },
+    });
+    // Replace any existing industry_top10 for this industry after the new
+    // article exists, avoiding a public-content gap if create fails.
+    await this.prisma.blogArticle.deleteMany({
+      where: { templateType: 'industry_top10', industrySlug, id: { not: top10Article.id } },
     });
     await this.qualityRunner.attachArticleId(
       'industry_top10',
@@ -1761,10 +1804,6 @@ export class BlogArticleService {
     const title = titleMatch ? titleMatch[1].trim() : `${industryLabel}選購指南(${topic})`;
     const slug = `${industrySlug}-buyer-guide-${topic}-${Date.now().toString(36)}`;
 
-    await this.prisma.blogArticle.deleteMany({
-      where: { templateType: 'buyer_guide', industrySlug, title: { contains: title.slice(0, 20) } },
-    });
-
     const buyerArticle = await this.prisma.blogArticle.create({
       data: {
         slug,
@@ -1786,6 +1825,14 @@ export class BlogArticleService {
         readTime: `${this.templateService.estimateReadingTime('buyer_guide')} 分鐘`,
         published: true,
         lastRegeneratedAt: new Date(),
+      },
+    });
+    await this.prisma.blogArticle.deleteMany({
+      where: {
+        templateType: 'buyer_guide',
+        industrySlug,
+        title: { contains: title.slice(0, 20) },
+        id: { not: buyerArticle.id },
       },
     });
     await this.qualityRunner.attachArticleId(
@@ -2646,7 +2693,7 @@ Required output:
 
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
-      select: { industry: true, user: { select: { plan: true } }, profile: true },
+      select: { name: true, url: true, industry: true, isPublic: true, user: { select: { plan: true } }, profile: true },
     });
     const rows = await this.prisma.blogArticle.findMany({
       where: { siteId, templateType: 'client_daily' },
@@ -2659,13 +2706,19 @@ Required output:
         published: true,
         createdAt: true,
         targetKeywords: true,
+        site: { select: { name: true, url: true, industry: true, isPublic: true } },
       },
     });
     const rowsWithSafety = rows.map((r) => ({
       ...r,
-      safetyReasons: this.clientDailySafetyReasons({
+      safetyReasons: this.clientDailyPublicBlockers({
         ...r,
-        site: { industry: site?.industry },
+        site: r.site ?? {
+          name: site?.name,
+          url: site?.url,
+          industry: site?.industry,
+          isPublic: site?.isPublic,
+        },
       }),
     }));
     const publicVisibleRows = rowsWithSafety.filter((r) => r.published && r.safetyReasons.length === 0);
@@ -2736,7 +2789,7 @@ Required output:
     const skip = (opts.page - 1) * opts.limit;
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
-      select: { industry: true },
+      select: { name: true, url: true, industry: true, isPublic: true },
     });
     const rows = await this.prisma.blogArticle.findMany({
       where: { siteId, templateType: 'client_daily' },
@@ -2749,13 +2802,19 @@ Required output:
         createdAt: true,
         targetKeywords: true,
         content: true,
+        site: { select: { name: true, url: true, industry: true, isPublic: true } },
       },
     });
     const rowsWithSafety = rows.map((r) => ({
       ...r,
-      safetyReasons: this.clientDailySafetyReasons({
+      safetyReasons: this.clientDailyPublicBlockers({
         ...r,
-        site: { industry: site?.industry },
+        site: r.site ?? {
+          name: site?.name,
+          url: site?.url,
+          industry: site?.industry,
+          isPublic: site?.isPublic,
+        },
       }),
     }));
     const total = rowsWithSafety.length;
@@ -2783,29 +2842,105 @@ Required output:
     };
   }
 
+  async setClientDailyArticlePublished(
+    slug: string,
+    published: boolean,
+    userId?: string,
+    role?: string,
+  ) {
+    const article = await this.prisma.blogArticle.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        description: true,
+        content: true,
+        targetKeywords: true,
+        templateType: true,
+        published: true,
+        siteId: true,
+        site: {
+          select: {
+            id: true,
+            name: true,
+            url: true,
+            industry: true,
+            isPublic: true,
+          },
+        },
+      },
+    });
+
+    if (!article || article.templateType !== 'client_daily' || !article.siteId) {
+      throw new NotFoundException('Client daily article not found');
+    }
+
+    await this.assertSiteAccess(article.siteId, userId, role);
+
+    const blockers = this.clientDailyPublicBlockers(article);
+    if (published && blockers.length > 0) {
+      throw new BadRequestException({
+        message: 'Article cannot be published until quality blockers are fixed',
+        blockers,
+      });
+    }
+
+    const updated = await this.prisma.blogArticle.update({
+      where: { id: article.id },
+      data: { published },
+      select: { slug: true, title: true, published: true },
+    });
+
+    this.llmsHostingService.invalidatePlatformLlmsFull(article.siteId);
+    if (published) this.pingIndexNow(article.slug);
+
+    return {
+      ...updated,
+      publicVisible: updated.published,
+      safetyReasons: blockers,
+    };
+  }
+
   async qualityAudit(minScore: number = 85) {
     const articles = await this.prisma.blogArticle.findMany({
       where: { published: true },
       select: { id: true, title: true, content: true, siteId: true, slug: true },
     });
 
-    let deleted = 0;
+    let unpublished = 0;
     let kept = 0;
-    const deletedTitles: string[] = [];
+    const unpublishedTitles: string[] = [];
 
     for (const article of articles) {
       const siteName = article.title?.split(' ')[0] || '';
       const quality = this.assessArticleQuality(article.content || '', siteName);
       if (quality < minScore) {
-        await this.prisma.blogArticle.delete({ where: { id: article.id } });
-        deleted++;
-        deletedTitles.push(`${quality}/100 | ${article.slug}`);
+        await this.prisma.blogArticle.update({
+          where: { id: article.id },
+          data: { published: false },
+        });
+        unpublished++;
+        unpublishedTitles.push(`${quality}/100 | ${article.slug}`);
       } else {
         kept++;
       }
     }
 
-    this.logger.log(`Quality audit complete: ${kept} kept, ${deleted} deleted (threshold: ${minScore})`);
-    return { total: articles.length, kept, deleted, threshold: minScore };
+    if (unpublished > 0) {
+      this.llmsHostingService.invalidatePlatformLlmsFull();
+    }
+
+    this.logger.log(
+      `Quality audit complete: ${kept} kept, ${unpublished} unpublished, 0 deleted (threshold: ${minScore})`,
+    );
+    return {
+      total: articles.length,
+      kept,
+      unpublished,
+      deleted: 0,
+      threshold: minScore,
+      unpublishedTitles,
+    };
   }
 }
