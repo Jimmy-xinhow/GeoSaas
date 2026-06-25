@@ -14,6 +14,11 @@ import {
   createClientDailySpec,
 } from '../content-quality/specs/client-daily.spec';
 import {
+  CLIENT_DAILY_DAY_SEQUENCE,
+  clientDailyDayTypeForDate,
+  getClientDailyActiveDays,
+} from './client-daily-policy';
+import {
   BrandShowcaseData,
   createBrandShowcaseSpec,
 } from '../content-quality/specs/brand-showcase.spec';
@@ -161,6 +166,103 @@ export class BlogArticleService {
   private bucketClientDailyReason(reason?: string): string {
     if (!reason) return 'unknown';
     return reason.split(':')[0] || 'unknown';
+  }
+
+  private async persistClientDailyRejectedDraft(args: {
+    site: { id: string; name: string; url: string; industry?: string | null };
+    dayType: ClientDailyDay;
+    today: Date;
+    content?: string;
+    graph: BrandFactGraph;
+    strategy: ClientDailyContentStrategy;
+    pulse?: { geoScore: number; industryRank: number | null; industryAvgScore: number | null; weekCrawlerVisits: number };
+    medicalAdjacent: boolean;
+    reasons: string[];
+    runStartedAt: Date;
+  }): Promise<{ id: string; slug: string; created: boolean }> {
+    const oneDayAgo = new Date(Date.now() - 86400000);
+    const existingDraft = await this.prisma.blogArticle.findFirst({
+      where: {
+        siteId: args.site.id,
+        templateType: 'client_daily',
+        published: false,
+        createdAt: { gte: oneDayAgo },
+        targetKeywords: { has: args.dayType },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, slug: true },
+    });
+    if (existingDraft) return { ...existingDraft, created: false };
+
+    let content = args.content?.trim() || this.buildClientDailyFallbackContent({
+      site: args.site,
+      graph: args.graph,
+      dayType: args.dayType,
+      strategy: args.strategy,
+      pulse: args.pulse,
+      medicalAdjacent: args.medicalAdjacent,
+    });
+
+    const rawTitle = content.match(/^#{1,2}\s+(.+)$/m)?.[1] ?? '';
+    const title = this.makeClientDailyTitle(rawTitle, args.site.name, args.dayType);
+    content = /^#{1,2}\s+.+$/m.test(content)
+      ? content.replace(/^#{1,2}\s+.+$/m, `# ${title}`)
+      : `# ${title}\n\n${content}`;
+
+    const yyyymm = `${args.today.getUTCFullYear()}${String(args.today.getUTCMonth() + 1).padStart(2, '0')}`;
+    const rand4 = Date.now().toString(36).slice(-4);
+    const slug = `${args.site.id.slice(0, 10)}-${yyyymm}-${args.dayType.replace(/_/g, '-')}-draft-${rand4}`;
+    const officialDomain = this.officialDomain(args.site.url);
+    const targetKeywords = [
+      args.site.name,
+      args.site.industry ?? '',
+      args.dayType,
+      officialDomain,
+      'daily',
+      'ai_wiki',
+      'brand_facts',
+      'client_daily_blocked',
+      ...args.reasons.map((reason) => `blocked:${this.bucketClientDailyReason(reason)}`),
+      ...args.strategy.targetKeywords.slice(0, 8),
+    ].filter(Boolean);
+
+    const article = await this.prisma.blogArticle.create({
+      data: {
+        slug,
+        title,
+        description: this.makeClientDailyDescription(
+          content,
+          { name: args.site.name, url: args.site.url },
+          args.dayType,
+        ),
+        content,
+        category: 'client-daily',
+        siteId: args.site.id,
+        templateType: 'client_daily',
+        industrySlug: args.site.industry ?? undefined,
+        targetKeywords: [...new Set(targetKeywords)],
+        readingTimeMinutes: this.templateService.estimateReadingTime('client_daily'),
+        readTime: `${this.templateService.estimateReadingTime('client_daily')} 分鐘`,
+        published: false,
+        lastRegeneratedAt: new Date(),
+      },
+      select: { id: true, slug: true },
+    });
+
+    try {
+      await this.qualityRunner.attachArticleId(
+        `client_daily/${args.dayType}`,
+        args.site.id,
+        article.id,
+        args.runStartedAt,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `client_daily rejected-draft quality-log attach failed ${args.site.name}/${args.dayType}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    return { ...article, created: true };
   }
 
   private clientDailySafetyReasons(article: {
@@ -2655,19 +2757,14 @@ export class BlogArticleService {
   //   STARTER: 1/week  (Tue Q&A)
   //   PRO:     3/week  (Tue Q&A + Fri comparison + Sat data pulse)
 
-  private readonly daySequence: ClientDailyDay[] = [
-    'mon_topical', 'tue_qa_deepdive', 'wed_service',
-    'thu_audience', 'fri_comparison', 'sat_data_pulse',
-  ];
+  private readonly daySequence: ClientDailyDay[] = CLIENT_DAILY_DAY_SEQUENCE;
 
   /**
    * Map Date → (ClientDailyDay | null). Sunday returns null — cron skips.
    * JS getDay(): 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
    */
   private dayTypeFor(date: Date): ClientDailyDay | null {
-    const d = date.getDay();
-    if (d === 0) return null;
-    return this.daySequence[d - 1];
+    return clientDailyDayTypeForDate(date);
   }
 
   /**
@@ -2675,10 +2772,8 @@ export class BlogArticleService {
    * types (Q&A deep-dive + competitive comparison) because those produce
    * the most crawler-friendly unique content per client.
    */
-  private activeDaysForPlan(plan: string): ClientDailyDay[] {
-    if (plan === 'PRO') return ['tue_qa_deepdive', 'fri_comparison', 'sat_data_pulse'];
-    if (plan === 'STARTER') return ['tue_qa_deepdive'];
-    return [];
+  private activeDaysForClient(plan?: string | null, role?: string | null): ClientDailyDay[] {
+    return getClientDailyActiveDays(plan, role);
   }
 
   private formatFactList(items: string[], fallback = 'No verified data provided'): string {
@@ -2942,8 +3037,7 @@ Required output:
 
     // Plan gate — STARTER only gets 2 day types, PRO gets all 6
     const planTier = site.user?.plan || 'FREE';
-    const isBypassRole = site.user?.role === 'ADMIN' || site.user?.role === 'SUPER_ADMIN' || site.user?.role === 'STAFF';
-    const allowedDays = isBypassRole ? this.daySequence : this.activeDaysForPlan(planTier);
+    const allowedDays = this.activeDaysForClient(planTier, site.user?.role);
     if (!allowedDays.includes(resolvedDay)) {
       return { status: 'skipped', reasons: [`day_not_in_plan:${planTier}:${resolvedDay}`] };
     }
@@ -2954,13 +3048,20 @@ Required output:
     const recent = await this.prisma.blogArticle.findFirst({
       where: {
         siteId, templateType: 'client_daily',
-        published: true,
         createdAt: { gte: oneDayAgo },
         targetKeywords: { has: resolvedDay },
       },
-      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, slug: true, published: true },
     });
-    if (recent && !options.dryRun) return { status: 'skipped', reasons: ['already_generated_today'] };
+    if (recent && !options.dryRun) {
+      return {
+        status: 'skipped',
+        reasons: [recent.published ? 'already_generated_today' : 'already_has_unpublished_draft_today'],
+        slug: recent.slug,
+        dayType: resolvedDay,
+      };
+    }
 
     const brandFacts = await this.brandFactService.buildForSite(site.id);
     if (!this.brandFactService.isReadyForCitationContent(brandFacts)) {
@@ -3131,30 +3232,25 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     const hardFailedRules = finalFailedRules.filter((rule) =>
       /^(fabricated_contact|fabricated_phone|forbidden_phrase|medical_boundary_violation|client_daily_safety)/.test(rule),
     );
+    let fallbackReasons: string[] = [];
     if (hardFailedRules.length > 0) {
       this.logger.warn(
-        `client_daily hard rejected ${site.name}/${resolvedDay}: ${hardFailedRules.join(',')}`,
+        `client_daily hard quality rejection ${site.name}/${resolvedDay}; switching to fallback: ${hardFailedRules.join(',')}`,
       );
-      return {
-        status: 'rejected',
-        reasons: hardFailedRules,
-        dayType: resolvedDay,
-        dryRun: options.dryRun || undefined,
-        content: options.dryRun ? result.content : undefined,
-        totalScore: result.totalScore,
-        attempts: options.dryRun ? attemptSummary : undefined,
-      };
+      fallbackReasons = ['fallback_after_hard_quality_rejection', ...hardFailedRules];
     }
 
     let content = result.content ?? '';
-    let fallbackReasons: string[] = [];
-    if (result.status !== 'generated' || !content) {
+    if (hardFailedRules.length > 0 || result.status !== 'generated' || !content) {
       this.logger.warn(
         `client_daily fallback ${site.name}/${resolvedDay} after ${result.attempts.length} attempts: ${(result.failedRules || []).join(', ')}`,
       );
-      fallbackReasons = result.failedRules?.length
-        ? ['fallback_after_quality_rejection', ...result.failedRules]
-        : ['fallback_after_quality_rejection', 'quality_runner_rejected'];
+      fallbackReasons = [...new Set([
+        ...fallbackReasons,
+        ...(result.failedRules?.length
+          ? ['fallback_after_quality_rejection', ...result.failedRules]
+          : ['fallback_after_quality_rejection', 'quality_runner_rejected']),
+      ])];
       content = this.buildClientDailyFallbackContent({
         site: { id: site.id, name: site.name, url: site.url, industry: site.industry },
         graph: brandFacts,
@@ -3165,13 +3261,44 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
       });
     }
 
+    const persistRejectedDraft = async (
+      reasons: string[],
+      draftContent = content,
+    ) => {
+      if (options.dryRun) return null;
+      try {
+        return await this.persistClientDailyRejectedDraft({
+          site: { id: site.id, name: site.name, url: site.url, industry: site.industry },
+          dayType: resolvedDay,
+          today,
+          content: draftContent,
+          graph: brandFacts,
+          strategy: contentStrategy,
+          pulse,
+          medicalAdjacent: isMedicalAdjacent,
+          reasons,
+          runStartedAt,
+        });
+      } catch (err) {
+        this.logger.error(
+          `client_daily rejected draft persist failed ${site.name}/${resolvedDay}: ${err instanceof Error ? err.message : err}`,
+          err instanceof Error ? err.stack : undefined,
+        );
+        return null;
+      }
+    };
+
     if (isMedicalAdjacent && this.hasMedicalBoundaryViolation(content)) {
       this.logger.warn(
         `client_daily hard rejected ${site.name}/${resolvedDay}: medical_boundary_violation_post_gate`,
       );
+      const draft = await persistRejectedDraft(['medical_boundary_violation']);
       return {
         status: 'rejected',
-        reasons: ['medical_boundary_violation'],
+        reasons: draft?.created
+          ? ['draft_saved', 'medical_boundary_violation']
+          : ['medical_boundary_violation'],
+        slug: draft?.slug,
         dayType: resolvedDay,
         dryRun: options.dryRun || undefined,
         content: options.dryRun ? content : undefined,
@@ -3191,9 +3318,11 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
         this.logger.warn(
           `client_daily safety rejected ${site.name}/${resolvedDay}: ${hardSafetyReasons.join(',')}`,
         );
+        const draft = await persistRejectedDraft(hardSafetyReasons);
         return {
           status: 'rejected',
-          reasons: hardSafetyReasons,
+          reasons: draft?.created ? ['draft_saved', ...hardSafetyReasons] : hardSafetyReasons,
+          slug: draft?.slug,
           dayType: resolvedDay,
           dryRun: options.dryRun || undefined,
           content: options.dryRun ? content : undefined,
@@ -3218,9 +3347,13 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
       this.logger.warn(
         `client_daily hard rejected ${site.name}/${resolvedDay}: medical_boundary_violation_after_repair`,
       );
+      const draft = await persistRejectedDraft(['medical_boundary_violation']);
       return {
         status: 'rejected',
-        reasons: ['medical_boundary_violation'],
+        reasons: draft?.created
+          ? ['draft_saved', 'medical_boundary_violation']
+          : ['medical_boundary_violation'],
+        slug: draft?.slug,
         dayType: resolvedDay,
         dryRun: options.dryRun || undefined,
         content: options.dryRun ? content : undefined,
@@ -3277,9 +3410,19 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
         this.logger.warn(
           `client_daily operating gate hard rejected ${site.name}/${resolvedDay}: ${operatingAudit.failedRules.join(',')}`,
         );
+        const draft = await persistRejectedDraft(
+          operatingAudit.hardFailures.length > 0
+            ? operatingAudit.hardFailures
+            : operatingAudit.failedRules,
+          content,
+        );
+        const reasons = operatingAudit.hardFailures.length > 0
+          ? operatingAudit.hardFailures
+          : operatingAudit.failedRules;
         return {
           status: 'rejected',
-          reasons: operatingAudit.hardFailures,
+          reasons: draft?.created ? ['draft_saved', ...reasons] : reasons,
+          slug: draft?.slug,
           dayType: resolvedDay,
           dryRun: options.dryRun || undefined,
           content: options.dryRun ? content : undefined,
@@ -3330,13 +3473,16 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
         this.logger.warn(
           `client_daily operating gate rejected after repair ${site.name}/${resolvedDay}: score=${operatingAudit.score}; ${operatingAudit.failedRules.join(',')}`,
         );
+        const reasons = [
+          'content_operating_gate_failed',
+          `operating_score:${operatingAudit.score}`,
+          ...operatingAudit.failedRules,
+        ];
+        const draft = await persistRejectedDraft(reasons, content);
         return {
           status: 'rejected',
-          reasons: [
-            'content_operating_gate_failed',
-            `operating_score:${operatingAudit.score}`,
-            ...operatingAudit.failedRules,
-          ],
+          reasons: draft?.created ? ['draft_saved', ...reasons] : reasons,
+          slug: draft?.slug,
           dayType: resolvedDay,
           dryRun: options.dryRun || undefined,
           content: options.dryRun ? content : undefined,
@@ -3543,7 +3689,14 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
 
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
-      select: { name: true, url: true, industry: true, isPublic: true, user: { select: { plan: true } }, profile: true },
+      select: {
+        name: true,
+        url: true,
+        industry: true,
+        isPublic: true,
+        user: { select: { plan: true, role: true } },
+        profile: true,
+      },
     });
     const rows = await this.prisma.blogArticle.findMany({
       where: { siteId, templateType: 'client_daily' },
@@ -3583,7 +3736,7 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     const plan = site?.user?.plan || 'FREE';
     const prof = (site?.profile as Record<string, any>) || {};
     const paused = !!prof.dailyContentPaused;
-    const activeDays = this.activeDaysForPlan(plan);
+    const activeDays = this.activeDaysForClient(plan, site?.user?.role);
 
     return {
       totalCount,
@@ -3789,8 +3942,11 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
   }
 
   async qualityAudit(minScore: number = 85) {
+    const skippedClientDaily = await this.prisma.blogArticle.count({
+      where: { published: true, templateType: 'client_daily' },
+    });
     const articles = await this.prisma.blogArticle.findMany({
-      where: { published: true },
+      where: { published: true, NOT: { templateType: 'client_daily' } },
       select: { id: true, title: true, content: true, siteId: true, slug: true },
     });
 
@@ -3825,6 +3981,7 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
       kept,
       unpublished,
       deleted: 0,
+      skippedClientDaily,
       threshold: minScore,
       unpublishedTitles,
     };

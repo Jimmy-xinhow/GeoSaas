@@ -10,6 +10,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ScanPipelineService } from '../scan/scan-pipeline.service';
 import { DiscoveryService } from '../discovery/discovery.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
+import {
+  clientDailyDayTypeForDate,
+  getClientDailyActiveDays,
+} from '../blog-article/client-daily-policy';
 
 @Injectable()
 export class TaskRegistryService implements OnModuleInit {
@@ -236,16 +240,9 @@ export class TaskRegistryService implements OnModuleInit {
         this.logger.log('client_daily sentinel skipped in E2E');
         return;
       }
-      const dayMap = ['', 'mon_topical', 'tue_qa_deepdive', 'wed_service', 'thu_audience', 'fri_comparison', 'sat_data_pulse'];
       const today = new Date();
-      const dow = today.getUTCDay(); // 0=Sun
-      if (dow === 0) return; // Sunday off
-      const dayType = dayMap[dow];
-
-      const planActiveDays: Record<string, string[]> = {
-        PRO: ['tue_qa_deepdive', 'fri_comparison', 'sat_data_pulse'],
-        STARTER: ['tue_qa_deepdive'],
-      };
+      const dayType = clientDailyDayTypeForDate(today);
+      if (!dayType) return; // Sunday off
 
       const clients = await this.prisma.site.findMany({
         where: { isClient: true, isPublic: true },
@@ -256,11 +253,7 @@ export class TaskRegistryService implements OnModuleInit {
       for (const s of clients) {
         const profile = (s.profile as Record<string, any>) || {};
         if (profile.dailyContentPaused) continue;
-        const role = s.user?.role;
-        const isBypass = role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'STAFF';
-        const allowedDays = isBypass
-          ? planActiveDays.PRO
-          : planActiveDays[s.user?.plan || 'FREE'] || [];
+        const allowedDays = getClientDailyActiveDays(s.user?.plan, s.user?.role);
         if (allowedDays.includes(dayType)) {
           expected.push({ id: s.id, name: s.name });
         }

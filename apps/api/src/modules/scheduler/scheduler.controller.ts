@@ -9,6 +9,10 @@ import {
   getPublicBlogArticleSeoIssues,
   publicIndexableBlogArticleWhere,
 } from '../../common/utils/public-data-filter';
+import {
+  clientDailyDayTypeForDate,
+  getClientDailyActiveDays,
+} from '../blog-article/client-daily-policy';
 
 type AutomationStatus = 'healthy' | 'warning' | 'critical';
 
@@ -42,18 +46,6 @@ function startOfUtcDay(date: Date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
-function clientDailyDayType(date: Date): string | null {
-  return [
-    null,
-    'mon_topical',
-    'tue_qa_deepdive',
-    'wed_service',
-    'thu_audience',
-    'fri_comparison',
-    'sat_data_pulse',
-  ][date.getUTCDay()] ?? null;
-}
-
 function classifyTask(task: {
   enabled: boolean;
   lastRunAt: Date | null;
@@ -67,17 +59,6 @@ function classifyTask(task: {
     return 'warning';
   }
   return 'healthy';
-}
-
-function activeDaysForClient(plan: string | null | undefined, role: string | null | undefined) {
-  const planActiveDays: Record<string, string[]> = {
-    PRO: ['tue_qa_deepdive', 'fri_comparison', 'sat_data_pulse'],
-    STARTER: ['tue_qa_deepdive'],
-  };
-  if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'STAFF') {
-    return planActiveDays.PRO;
-  }
-  return planActiveDays[plan || 'FREE'] || [];
 }
 
 @ApiTags('Admin — Scheduler')
@@ -105,7 +86,7 @@ export class SchedulerController {
     const now = new Date();
     const todayStart = startOfUtcDay(now);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
-    const todayDayType = clientDailyDayType(now);
+    const todayDayType = clientDailyDayTypeForDate(now);
 
     const [
       tasks,
@@ -195,7 +176,7 @@ export class SchedulerController {
       ? clientSites.filter((site) => {
           const profile = (site.profile as Record<string, unknown>) || {};
           if (profile.dailyContentPaused === true) return false;
-          return activeDaysForClient(site.user?.plan, site.user?.role).includes(todayDayType);
+          return getClientDailyActiveDays(site.user?.plan, site.user?.role).includes(todayDayType);
         })
       : [];
     const actualToday = todayDayType && expectedToday.length > 0
