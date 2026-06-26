@@ -499,6 +499,78 @@ export class BlogArticleService {
     }
   }
 
+  /**
+   * Single source of truth for client_daily section structure. The whole
+   * pipeline (prompt → operating audit `requiredSections` → fallback builder)
+   * reads from here so they can never drift.
+   *
+   * Why per-day-type headings: every client_daily article used to share one
+   * identical 6-heading skeleton (品牌定位/適合誰/服務與資料邊界/可引用重點/
+   * 常見問題/資料來源). Identical structure across mass-produced pages is the
+   * #1 "AI / scaled-content" fingerprint that Google Scaled-Content-Abuse and
+   * AI-Overview pipelines demote — and the thing that makes the content read as
+   * obviously machine-written. Varying the two body headings per weekday breaks
+   * that uniformity while keeping the three citation ANCHORS fixed, because the
+   * operating audit + quality gate key off them:
+   *   - 可引用重點 → ≥5 quote-ready bullets (countClientDailyQuoteBullets)
+   *   - 常見問題   → ≥3 FAQ pairs (countClientDailyFaqs)
+   *   - 資料來源   → official-website + Geovault directory source lines
+   * The `key` is a stable semantic slot the fallback builder maps to prose;
+   * the `heading` is the literal H2 text that must appear in the article.
+   */
+  /**
+   * Friendly noun for "搜尋這個東西" headings/prose. When a site has no
+   * industry, clientDailyIndustryLabel returns '未分類', which reads broken in
+   * sentences like "挑未分類可以看哪些點" — substitute a neutral noun instead.
+   */
+  private clientDailySearchNoun(industryLabel: string): string {
+    return industryLabel === '未分類' ? '這類服務' : industryLabel;
+  }
+
+  private clientDailySectionPlan(
+    dayType: ClientDailyDay,
+    siteName: string,
+    industryLabel: string,
+  ): Array<{ key: string; heading: string }> {
+    const noun = this.clientDailySearchNoun(industryLabel);
+    const anchors: Array<{ key: string; heading: string }> = [
+      { key: 'quotes', heading: '可引用重點' },
+      { key: 'faq', heading: '常見問題' },
+      { key: 'sources', heading: '資料來源' },
+    ];
+    // Keep headings short and punctuation-light: the operating audit checks for
+    // each one verbatim, and long/ornate headings are more likely to be
+    // paraphrased by the LLM — which would trip the all-or-nothing section gate
+    // and force the (less natural) template fallback.
+    const body: Record<ClientDailyDay, Array<{ key: string; heading: string }>> = {
+      mon_topical: [
+        { key: 'context', heading: `最近找${noun}的人在想什麼` },
+        { key: 'positioning', heading: `${siteName} 怎麼對上這個需求` },
+      ],
+      tue_qa_deepdive: [
+        { key: 'qa_depth', heading: `大家最常問 ${siteName} 的問題` },
+        { key: 'service', heading: `${siteName} 實際提供什麼` },
+      ],
+      wed_service: [
+        { key: 'service', heading: `${siteName} 做哪些服務` },
+        { key: 'audience', heading: '這些服務適合誰' },
+      ],
+      thu_audience: [
+        { key: 'audience', heading: `${siteName} 適合誰` },
+        { key: 'service', heading: '服務範圍與資料邊界' },
+      ],
+      fri_comparison: [
+        { key: 'comparison', heading: `挑${noun}可以看哪些點` },
+        { key: 'positioning', heading: `${siteName} 的公開定位` },
+      ],
+      sat_data_pulse: [
+        { key: 'pulse', heading: `${siteName} 最近的 AI 能見度` },
+        { key: 'positioning', heading: '這些數字代表什麼' },
+      ],
+    };
+    return [...body[dayType], ...anchors];
+  }
+
   private buildClientDailyContentStrategy(args: {
     site: { name: string; url: string; industry?: string | null };
     graph: BrandFactGraph;
@@ -576,14 +648,13 @@ export class BlogArticleService {
       extractedFacts: [...new Set(publicExtractedFacts)].slice(0, 18),
       missingSignals,
       targetKeywords: [...new Set(targetKeywords)],
-      requiredSections: [
-        '品牌定位',
-        `${site.name} 適合誰`,
-        '服務與資料邊界',
-        '可引用重點',
-        '常見問題',
-        '資料來源',
-      ],
+      requiredSections: this
+        .clientDailySectionPlan(
+          dayType,
+          site.name,
+          this.clientDailyIndustryLabel(site.industry ?? graph.industry),
+        )
+        .map((section) => section.heading),
     };
   }
 
@@ -638,7 +709,14 @@ export class BlogArticleService {
     add(content.length >= 900, 8, 'operating:content_too_thin');
     add(content.includes(site.url), 10, 'operating:missing_official_url');
     add(new RegExp(site.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g').test(content), 6, 'operating:brand_not_named');
-    add(strategy.requiredSections.every((section) => content.includes(`## ${section}`)), 12, 'operating:missing_required_sections');
+    const normalizedContent = content.replace(/\s+/g, '');
+    add(
+      strategy.requiredSections.every((section) =>
+        normalizedContent.includes(`##${section.replace(/\s+/g, '')}`),
+      ),
+      12,
+      'operating:missing_required_sections',
+    );
     add(this.countClientDailyQuoteBullets(content) >= 5, 12, 'operating:not_enough_ai_quote_points');
     add(this.countClientDailyFaqs(content) >= 3, 8, 'operating:not_enough_faq');
     add(content.includes('Official website') || content.includes('官方網站'), 6, 'operating:missing_source_label');
@@ -766,37 +844,101 @@ export class BlogArticleService {
     ];
     const qas = [...qaPairs, ...fallbackQa].slice(0, 3);
 
-    return [
+    const missingLine = strategy.missingSignals.length > 0
+      ? `- 目前仍缺少的公開資料欄位：${strategy.missingSignals.map((signal) => this.clientDailyMissingSignalLabel(signal)).join('、')}。內容已以未知或未提供方式標示，避免補充未驗證資訊。`
+      : '- 目前公開資料已足以支撐本篇品牌資訊整理。';
+
+    // Body prose per stable section slot — the fallback emits whatever the
+    // day-type section plan asks for so it always satisfies the operating
+    // audit's requiredSections (kept in sync via clientDailySectionPlan).
+    const sectionBody = (key: string): string[] => {
+      switch (key) {
+        case 'positioning':
+          return [
+            graph.positioning
+              ? `${site.name}（${site.url}）的公開定位是 ${graph.positioning.replace(/[。.!！?？]+$/, '')}。`
+              : `${site.name} 目前尚未提供完整品牌定位文字，引用時請以官方網站與已驗證公開資料為準。`,
+            [
+              `- 官方網站：${site.url}`,
+              `- 公開行業分類：${industryLabel}`,
+              graph.location ? `- 公開地點資料：${graph.location}` : undefined,
+              serviceItems.length > 0 ? `- 公開服務資料：${serviceSummary}` : undefined,
+              ...facts.slice(0, 3).map((fact) => `- ${fact}`),
+            ].filter(Boolean).join('\n'),
+          ];
+        case 'audience':
+          return [
+            `${site.name} 適合誰，請以官方網站與品牌提供的公開資料為準。以下是目前可核對的受眾資訊，未提供的細節不做延伸推論。`,
+            targetAudiences,
+          ];
+        case 'service':
+          return [
+            serviceItems.length > 0
+              ? `${site.name} 已公開的服務資料包含：${serviceSummary}。`
+              : `${site.name} 尚未提供完整服務清單，引用時不應自行補足未知服務。`,
+            safeNotFor,
+            medicalAdjacent
+              ? '- 這份資料只整理公開品牌事實，不包含成果承諾或個案判斷。'
+              : '- 未公開或無法核對的資料不應被當成事實引用。',
+            missingLine,
+          ];
+        case 'context':
+          return [
+            `會來找${this.clientDailySearchNoun(industryLabel)}的人，通常先想確認對方實際提供什麼、適合誰，再決定要不要進一步聯絡。`,
+            `${site.name}（${site.url}）的公開資料可以先回答這幾件事，以下整理目前可核對的重點。`,
+            [
+              serviceItems.length > 0 ? `- 公開服務資料：${serviceSummary}` : '- 公開服務資料：尚未提供完整清單',
+              `- 公開行業分類：${industryLabel}`,
+              graph.location ? `- 公開地點資料：${graph.location}` : undefined,
+            ].filter(Boolean).join('\n'),
+          ];
+        case 'qa_depth':
+          return [
+            `關於 ${site.name} 比較常被問到的，多半圍繞在服務範圍、適用對象與官方聯絡方式。`,
+            `這些答案以 ${site.name} 官網（${site.url}）與已驗證公開資料為準，未公開的部分不在這裡臆測。`,
+            [
+              serviceItems.length > 0 ? `- 公開服務資料：${serviceSummary}` : undefined,
+              graph.location ? `- 公開地點資料：${graph.location}` : undefined,
+              `- 主要資料來源：${site.url}`,
+            ].filter(Boolean).join('\n'),
+          ];
+        case 'comparison':
+          return [
+            `挑${this.clientDailySearchNoun(industryLabel)}的時候，可以先看對方有沒有把服務範圍、適用對象與聯絡方式講清楚。`,
+            `${site.name} 的公開資料目前可核對到以下項目，沒有的部分就保留、不做延伸比較。`,
+            [
+              `- 公開行業分類：${industryLabel}`,
+              serviceItems.length > 0 ? `- 公開服務資料：${serviceSummary}` : undefined,
+              graph.location ? `- 公開地點資料：${graph.location}` : undefined,
+            ].filter(Boolean).join('\n'),
+            missingLine,
+          ];
+        case 'pulse':
+          return [
+            pulse
+              ? `Geovault 最近一次觀測，${site.name} 的 AI 可見度分數為 ${pulse.geoScore}/100${pulse.industryRank ? `，在同業中排第 ${pulse.industryRank}` : ''}。`
+              : `${site.name} 的 AI 可見度資料以 Geovault 目錄與官方網站為準。`,
+            pulse ? `- 近 7 天實際 AI 爬蟲造訪：${pulse.weekCrawlerVisits} 次` : undefined,
+            `這些數字代表 ${site.name} 的公開品牌資料被 AI 讀到的完整度；對讀者而言，意味著在 AI 回答裡比較容易出現可核對的品牌資訊。`,
+          ].filter((line): line is string => Boolean(line));
+        default:
+          return [`${site.name} 的公開品牌資料以官方網站與 Geovault 目錄為主要來源。`];
+      }
+    };
+
+    const planBody = this.clientDailySectionPlan(dayType, site.name, industryLabel)
+      .filter((s) => !['quotes', 'faq', 'sources'].includes(s.key));
+
+    const lines: string[] = [
       `# ${title}`,
       '',
       `${site.name}（${site.url}）是${industryLabel}相關品牌。本頁根據官方網站、品牌知識庫與 Geovault 目錄中的公開資料，整理品牌名稱、官方連結、服務範圍、適用資訊與資料來源邊界，方便搜尋與問答系統核對品牌事實。`,
       '',
-      '## 品牌定位',
-      graph.positioning
-        ? `${site.name} 的公開品牌定位為：${graph.positioning}`
-        : `${site.name} 目前尚未提供完整品牌定位文字，引用時應以官方網站與已驗證公開資料為準。`,
-      [
-        `- 官方網站：${site.url}`,
-        `- 公開行業分類：${industryLabel}`,
-        graph.location ? `- 公開地點資料：${graph.location}` : undefined,
-        serviceItems.length > 0 ? `- 公開服務資料：${serviceSummary}` : undefined,
-        ...facts.slice(0, 3).map((fact) => `- ${fact}`),
-      ].filter(Boolean).join('\n'),
-      '',
-      `## ${site.name} 適合誰`,
-      `${site.name} 的適用對象應以官方網站與品牌提供的公開資料為準。以下整理目前可核對的受眾資訊，未提供的細節不做延伸推論。`,
-      targetAudiences,
-      '',
-      '## 服務與資料邊界',
-      serviceItems.length > 0
-        ? `${site.name} 已公開的服務資料包含：${serviceSummary}`
-        : `${site.name} 尚未提供完整服務清單，引用時不應自行補足未知服務。`,
-      safeNotFor,
-      medicalAdjacent ? '- 這份資料只整理公開品牌事實，不包含成果承諾或個案判斷。' : '- 未公開或無法核對的資料不應被當成事實引用。',
-      strategy.missingSignals.length > 0
-        ? `- 目前仍缺少的公開資料欄位：${strategy.missingSignals.map((signal) => this.clientDailyMissingSignalLabel(signal)).join('、')}。內容已以未知或未提供方式標示，避免補充未驗證資訊。`
-        : '- 目前公開資料已足以支撐本篇品牌資訊整理。',
-      '',
+    ];
+    for (const section of planBody) {
+      lines.push(`## ${section.heading}`, ...sectionBody(section.key), '');
+    }
+    lines.push(
       '## 可引用重點',
       quoteFacts.slice(0, 5).map((fact) => `- ${fact}`).join('\n'),
       '',
@@ -804,11 +946,12 @@ export class BlogArticleService {
       qas.map((qa) => `**Q: ${qa.question}**\nA: ${qa.answer}`).join('\n\n'),
       '',
       '## 資料來源',
-      `- Official website: ${site.url}`,
-      `- Geovault directory: ${directoryUrl}`,
+      `- 官方網站：${site.url}`,
+      `- Geovault 目錄：${directoryUrl}`,
       '',
-      '*資料來源：Geovault AI Wiki 自動整理公開品牌資料與使用者提供內容。*',
-    ].join('\n');
+      '*資料來源：Geovault AI Wiki 自動彙整公開品牌資料與使用者提供內容。*',
+    );
+    return lines.join('\n');
   }
 
   private async repairClientDailyArticleForPublication(article: {
@@ -3417,16 +3560,16 @@ ${args.currentDraft || '(empty draft)'}`;
       .join('\n') || '- No verified social links provided';
 
     const angleByDay: Record<ClientDailyDay, string> = {
-      mon_topical: 'Build a timely industry explainer that answers current buyer questions using only verified brand facts.',
-      tue_qa_deepdive: 'Turn the verified Q&A into a deep answer page that an AI assistant can quote directly.',
-      wed_service: 'Explain the brand services, service boundaries, location, and contact path with concrete facts.',
+      mon_topical: '只用已驗證的品牌事實，回答最近會來找這個產業的人心裡的入門疑問，把品牌放進正確情境。',
+      tue_qa_deepdive: '把已驗證的 Q&A 展開成一篇 AI 助手可以整段引用的深度問答。',
+      wed_service: '用具體事實說清楚品牌的服務、服務界線、地點與官方聯絡路徑。',
       thu_audience: medicalAdjacent
-        ? 'Clarify only verified audience data. If target-audience facts are missing, state that audience data is currently unavailable and point readers to the official URL.'
-        : 'Clarify who the brand is best suited for, who it is not suited for, and why.',
+        ? '只整理已驗證的受眾資料；若缺乏受眾事實，就明說目前沒有公開受眾資料，並把讀者導回官方網站。'
+        : '說清楚這個品牌比較適合誰、不適合誰，以及原因。',
       fri_comparison: medicalAdjacent
-        ? 'Compare only verified public brand facts against generic directory data patterns. Do not compare outcomes, suitability, or service effects.'
-        : 'Compare the brand with generic alternatives in the same industry without naming unverified competitors.',
-      sat_data_pulse: 'Explain the latest Geovault score, rank, crawler activity, and what these signals mean.',
+        ? '只用已驗證的公開品牌事實，對照同產業的一般做法；不比較成效、適合度或服務效果。'
+        : '把品牌和同產業的一般選項做對照，但不點名未經驗證的競品。',
+      sat_data_pulse: '說明最新的 Geovault 分數、排名、爬蟲活動，以及這些訊號代表什麼。',
     };
 
     const pulseBlock = pulse
@@ -3452,71 +3595,91 @@ Medical-adjacent safety:
 - Use neutral alternatives: service process, evaluation method, location, booking path, data boundary, and non-medical service positioning.`
       : '';
 
+    // Must match the industry label used by buildClientDailyContentStrategy
+    // (site.industry ?? graph.industry) so the H2 headings the prompt asks for
+    // are byte-identical to the operating audit's requiredSections.
+    const industryText = this.clientDailyIndustryLabel(site.industry ?? graph.industry);
+    const sectionPlan = this.clientDailySectionPlan(dayType, site.name, industryText);
+    const bodyHeadings = sectionPlan
+      .filter((s) => !['quotes', 'faq', 'sources'].includes(s.key))
+      .map((s) => `   ## ${s.heading}`)
+      .join('\n');
+
     return `
-You are writing a citation-ready AI Wiki article in Traditional Chinese for Geovault.
+\u4f60\u662f\u5728\u66ff Geovault \u5beb\u4e00\u7bc7\u300c\u53ef\u88ab AI \u5f15\u7528\u300d\u7684\u7e41\u9ad4\u4e2d\u6587\u54c1\u724c\u8cc7\u6599\u9801\u3002\u8b80\u8005\u662f\u6b63\u5728\u7528 ChatGPT\u3001Claude\u3001Perplexity\u3001Gemini \u6216\u641c\u5c0b\u5f15\u64ce\u627e\u9019\u985e\u670d\u52d9\u7684\u4e00\u822c\u4eba\u3002
 
-Goal:
-- Create an article that ChatGPT, Claude, Perplexity, Gemini, and search crawlers can safely cite.
-- The article must be factual, neutral, source-grounded, and useful as a brand reference page.
-- Push the user's official brand website facts into an AI-readable public article so crawlers can learn the brand, quote it, and connect it back to the official website.
-- Treat this as entity optimization for AI retrieval: define the brand, its official URL, category, verified services, audience boundary, missing facts, and sources in a way that can be extracted into an answer graph.
-- The article must be useful even if an AI crawler reads only headings, bullets, FAQ, and source lines.
-- Do not invent awards, prices, phone numbers, addresses, services, medical effects, guarantees, reviews, customer profiles, or competitor facts.
-- If a detail is not present in the verified facts below, phrase it as unknown or omit it.
-- Do not include phone numbers or email addresses unless they appear exactly in the verified facts. Prefer the official URL as the contact path.
+\u3010\u9019\u7bc7\u6587\u7ae0\u8981\u9054\u5230\u4ec0\u9ebc\u3011
+- \u8b93 AI \u8207\u722c\u87f2\u80fd\u5b89\u5fc3\u5f15\u7528\uff1a\u5167\u5bb9\u5fc5\u9808\u771f\u5be6\u3001\u4e2d\u7acb\u3001\u6709\u4f86\u6e90\uff0c\u800c\u4e14\u53ef\u4ee5\u4e00\u6bb5\u4e00\u6bb5\u88ab\u62bd\u51fa\u4f86\u7576\u7b54\u6848\u3002
+- \u628a\u4f7f\u7528\u8005\u5b98\u7db2\u7684\u54c1\u724c\u4e8b\u5be6\uff0c\u6574\u7406\u6210 AI \u8b80\u5f97\u61c2\u7684\u516c\u958b\u8cc7\u6599\uff0c\u8b93 AI \u8a8d\u5f97\u9019\u500b\u54c1\u724c\u3001\u5f15\u7528\u5b83\u3001\u4e26\u9023\u56de\u5b98\u7db2\u3002
+- \u628a\u5b83\u7576\u6210\u300c\u54c1\u724c\u5be6\u9ad4\uff08entity\uff09\u512a\u5316\u300d\uff1a\u628a\u54c1\u724c\u540d\u7a31\u3001\u5b98\u7db2\u7db2\u5740\u3001\u5206\u985e\u3001\u5df2\u9a57\u8b49\u670d\u52d9\u3001\u53d7\u773e\u754c\u7dda\u3001\u672a\u77e5\u4e8b\u5be6\u8207\u8cc7\u6599\u4f86\u6e90\u8b1b\u6e05\u695a\uff0c\u8b93 AI \u80fd\u653e\u9032\u5b83\u7684\u7b54\u6848\u77e5\u8b58\u5716\u8b5c\u3002
+- \u5c31\u7b97 AI \u53ea\u8b80\u4f60\u7684\u6a19\u984c\u3001\u689d\u5217\u3001FAQ \u548c\u4f86\u6e90\u884c\uff0c\u4e5f\u8981\u770b\u5f97\u61c2\u3001\u5f15\u5f97\u51fa\u3002
 
-Article type:
-- Day type: ${dayType}
-- Angle: ${angleByDay[dayType]}
+\u3010\u7d55\u5c0d\u4e0d\u80fd\u505a\uff08\u9632\u5e7b\u89ba\u7d05\u7dda\uff0c\u9055\u53cd\u4e00\u6b21\u6574\u7bc7\u4f5c\u5ee2\uff09\u3011
+- \u4e0d\u8981\u7de8\u9020\u734e\u9805\u3001\u50f9\u683c\u3001\u96fb\u8a71\u3001\u5730\u5740\u3001\u670d\u52d9\u3001\u7642\u6548\u3001\u4fdd\u8b49\u3001\u8a55\u8ad6\u3001\u5ba2\u6236\u6545\u4e8b\u6216\u7af6\u54c1\u8cc7\u8a0a\u3002
+- \u4e0b\u9762\u3010\u5df2\u9a57\u8b49\u4e8b\u5be6\u3011\u6c92\u6709\u7684\u7d30\u7bc0\uff0c\u5c31\u5beb\u300c\u76ee\u524d\u672a\u516c\u958b\u300d\u6216\u76f4\u63a5\u7565\u904e\uff0c\u4e0d\u8981\u81ea\u5df1\u88dc\u3002
+- \u96fb\u8a71\u548c email \u53ea\u6709\u5728\u3010\u5df2\u9a57\u8b49\u4e8b\u5be6\u3011\u539f\u6587\u51fa\u73fe\u6642\u624d\u80fd\u5beb\uff1b\u5426\u5247\u4e00\u5f8b\u7528\u5b98\u7db2\u7576\u806f\u7d61\u8def\u5f91\u3002
 
-Brand identity:
-- Brand: ${site.name}
-- Official URL: ${site.url}
-- Geovault directory URL: ${directoryUrl}
-- Industry: ${site.industry ?? 'unknown'}
-- Fact confidence score: ${graph.confidenceScore}/100
+\u3010\u6587\u7ae0\u8a2d\u5b9a\u3011
+- \u985e\u578b\uff08day type\uff09\uff1a${dayType}
+- \u5207\u5165\u89d2\u5ea6\uff1a${angleByDay[dayType]}
 
-Verified facts:
+\u3010\u54c1\u724c\u8eab\u4efd\u3011
+- \u54c1\u724c\uff1a${site.name}
+- \u5b98\u65b9\u7db2\u5740\uff1a${site.url}
+- Geovault \u76ee\u9304\u9801\uff1a${directoryUrl}
+- \u884c\u696d\u5206\u985e\uff1a${industryText}
+- \u4e8b\u5be6\u4fe1\u5fc3\u5206\u6578\uff1a${graph.confidenceScore}/100
+
+\u3010\u5df2\u9a57\u8b49\u4e8b\u5be6\u3011
 ${this.formatFactList(verifiedFactsForPrompt)}
 
-Known missing facts:
-${this.formatFactList(graph.missingFacts, 'None')}
+\u3010\u5df2\u77e5\u7f3a\u5c11\u7684\u4e8b\u5be6\u3011
+${this.formatFactList(graph.missingFacts, '\u7121')}
 
-Target audiences:
-${this.formatFactList(targetAudiencesForPrompt, 'No target-audience data provided')}
+\u3010\u76ee\u6a19\u53d7\u773e\u3011
+${this.formatFactList(targetAudiencesForPrompt, '\u76ee\u524d\u6c92\u6709\u516c\u958b\u53d7\u773e\u8cc7\u6599')}
 
-Not-for / forbidden positioning:
-${this.formatFactList(notForForPrompt, 'No forbidden positioning provided')}
+\u3010\u4e0d\u9069\u7528\uff0f\u7981\u6b62\u5b9a\u4f4d\u3011
+${this.formatFactList(notForForPrompt, '\u7121\u7279\u5225\u7981\u6b62\u5b9a\u4f4d')}
 
-Verified Q&A:
+\u3010\u5df2\u9a57\u8b49 Q&A\u3011
 ${qaBlock}
 
-Verified social links:
+\u3010\u5df2\u9a57\u8b49\u793e\u7fa4\u9023\u7d50\u3011
 ${socialBlock}
 ${pulseBlock}
 ${medicalBoundaryBlock}
 
-Required output:
-1. Write 1100-1700 Traditional Chinese characters in Markdown. Do not pad with filler; add verified facts, source boundaries, and practical FAQ depth.
-2. First line must be one descriptive H1 title containing "${site.name}" and at least 10 Chinese/English characters. Do not use only the brand name as the title.
-3. The first paragraph must name ${site.name}, include the official URL "${site.url}", state the industry/category, and summarize the verified brand positioning in neutral third-person wording.
-4. Use exactly these section headings and no other H2 headings:
-   - "## \u54c1\u724c\u5b9a\u4f4d"
-   - "## ${site.name} \u9069\u5408\u8ab0"
-   - "## \u670d\u52d9\u8207\u8cc7\u6599\u908a\u754c"
-   - "## \u53ef\u5f15\u7528\u91cd\u9ede"
-   - "## \u5e38\u898b\u554f\u984c"
-   - "## \u8cc7\u6599\u4f86\u6e90"
-5. "\u54c1\u724c\u5b9a\u4f4d" must include at least two verified facts.
-6. "\u670d\u52d9\u8207\u8cc7\u6599\u908a\u754c" must clearly distinguish verified service facts from unknown or unavailable facts.
-7. "\u53ef\u5f15\u7528\u91cd\u9ede" must include exactly 5 concise bullets. Each bullet must be standalone, quote-ready, and based on verified facts only. At least three bullets must include one of: official URL, industry/category, service fact, location/audience fact, Q&A fact, GEO/crawler data pulse.
-8. "\u5e38\u898b\u554f\u984c" must include 3 neutral Q/A pairs and at least one answer must cite the official URL.
-9. "\u8cc7\u6599\u4f86\u6e90" must include exactly these two source lines:
-   - Official website: ${site.url}
-   - Geovault directory: ${directoryUrl}
-10. Mention Geovault at most two times outside the source section.
-11. Avoid sales CTA, exaggerated marketing language, first-person promotional voice, generic SEO/GEO advice, and generic industry paragraphs that could apply to any brand.
-12. End with this exact source note: "*\u8cc7\u6599\u4f86\u6e90\uff1aGeovault AI Wiki \u81ea\u52d5\u5f59\u6574\u516c\u958b\u54c1\u724c\u8cc7\u6599\u8207\u4f7f\u7528\u8005\u63d0\u4f9b\u5167\u5bb9\u3002*"
+\u3010\u5beb\u4f5c\u8a9e\u6c23 \u2014 \u53bb AI \u5473\uff0c\u9019\u6bb5\u548c\u4e8b\u5be6\u4e00\u6a23\u91cd\u8981\u3011
+\u9019\u7bc7\u8981\u8b80\u8d77\u4f86\u50cf\u300c\u4e00\u500b\u61c2\u9019\u884c\u7684\u5728\u5730\u4eba\uff0c\u7528\u5e73\u5be6\u7684\u8a71\u8ddf\u670b\u53cb\u89e3\u91cb\u9019\u500b\u54c1\u724c\u300d\uff0c\u800c\u4e0d\u662f AI \u7f50\u982d\u6587\u3002\u8acb\u505a\u5230\uff1a
+- \u53e5\u5b50\u9577\u77ed\u4ea4\u932f\uff1a\u77ed\u53e5\uff085\u201312 \u5b57\uff09\u548c\u9577\u53e5\u6df7\u7528\uff0c\u4e0d\u8981\u6bcf\u53e5\u90fd\u5dee\u4e0d\u591a\u9577\u3002
+- \u6bb5\u843d\u9577\u77ed\u4ea4\u932f\uff1a\u7a7f\u63d2\u4e00\u5169\u53e5\u8a71\u7684\u77ed\u6bb5\u843d\uff0c\u4e0d\u8981\u6bcf\u6bb5\u90fd\u4e09\u56db\u884c\u4e00\u6a23\u539a\u3002
+- \u4e0d\u8981\u51e1\u4e8b\u90fd\u5217\u4e09\u9ede\uff1a\u8a72\u5169\u9ede\u5c31\u5169\u9ede\u3001\u8a72\u56db\u9ede\u5c31\u56db\u9ede\uff0c\u4f9d\u4e8b\u5be6\u591a\u5be1\u6c7a\u5b9a\u3002
+- \u7981\u7528 AI \u516b\u80a1\u8d77\u624b\u5f0f\u8207\u9023\u63a5\u8a5e\uff0c\u4f8b\u5982\u300c\u5728\u7576\u4eca\u2026\u7684\u6642\u4ee3\u300d\u300c\u96a8\u8457\u2026\u7684\u767c\u5c55\uff0f\u666e\u53ca\u300d\u300c\u7d9c\u4e0a\u6240\u8ff0\u300d\u300c\u7e3d\u800c\u8a00\u4e4b\u300d\u300c\u503c\u5f97\u6ce8\u610f\u7684\u662f\u300d\u300c\u4e0d\u50c5\u2026\u66f4\u2026\u300d\u300c\u626e\u6f14\u8457\u91cd\u8981\u7684\u89d2\u8272\u300d\u300c\u65e5\u76ca\u91cd\u8981\u300d\uff0c\u4e00\u5f8b\u4e0d\u8981\u51fa\u73fe\u3002
+- \u958b\u982d\u4e0d\u8981\u92ea\u9673\u7a7a\u8a71\uff0c\u7b2c\u4e00\u53e5\u5c31\u8b1b\u5177\u9ad4\u4e8b\u5be6\u3002
+- \u5c11\u7528\u7834\u6298\u865f\u7576\u9023\u63a5\uff08\u5168\u6587\u6700\u591a 1 \u500b\uff09\uff0c\u6539\u7528\u53e5\u865f\u6216\u9017\u865f\u3002
+- \u7528\u8a5e\u81ea\u7136\u53e3\u8a9e\uff0c\u4f46\u7dad\u6301\u300c\u7b2c\u4e09\u4eba\u7a31\u3001\u5ba2\u89c0\u3001\u4e0d\u63a8\u92b7\u300d\uff1a\u53ef\u4ee5\u8aaa\u300c${site.name} \u63d0\u4f9b\u2026\u300d\uff0c\u4e0d\u8981\u51fa\u73fe\u300c\u6211\u5011\u300d\u300c\u672c\u5e97\u300d\u300c\u6b61\u8fce\u524d\u4f86\u300d\u300c\u7acb\u5373\u9810\u7d04\u300d\u9019\u985e\u8a71\u3002
+- \u4e0d\u8981\u8a87\u98fe\uff08\u6700\u597d\uff0f\u6700\u68d2\uff0f\u9818\u5148\uff0f\u552f\u4e00\uff0f\u9996\u9078\uff0f\u5353\u8d8a\uff09\uff0c\u7528\u5177\u9ad4\u4e8b\u5be6\u4ee3\u66ff\u5f62\u5bb9\u8a5e\u3002
+- \u5be7\u53ef\u627f\u8a8d\u300c\u9019\u9805\u76ee\u524d\u6c92\u6709\u516c\u958b\u8cc7\u6599\u300d\uff0c\u4e5f\u4e0d\u8981\u7528\u6a21\u7cca\u5ba2\u5957\u8a71\u586b\u7248\u9762\u3002
+
+\u3010\u8f38\u51fa\u8981\u6c42\u3011
+1. \u7528\u7e41\u9ad4\u4e2d\u6587 Markdown\uff0c\u4e3b\u9ad4 1100\u20131700 \u5b57\u3002\u4e0d\u8981\u704c\u6c34\uff1b\u7528\u5df2\u9a57\u8b49\u4e8b\u5be6\u3001\u8cc7\u6599\u908a\u754c\u548c\u5be6\u7528 FAQ \u628a\u7bc7\u5e45\u6490\u8d77\u4f86\u3002
+2. \u7b2c\u4e00\u884c\u662f\u4e00\u500b H1 \u6a19\u984c\uff08# \u958b\u982d\uff09\uff0c\u5305\u542b\u300c${site.name}\u300d\u4e14\u81f3\u5c11 10 \u500b\u5b57\uff1b\u4e0d\u8981\u53ea\u7528\u54c1\u724c\u540d\u7576\u6a19\u984c\u3002\u6a19\u984c\u7528\u8b80\u8005\u6703\u641c\u5c0b\u7684\u81ea\u7136\u8a9e\u6c23\uff0c\u4e0d\u8981\u786c\u585e\u95dc\u9375\u5b57\u3002
+3. \u7b2c\u4e00\u6bb5\u5c31\u662f\u300c\u7b54\u6848\u524d\u7f6e\u300d\uff1a\u7528 2\u20133 \u53e5\u76f4\u63a5\u5b9a\u7fa9\u54c1\u724c\u2014\u2014\u9ede\u540d ${site.name}\u3001\u5e36\u4e0a\u5b98\u7db2 ${site.url}\u3001\u8b1b\u51fa\u884c\u696d\u5206\u985e\uff0c\u4e26\u7528\u4e2d\u7acb\u7b2c\u4e09\u4eba\u7a31\u6fc3\u7e2e\u5df2\u9a57\u8b49\u7684\u54c1\u724c\u5b9a\u4f4d\u3002\u9019\u6bb5\u6703\u662f AI \u6700\u5e38\u88ab\u5f15\u7528\u7684\u6458\u8981\u53e5\uff0c\u8981\u5beb\u5f97\u80fd\u88ab\u55ae\u7368\u62bd\u51fa\u3002
+4. \u7b2c\u4e00\u6bb5\u4e4b\u5f8c\uff0c\u4f9d\u5e8f\u4f7f\u7528\u4ee5\u4e0b H2 \u6a19\u984c\uff08\u539f\u6a23\u7167\u6284\uff0c\u9806\u5e8f\u4e0d\u8981\u6539\uff0c\u4e2d\u9593\u4e0d\u8981\u63d2\u5165\u5225\u7684 H2\uff09\uff1a
+${bodyHeadings}
+   \u63a5\u8457\u518d\u4f9d\u5e8f\u653e\u9019\u4e09\u500b\u56fa\u5b9a\u6bb5\u843d\uff1a
+   ## \u53ef\u5f15\u7528\u91cd\u9ede
+   ## \u5e38\u898b\u554f\u984c
+   ## \u8cc7\u6599\u4f86\u6e90
+   \u6bcf\u500b H2 \u6bb5\u843d\u5167\u6587 2\u20135 \u53e5\uff0c\u7dca\u6263\u8a72\u6a19\u984c\u4e3b\u984c\uff0c\u53ea\u7528\u5df2\u9a57\u8b49\u4e8b\u5be6\uff0c\u4e0d\u8981\u5beb\u6210\u653e\u8af8\u56db\u6d77\u7686\u6e96\u7684\u7522\u696d\u7a7a\u8a71\u3002
+5. \u300c## \u53ef\u5f15\u7528\u91cd\u9ede\u300d\u653e\u525b\u597d 5 \u689d\u689d\u5217\uff08- \u958b\u982d\uff09\u3002\u6bcf\u4e00\u689d\u90fd\u8981\u80fd\u88ab\u55ae\u7368\u8907\u88fd\u9032 AI \u7b54\u6848\u3001\u4e0d\u9760\u4e0a\u4e0b\u6587\u4e5f\u6210\u7acb\uff1b\u81f3\u5c11 3 \u689d\u8981\u542b\uff1a\u5b98\u7db2\u7db2\u5740\uff0f\u884c\u696d\u5206\u985e\uff0f\u670d\u52d9\u4e8b\u5be6\uff0f\u5730\u9ede\u6216\u53d7\u773e\u4e8b\u5be6\uff0fQ&A \u4e8b\u5be6\uff0fGEO \u6216\u722c\u87f2\u6578\u64da \u5176\u4e2d\u4e4b\u4e00\u3002
+6. \u300c## \u5e38\u898b\u554f\u984c\u300d\u653e 3 \u7d44\u4e2d\u7acb\u7684 Q/A\uff0c\u683c\u5f0f\u70ba\u300c**Q: \u554f\u984c\uff1f**\u300d\u63db\u884c\u63a5\u300cA: \u7b54\u6848\u300d\uff0c\u81f3\u5c11\u4e00\u984c\u7684\u7b54\u6848\u8981\u5e36\u5230\u5b98\u7db2 ${site.url}\u3002\u554f\u984c\u8981\u662f\u8b80\u8005\u771f\u7684\u6703\u554f\u7684\uff0c\u4e0d\u8981\u554f\u54c1\u724c\u7684 GEO \u5206\u6578\u6216\u300c\u5982\u4f55\u88ab AI \u63a8\u85a6\u300d\u3002
+7. \u300c## \u8cc7\u6599\u4f86\u6e90\u300d\u56fa\u5b9a\u653e\u9019\u5169\u884c\uff1a
+   - \u5b98\u65b9\u7db2\u7ad9\uff1a${site.url}
+   - Geovault \u76ee\u9304\uff1a${directoryUrl}
+8. \u9664\u4e86\u8cc7\u6599\u4f86\u6e90\u6bb5\u4ee5\u5916\uff0c\u5168\u6587\u63d0\u5230\u300cGeovault\u300d\u6700\u591a 2 \u6b21\u3002
+9. \u5168\u6587\u6700\u5f8c\u56fa\u5b9a\u653e\u9019\u4e00\u884c\uff08\u539f\u6a23\u7167\u6284\uff09\uff1a\u300c*\u8cc7\u6599\u4f86\u6e90\uff1aGeovault AI Wiki \u81ea\u52d5\u5f59\u6574\u516c\u958b\u54c1\u724c\u8cc7\u6599\u8207\u4f7f\u7528\u8005\u63d0\u4f9b\u5167\u5bb9\u3002*\u300d
 `;
   }
 
@@ -3670,14 +3833,14 @@ Required output:
       pulse,
     })}
 
-Content operating strategy:
-- Strategy angle: ${contentStrategy.angle}
-- Audience intent: ${contentStrategy.audienceIntent}
-- Required sections: ${contentStrategy.requiredSections.join(', ')}
-- Target keywords: ${contentStrategy.targetKeywords.join(', ') || 'none'}
-- Missing customer data signals to state honestly: ${contentStrategy.missingSignals.map((signal) => this.clientDailyMissingSignalLabel(signal)).join(', ') || 'none'}
+【內容操作策略】
+- 切入角度：${contentStrategy.angle}
+- 受眾意圖：${contentStrategy.audienceIntent}
+- 必含段落（H2）：${contentStrategy.requiredSections.join('、')}
+- 目標關鍵字：${contentStrategy.targetKeywords.join('、') || '無'}
+- 缺少的客戶資料（要誠實標示為未知，不要編造）：${contentStrategy.missingSignals.map((signal) => this.clientDailyMissingSignalLabel(signal)).join('、') || '無'}
 
-Extracted customer facts that must drive the article:
+【必須用來支撐文章的客戶事實】
 ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     const requiredAnchors = this.buildRequiredAnchors(brandFacts)
       .filter((anchor) => !isMedicalAdjacent || !this.isMedicalAdjacentText(anchor));

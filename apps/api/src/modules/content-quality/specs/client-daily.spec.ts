@@ -7,6 +7,7 @@ import {
   hasSpecificFacts,
   lengthFloor,
   medicalBoundary,
+  naturalVoice,
   nicheKeywords,
   noCTABoilerplate,
   noFabricatedContact,
@@ -89,20 +90,24 @@ function clientDailyPostSafetyGate(weight: number): ScoringRule {
 }
 
 function commonRules(opts: { withSelfPromoFaq: boolean }): ScoringRule[] {
+  // Weights are tuned to sum to 100 so the 75/80/85 day thresholds keep their
+  // meaning. naturalVoice(6) was added for de-AI-ification; firstHandDataAnchors
+  // (10→6) and noOutdatedNarrative (6→4) were trimmed by the same 6 to absorb it.
   const list: ScoringRule[] = [
     brandSaturation(6, 5),
     nicheKeywords(8),
     noFabricatedContact(8),
     forbiddenPhrases(8),
-    noOutdatedNarrative(6),
+    noOutdatedNarrative(4),
     noFabricatedPersona(5),
     geovaultAttribution(1),
     noMojibake(3),
     noHyperbole(6),
     noFirstPersonPromo(7),
     noCTABoilerplate(5),
+    naturalVoice(6),
     hasSpecificFacts(5, 2),
-    firstHandDataAnchors(10, 3),
+    firstHandDataAnchors(6, 3),
     medicalBoundary(8),
     hasOfficialSourceUrl(1),
     hasCitationReadyStructure(1),

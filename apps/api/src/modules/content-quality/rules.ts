@@ -693,6 +693,49 @@ export function noCTABoilerplate(weight: number): ScoringRule {
 }
 
 /**
+ * De-AI-ify rule. The single biggest "this was written by a bot" signal in
+ * Traditional Chinese is the canned connective / opener vocabulary that LLMs
+ * lean on ("在當今…的時代", "隨著…的發展", "綜上所述", "值得注意的是", …).
+ * Vocabulary blocklists transfer poorly across languages, so this is the
+ * zh-specific counterpart to the English em-dash / hedge-phrase de-slop lists.
+ * Soft rule with partial credit — it nudges the prompt's natural-voice
+ * instructions without forcing the (worse) template fallback. NOT a hard fail.
+ */
+export function naturalVoice(weight: number): ScoringRule {
+  return {
+    key: 'natural_voice',
+    weight,
+    description: '去除 AI 八股連接詞與罐頭起手式',
+    evaluate(content) {
+      const cliches = [
+        /在當今[^，。]{0,8}(?:社會|時代|世界|數位|環境)/,
+        /隨著[^，。]{0,12}(?:發展|普及|興起|到來|進步|提升|演進|加速)/,
+        /在這個[^，。]{0,10}的時代/,
+        /綜上所述/,
+        /總而言之/,
+        /總的來說/,
+        /總結來說/,
+        /不可否認/,
+        /無庸置疑/,
+        /毋庸置疑/,
+        /值得(?:注意|一提)的是/,
+        /眾所周知/,
+        /不僅僅?[^，。]{0,15}更(?:是|能|可|為)/,
+        /在[^，。]{0,8}的浪潮(?:下|中)/,
+        /扮演[^，。]{0,6}重要的?角色/,
+        /日益[^，。]{0,4}(?:重要|普及|增長|增加)/,
+        /為[^，。]{0,12}提供了[^，。]{0,6}的(?:選擇|解決方案|方案)/,
+      ];
+      const hits = cliches.reduce((sum, p) => sum + (p.test(content) ? 1 : 0), 0);
+      if (hits === 0) return { score: weight };
+      if (hits === 1) return { score: Math.round(weight * 0.6), reason: 'ai_cliche:1' };
+      if (hits === 2) return { score: Math.round(weight * 0.3), reason: 'ai_cliche:2' };
+      return { score: 0, reason: `ai_cliche:${hits}` };
+    },
+  };
+}
+
+/**
  * AI citations prefer specific facts (numbers, durations, prices, years)
  * over vague claims ("提供優質服務"). This is a POSITIVE rule — partial
  * credit for some specifics, full credit for ≥3 distinct concrete facts.
