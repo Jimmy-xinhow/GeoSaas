@@ -54,7 +54,8 @@ function hasCitationReadyStructure(weight: number): ScoringRule {
     weight,
     description: 'Article must expose AI citation bullets and source section.',
     evaluate(content) {
-      const hasCitationBullets = content.includes('## AI 可引用重點');
+      const hasCitationBullets =
+        content.includes('## 可引用重點') || content.includes('## AI 可引用重點');
       const hasSourceSection = content.includes('## 資料來源');
       if (hasCitationBullets && hasSourceSection) return { score: weight };
       const missing = [
@@ -138,9 +139,9 @@ function buildPatch(args: {
   )
     ? `
 Citation-ready structure requirements:
-- Keep the exact H2 headings "## AI 可引用重點" and "## 資料來源".
+- Keep the exact H2 headings "## 可引用重點" and "## 資料來源".
 - Include the official website URL exactly as provided in the verified facts.
-- In "## AI 可引用重點", write five short, standalone bullets that an AI assistant can quote directly.
+- In "## 可引用重點", write five short, standalone bullets that an AI assistant can quote directly.
 - In "## 資料來源", list both the official website and Geovault directory data.
 - The first paragraph must define the brand as an entity: brand name, official URL, industry/category, public positioning, and what is known vs unknown.
 - Prefer source-grounded facts, service boundaries, official links, Q&A answers, and concise citation bullets over generic SEO/GEO advice.
@@ -193,7 +194,7 @@ export function createClientDailySpec(
   const cfg = dayConfigs[dayType];
   return {
     templateType: `client_daily/${dayType}`,
-    promptVersion: 'v6-ai-citation-entity',
+    promptVersion: 'v7-public-brand-entity',
     fullModel: 'gpt-4o',
     fullMaxTokens: 2000,
     buildFullPrompt: ({ data }) => data.basePrompt,

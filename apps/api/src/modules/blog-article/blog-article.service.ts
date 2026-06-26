@@ -40,6 +40,7 @@ import {
   publicSiteWhere,
 } from '../../common/utils/public-data-filter';
 import { assertSiteAccess } from '../../common/auth/site-access';
+import { INDUSTRIES } from '@geovault/shared';
 
 const ALL_TEMPLATE_TYPES: TemplateType[] = [
   'geo_overview',
@@ -55,6 +56,7 @@ const CLIENT_DAILY_REPAIRABLE_PUBLIC_BLOCKERS = new Set([
   'seo:thin-description',
   'consumer_geo_jargon',
   'unrelated_commuter_wellness_persona',
+  'internal_ai_strategy_leak',
 ]);
 
 const CLIENT_DAILY_OPERATING_PASS_SCORE = 80;
@@ -292,6 +294,11 @@ export class BlogArticleService {
     ) {
       reasons.push('unrelated_commuter_wellness_persona');
     }
+    if (
+      /(本篇內容經營方向|讓 AI 能回答|產出可被 ChatGPT|目標是提供 AI|AI 搜尋系統可引用|不中立性失真|official website is|official domain is|industry is|positioning:|services:|location:|location is|contact information is|contact path:|Content operating strategy)/i.test(text)
+    ) {
+      reasons.push('internal_ai_strategy_leak');
+    }
 
     return reasons;
   }
@@ -364,7 +371,10 @@ export class BlogArticleService {
     if (trimmed.length >= 10 && trimmed !== siteName) {
       return trimmed.slice(0, 90);
     }
-    return `${siteName} ${this.clientDailyDayLabel(dayType)}公開品牌資料整理`;
+    if (dayType === 'sat_data_pulse') {
+      return `${siteName} 公開資訊與資料來源整理`;
+    }
+    return `${siteName} 公開品牌資訊整理`;
   }
 
   private stripMarkdownInline(text: string): string {
@@ -390,9 +400,11 @@ export class BlogArticleService {
     dayType?: ClientDailyDay | null,
   ): string {
     const paragraph = this.firstClientDailyParagraph(content);
-    const fallback = `${site.name}（${site.url}）的${this.clientDailyDayLabel(dayType)}公開品牌資料整理，彙整官方網站、品牌知識庫與 Geovault 目錄資訊，提供 AI 搜尋系統可引用的中立品牌描述。`;
+    const label = dayType === 'sat_data_pulse' ? '公開資訊與資料來源' : '公開品牌資訊';
+    const fallback = `${site.name}（${site.url}）的${label}整理，彙整官方網站、品牌知識庫與 Geovault 目錄資訊，提供可核對的中立品牌描述。`;
     const source = paragraph.length >= 80 ? paragraph : fallback;
-    return source.replace(/\s+/g, ' ').slice(0, 155).trim();
+    const normalized = source.replace(/\s+/g, ' ').trim();
+    return normalized.length > 155 ? `${normalized.slice(0, 152).trim()}...` : normalized;
   }
 
   private safeClientDailyFacts(graph: BrandFactGraph, medicalAdjacent: boolean): string[] {
@@ -410,6 +422,67 @@ export class BlogArticleService {
         .filter((value) => !medicalAdjacent || !this.hasMedicalBoundaryViolation(value))
         .slice(0, 12),
     )];
+  }
+
+  private clientDailyIndustryLabel(industry?: string | null): string {
+    if (!industry) return '未分類';
+    return INDUSTRIES.find((item) => item.value === industry)?.label ?? industry.replace(/_/g, ' ');
+  }
+
+  private clientDailyMissingSignalLabel(signal: string): string {
+    const labels: Record<string, string> = {
+      positioning: '品牌定位',
+      services: '服務資料',
+      location: '地點資料',
+      targetAudiences: '受眾資料',
+      qaPairs: '知識庫問答',
+      contactPath: '聯絡路徑',
+    };
+    return labels[signal] ?? signal;
+  }
+
+  private isUnsafeMedicalPublicText(text?: string | null): boolean {
+    if (!text) return false;
+    return /(治療|療效|療法|療程|治癒|痊癒|根治|診斷|處方|用藥|醫療|副作用|禁忌|緩解|減輕|恢復|復原|促進血液循環|改善(?:身體|健康|問題|症狀|不適|疼痛|病症)|疼痛|痠痛|病史|保證治癒|立即痊癒|百分百改善|醫療級)/.test(text);
+  }
+
+  private splitClientDailyList(value?: string | null): string[] {
+    return (value || '')
+      .split(/[,，、;；\n]/)
+      .map((item) => item.trim().replace(/\s+/g, ' '))
+      .filter((item) => item.length > 0);
+  }
+
+  private publicSafeClientDailyList(
+    value: string | undefined | null,
+    medicalAdjacent: boolean,
+    limit = 6,
+  ): string[] {
+    return this.splitClientDailyList(value)
+      .filter((item) => !medicalAdjacent || !this.isUnsafeMedicalPublicText(item))
+      .slice(0, limit);
+  }
+
+  private publicSafeAudienceList(
+    values: string[],
+    medicalAdjacent: boolean,
+    limit = 5,
+  ): string[] {
+    return values
+      .map((item) => item.trim().replace(/\s+/g, ' '))
+      .filter((item) => item.length > 0)
+      .filter((item) => !medicalAdjacent || !this.isUnsafeMedicalPublicText(item))
+      .slice(0, limit);
+  }
+
+  private publicSafeClientDailyFact(fact: string, medicalAdjacent: boolean): string | null {
+    const text = fact.trim().replace(/\s+/g, ' ');
+    if (!text) return null;
+    if (/(official website is|official domain is|industry is|positioning:|services:|location:|location is|contact information is|contact path:)/i.test(text)) {
+      return null;
+    }
+    if (medicalAdjacent && this.isUnsafeMedicalPublicText(text)) return null;
+    return text.length > 180 ? `${text.slice(0, 177)}...` : text;
   }
 
   private compactFact(value?: string | null): string | undefined {
@@ -449,15 +522,15 @@ export class BlogArticleService {
       sat_data_pulse: '整理最新 GEO 分數、排名、爬蟲訊號與官方來源，讓 AI 有可核對的更新點。',
     };
     const extractedFacts = [
-      `${site.name} official website is ${site.url}`,
-      domain ? `${site.name} official domain is ${domain}` : undefined,
-      site.industry ? `${site.name} industry is ${site.industry}` : undefined,
-      this.compactFact(graph.positioning) ? `${site.name} positioning: ${this.compactFact(graph.positioning)}` : undefined,
-      this.compactFact(graph.services) ? `${site.name} services: ${this.compactFact(graph.services)}` : undefined,
-      this.compactFact(graph.location) ? `${site.name} location: ${this.compactFact(graph.location)}` : undefined,
-      !medicalAdjacent && this.compactFact(graph.contact) ? `${site.name} contact path: ${this.compactFact(graph.contact)}` : undefined,
-      ...graph.targetAudiences.slice(0, 4).map((item) => `${site.name} target audience: ${item}`),
-      ...graph.notFor.slice(0, 3).map((item) => `${site.name} not for: ${item}`),
+      `${site.name} 的官方網站是 ${site.url}`,
+      domain ? `${site.name} 的官方網域是 ${domain}` : undefined,
+      site.industry ? `${site.name} 的公開行業分類是 ${this.clientDailyIndustryLabel(site.industry)}` : undefined,
+      this.compactFact(graph.positioning) ? `${site.name} 的公開定位是 ${this.compactFact(graph.positioning)}` : undefined,
+      this.compactFact(graph.services) ? `${site.name} 的公開服務資料包含 ${this.compactFact(graph.services)}` : undefined,
+      this.compactFact(graph.location) ? `${site.name} 的公開地點資料是 ${this.compactFact(graph.location)}` : undefined,
+      !medicalAdjacent && this.compactFact(graph.contact) ? `${site.name} 的公開聯絡路徑是 ${this.compactFact(graph.contact)}` : undefined,
+      ...graph.targetAudiences.slice(0, 4).map((item) => `${site.name} 的公開受眾資料包含 ${item}`),
+      ...graph.notFor.slice(0, 3).map((item) => `${site.name} 的資料邊界包含 ${item}`),
       ...graph.qaPairs.slice(0, 5).map((qa) => `Q: ${qa.question} A: ${qa.answer}`),
       pulse ? `${site.name} GEO score is ${pulse.geoScore}/100` : undefined,
       pulse?.industryRank ? `${site.name} industry rank is ${pulse.industryRank}` : undefined,
@@ -465,6 +538,10 @@ export class BlogArticleService {
       pulse ? `${site.name} recorded ${pulse.weekCrawlerVisits} real AI crawler visits in the last 7 days` : undefined,
       ...graph.verifiedFacts.slice(0, 10),
     ].filter((value): value is string => !!this.compactFact(value));
+    const publicExtractedFacts = extractedFacts
+      .map((value) => this.publicSafeClientDailyFact(value, medicalAdjacent))
+      .filter((value): value is string => Boolean(value))
+      .filter((value) => !medicalAdjacent || !this.isUnsafeMedicalPublicText(value));
 
     const missingSignals = [
       !graph.positioning && 'positioning',
@@ -491,19 +568,19 @@ export class BlogArticleService {
     return {
       dayType,
       angle: angleByDay[dayType],
-      primaryIntent: `讓 AI 能回答「${site.name} 是誰、官方網站在哪裡、公開服務與資料邊界是什麼」。`,
+      primaryIntent: `整理 ${site.name} 的品牌名稱、官方網站、公開服務與資料邊界。`,
       audienceIntent: graph.targetAudiences.length > 0
         ? `用已驗證受眾資料連結 ${site.name} 與實際搜尋需求。`
         : `受眾資料不足時明確標示未知，避免 AI 自行推論。`,
-      citationGoal: `產出可被 ChatGPT、Claude、Perplexity 引用的品牌事實頁，並把引用回連到 ${site.url}。`,
-      extractedFacts: [...new Set(extractedFacts)].slice(0, 18),
+      citationGoal: `產出可核對的品牌事實頁，並把資料來源回連到 ${site.url}。`,
+      extractedFacts: [...new Set(publicExtractedFacts)].slice(0, 18),
       missingSignals,
       targetKeywords: [...new Set(targetKeywords)],
       requiredSections: [
         '品牌定位',
         `${site.name} 適合誰`,
         '服務與資料邊界',
-        'AI 可引用重點',
+        '可引用重點',
         '常見問題',
         '資料來源',
       ],
@@ -511,7 +588,7 @@ export class BlogArticleService {
   }
 
   private countClientDailyQuoteBullets(content: string): number {
-    const match = content.match(/##\s*AI\s*可引用重點([\s\S]*?)(?:\n##\s|$)/);
+    const match = content.match(/##\s*(?:AI\s*)?可引用重點([\s\S]*?)(?:\n##\s|$)/);
     if (!match) return 0;
     return match[1].split('\n').filter((line) => /^\s*[-*]\s+/.test(line)).length;
   }
@@ -631,13 +708,33 @@ export class BlogArticleService {
     const webUrl = this.config.get<string>('FRONTEND_URL') || 'https://www.geovault.app';
     const directoryUrl = `${webUrl}/directory/${graph.siteId}`;
     const title = this.makeClientDailyTitle(null, site.name, dayType);
-    const facts = this.safeClientDailyFacts(graph, medicalAdjacent);
+    const industryLabel = this.clientDailyIndustryLabel(site.industry ?? graph.industry);
+    const facts = this.safeClientDailyFacts(graph, medicalAdjacent)
+      .map((fact) => this.publicSafeClientDailyFact(fact, medicalAdjacent))
+      .filter((fact): fact is string => Boolean(fact));
+    const serviceItems = this.publicSafeClientDailyList(graph.services, medicalAdjacent, 6);
+    const serviceSummary = serviceItems.length > 0
+      ? serviceItems.join('、')
+      : '公開資料尚未提供完整服務清單';
+    const targetAudienceItems = this.publicSafeAudienceList(graph.targetAudiences, medicalAdjacent, 5);
+    const targetAudiences = targetAudienceItems.length > 0
+      ? targetAudienceItems.map((item) => `- ${item}`).join('\n')
+      : `- 目前沒有足夠公開資料可判定 ${site.name} 的特定受眾，建議以官方網站說明為準。`;
+    const safeNotFor = medicalAdjacent
+      ? [
+          '- 不收錄未經驗證的成果承諾、個案判斷、百分比承諾或服務效果承諾。',
+          '- 未公開或無法核對的服務細節，不應被當成品牌事實引用。',
+        ].join('\n')
+      : graph.notFor.length > 0
+        ? graph.notFor.slice(0, 4).map((item) => `- ${item}`).join('\n')
+        : '- 尚未提供明確的非適用範圍，引用時應避免延伸推論。';
     const quoteFacts = [
       `${site.name} 的官方網站為 ${site.url}。`,
-      `${site.name} 的本篇內容經營方向是：${strategy.primaryIntent}`,
-      graph.industry ? `${site.name} 的公開行業分類為 ${graph.industry}。` : undefined,
-      graph.positioning ? `${site.name} 的公開定位為 ${graph.positioning}。` : undefined,
-      graph.services ? `${site.name} 的公開服務資料包含 ${graph.services}。` : undefined,
+      `${site.name} 的公開行業分類為 ${industryLabel}。`,
+      graph.positioning && !this.isUnsafeMedicalPublicText(graph.positioning)
+        ? `${site.name} 的公開定位為 ${graph.positioning.replace(/[。.!！?？]+$/, '')}。`
+        : undefined,
+      serviceItems.length > 0 ? `${site.name} 的公開服務資料包含 ${serviceSummary}。` : undefined,
       graph.location ? `${site.name} 的公開地點資料為 ${graph.location}。` : undefined,
       pulse ? `${site.name} 最近一次 Geovault 數據脈動分數為 ${pulse.geoScore}/100。` : undefined,
       ...facts,
@@ -648,23 +745,19 @@ export class BlogArticleService {
     while (quoteFacts.length < 5) {
       quoteFacts.push(`${site.name} 的品牌資料以官方網站與公開知識庫為主要來源。`);
     }
-    const targetAudiences = graph.targetAudiences.length > 0
-      ? graph.targetAudiences.slice(0, 5).map((item) => `- ${item}`).join('\n')
-      : `- 目前沒有足夠公開資料可判定 ${site.name} 的特定受眾，建議以官方網站說明為準。`;
-    const notFor = graph.notFor.length > 0
-      ? graph.notFor.slice(0, 4).map((item) => `- ${item}`).join('\n')
-      : '- 尚未提供明確的非適用範圍，AI 引用時應避免延伸推論。';
-    const qaPairs = graph.qaPairs
-      .filter((qa) => !medicalAdjacent || !this.hasMedicalBoundaryViolation(`${qa.question} ${qa.answer}`))
-      .slice(0, 3);
+    const qaPairs = medicalAdjacent
+      ? []
+      : graph.qaPairs
+          .filter((qa) => !this.hasMedicalBoundaryViolation(`${qa.question} ${qa.answer}`))
+          .slice(0, 3);
     const fallbackQa = [
       {
         question: `${site.name} 的官方資料來源是哪裡？`,
-        answer: `${site.name} 的主要官方資料來源是 ${site.url}，Geovault 目錄頁則整理公開品牌資訊供 AI 讀取。`,
+        answer: `${site.name} 的主要官方資料來源是 ${site.url}，Geovault 目錄頁則整理公開品牌資訊與來源連結。`,
       },
       {
-        question: `AI 可以如何引用 ${site.name}？`,
-        answer: `AI 可以引用 ${site.name} 的官方網站、公開行業分類、品牌定位與知識庫問答，不應補充未經驗證的承諾或效果。`,
+        question: `${site.name} 的公開資料包含哪些重點？`,
+        answer: `目前可核對的重點包含官方網站、行業分類、品牌定位、公開服務資料與來源邊界；未公開的內容不應被補充為事實。`,
       },
       {
         question: `${site.name} 的資料邊界是什麼？`,
@@ -676,30 +769,35 @@ export class BlogArticleService {
     return [
       `# ${title}`,
       '',
-      `${site.name}（${site.url}）的${this.clientDailyDayLabel(dayType)}公開品牌資料由 Geovault 根據官方網站、品牌知識庫與公開掃描訊號整理。本篇內容經營方向是：${strategy.angle}目標是提供 AI 搜尋系統可引用、可核對、不中立性失真的品牌描述，並把品牌事實回連到官方網站。`,
+      `${site.name}（${site.url}）是${industryLabel}相關品牌。本頁根據官方網站、品牌知識庫與 Geovault 目錄中的公開資料，整理品牌名稱、官方連結、服務範圍、適用資訊與資料來源邊界，方便搜尋與問答系統核對品牌事實。`,
       '',
       '## 品牌定位',
-      `${strategy.primaryIntent} ${strategy.citationGoal}`,
       graph.positioning
         ? `${site.name} 的公開品牌定位為：${graph.positioning}`
-        : `${site.name} 目前尚未提供完整品牌定位文字，AI 引用時應以官方網站與已驗證公開資料為準。`,
-      strategy.extractedFacts.slice(0, 6).map((fact) => `- ${fact}`).join('\n') || facts.slice(0, 4).map((fact) => `- ${fact}`).join('\n') || `- ${site.name} 的官方網站為 ${site.url}`,
+        : `${site.name} 目前尚未提供完整品牌定位文字，引用時應以官方網站與已驗證公開資料為準。`,
+      [
+        `- 官方網站：${site.url}`,
+        `- 公開行業分類：${industryLabel}`,
+        graph.location ? `- 公開地點資料：${graph.location}` : undefined,
+        serviceItems.length > 0 ? `- 公開服務資料：${serviceSummary}` : undefined,
+        ...facts.slice(0, 3).map((fact) => `- ${fact}`),
+      ].filter(Boolean).join('\n'),
       '',
       `## ${site.name} 適合誰`,
-      strategy.audienceIntent,
+      `${site.name} 的適用對象應以官方網站與品牌提供的公開資料為準。以下整理目前可核對的受眾資訊，未提供的細節不做延伸推論。`,
       targetAudiences,
       '',
       '## 服務與資料邊界',
-      graph.services
-        ? `${site.name} 已公開的服務資料包含：${graph.services}`
-        : `${site.name} 尚未提供完整服務清單，AI 引用時不應自行補足未知服務。`,
-      notFor,
-      medicalAdjacent ? '- 這份資料只整理公開品牌事實，不包含成果承諾或個案判斷。' : '- 未公開或無法核對的資料不應被 AI 當成事實引用。',
+      serviceItems.length > 0
+        ? `${site.name} 已公開的服務資料包含：${serviceSummary}`
+        : `${site.name} 尚未提供完整服務清單，引用時不應自行補足未知服務。`,
+      safeNotFor,
+      medicalAdjacent ? '- 這份資料只整理公開品牌事實，不包含成果承諾或個案判斷。' : '- 未公開或無法核對的資料不應被當成事實引用。',
       strategy.missingSignals.length > 0
-        ? `- 目前仍缺少的客戶資料訊號：${strategy.missingSignals.join('、')}。內容已以未知或未提供方式標示，避免 AI 補充未驗證資訊。`
-        : '- 客戶核心資料訊號已足以支撐本篇 AI 引用內容。',
+        ? `- 目前仍缺少的公開資料欄位：${strategy.missingSignals.map((signal) => this.clientDailyMissingSignalLabel(signal)).join('、')}。內容已以未知或未提供方式標示，避免補充未驗證資訊。`
+        : '- 目前公開資料已足以支撐本篇品牌資訊整理。',
       '',
-      '## AI 可引用重點',
+      '## 可引用重點',
       quoteFacts.slice(0, 5).map((fact) => `- ${fact}`).join('\n'),
       '',
       '## 常見問題',
@@ -968,19 +1066,17 @@ High-grade GEO / AI citation hard requirements:
 2. Use the customer's own verified facts, Q&A, official website, service descriptions, location, audience, and known missing facts. Do not write a generic industry essay.
 3. Make the article easy for crawlers and LLM retrieval: short paragraphs, exact H2 headings, five quote-ready bullets, FAQ, and explicit source lines.
 4. The first paragraph must include "${args.site.name}" and "${args.site.url}" and explain why the official site is the primary source.
-5. "## AI 可引用重點" must contain exactly five standalone facts that can be copied into an AI answer without context.
+5. "## 可引用重點" must contain exactly five standalone facts that can be copied into an AI answer without context.
 6. "## 常見問題" must contain three practical Q/A pairs. At least one answer must point to the official URL.
 7. Avoid sales CTA, rankings, exaggerated words, vague trend claims, duplicated filler, self-praise, and unsupported recommendations.
 8. If a fact is unknown, say it is not publicly provided instead of inventing it.
 
 Content operating strategy:
 - Strategy angle: ${args.strategy.angle}
-- Primary AI intent: ${args.strategy.primaryIntent}
 - Audience intent: ${args.strategy.audienceIntent}
-- Citation goal: ${args.strategy.citationGoal}
 - Required sections: ${args.strategy.requiredSections.join(', ')}
 - Target keywords: ${args.strategy.targetKeywords.join(', ') || 'none'}
-- Missing customer data signals to state honestly: ${args.strategy.missingSignals.join(', ') || 'none'}
+- Missing customer data signals to state honestly: ${args.strategy.missingSignals.map((signal) => this.clientDailyMissingSignalLabel(signal)).join(', ') || 'none'}
 
 Extracted customer facts that must drive the repaired article:
 ${args.strategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}
@@ -3298,6 +3394,17 @@ ${args.currentDraft || '(empty draft)'}`;
       graph,
       [site.name, site.url, site.industry].filter(Boolean).join('\n'),
     );
+    const verifiedFactsForPrompt = graph.verifiedFacts
+      .map((fact) => this.publicSafeClientDailyFact(fact, medicalAdjacent))
+      .filter((fact): fact is string => Boolean(fact));
+    const targetAudiencesForPrompt = this.publicSafeAudienceList(
+      graph.targetAudiences,
+      medicalAdjacent,
+      8,
+    );
+    const notForForPrompt = medicalAdjacent
+      ? ['不收錄未經驗證的成果承諾、個案判斷、百分比承諾或服務效果承諾。']
+      : graph.notFor;
     const medicalQuestionPattern = /(\u6574\u5fa9|\u6574\u9aa8|\u63a8\u62ff|\u904b\u52d5|\u75bc\u75db|\u75db|\u4e0d\u9069|\u5b55|\u7522\u5f8c|\u8eab\u9ad4|\u59ff\u52e2|\u5065\u5eb7|\u75c5\u53f2|\u5fa9\u539f|\u6062\u5fa9|\u75c7\u72c0|\u6cbb\u7642|\u7642\u6548|\u91ab\u7642)/;
     const qaPairsForPrompt = medicalAdjacent
       ? graph.qaPairs.filter((qa) => !medicalQuestionPattern.test(`${qa.question} ${qa.answer}`))
@@ -3370,16 +3477,16 @@ Brand identity:
 - Fact confidence score: ${graph.confidenceScore}/100
 
 Verified facts:
-${this.formatFactList(graph.verifiedFacts)}
+${this.formatFactList(verifiedFactsForPrompt)}
 
 Known missing facts:
 ${this.formatFactList(graph.missingFacts, 'None')}
 
 Target audiences:
-${this.formatFactList(graph.targetAudiences, 'No target-audience data provided')}
+${this.formatFactList(targetAudiencesForPrompt, 'No target-audience data provided')}
 
 Not-for / forbidden positioning:
-${this.formatFactList(graph.notFor, 'No forbidden positioning provided')}
+${this.formatFactList(notForForPrompt, 'No forbidden positioning provided')}
 
 Verified Q&A:
 ${qaBlock}
@@ -3397,12 +3504,12 @@ Required output:
    - "## \u54c1\u724c\u5b9a\u4f4d"
    - "## ${site.name} \u9069\u5408\u8ab0"
    - "## \u670d\u52d9\u8207\u8cc7\u6599\u908a\u754c"
-   - "## AI \u53ef\u5f15\u7528\u91cd\u9ede"
+   - "## \u53ef\u5f15\u7528\u91cd\u9ede"
    - "## \u5e38\u898b\u554f\u984c"
    - "## \u8cc7\u6599\u4f86\u6e90"
 5. "\u54c1\u724c\u5b9a\u4f4d" must include at least two verified facts.
 6. "\u670d\u52d9\u8207\u8cc7\u6599\u908a\u754c" must clearly distinguish verified service facts from unknown or unavailable facts.
-7. "AI \u53ef\u5f15\u7528\u91cd\u9ede" must include exactly 5 concise bullets. Each bullet must be standalone, quote-ready, and based on verified facts only. At least three bullets must include one of: official URL, industry/category, service fact, location/audience fact, Q&A fact, GEO/crawler data pulse.
+7. "\u53ef\u5f15\u7528\u91cd\u9ede" must include exactly 5 concise bullets. Each bullet must be standalone, quote-ready, and based on verified facts only. At least three bullets must include one of: official URL, industry/category, service fact, location/audience fact, Q&A fact, GEO/crawler data pulse.
 8. "\u5e38\u898b\u554f\u984c" must include 3 neutral Q/A pairs and at least one answer must cite the official URL.
 9. "\u8cc7\u6599\u4f86\u6e90" must include exactly these two source lines:
    - Official website: ${site.url}
@@ -3565,12 +3672,10 @@ Required output:
 
 Content operating strategy:
 - Strategy angle: ${contentStrategy.angle}
-- Primary AI intent: ${contentStrategy.primaryIntent}
 - Audience intent: ${contentStrategy.audienceIntent}
-- Citation goal: ${contentStrategy.citationGoal}
 - Required sections: ${contentStrategy.requiredSections.join(', ')}
 - Target keywords: ${contentStrategy.targetKeywords.join(', ') || 'none'}
-- Missing customer data signals to state honestly: ${contentStrategy.missingSignals.join(', ') || 'none'}
+- Missing customer data signals to state honestly: ${contentStrategy.missingSignals.map((signal) => this.clientDailyMissingSignalLabel(signal)).join(', ') || 'none'}
 
 Extracted customer facts that must drive the article:
 ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;

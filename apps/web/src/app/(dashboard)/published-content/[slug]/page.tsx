@@ -127,11 +127,11 @@ export default function PublishedContentReviewPage() {
             type="button"
             size="sm"
             variant="outline"
-            disabled={!dirty || updateMutation.isPending}
+            disabled={updateMutation.isPending || repairMutation.isPending}
             onClick={saveDraft}
           >
             <Save className="mr-1 h-4 w-4" />
-            {updateMutation.isPending ? '儲存中' : '儲存草稿'}
+            {updateMutation.isPending ? '處理中' : dirty ? '儲存草稿並重審' : '重新檢查'}
           </Button>
           <Button
             type="button"
@@ -265,7 +265,7 @@ export default function PublishedContentReviewPage() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-gray-300">
           <p>1. 可先按「依阻擋原因重新修改」，系統會依 blocker、品牌資料與 AI 引用標準重寫草稿。</p>
-          <p>2. 若人工調整內容，按「儲存草稿」，系統會重新計算 blocker。</p>
+          <p>2. 若人工調整內容，按「儲存草稿並重審」；沒有修改時也可按「重新檢查」重新計算 blocker。</p>
           <p>3. blocker 清除後，按「修復並公開」。公開後才會出現在對外 blog、sitemap 與 llms-full。</p>
           <Link href="/published-content" className="inline-flex text-blue-300 hover:underline">
             回發布列表
