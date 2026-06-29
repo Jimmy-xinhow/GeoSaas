@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron } from '@nestjs/schedule';
 import Anthropic from '@anthropic-ai/sdk';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BlogTemplateService, BrandShowcaseContext, BrandProfileMedicalMode } from './blog-template.service';
@@ -8,6 +9,11 @@ import { CitationReadinessResult } from '../citation-readiness/citation-readines
 
 const TEMPLATE_TYPE = 'brand_profile';
 const DEFAULT_GEN_MODEL = 'claude-opus-4-8';
+// Old GEO-score brand pages superseded by brand_profile — demoted once a
+// citable page exists for the site.
+const DEMOTE_TYPES = ['geo_overview', 'brand_reputation', 'industry_benchmark', 'competitor_comparison'];
+// Daily rollout cap → spreads the ~617 brands-with-facts across ~30 days.
+const DEFAULT_DAILY = 21;
 
 export interface BrandProfileOutcome {
   siteId: string;
@@ -111,9 +117,11 @@ export class BrandProfileService {
       }
     }
 
-    // 4. Only `ready` ships.
+    // 4. Only `ready` ships. Either way mark the attempt so it's never retried
+    //    (no generate→reject→regenerate cost spiral).
     if (result.verdict !== 'ready') {
       this.logger.warn(`brand_profile ${site.name}: ${result.verdict} (${result.score}) — not published`);
+      await this.markStatus(site.id, 'rejected', (result.reasons || [])[0]);
       return {
         siteId, siteName: site.name, status: 'rejected', verdict: result.verdict,
         score: result.score, repaired, reasons: result.reasons,
@@ -121,6 +129,12 @@ export class BrandProfileService {
     }
 
     const slug = await this.persist(site.id, site.name, site.url, site.industry, content);
+    // A citable page now exists → demote the old GEO-score brand pages.
+    await this.prisma.blogArticle.updateMany({
+      where: { siteId: site.id, templateType: { in: DEMOTE_TYPES }, published: true },
+      data: { published: false },
+    });
+    await this.markStatus(site.id, 'ready');
     this.logger.log(`brand_profile ${site.name}: READY ${result.score} → ${slug}`);
     return {
       siteId, siteName: site.name, status: 'generated', verdict: result.verdict,
@@ -128,7 +142,77 @@ export class BrandProfileService {
     };
   }
 
+  /**
+   * Daily rollout — spreads the brands-with-facts across ~30 days at
+   * BRAND_PROFILE_DAILY/day. Each brand is attempted AT MOST ONCE: ready ones
+   * publish + demote old GEO pages, rejected ones are recorded
+   * (profile.brandProfileStatus='rejected') and never retried — no
+   * generate→reject→regenerate cost spiral. A rejected brand can be re-attempted
+   * later only by clearing its status flag (e.g. after fact enrichment).
+   * Uses BRAND_PROFILE_MODEL (gen) + CRG_JUDGE_MODEL (judge) from env.
+   */
+  @Cron('0 6 * * *', { name: 'brand-profile-rollout' })
+  async scheduledBrandProfileRollout(): Promise<void> {
+    const dailyN = Number(this.config.get('BRAND_PROFILE_DAILY') || DEFAULT_DAILY);
+    const pool = await this.prisma.site.findMany({
+      where: { isPublic: true, isClient: false },
+      select: {
+        id: true,
+        name: true,
+        profile: true,
+        blogArticles: { where: { templateType: TEMPLATE_TYPE }, select: { id: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 1500,
+    });
+
+    const candidates: string[] = [];
+    for (const s of pool) {
+      if (s.blogArticles.length) continue; // already has a brand_profile
+      const pr = (s.profile as Record<string, any>) || {};
+      if (pr.brandProfileStatus === 'ready' || pr.brandProfileStatus === 'rejected') continue; // attempted once
+      const desc = pr.description || pr._enriched?.description || '';
+      if (typeof desc !== 'string' || desc.length < 40) continue; // needs facts to be citable
+      candidates.push(s.id);
+      if (candidates.length >= dailyN) break;
+    }
+
+    if (candidates.length === 0) {
+      this.logger.log('brand-profile-rollout: no remaining candidates');
+      return;
+    }
+
+    let ready = 0;
+    let rejected = 0;
+    for (const id of candidates) {
+      try {
+        const r = await this.generateBrandProfile(id, { force: false });
+        if (r.status === 'generated') ready++;
+        else rejected++; // generateBrandProfile already marked the status
+      } catch (err) {
+        rejected++;
+        await this.markStatus(id, 'rejected', String(err).slice(0, 120));
+      }
+    }
+    this.logger.log(`brand-profile-rollout: ${ready} ready, ${rejected} rejected (attempted once, no retry)`);
+  }
+
   // ── internals ──────────────────────────────────────────────────────────
+
+  /** Record the one-time attempt outcome in profile JSON (no schema change). */
+  private async markStatus(siteId: string, status: 'ready' | 'rejected', reason?: string): Promise<void> {
+    try {
+      const s = await this.prisma.site.findUnique({ where: { id: siteId }, select: { profile: true } });
+      const profile = { ...((s?.profile as Record<string, any>) || {}) };
+      profile.brandProfileStatus = status;
+      profile.brandProfileAttemptedAt = new Date().toISOString();
+      if (reason) profile.brandProfileReason = String(reason).slice(0, 200);
+      else delete profile.brandProfileReason;
+      await this.prisma.site.update({ where: { id: siteId }, data: { profile } });
+    } catch (err) {
+      this.logger.warn(`markStatus ${siteId} failed: ${String(err).slice(0, 120)}`);
+    }
+  }
 
   /**
    * Decide medical handling. The authoritative source is the per-brand flag
