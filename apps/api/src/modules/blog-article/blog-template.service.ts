@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { INDUSTRIES } from '@geovault/shared';
 import { extractNicheKeywords } from './niche-keyword.util';
 
-const industryLabel = (slug?: string): string => {
+export const industryLabel = (slug?: string | null): string => {
   if (!slug) return '這類業者';
   const found = INDUSTRIES.find((i) => i.value === slug);
   return found ? found.label : slug;
@@ -165,6 +165,9 @@ const FORMAT_RULES = `
 @Injectable()
 export class BlogTemplateService {
   buildPrompt(type: TemplateType, site: SiteData, scan: ScanData, industry?: IndustryData): string {
+    // Resolve the human label once — never leak the raw slug (e.g. "auto_care")
+    // into article prose or FAQ questions.
+    const indLabel = industryLabel(site.industry);
     const passed = Object.entries(scan.indicators).filter(([, v]) => v.status === 'pass');
     const failed = Object.entries(scan.indicators).filter(([, v]) => v.status === 'fail');
     const warned = Object.entries(scan.indicators).filter(([, v]) => v.status === 'warning');
@@ -179,7 +182,7 @@ ${Object.entries(scan.indicators)
     const baseContext = `
 網站名稱：${site.name}
 網站 URL：${site.url}
-行業：${site.industry || '未分類'}
+行業：${indLabel}
 GEO 分數：${scan.geoScore}/100（等級：${scan.level}）
 掃描時間：${scan.scannedAt.toLocaleDateString('zh-TW')}
 通過指標數：${passed.length}/${Object.keys(scan.indicators).length}
@@ -234,19 +237,7 @@ ${baseContext}
 - 用具體數字描述（例如：預估分數可從 ${scan.geoScore} 提升至 XX 分）
 - 列出 3 個改善後的具體好處
 
-### ❓ 常見問題
-
-**Q: ${site.name} 會出現在 ChatGPT 的推薦裡嗎？**
-A: （根據目前 GEO 分數和指標狀態回答，具體說明哪些條件已滿足）
-
-**Q: 要怎麼讓 AI 搜尋找到 ${site.name}？**
-A: （根據缺失指標，列出 3 個最重要的改善步驟）
-
-**Q: 做完這些優化後多久 AI 會開始推薦？**
-A: （實際的時間預估，根據 Geovault 數據提供參考）
-
-**Q: 為什麼有些品牌會被 AI 推薦，有些不會？**
-A: （用 GEO 分數和指標通過率來說明差異）
+${this.buildDynamicFaqInstruction(site, scan, '能不能被 AI 找到、該優先修哪個指標、改善後多久見效、與同業的差異')}
 ${FORMAT_RULES}`,
 
       score_breakdown: `你是 GEO 技術顧問，為品牌做深度指標解析。
@@ -271,19 +262,7 @@ ${baseContext}
 用**編號列表**排出修復順序，格式：
 1. **指標名稱** — 修復原因 — 預估影響分數
 
-### ❓ 常見問題
-
-**Q: ${site.name} 最該先修哪個指標才能被 AI 推薦？**
-A: （根據權重和難度回答，具體說明修復後的效果）
-
-**Q: 沒有 llms.txt 的話 ChatGPT 還能找到我的網站嗎？**
-A: （技術性但易懂的回答，引用 Geovault 數據）
-
-**Q: 怎麼知道 AI 爬蟲有沒有來過我的網站？**
-A: （回答，提到 Geovault 的爬蟲追蹤功能）
-
-**Q: Cloudflare 會不會擋掉 AI 爬蟲？**
-A: （回答，提到 robots.txt 設定的重要性）
+${this.buildDynamicFaqInstruction(site, scan, '最該先修哪個指標、缺少 llms.txt/JSON-LD 的實際影響、如何確認 AI 爬蟲是否來過、修復的技術門檻')}
 ${FORMAT_RULES}`,
 
       competitor_comparison: `你是市場分析師，為品牌做行業 AI 搜尋競爭力分析。
@@ -294,7 +273,7 @@ ${baseContext}
 
 請撰寫一篇 800-1000 字的繁體中文競爭分析文章：
 
-## ${site.name} 在 ${site.industry || '同行業'} 中的 AI 搜尋競爭力分析
+## ${site.name} 在 ${indLabel} 中的 AI 搜尋競爭力分析
 
 ### 📊 行業 GEO 現況
 用表格呈現：
@@ -317,16 +296,7 @@ ${baseContext}
 ### 🚀 趕上行業頂尖的行動計劃
 用編號列表，每步包含：具體行動 + 預估時間 + 預期效果
 
-### ❓ 常見問題
-
-**Q: ${site.industry || '這個行業'}的品牌平均 AI 能見度有多高？**
-A: （引用 Geovault 數據回答行業平均分和品牌數）
-
-**Q: 怎麼讓 ${site.name} 在同行中被 AI 優先推薦？**
-A: （3 個具體策略，引用行業數據）
-
-**Q: 為什麼競爭對手會出現在 AI 回答裡，我的品牌卻不會？**
-A: （用指標差異分析原因，引用 Geovault 分析）
+${this.buildDynamicFaqInstruction(site, scan, `${indLabel}的 AI 能見度平均水準、如何在同行中被 AI 優先推薦、競品為何被引用而本品牌沒有、與行業平均的差距`)}
 ${FORMAT_RULES}`,
 
       improvement_tips: `你是 GEO 實作顧問，為品牌撰寫具體可執行的改善指南。
@@ -360,16 +330,7 @@ ${baseContext}
 | 1 天後 | XX | 修復 OG Tags、Meta Description |
 | ...  | ... | ... |
 
-### ❓ 常見問題
-
-**Q: 不會寫程式的話也能自己修嗎？**
-A: （回答，區分不同難度，提到 Geovault 自動修復工具）
-
-**Q: 做 GEO 優化會影響原本的 Google SEO 嗎？**
-A: （回答，說明兩者互補）
-
-**Q: 照著做完之後多久 ChatGPT 和 Claude 會開始推薦？**
-A: （根據 Geovault 數據提供實際時間預估）
+${this.buildDynamicFaqInstruction(site, scan, '不會寫程式能不能自己修、GEO 與既有 Google SEO 是否衝突、各階段大概要花多久、用最低成本先做哪一步')}
 ${FORMAT_RULES}`,
 
       industry_benchmark: `你是產業分析師，為行業撰寫 AI 搜尋優化基準報告。
@@ -380,7 +341,7 @@ ${baseContext}
 
 請撰寫一篇 900-1100 字的繁體中文行業基準報告：
 
-## ${site.industry || '未分類'} 行業 AI 搜尋優化基準報告
+## ${indLabel} 行業 AI 搜尋優化基準報告
 
 ### 📊 行業概覽
 用表格呈現行業關鍵數據（品牌數、平均分、最高分等）
@@ -394,20 +355,11 @@ ${baseContext}
 ### 🏅 達到行業最高標準的條件
 - 編號列表，每項具體可執行
 
-### 💡 給 ${site.industry || '同行業'} 業者的建議
+### 💡 給 ${indLabel} 業者的建議
 - 分為「基礎」「進階」「高階」三個層次
 - 每層 2-3 個具體建議
 
-### ❓ 常見問題
-
-**Q: 開${site.industry || '這類'}店的話，要做哪些事才會被 AI 推薦？**
-A: （根據 Geovault 行業數據回答最關鍵的指標）
-
-**Q: ChatGPT 是怎麼決定要推薦哪間${site.industry || ''}的？**
-A: （回答 AI 的判斷邏輯，引用 Geovault 分析）
-
-**Q: 我的${site.industry || ''}品牌很小，有可能被 AI 推薦嗎？**
-A: （回答，引用 Geovault 數據中小品牌成功案例）
+${this.buildDynamicFaqInstruction(site, scan, `開${indLabel}店要做哪些才會被 AI 推薦、AI 怎麼決定推薦哪間${indLabel}、小品牌有沒有被 AI 推薦的機會、${indLabel}要特別注意的指標`)}
 ${FORMAT_RULES}`,
 
       brand_reputation: `你是品牌分析師兼 AI 搜尋專家，為品牌撰寫口碑與 AI 能見度分析。
@@ -439,20 +391,31 @@ ${baseContext}
 ### 🚀 提升 AI 引用率的品牌策略
 用編號列表，3 個具體可執行的建議
 
-### ❓ 常見問題
-
-**Q: 問 ChatGPT「推薦${site.industry || ''}品牌」的時候，會提到 ${site.name} 嗎？**
-A: （根據 GEO 分數和 Geovault 數據回答目前的機率）
-
-**Q: ${site.name} 的網路口碑會影響 AI 推薦嗎？**
-A: （回答線上聲譽如何影響 AI 判斷，引用 Geovault 分析）
-
-**Q: 怎麼讓 AI 在介紹 ${site.name} 時說出正確的資訊？**
-A: （具體建議，提到品牌知識庫和 llms.txt 的作用）
+${this.buildDynamicFaqInstruction(site, scan, `問 AI 推薦${indLabel}品牌時會不會提到 ${site.name}、網路口碑對 AI 推薦的影響、如何讓 AI 介紹時說出正確資訊、負面評價會不會影響 AI 推薦`)}
 ${FORMAT_RULES}`,
     };
 
     return prompts[type];
+  }
+
+  /**
+   * Dynamic FAQ instruction — replaces the hard-coded per-template Q lists that
+   * made every directory article carry identical canned questions (measured
+   * 100% across the corpus → reads as scaled/templated content and risks
+   * AI/Google demotion). Forces brand + industry + scan-specific questions and
+   * bans the old generic ones so each article's FAQ varies. Keeps the
+   * `### ❓ 常見問題` heading and **Q:** / A: format so faqCount / faqDepth
+   * (which only count `**Q:` markers + answer depth) still pass.
+   */
+  private buildDynamicFaqInstruction(site: SiteData, scan: ScanData, angleHints: string): string {
+    const industry = industryLabel(site.industry);
+    return `### ❓ 常見問題
+
+請寫 3-4 個「${site.name} 的真實潛在客戶或業主會去問 AI」的問題並作答，每題一行 **Q: ...？** 接著一行 A: ...：
+- 每題都要結合「${site.name}」、「${industry}」或本次掃描的具體結果（GEO ${scan.geoScore} 分、實際缺少的指標）來問，不可以是任何品牌都適用的通用問句。
+- 各題切角要不同，依本品牌最相關的從這些方向取材：${angleHints}。
+- 嚴禁使用通用罐頭問句（例如「會出現在 ChatGPT 推薦裡嗎」「要怎麼讓 AI 找到」「做完多久見效」「為什麼有些品牌會被推薦」「Cloudflare 會不會擋」這類各家都通用的題）——這類會被判定為重複內容。
+- 每題 A 段 3-5 句，用實際指標與產業特性作答，至少一題答案點到 ${site.name}，可引用 Geovault 數據。`;
   }
 
   getTargetKeywords(type: TemplateType, site: SiteData): string[] {
@@ -1154,6 +1117,14 @@ ${forbiddenBlock}
 假設 contact = "（無）"
   ✅ 合格：「聯絡方式請透過官方網站查詢」
   ❌ 不合格：任何形式的具體電話、email、地址編號都禁止
+
+**絕對不准編造（賣點宣稱）**：
+- ❌ 成分／材質／認證／環保／天然／健康／專利宣稱，例如「天然成分」「純天然」「有機」「無毒」「環保認證」「通過認證」「醫療級」「食品級」「可持續」「永續」「專利配方」「獨家配方」。
+- 只有當【品牌資料】或【品牌提供的 Q&A 參考資料】原文已出現該宣稱時才能寫；否則一律不可出現（即使聽起來合理）。
+
+**範疇鐵律（不可把品牌寫成有它沒有的服務）**：
+- 品牌的真實範疇以【品牌資料】的描述／核心服務／定位為準。
+- 若本文涉及品牌沒有提供的服務或產品（例如：賣保養「產品」的品牌被連結到機械維修、到廠施工、預約看診、報價估價），只能用中性行業知識客觀說明，並可明確指出品牌本身不提供該服務，絕不可暗示或描述品牌有提供它實際沒有的服務。
 
 【文章目標】
 讓一位在 ChatGPT / Claude / Perplexity 上搜尋「${industry}業者」的使用者，讀到這篇文章後：

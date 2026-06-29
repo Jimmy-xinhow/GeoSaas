@@ -388,7 +388,12 @@ export function noFabricatedContact(weight: number): ScoringRule {
     weight,
     description: '不虛構電話/email/地址',
     evaluate(content, ctx) {
-      const ref = ((ctx.extras?.profileRefText as string | undefined) || '').replace(/[-\s.()]/g, '');
+      const rawRef = ((ctx.extras?.profileRefText as string | undefined) || '').toLowerCase();
+      // phone-normalised ref (dots/dashes/spaces stripped) — ONLY valid for
+      // phone comparison. Emails must compare against rawRef: stripping dots
+      // turned "a59052099@gmail.com" into "...gmailcom" and false-flagged every
+      // real email as fabricated.
+      const ref = rawRef.replace(/[-\s.()]/g, '');
       const violations: string[] = [];
 
       const phones = content.match(/\b(?:\+?886[-\s.]?\d|0\d)[-\s.]?\d{2,4}[-\s.]?\d{3,4}(?:[-\s.]?\d{2,4})?\b/g) || [];
@@ -402,7 +407,7 @@ export function noFabricatedContact(weight: number): ScoringRule {
 
       const emails = content.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) || [];
       for (const e of emails) {
-        if (!ref.toLowerCase().includes(e.toLowerCase())) {
+        if (!rawRef.includes(e.toLowerCase())) {
           violations.push(`email:${e}`);
           break;
         }
@@ -410,6 +415,37 @@ export function noFabricatedContact(weight: number): ScoringRule {
 
       if (violations.length === 0) return { score: weight };
       return { score: 0, reason: `fabricated_contact:${violations.join('|')}` };
+    },
+  };
+}
+
+/**
+ * Flags unverifiable selling-point claims (天然成分 / 有機 / 環保認證 / 醫療級 /
+ * 專利 / 獨家配方 …) unless the exact claim term also appears in the brand's
+ * profileRefText (verified facts + official scrape). gpt-4o embellishes
+ * product copy with green/health/certification superlatives the brand never
+ * made — pure fabrication that erodes citation trust. Partial credit by hit
+ * count; a single unverified claim is heavily docked, two or more → 0. Not a
+ * hard fail, so a patch retry gets a chance to strip the invented claim.
+ */
+export function noUnverifiedSellingClaims(weight: number): ScoringRule {
+  return {
+    key: 'no_unverified_selling_claims',
+    weight,
+    description: '禁用未經品牌驗證的賣點宣稱(天然/有機/環保認證/醫療級/專利)',
+    evaluate(content, ctx) {
+      const ref = (ctx.extras?.profileRefText as string | undefined) || '';
+      const claimTerms = [
+        '天然成分', '純天然', '天然配方', '天然製成', '有機', '無毒', '無害',
+        '環保認證', '通過認證', '獲得認證', '國際認證', '醫療級', '食品級',
+        '可持續', '永續', '零添加', '無化學', '專利配方', '獨家配方', '專利技術',
+      ];
+      const unverified = claimTerms.filter((t) => content.includes(t) && !ref.includes(t));
+      if (unverified.length === 0) return { score: weight };
+      if (unverified.length === 1) {
+        return { score: Math.round(weight * 0.4), reason: `unverified_claim:${unverified[0]}` };
+      }
+      return { score: 0, reason: `unverified_claim:${unverified.slice(0, 2).join('|')}` };
     },
   };
 }
@@ -657,6 +693,8 @@ export function noFirstPersonPromo(weight: number): ScoringRule {
         /我們提供/, /我們的服務/, /我們致力/, /我們秉持/,
         /本店/, /本品牌/, /本公司/, /本中心/,
         /歡迎(?:前來|蒞臨|來電|您|光臨)/,
+        /為您(?:提供|服務|打造|準備|規劃|量身|帶來)/,
+        /為你(?:提供|服務|打造)/,
       ];
       const hits = patterns.reduce((sum, p) => sum + (content.match(p) ? 1 : 0), 0);
       if (hits === 0) return { score: weight };

@@ -1213,6 +1213,8 @@ High-grade GEO / AI citation hard requirements:
 6. "## 常見問題" must contain three practical Q/A pairs. At least one answer must point to the official URL.
 7. Avoid sales CTA, rankings, exaggerated words, vague trend claims, duplicated filler, self-praise, and unsupported recommendations.
 8. If a fact is unknown, say it is not publicly provided instead of inventing it.
+9. Never fabricate ingredient / material / certification / eco / natural / health / patent claims (天然成分, 有機, 環保認證, 通過認證, 醫療級, 食品級, 可持續, 永續, 專利配方, 獨家配方, …). Only state such a claim if it appears verbatim in the verified brand facts above.
+10. Stay within the brand's real scope. Do not describe the brand as offering services or products it does not actually provide (e.g. a brand that sells care PRODUCTS must not be written as offering mechanical repair, on-site service, appointment booking, or quotes). If the topic goes beyond the brand's scope, answer it as neutral industry knowledge and, if needed, state plainly that the brand does not provide that service.
 
 Content operating strategy:
 - Strategy angle: ${args.strategy.angle}

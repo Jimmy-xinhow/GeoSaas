@@ -4,6 +4,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
 import { BlogArticleService } from './blog-article.service';
+import { FaqArticleService } from './faq-article.service';
 import { IndustryInsightService, InsightType } from './industry-insight.service';
 import { GenerateInsightDto, PreviewBrandShowcaseDto } from './dto/blog-admin.dto';
 
@@ -79,6 +80,7 @@ export class BlogArticleController {
   constructor(
     private readonly service: BlogArticleService,
     private readonly insightService: IndustryInsightService,
+    private readonly faqService: FaqArticleService,
   ) {}
 
   @Public()
@@ -393,6 +395,29 @@ export class BlogArticleController {
     @Query('dayType') dayType?: string,
   ) {
     return this.service.generateClientDailyContent(siteId, dayType as any, { dryRun: true });
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post('faq-preview/:siteId')
+  @ApiOperation({
+    summary:
+      'Dry-run FAQ-driven deep-dive article generation for one paid-client site. Picks the most valuable uncovered SiteQa questions, generates one deep article per question through the quality gate, runs similarity dedup against existing + sibling articles, and returns candidates with quality/dedup verdicts. Writes NO BlogArticle. Body: { limit?: number } (default 5, max 15).',
+  })
+  faqPreview(
+    @Param('siteId') siteId: string,
+    @Body() body: { limit?: unknown } = {},
+  ) {
+    const limit =
+      typeof body.limit === 'number'
+        ? body.limit
+        : typeof body.limit === 'string'
+          ? Number(body.limit)
+          : undefined;
+    return this.faqService.previewSiteFaqArticles(siteId, {
+      limit: Number.isFinite(limit) ? (limit as number) : undefined,
+    });
   }
 
   @ApiBearerAuth()

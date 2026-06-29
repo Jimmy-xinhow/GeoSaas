@@ -29,6 +29,7 @@ import {
   noHyperbole,
   noMojibake,
   noSlugLeak,
+  noUnverifiedSellingClaims,
 } from '../rules';
 
 export interface BrandShowcaseData {
@@ -58,12 +59,13 @@ const rules: ScoringRule[] = [
   forbiddenPhrases(4),             // ↓ 5 → 4
   noMojibake(2),
   // v3 neutrality + fact-density rules ↓
-  noHyperbole(8),
+  noHyperbole(5),                  // ↓ 8 → 5 (freed 3 for unverified-claims)
   noFirstPersonPromo(6),
   noCTABoilerplate(4),
   hasSpecificFacts(4, 3),
+  noUnverifiedSellingClaims(3),    // gate fabricated 天然/認證/醫療級/專利 claims
 ];
-// Sum: 7+6+3+8+8+10+6+5+4+4+3+8+4+2 + 8+6+4+4 = 100
+// Sum: 7+6+3+8+8+10+6+5+4+4+3+8+4+2 + 5+6+4+4+3 = 100
 
 function buildPatch(args: {
   data: BrandShowcaseData;

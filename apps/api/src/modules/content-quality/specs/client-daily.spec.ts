@@ -17,6 +17,7 @@ import {
   noMojibake,
   noOutdatedNarrative,
   noSelfPromoFaq,
+  noUnverifiedSellingClaims,
 } from '../rules';
 
 export type ClientDailyDay =
@@ -93,22 +94,25 @@ function commonRules(opts: { withSelfPromoFaq: boolean }): ScoringRule[] {
   // Weights are tuned to sum to 100 so the 75/80/85 day thresholds keep their
   // meaning. naturalVoice(6) was added for de-AI-ification; firstHandDataAnchors
   // (10→6) and noOutdatedNarrative (6→4) were trimmed by the same 6 to absorb it.
+  // noUnverifiedSellingClaims(3) added (gate fabricated 天然/認證/醫療級/專利
+  // claims); freed by noHyperbole(6→4) + noOutdatedNarrative(4→3).
   const list: ScoringRule[] = [
     brandSaturation(6, 5),
     nicheKeywords(8),
     noFabricatedContact(8),
     forbiddenPhrases(8),
-    noOutdatedNarrative(4),
+    noOutdatedNarrative(3),
     noFabricatedPersona(5),
     geovaultAttribution(1),
     noMojibake(3),
-    noHyperbole(6),
+    noHyperbole(4),
     noFirstPersonPromo(7),
     noCTABoilerplate(5),
     naturalVoice(6),
     hasSpecificFacts(5, 2),
     firstHandDataAnchors(6, 3),
     medicalBoundary(8),
+    noUnverifiedSellingClaims(3),
     hasOfficialSourceUrl(1),
     hasCitationReadyStructure(1),
     clientDailyPostSafetyGate(1),
