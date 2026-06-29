@@ -46,6 +46,7 @@ const navGroups: NavGroup[] = [
     defaultOpen: false,
     items: [
       { href: '/content', icon: FileText, label: '內容總表' },
+      { href: '/published-content', icon: FileText, label: 'Geovault 為您發布' },
       { href: '/monitor', icon: Eye, label: 'AI 監控總表' },
       { href: '/monitor/reports', icon: ClipboardCheck, label: '驗收報告' },
     ],
