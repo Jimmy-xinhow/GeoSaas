@@ -37,6 +37,7 @@ import { IndustryAiModule } from './modules/industry-ai/industry-ai.module';
 import { BrandSpreadModule } from './modules/brand-spread/brand-spread.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ContentQualityModule } from './modules/content-quality/content-quality.module';
+import { CitationReadinessModule } from './modules/citation-readiness/citation-readiness.module';
 import { SupportModule } from './modules/support/support.module';
 import { AffiliateModule } from './modules/affiliate/affiliate.module';
 import { CmsFixModule } from './modules/cms-fix/cms-fix.module';
@@ -89,6 +90,7 @@ import { GuidedFixModule } from './modules/guided-fix/guided-fix.module';
     BrandSpreadModule,
     UploadModule,
     ContentQualityModule,
+    CitationReadinessModule,
     SupportModule,
     AffiliateModule,
     CmsFixModule,

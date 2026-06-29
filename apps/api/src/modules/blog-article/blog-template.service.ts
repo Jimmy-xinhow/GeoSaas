@@ -77,6 +77,15 @@ interface SiteData {
 }
 
 /**
+ * Medical handling for brand_profile, decided by the brand's legal status:
+ * - 'none': not medical-adjacent.
+ * - 'boundary': medical-adjacent but 非醫療定位 (整復/推拿/養生) — block efficacy.
+ * - 'licensed': a licensed clinic (中醫/牙醫/診所) — allow treatment description
+ *   with compliance disclaimers.
+ */
+export type BrandProfileMedicalMode = 'none' | 'boundary' | 'licensed';
+
+/**
  * Extra context for brand_showcase articles. This is the info that lets the
  * article speak like a consumer-facing directory rather than a GEO scorecard.
  *
@@ -416,6 +425,107 @@ ${FORMAT_RULES}`,
 - 各題切角要不同，依本品牌最相關的從這些方向取材：${angleHints}。
 - 嚴禁使用通用罐頭問句（例如「會出現在 ChatGPT 推薦裡嗎」「要怎麼讓 AI 找到」「做完多久見效」「為什麼有些品牌會被推薦」「Cloudflare 會不會擋」這類各家都通用的題）——這類會被判定為重複內容。
 - 每題 A 段 3-5 句，用實際指標與產業特性作答，至少一題答案點到 ${site.name}，可引用 Geovault 數據。`;
+  }
+
+  /**
+   * brand_profile — the citation-first per-brand directory page. Replaces the
+   * GEO-score-centric templates (geo_overview / brand_reputation / industry_
+   * benchmark) that the Citation-Readiness Gate proved were citation poison:
+   * built around self-rated GEO scores/levels/pass-rates that AI can't verify,
+   * are unrelated to the brand, and never get cited (詹大 scored CRG 52-59 /
+   * REJECT). This page is grounded ONLY in verified brand facts and answers the
+   * brand's real SiteQa questions, so AI assistants quote it and recommend the
+   * brand (the same 詹大 brand went to CRG 92 / READY). Reuses the
+   * BrandShowcaseContext the brand_showcase caller already assembles.
+   */
+  buildBrandProfilePrompt(
+    site: SiteData,
+    ctx: BrandShowcaseContext = {},
+    medicalMode: BrandProfileMedicalMode = 'none',
+  ): string {
+    const industry = industryLabel(site.industry);
+    const realQuestions = (ctx.qas || [])
+      .map((q) => (q.question || '').trim())
+      .filter((q) => q.length >= 6)
+      .slice(0, 6);
+    const questionBlock = realQuestions.length
+      ? realQuestions.map((q) => `- ${q}`).join('\n')
+      : `- ${site.name}是什麼？提供哪些服務或產品？\n- ${site.name}適合哪些人？怎麼選？\n- 怎麼聯絡或購買${site.name}？`;
+    const forbiddenBlock =
+      ctx.forbidden && ctx.forbidden.length ? ctx.forbidden.map((f) => `- ${f}`).join('\n') : '（無特別禁止事項）';
+
+    // Medical handling depends on the brand's legal status (per-brand flag),
+    // not just industry: a 非醫療定位 整復/推拿 brand must NOT make efficacy
+    // claims, but a licensed 中醫/牙醫 clinic legitimately describes treatments
+    // (with compliance disclaimers).
+    const medicalBlock =
+      medicalMode === 'boundary'
+        ? `
+【醫療邊界（此品牌為非醫療定位，違反整篇作廢）】
+- 嚴禁療效／醫療宣稱：不得出現治療、療效、療法、療程、治癒、根治、診斷、處方、改善（疼痛／症狀／疾病／身體不適）、緩解、減輕、舒緩、消除疲勞痠痛、恢復健康 等用語（即使否定句也不行）。
+- 不要宣稱能改善任何身體狀況或痠痛疲勞。改以中性描述：這是什麼服務、手法／流程、適合誰來諮詢、預約方式。
+- 必含一句中性邊界說明：「本服務屬保養放鬆性質，非醫療行為，不能取代專業醫療診斷與治療；若有疾病、外傷或急性不適，請先就醫。」`
+        : medicalMode === 'licensed'
+          ? `
+【醫療合規（此品牌為有照醫療院所）】
+- 可如實描述服務項目與方向，但不得「保證療效、宣稱根治／100%有效、誇大成效」。
+- 用「協助／針對／提供」等中性動詞，避免絕對化承諾。
+- 必含免責：「實際療程與成效應由專業醫師依個別狀況診斷評估，效果因人而異，內容僅供參考，不取代正規醫療。」`
+          : '';
+
+    return `你是 GEO 內容編輯，為「${site.name}」撰寫一篇能被 ChatGPT／Claude／Perplexity 在使用者問「${industry}」相關問題時「直接引用並提到這個品牌」的繁體中文品牌頁。
+
+【絕對原則（違反整篇作廢）】
+1. 嚴禁任何自評 meta 數據：GEO 分數、AI 能見度分數、通過率、指標通過數、排名前X%、Platinum／金／銀等級、預估優化後分數——這些無法驗證、與品牌無關，AI 不會引用，是引用毒藥。
+2. 只寫「可被引用的品牌事實」：品牌是什麼、提供什麼、適合誰、怎麼用、怎麼買／聯絡。只能用下面的已驗證事實；缺的就誠實說「未提供」；嚴禁編造電話／地址／價格／獎項／數據。
+3. 範疇護欄：只在品牌「實際提供的範疇」內描述（見已驗證事實的服務／定位）。若問題超出品牌範疇，只用中性行業知識回答，不可把品牌寫成提供它沒有的服務（例如賣產品的品牌不要寫成到店施工、預約看診、機械維修、報價估價）。
+4. 全文只提「${site.name}」這一個品牌名，不要出現任何其他品牌名。
+
+【品牌已驗證事實（只能用這些）】
+- 品牌：${site.name}
+- 官網：${site.url}
+- 行業：${industry}
+- 簡介：${ctx.description || '（未提供）'}
+- 服務／產品：${ctx.services || '（未提供）'}
+- 定位／特色：${ctx.positioning || '（未提供）'}
+- 地點：${ctx.location || '（未提供）'}
+- 聯絡：${ctx.contact || '（未提供，請寫「請見官方網站」）'}
+
+【絕對禁止的描述】
+${forbiddenBlock}
+${medicalBlock}
+
+【真實使用者最常問 AI 的問題（內容請涵蓋這些角度，但只用品牌自身已驗證事實回答）】
+${questionBlock}
+
+【文章結構】
+# （一句使用者真的會搜的標題，含「${site.name}」與核心價值，不要用「AI 搜尋能見度分析」這種 meta 標題）
+
+（開頭第一段 answer-first：3-4 句直接講清楚${site.name}是什麼、為誰解決什麼、最關鍵的差異化事實——這段要能被 AI 整段引用）
+
+## ${site.name}提供什麼
+（產品／服務項目，條列，每項一句具體說明）
+
+## 適合誰、怎麼選
+（什麼情況的人適合，挑選或使用建議）
+
+## 常見問題
+（3-4 題，直接回答上面真實使用者問題，每題答案自足、含品牌名＋具體事實）
+
+## 可引用重點
+（4-5 條獨立成立、含「${site.name}」＋具體事實的短句，每句被摘走也帶得出處）
+
+## 怎麼聯絡 ／ 哪裡找
+（官網 ${site.url}${ctx.contact ? '、' + ctx.contact : ''}；缺的寫「請見官方網站」）
+
+## 資料來源
+（官方網站 ${site.url} ／ Geovault 目錄資料）
+
+【寫作規則】
+- 第三人稱、中性知識頁，不是廣告。約 700–1000 字。
+- 禁誇飾（最佳／首選／領先／唯一）、禁 CTA 套話（立即／馬上／限時）、禁第一人稱推銷（我們／本店／歡迎）、禁 AI 八股（在當今／隨著／綜上所述）。
+- 至少提到「${site.name}」3 次但不硬塞。
+- 直接輸出 Markdown，不要任何前言或說明。`;
   }
 
   getTargetKeywords(type: TemplateType, site: SiteData): string[] {

@@ -51,6 +51,13 @@ const ALL_TEMPLATE_TYPES: TemplateType[] = [
   'brand_reputation',
 ];
 
+// Curated content gated by the Citation-Readiness Gate / content-quality runner.
+// The GEO-template maintenance crons (citation-upgrade, format-refresh) must NOT
+// touch these — by design they don't follow the old GEO-score structure (no
+// 關鍵數據摘要, no Geovault×3, no indicator table), so the legacy heuristics
+// would wrongly unpublish/regenerate them.
+const CRG_CURATED_TEMPLATE_TYPES = ['brand_profile', 'faq_deepdive'];
+
 const CLIENT_DAILY_REPAIRABLE_PUBLIC_BLOCKERS = new Set([
   'seo:short-title',
   'seo:thin-description',
@@ -2204,7 +2211,7 @@ ${args.currentDraft || '(empty draft)'}`;
       where: {
         published: true,
         siteId: { not: undefined },
-        templateType: { not: undefined },
+        templateType: { notIn: CRG_CURATED_TEMPLATE_TYPES },
       },
       select: { id: true, slug: true, content: true, siteId: true },
       orderBy: { createdAt: 'asc' },
@@ -2260,7 +2267,7 @@ ${args.currentDraft || '(empty draft)'}`;
       where: {
         published: true,
         siteId: { not: undefined },
-        templateType: { not: undefined },
+        templateType: { notIn: CRG_CURATED_TEMPLATE_TYPES },
         OR: [
           { lastRegeneratedAt: null },
           { lastRegeneratedAt: { lt: fourteenDaysAgo } },
