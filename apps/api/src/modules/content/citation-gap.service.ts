@@ -310,6 +310,14 @@ AI 回答了其他品牌但沒提到 ${site.name}。
    */
   @Cron('0 6 * * 3', { name: 'citation-gap-fill' })
   async scheduledGapFill() {
+    // Paused by default — auto-creates QAs + articles into the brand's verified-
+    // fact knowledge base with no quality/anti-fabrication gate, which poisons
+    // the source that brand_profile / FAQ depend on. Re-enable with
+    // CITATION_GAP_FILL_ENABLED=1 once a gate is added. Manual runForSite() unaffected.
+    if (this.config.get('CITATION_GAP_FILL_ENABLED') !== '1') {
+      this.logger.warn('Citation gap-fill disabled (set CITATION_GAP_FILL_ENABLED=1 to re-enable)');
+      return;
+    }
     this.logger.log('Starting weekly citation gap fill...');
 
     const sites = await this.prisma.site.findMany({

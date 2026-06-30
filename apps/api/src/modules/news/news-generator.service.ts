@@ -67,12 +67,26 @@ export class NewsGeneratorService {
    */
   @Cron('0 6 * * *')
   async generateMorningBatch() {
+    if (!this.autogenEnabled()) return;
     await this.generateBatch(10);
   }
 
   @Cron('0 18 * * *')
   async generateEveningBatch() {
+    if (!this.autogenEnabled()) return;
     await this.generateBatch(10);
+  }
+
+  /**
+   * News auto-generation is paused by default — it published unvetted AI
+   * "analysis" with no content quality gate (only title dedup). Re-enable by
+   * setting NEWS_AUTOGEN_ENABLED=1 once a grounding/anti-fabrication gate is
+   * added. Manual generateBatch() calls are unaffected.
+   */
+  private autogenEnabled(): boolean {
+    if (this.config.get('NEWS_AUTOGEN_ENABLED') === '1') return true;
+    this.logger.warn('News auto-generation disabled (set NEWS_AUTOGEN_ENABLED=1 to re-enable)');
+    return false;
   }
 
   /**

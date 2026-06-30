@@ -2088,6 +2088,16 @@ ${args.currentDraft || '(empty draft)'}`;
   /** Cron: 每天凌晨 2 點批量補齊文章 */
   @Cron('0 2 * * *', { name: 'blog-bulk-generation' })
   async scheduledBulkGeneration(): Promise<void> {
+    // Paused by default — this mass-generates the legacy GEO-score templates
+    // (geo_overview/brand_reputation/... = self-rated scores the CRG proved are
+    // citation poison) AND fights the brand_profile rollout: after a site's old
+    // GEO pages are demoted it sees "<6 published" and regenerates them. The
+    // brand-profile-rollout cron is the replacement. Re-enable only with
+    // LEGACY_GEO_BULK_ENABLED=1.
+    if (this.config.get('LEGACY_GEO_BULK_ENABLED') !== '1') {
+      this.logger.warn('Legacy GEO bulk-generation disabled (set LEGACY_GEO_BULK_ENABLED=1 to re-enable)');
+      return;
+    }
     this.logger.log('Starting scheduled blog bulk generation...');
 
     // Find sites with fewer than 6 articles (all template types)
@@ -2255,6 +2265,14 @@ ${args.currentDraft || '(empty draft)'}`;
    */
   @Cron('0 4 * * *', { name: 'article-format-refresh' })
   async scheduledFormatRefresh(): Promise<void> {
+    // Paused with the GEO factory — it unpublishes "poorly formatted" GEO
+    // articles and regenerates them via the legacy GEO templates (and can turn
+    // correct facts into hallucinations on a format-only trigger). Gated by the
+    // same flag as bulk-generation.
+    if (this.config.get('LEGACY_GEO_BULK_ENABLED') !== '1') {
+      this.logger.warn('Legacy GEO format-refresh disabled (set LEGACY_GEO_BULK_ENABLED=1 to re-enable)');
+      return;
+    }
     this.logger.log('Starting article format refresh...');
 
     // Skip articles refreshed in the last 14 days — if a regenerated article
