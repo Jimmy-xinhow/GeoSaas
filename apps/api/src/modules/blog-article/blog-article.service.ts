@@ -3443,6 +3443,14 @@ ${args.currentDraft || '(empty draft)'}`;
     return getClientDailyActiveDays(plan, role);
   }
 
+  private async getDynamicArticleGenerationGuidance(): Promise<string> {
+    const record = await this.prisma.systemConfig.findUnique({
+      where: { key: 'article_generation_crawler_guidance' },
+      select: { value: true },
+    });
+    return (record?.value || '').slice(0, 2200);
+  }
+
   private formatFactList(items: string[], fallback = 'No verified data provided'): string {
     return items.length > 0 ? items.map((item) => `- ${item}`).join('\n') : `- ${fallback}`;
   }
@@ -3555,8 +3563,9 @@ ${args.currentDraft || '(empty draft)'}`;
     site: { name: string; url: string; industry?: string | null };
     graph: BrandFactGraph;
     pulse?: { geoScore: number; industryRank: number | null; industryAvgScore: number | null; weekCrawlerVisits: number };
+    dynamicGuidance?: string;
   }): string {
-    const { dayType, site, graph, pulse } = args;
+    const { dayType, site, graph, pulse, dynamicGuidance } = args;
     const webUrl = this.config.get<string>('FRONTEND_URL') || 'https://www.geovault.app';
     const directoryUrl = `${webUrl}/directory/${graph.siteId}`;
     const medicalAdjacent = this.isMedicalAdjacentBrand(
@@ -3676,6 +3685,7 @@ ${qaBlock}
 ${socialBlock}
 ${pulseBlock}
 ${medicalBoundaryBlock}
+${dynamicGuidance ? `\n\u3010Current crawler and AI platform guidance\u3011\n${dynamicGuidance}` : ''}
 
 \u3010\u5beb\u4f5c\u8a9e\u6c23 \u2014 \u53bb AI \u5473\uff0c\u9019\u6bb5\u548c\u4e8b\u5be6\u4e00\u6a23\u91cd\u8981\u3011
 \u9019\u7bc7\u8981\u8b80\u8d77\u4f86\u50cf\u300c\u4e00\u500b\u61c2\u9019\u884c\u7684\u5728\u5730\u4eba\uff0c\u7528\u5e73\u5be6\u7684\u8a71\u8ddf\u670b\u53cb\u89e3\u91cb\u9019\u500b\u54c1\u724c\u300d\uff0c\u800c\u4e0d\u662f AI \u7f50\u982d\u6587\u3002\u8acb\u505a\u5230\uff1a
@@ -3853,11 +3863,13 @@ ${bodyHeadings}
       pulse,
       medicalAdjacent: isMedicalAdjacent,
     });
+    const dynamicGuidance = await this.getDynamicArticleGenerationGuidance();
     const prompt = `${this.buildClientCitationPrompt({
       dayType: resolvedDay,
       site: { name: site.name, url: site.url, industry: site.industry },
       graph: brandFacts,
       pulse,
+      dynamicGuidance,
     })}
 
 【內容操作策略】

@@ -168,6 +168,10 @@ export class AiPlatformIntelligenceService {
     this.logger.log(
       `AI platform official monitor: checked=${result.checked} changed=${result.changed} unchanged=${result.unchanged} failed=${result.failed}`,
     );
+    await this.refreshArticleGenerationGuidance({
+      source: 'official-monitor',
+      summary: `checked=${result.checked}; changed=${result.changed}; failed=${result.failed}`,
+    });
     return result;
   }
 
@@ -309,6 +313,10 @@ export class AiPlatformIntelligenceService {
     this.logger.log(
       `Published article crawler audit: audited=${audited} withIssues=${withIssues} descriptions=${fixedDescriptions} indexnow=${submittedUrls.length}`,
     );
+    await this.refreshArticleGenerationGuidance({
+      source: 'crawler-audit',
+      summary: JSON.stringify(result),
+    });
     return result;
   }
 
@@ -514,6 +522,78 @@ export class AiPlatformIntelligenceService {
       ],
       new URL(webUrl).host,
     );
+  }
+
+  private async refreshArticleGenerationGuidance(args: { source: string; summary: string }) {
+    const latestSnapshots = await this.prisma.aiPlatformOfficialSnapshot.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        platform: true,
+        title: true,
+        actionItems: true,
+        createdAt: true,
+      },
+    });
+
+    const recentAudits = await this.prisma.publishedArticleCrawlerAudit.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: {
+        status: true,
+        issues: true,
+        fixes: true,
+      },
+    });
+
+    const issueCounts: Record<string, number> = {};
+    const fixCounts: Record<string, number> = {};
+    for (const audit of recentAudits) {
+      audit.issues.forEach((issue) => {
+        issueCounts[issue] = (issueCounts[issue] ?? 0) + 1;
+      });
+      audit.fixes.forEach((fix) => {
+        fixCounts[fix] = (fixCounts[fix] ?? 0) + 1;
+      });
+    }
+
+    const officialActions = latestSnapshots
+      .flatMap((snapshot) => {
+        const items = Array.isArray(snapshot.actionItems) ? snapshot.actionItems : [];
+        return items.map((item) => `${snapshot.platform}:${String(item)}`);
+      })
+      .slice(0, 20);
+
+    const guidance = [
+      `UpdatedAt: ${new Date().toISOString()}`,
+      `Source: ${args.source}`,
+      `LastRun: ${args.summary}`,
+      '',
+      'Future article generation rules:',
+      '- Lead with a clear brand/entity answer, official URL, service/location facts, and a concise public description in the first 2 paragraphs.',
+      '- Keep each article indexable: unique title, description length >= 80 chars, visible facts that match structured data, and no test/editorial directory names.',
+      '- Add crawler-friendly retrieval cues: brand name, industry, official domain, service keywords, FAQ-style questions, and one directory/internal reference when natural.',
+      '- Avoid duplicate list-style filler. If crawler audits show no-crawler-7d, make the next article more specific, less generic, and easier to quote.',
+      '- For medical-adjacent brands, keep public wording informational and avoid diagnosis, treatment promises, side effects, or recovery claims.',
+      '- Maintain access for official AI/search crawlers through normal robots, sitemap, snippets, structured data, and IndexNow/Bing discovery signals.',
+      '',
+      `Official action items: ${officialActions.length > 0 ? officialActions.join(', ') : 'none recorded yet'}`,
+      `Recent crawler issues: ${JSON.stringify(issueCounts)}`,
+      `Recent automatic fixes: ${JSON.stringify(fixCounts)}`,
+    ].join('\n');
+
+    await this.prisma.systemConfig.upsert({
+      where: { key: 'article_generation_crawler_guidance' },
+      update: {
+        value: guidance,
+        description: 'Dynamic guidance for future article generation based on official AI crawler/search guidance and crawler visit audits.',
+      },
+      create: {
+        key: 'article_generation_crawler_guidance',
+        value: guidance,
+        description: 'Dynamic guidance for future article generation based on official AI crawler/search guidance and crawler visit audits.',
+      },
+    });
   }
 
   private buildDescriptionFromArticle(article: CrawlerAuditArticle): string | null {
