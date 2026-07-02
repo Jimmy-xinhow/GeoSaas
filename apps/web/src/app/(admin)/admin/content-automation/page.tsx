@@ -33,6 +33,20 @@ interface AutomationRow {
   action: string;
 }
 
+interface ArticleCrawlerVisit {
+  slug: string;
+  title: string;
+  templateType: string;
+  siteName: string | null;
+  publishedAt: string;
+  last24h: number;
+  last7d: number;
+  last30d: number;
+  visitsPerDay30d: number;
+  lastVisitAt: string | null;
+  bots: Array<{ botName: string; botOrg: string; count: number }>;
+}
+
 interface AutomationHealth {
   generatedAt: string;
   summary: Record<AutomationStatus | 'total', number>;
@@ -58,6 +72,12 @@ interface AutomationHealth {
   crawler: {
     real24h: number;
     real7d: number;
+    article24h: number;
+    article7d: number;
+    article30d: number;
+    articleTrackedArticles: number;
+    articleWithVisits30d: number;
+    topArticleVisits: ArticleCrawlerVisit[];
   };
   rows: AutomationRow[];
 }
@@ -248,6 +268,102 @@ export default function AdminContentAutomationPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Activity className="h-4 w-4" />
+            已發佈文章爬蟲頻率
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-gray-400">文章爬蟲 24h</p>
+              <p className="mt-1 text-2xl font-semibold text-blue-300">{data.crawler.article24h}</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-gray-400">文章爬蟲 7 天</p>
+              <p className="mt-1 text-2xl font-semibold text-blue-300">{data.crawler.article7d}</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-gray-400">文章爬蟲 30 天</p>
+              <p className="mt-1 text-2xl font-semibold text-blue-300">{data.crawler.article30d}</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-gray-400">追蹤文章</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{data.crawler.articleTrackedArticles}</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-gray-400">30 天有造訪</p>
+              <p className="mt-1 text-2xl font-semibold text-emerald-300">{data.crawler.articleWithVisits30d}</p>
+            </div>
+          </div>
+
+          {data.crawler.topArticleVisits.length === 0 ? (
+            <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+              最近 30 天尚未記錄到公開文章頁面的真實 AI / 搜尋爬蟲造訪。請確認 sitemap、IndexNow、llms-full 與平台 middleware 回報是否持續正常。
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="py-2 pr-4">文章</th>
+                    <th className="py-2 pr-4">品牌</th>
+                    <th className="py-2 pr-4">類型</th>
+                    <th className="py-2 pr-4 text-right">24h</th>
+                    <th className="py-2 pr-4 text-right">7 天</th>
+                    <th className="py-2 pr-4 text-right">30 天</th>
+                    <th className="py-2 pr-4">主要 bot</th>
+                    <th className="py-2">最後造訪</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {data.crawler.topArticleVisits.map((article) => (
+                    <tr key={article.slug} className="align-top">
+                      <td className="py-3 pr-4">
+                        <a
+                          href={`/blog/${article.slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-blue-300 hover:underline"
+                        >
+                          {article.title}
+                        </a>
+                        <p className="mt-1 max-w-md truncate text-xs text-gray-500">{article.slug}</p>
+                      </td>
+                      <td className="py-3 pr-4 text-gray-300">{article.siteName || '平台內容'}</td>
+                      <td className="py-3 pr-4">
+                        <Badge variant="outline" className="border-white/10 text-gray-300">
+                          {article.templateType}
+                        </Badge>
+                      </td>
+                      <td className="py-3 pr-4 text-right text-blue-200">{article.last24h}</td>
+                      <td className="py-3 pr-4 text-right text-blue-200">{article.last7d}</td>
+                      <td className="py-3 pr-4 text-right text-blue-200">{article.last30d}</td>
+                      <td className="py-3 pr-4">
+                        {article.bots.length === 0 ? (
+                          <span className="text-gray-500">尚無</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {article.bots.slice(0, 3).map((bot) => (
+                              <Badge key={bot.botName} variant="outline" className="border-white/10 text-gray-300">
+                                {bot.botName} · {bot.count}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 text-gray-400">{formatDate(article.lastVisitAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

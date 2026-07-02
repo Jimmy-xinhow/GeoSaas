@@ -46,6 +46,18 @@ function startOfUtcDay(date: Date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
+function extractBlogSlugFromUrl(value?: string | null): string | null {
+  if (!value) return null;
+  try {
+    const pathname = new URL(value).pathname;
+    const match = pathname.match(/^\/blog\/([^/?#]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  } catch {
+    const match = value.match(/\/blog\/([^/?#]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+}
+
 function classifyTask(task: {
   enabled: boolean;
   lastRunAt: Date | null;
@@ -86,6 +98,7 @@ export class SchedulerController {
     const now = new Date();
     const todayStart = startOfUtcDay(now);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
     const todayDayType = clientDailyDayTypeForDate(now);
 
     const [
@@ -102,6 +115,7 @@ export class SchedulerController {
       lowQualityPublicSeeds,
       crawler24h,
       crawler7d,
+      articleCrawlerVisits,
     ] = await Promise.all([
       this.prisma.scheduledTask.findMany({
         where: { taskKey: { in: CONTENT_TASK_KEYS } },
@@ -146,6 +160,7 @@ export class SchedulerController {
           title: true,
           description: true,
           templateType: true,
+          createdAt: true,
           site: { select: { name: true, url: true, isPublic: true } },
         },
       }),
@@ -169,6 +184,23 @@ export class SchedulerController {
       }),
       this.prisma.crawlerVisit.count({
         where: { isSeeded: false, visitedAt: { gte: sevenDaysAgo } },
+      }),
+      this.prisma.crawlerVisit.findMany({
+        where: {
+          isSeeded: false,
+          visitedAt: { gte: thirtyDaysAgo },
+          OR: [
+            { url: { contains: 'geovault.app/blog/' } },
+            { url: { contains: 'www.geovault.app/blog/' } },
+          ],
+        },
+        orderBy: { visitedAt: 'desc' },
+        select: {
+          url: true,
+          botName: true,
+          botOrg: true,
+          visitedAt: true,
+        },
       }),
     ]);
 
@@ -195,6 +227,77 @@ export class SchedulerController {
       if (article.site && article.site.isPublic === false) return true;
       return getPublicBlogArticleSeoIssues(article).length > 0;
     });
+
+    const publishedArticleMap = new Map(publishedArticleSamples.map((article) => [article.slug, article]));
+    const articleCrawlerMap = new Map<string, {
+      slug: string;
+      title: string;
+      templateType: string;
+      siteName: string | null;
+      publishedAt: Date;
+      last24h: number;
+      last7d: number;
+      last30d: number;
+      lastVisitAt: Date | null;
+      bots: Map<string, { botName: string; botOrg: string; count: number }>;
+    }>();
+
+    for (const article of publishedArticleSamples) {
+      articleCrawlerMap.set(article.slug, {
+        slug: article.slug,
+        title: article.title,
+        templateType: article.templateType,
+        siteName: article.site?.name ?? null,
+        publishedAt: article.createdAt,
+        last24h: 0,
+        last7d: 0,
+        last30d: 0,
+        lastVisitAt: null,
+        bots: new Map(),
+      });
+    }
+
+    for (const visit of articleCrawlerVisits) {
+      const slug = extractBlogSlugFromUrl(visit.url);
+      if (!slug || !publishedArticleMap.has(slug)) continue;
+      const row = articleCrawlerMap.get(slug);
+      if (!row) continue;
+      row.last30d++;
+      if (visit.visitedAt >= sevenDaysAgo) row.last7d++;
+      if (visit.visitedAt >= new Date(now.getTime() - 86400000)) row.last24h++;
+      if (!row.lastVisitAt || visit.visitedAt > row.lastVisitAt) row.lastVisitAt = visit.visitedAt;
+      const bot = row.bots.get(visit.botName) ?? {
+        botName: visit.botName,
+        botOrg: visit.botOrg,
+        count: 0,
+      };
+      bot.count++;
+      row.bots.set(visit.botName, bot);
+    }
+
+    const articleCrawlerRows = Array.from(articleCrawlerMap.values())
+      .map((row) => {
+        const ageDays = Math.max(1, Math.ceil((now.getTime() - row.publishedAt.getTime()) / 86400000));
+        return {
+          slug: row.slug,
+          title: row.title,
+          templateType: row.templateType,
+          siteName: row.siteName,
+          publishedAt: row.publishedAt,
+          last24h: row.last24h,
+          last7d: row.last7d,
+          last30d: row.last30d,
+          visitsPerDay30d: Number((row.last30d / Math.min(ageDays, 30)).toFixed(2)),
+          lastVisitAt: row.lastVisitAt,
+          bots: Array.from(row.bots.values()).sort((a, b) => b.count - a.count).slice(0, 5),
+        };
+      })
+      .sort((a, b) => b.last7d - a.last7d || b.last30d - a.last30d || (b.lastVisitAt?.getTime() ?? 0) - (a.lastVisitAt?.getTime() ?? 0));
+
+    const articleCrawler24h = articleCrawlerRows.reduce((sum, row) => sum + row.last24h, 0);
+    const articleCrawler7d = articleCrawlerRows.reduce((sum, row) => sum + row.last7d, 0);
+    const articleCrawler30d = articleCrawlerRows.reduce((sum, row) => sum + row.last30d, 0);
+    const articleCrawlerVisited30d = articleCrawlerRows.filter((row) => row.last30d > 0).length;
 
     const rows = tasks.map((task) => {
       const status = classifyTask(task, now);
@@ -263,6 +366,22 @@ export class SchedulerController {
     });
 
     rows.push({
+      key: 'published_article_crawler_frequency',
+      name: '已發佈文章爬蟲頻率',
+      area: 'crawler',
+      status: articleCrawler30d > 0 ? 'healthy' : 'warning',
+      enabled: true,
+      cronExpr: 'derived',
+      lastRunAt: null,
+      nextRunAt: null,
+      lastResult: null,
+      evidence: `近 24 小時 ${articleCrawler24h} 次，近 7 天 ${articleCrawler7d} 次，近 30 天 ${articleCrawler30d} 次；最近 500 篇公開文章中 ${articleCrawlerVisited30d} 篇有文章頁爬蟲紀錄`,
+      action: articleCrawler30d > 0
+        ? '持續觀察文章發布後 7 天內是否有 GPTBot、ClaudeBot、PerplexityBot、Googlebot 等造訪'
+        : '確認文章 sitemap、IndexNow、llms-full 與 middleware 平台爬蟲回報是否正常',
+    });
+
+    rows.push({
       key: 'seed_public_quality',
       name: 'Seed 公開品質',
       area: 'seed',
@@ -319,6 +438,12 @@ export class SchedulerController {
       crawler: {
         real24h: crawler24h,
         real7d: crawler7d,
+        article24h: articleCrawler24h,
+        article7d: articleCrawler7d,
+        article30d: articleCrawler30d,
+        articleTrackedArticles: articleCrawlerRows.length,
+        articleWithVisits30d: articleCrawlerVisited30d,
+        topArticleVisits: articleCrawlerRows.slice(0, 20),
       },
       rows: rows.sort((a, b) => {
         const rank: Record<AutomationStatus, number> = { critical: 0, warning: 1, healthy: 2 };
