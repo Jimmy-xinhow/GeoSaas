@@ -11,9 +11,10 @@ import { ScanModule } from '../scan/scan.module';
 import { DiscoveryModule } from '../discovery/discovery.module';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { AiPlatformIntelligenceModule } from '../ai-platform-intelligence/ai-platform-intelligence.module';
 
 @Module({
-  imports: [MonitorModule, DirectoryModule, BlogArticleModule, SeedModule, IndexNowModule, ScanModule, DiscoveryModule, KnowledgeModule, PrismaModule],
+  imports: [MonitorModule, DirectoryModule, BlogArticleModule, SeedModule, IndexNowModule, ScanModule, DiscoveryModule, KnowledgeModule, PrismaModule, AiPlatformIntelligenceModule],
   controllers: [SchedulerController],
   providers: [CronManagerService, TaskRegistryService],
   exports: [CronManagerService],

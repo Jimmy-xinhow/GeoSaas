@@ -14,6 +14,7 @@ import {
   clientDailyDayTypeForDate,
   getClientDailyActiveDays,
 } from '../blog-article/client-daily-policy';
+import { AiPlatformIntelligenceService } from '../ai-platform-intelligence/ai-platform-intelligence.service';
 
 @Injectable()
 export class TaskRegistryService implements OnModuleInit {
@@ -31,6 +32,7 @@ export class TaskRegistryService implements OnModuleInit {
     private readonly scanPipeline: ScanPipelineService,
     private readonly discoveryService: DiscoveryService,
     private readonly knowledgeService: KnowledgeService,
+    private readonly aiPlatformIntelligence: AiPlatformIntelligenceService,
   ) {}
 
   onModuleInit() {
@@ -174,6 +176,20 @@ export class TaskRegistryService implements OnModuleInit {
           this.logger.warn(`Auto-fill Q&A failed for ${site.name}: ${err}`);
         }
       }
+    });
+
+    this.cronManager.registerHandler('ai_platform_official_monitor', async () => {
+      const result = await this.aiPlatformIntelligence.runWeeklyOfficialMonitor();
+      this.logger.log(
+        `AI platform official monitor: checked=${result.checked} changed=${result.changed} failed=${result.failed}`,
+      );
+    });
+
+    this.cronManager.registerHandler('published_article_crawler_audit', async () => {
+      const result = await this.aiPlatformIntelligence.runPublishedArticleCrawlerAudit({ apply: true });
+      this.logger.log(
+        `Published article crawler audit: audited=${result.audited} issues=${result.withIssues} descriptions=${result.fixedDescriptions} indexnow=${result.submittedUrls}`,
+      );
     });
 
     // --- Depth: Auto-fill articles for brands with < 3 articles ---

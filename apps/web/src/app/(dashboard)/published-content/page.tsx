@@ -147,7 +147,7 @@ export default function PublishedContentPage() {
                 <p className="text-3xl font-bold text-green-400">
                   {statsLoading ? '—' : stats?.monthCount ?? 0}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">本月已發布</p>
+                <p className="text-xs text-muted-foreground mt-1">本月已公開</p>
               </CardContent>
             </Card>
             <Card className="overflow-hidden">
@@ -156,7 +156,7 @@ export default function PublishedContentPage() {
                   {statsLoading ? '—' : stats?.weekCount ?? 0}
                   {weeklyQuota > 0 && <span className="text-base text-gray-400 ml-1">/{weeklyQuota}</span>}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">本週進度</p>
+                <p className="text-xs text-muted-foreground mt-1">本週公開進度</p>
               </CardContent>
             </Card>
             <Card className="overflow-hidden">
@@ -164,7 +164,7 @@ export default function PublishedContentPage() {
                 <p className="text-3xl font-bold text-white">
                   {statsLoading ? '—' : stats?.totalCount ?? 0}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">歷史總數</p>
+                <p className="text-xs text-muted-foreground mt-1">歷史紀錄</p>
               </CardContent>
             </Card>
             <Card className="overflow-hidden">
@@ -224,7 +224,7 @@ export default function PublishedContentPage() {
               <CardHeader className="pb-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <CardTitle className="text-base">
-                    已發布文章
+                    發佈紀錄
                     {list && list.total > 0 && (
                       <span className="text-sm text-gray-400 font-normal ml-2">
                         共 {list.total} 篇,顯示 {showingFrom}–{showingTo}

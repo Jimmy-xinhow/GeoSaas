@@ -114,6 +114,20 @@ const DEFAULT_TASKS: Array<{
     enabled: true,
   },
   {
+    taskKey: 'ai_platform_official_monitor',
+    name: 'AI platform official guidance monitor',
+    description: 'Weekly monitor for official AI crawler/search guidance from OpenAI, Anthropic, Perplexity, Google, and Bing.',
+    cronExpr: '0 2 * * 1',
+    enabled: true,
+  },
+  {
+    taskKey: 'published_article_crawler_audit',
+    name: 'Published article crawler audit',
+    description: 'Daily audit of crawler frequency for published articles; safely refreshes weak descriptions and resubmits cold URLs.',
+    cronExpr: '0 10 * * *',
+    enabled: true,
+  },
+  {
     taskKey: 'auto_fill_articles',
     name: '自動補齊品牌文章',
     description: 'Legacy GEO 模板補文。預設停用；需 LEGACY_GEO_BULK_ENABLED=1 並手動啟用排程才會執行',
@@ -143,6 +157,8 @@ const FORCE_ENABLED_TASKS = new Set([
   'auto_fill_qa',
   'client_daily_content',
   'client_daily_sentinel',
+  'ai_platform_official_monitor',
+  'published_article_crawler_audit',
 ]);
 
 @Injectable()

@@ -888,6 +888,68 @@ model ScheduledTask {
   @@map("scheduled_tasks")
 }
 
+model AiPlatformOfficialSource {
+  id            String   @id @default(cuid())
+  platform      String
+  sourceType    String   @default("official_guidance")
+  url           String   @unique
+  title         String
+  enabled       Boolean  @default(true)
+  lastHash      String?
+  lastFetchedAt DateTime?
+  lastChangedAt DateTime?
+  lastStatus    String?
+  lastError     String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  snapshots AiPlatformOfficialSnapshot[]
+
+  @@index([platform, enabled])
+  @@index([enabled, lastFetchedAt])
+  @@map("ai_platform_official_sources")
+}
+
+model AiPlatformOfficialSnapshot {
+  id           String                   @id @default(cuid())
+  sourceId     String
+  source       AiPlatformOfficialSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  platform     String
+  hash         String
+  title        String?
+  summary      String                   @db.Text
+  rawText      String?                  @db.Text
+  actionItems  Json?
+  appliedFixes Json?
+  createdAt    DateTime                 @default(now())
+
+  @@unique([sourceId, hash])
+  @@index([platform, createdAt])
+  @@index([sourceId, createdAt])
+  @@map("ai_platform_official_snapshots")
+}
+
+model PublishedArticleCrawlerAudit {
+  id           String   @id @default(cuid())
+  articleId    String
+  slug         String
+  templateType String
+  publishedAt  DateTime
+  last24h      Int      @default(0)
+  last7d       Int      @default(0)
+  last30d      Int      @default(0)
+  lastVisitAt  DateTime?
+  status       String
+  issues       String[] @default([])
+  fixes        String[] @default([])
+  createdAt    DateTime @default(now())
+
+  @@index([articleId, createdAt])
+  @@index([status, createdAt])
+  @@index([slug, createdAt])
+  @@map("published_article_crawler_audits")
+}
+
 model SeedSource {
   id         String   @id @default(cuid())
   url        String   @unique
