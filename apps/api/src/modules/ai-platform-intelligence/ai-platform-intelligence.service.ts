@@ -762,9 +762,9 @@ export class AiPlatformIntelligenceService {
   }
 
   private async refreshArticleGenerationGuidance(args: { source: string; summary: string }) {
-    const latestSnapshots = await this.prisma.aiPlatformOfficialSnapshot.findMany({
+    const snapshotCandidates = await this.prisma.aiPlatformOfficialSnapshot.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 5,
+      take: 25,
       select: {
         platform: true,
         title: true,
@@ -772,6 +772,12 @@ export class AiPlatformIntelligenceService {
         summary: true,
         createdAt: true,
       },
+    });
+    const seenPlatforms = new Set<string>();
+    const latestSnapshots = snapshotCandidates.filter((snapshot) => {
+      if (seenPlatforms.has(snapshot.platform)) return false;
+      seenPlatforms.add(snapshot.platform);
+      return true;
     });
 
     const recentAudits = await this.prisma.publishedArticleCrawlerAudit.findMany({
