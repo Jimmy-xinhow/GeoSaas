@@ -19,8 +19,21 @@ const LONG_TAIL_TEMPLATE_TYPES = [
   'brand_showcase',
   'industry_top10',
   'buyer_guide',
-  'industry_insight',
+  'industry_current_state',
+  'missing_indicator_focus',
+  'top_brands_analysis',
+  'improvement_opportunity',
   'client_daily',
+];
+
+const AUTO_PUBLISH_DRAFT_TEMPLATE_TYPES = [
+  'brand_showcase',
+  'industry_top10',
+  'buyer_guide',
+  'industry_current_state',
+  'missing_indicator_focus',
+  'top_brands_analysis',
+  'improvement_opportunity',
 ];
 
 interface ArticleForQa {
@@ -32,10 +45,13 @@ interface ArticleForQa {
   templateType: string;
   targetKeywords: string[];
   siteId: string | null;
+  industrySlug?: string | null;
+  createdAt?: Date;
   site: {
     name: string;
     url: string;
     industry: string | null;
+    isPublic?: boolean | null;
   } | null;
 }
 
@@ -62,10 +78,11 @@ export interface LongTailQaRunResult {
   manualRequired: number;
   skipped: number;
   backlog: number;
+  autoPublishedDrafts: number;
   issues: Array<{
     articleId: string;
     slug: string;
-    status: 'passed' | 'repaired' | 'repair_failed' | 'manual_required' | 'skipped';
+    status: 'passed' | 'repaired' | 'repair_failed' | 'manual_required' | 'skipped' | 'auto_published';
     score: number;
     failedRules: string[];
   }>;
@@ -98,7 +115,7 @@ export class LongTailArticleQaService {
     );
     const result = await this.runQueuedQa({ limit });
     this.logger.log(
-      `Long-tail QA checked=${result.checked}, repaired=${result.repaired}, manual=${result.manualRequired}, backlog=${result.backlog}`,
+      `Long-tail QA checked=${result.checked}, repaired=${result.repaired}, manual=${result.manualRequired}, autoPublished=${result.autoPublishedDrafts}, backlog=${result.backlog}`,
     );
   }
 
@@ -113,6 +130,7 @@ export class LongTailArticleQaService {
       manualRequired: 0,
       skipped: 0,
       backlog: 0,
+      autoPublishedDrafts: 0,
       issues: [],
     };
 
@@ -190,8 +208,54 @@ export class LongTailArticleQaService {
     }
 
     result.backlog = await this.countUncheckedArticles();
+    const autoPublish = await this.autoPublishPassedDrafts({ limit });
+    result.autoPublishedDrafts = autoPublish.published;
+    result.issues.push(...autoPublish.issues);
     await this.notifyAdminsIfNeeded(result);
     return result;
+  }
+
+  async autoPublishPassedDrafts(options: { limit?: number } = {}): Promise<{
+    checked: number;
+    published: number;
+    skipped: number;
+    issues: LongTailQaRunResult['issues'];
+  }> {
+    const limit = this.parseLimit(String(options.limit ?? ''), DEFAULT_BATCH_LIMIT);
+    const articles = await this.findAutoPublishDraftCandidates(limit);
+    const issues: LongTailQaRunResult['issues'] = [];
+    let checked = 0;
+    let published = 0;
+    let skipped = 0;
+
+    for (const article of articles) {
+      checked++;
+      if (!(await this.isLatestAutoPublishDraft(article))) {
+        skipped++;
+        continue;
+      }
+
+      const startedAt = Date.now();
+      const review = this.reviewArticle(article);
+      await this.persistQualityLog(article, 'full', 1, review, Date.now() - startedAt, 'deterministic');
+
+      if (!review.passed) {
+        skipped++;
+        issues.push(this.issue(article, 'manual_required', review));
+        continue;
+      }
+
+      await this.prisma.blogArticle.update({
+        where: { id: article.id },
+        data: { published: true, lastRegeneratedAt: new Date() },
+      });
+      this.llmsHosting.invalidatePlatformLlmsFull(article.siteId ?? undefined);
+      published++;
+      issues.push(this.issue(article, 'auto_published', review));
+      this.logger.log(`Long-tail QA auto-published draft ${article.slug} (${article.templateType})`);
+    }
+
+    return { checked, published, skipped, issues };
   }
 
   private async findUncheckedArticles(take: number): Promise<ArticleForQa[]> {
@@ -216,11 +280,49 @@ export class LongTailArticleQaService {
         templateType: true,
         targetKeywords: true,
         siteId: true,
+        industrySlug: true,
+        createdAt: true,
         site: {
           select: {
             name: true,
             url: true,
             industry: true,
+            isPublic: true,
+          },
+        },
+      },
+    });
+  }
+
+  private async findAutoPublishDraftCandidates(take: number): Promise<ArticleForQa[]> {
+    return this.prisma.blogArticle.findMany({
+      where: {
+        published: false,
+        templateType: { in: AUTO_PUBLISH_DRAFT_TEMPLATE_TYPES },
+        OR: [
+          { siteId: null },
+          { site: { is: { isPublic: true } } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        description: true,
+        content: true,
+        templateType: true,
+        targetKeywords: true,
+        siteId: true,
+        industrySlug: true,
+        createdAt: true,
+        site: {
+          select: {
+            name: true,
+            url: true,
+            industry: true,
+            isPublic: true,
           },
         },
       },
@@ -239,6 +341,57 @@ export class LongTailArticleQaService {
         },
       },
     });
+  }
+
+  private async isLatestAutoPublishDraft(article: ArticleForQa): Promise<boolean> {
+    const newerWhere = this.replacementScopeWhere(article);
+    if (!newerWhere) return false;
+    const newerCount = await this.prisma.blogArticle.count({
+      where: {
+        ...newerWhere,
+        createdAt: { gt: article.createdAt ?? new Date(0) },
+      },
+    });
+    return newerCount === 0;
+  }
+
+  private replacementScopeWhere(article: ArticleForQa): Record<string, unknown> | null {
+    if (article.templateType === 'brand_showcase') {
+      if (!article.siteId) return null;
+      return { templateType: 'brand_showcase', siteId: article.siteId };
+    }
+
+    if (article.templateType === 'industry_top10') {
+      if (!article.industrySlug) return null;
+      return { templateType: 'industry_top10', industrySlug: article.industrySlug };
+    }
+
+    if (article.templateType === 'buyer_guide') {
+      if (!article.industrySlug) return null;
+      const topic = this.buyerGuideTopicFromSlug(article.slug);
+      return {
+        templateType: 'buyer_guide',
+        industrySlug: article.industrySlug,
+        ...(topic ? { slug: { contains: `buyer-guide-${topic}-` } } : {}),
+      };
+    }
+
+    if (
+      article.templateType === 'industry_current_state' ||
+      article.templateType === 'missing_indicator_focus' ||
+      article.templateType === 'top_brands_analysis' ||
+      article.templateType === 'improvement_opportunity'
+    ) {
+      if (!article.industrySlug) return null;
+      return { templateType: article.templateType, industrySlug: article.industrySlug };
+    }
+
+    return null;
+  }
+
+  private buyerGuideTopicFromSlug(slug: string): string | null {
+    const match = slug.match(/buyer-guide-(how_to_choose|red_flags|beginner_primer)-/);
+    return match?.[1] ?? null;
   }
 
   private reviewArticle(article: ArticleForQa): ReviewResult {
@@ -418,6 +571,7 @@ ${article.content.slice(0, 9000)}
       `Repaired: ${result.repaired}`,
       `Repair failed: ${result.repairFailed}`,
       `Manual required: ${result.manualRequired}`,
+      `Auto-published drafts: ${result.autoPublishedDrafts}`,
       `Backlog: ${result.backlog}`,
     ].join('\n');
 

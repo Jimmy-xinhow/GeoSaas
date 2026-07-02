@@ -33,7 +33,7 @@ const TASK_LABELS: Record<string, string> = {
   blog_bulk_generation: '大量長尾文章補齊',
   auto_fill_articles: '品牌文章自動補齊',
   auto_fill_qa: '知識庫 Q&A 自動補齊',
-  client_daily_content: '客戶每日引用內容',
+  client_daily_content: '客戶方案配額引用內容',
   client_daily_sentinel: '客戶每日內容哨兵',
   indexnow_batch_submit: 'IndexNow 批量推送',
   directory_seo_recovery: '目錄 SEO 修復',

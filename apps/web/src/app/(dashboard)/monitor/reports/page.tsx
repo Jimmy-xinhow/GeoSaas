@@ -1291,7 +1291,7 @@ function ClientDailyAccumulatorCard({ siteId }: { siteId: string }) {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            每日 AI 可引用內容累積
+            Geovault 發布內容累積
             {data.paused && (
               <Badge variant="outline" className="text-yellow-400 border-yellow-500/30">
                 已暫停

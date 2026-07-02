@@ -178,6 +178,11 @@ export class TaskRegistryService implements OnModuleInit {
 
     // --- Depth: Auto-fill articles for brands with < 3 articles ---
     this.cronManager.registerHandler('auto_fill_articles', async () => {
+      if (process.env.LEGACY_GEO_BULK_ENABLED !== '1') {
+        this.logger.warn('Auto-fill articles disabled (set LEGACY_GEO_BULK_ENABLED=1 to re-enable legacy GEO templates)');
+        return;
+      }
+
       const sites = await this.prisma.site.findMany({
         where: {
           isPublic: true,

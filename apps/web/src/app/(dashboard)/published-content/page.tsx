@@ -86,7 +86,7 @@ export default function PublishedContentPage() {
       <PageHeader
         icon={FileText}
         title="Geovault 為您發布的內容"
-        description="您訂閱方案內含的每日 AI 可引用內容,Geovault 自動為您撰寫並發布在 geovault.app/blog/...,專為 ChatGPT、Claude、Perplexity 等 AI 引用而設計。所有發布記錄完整透明列出。"
+        description="您訂閱方案內含的 AI 可引用內容配額,Geovault 依方案每週自動為您撰寫並發布在 geovault.app/blog/...,專為 ChatGPT、Claude、Perplexity 等 AI 引用而設計。所有發布記錄完整透明列出。"
         actions={
           <Button
             variant="outline"
@@ -173,7 +173,7 @@ export default function PublishedContentPage() {
                   {statsLoading ? '—' : stats?.plan ?? 'FREE'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {weeklyQuota > 0 ? `每週 ${weeklyQuota} 篇配額` : '此方案不含每日內容'}
+                  {weeklyQuota > 0 ? `每週 ${weeklyQuota} 篇配額` : '此方案不含 Geovault 發布內容'}
                 </p>
               </CardContent>
             </Card>
@@ -183,7 +183,7 @@ export default function PublishedContentPage() {
           {isFreeOrUnentitled && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">尚未啟用每日 AI 可引用內容</CardTitle>
+                <CardTitle className="text-base">尚未啟用 Geovault 發布內容</CardTitle>
                 <CardDescription>
                   此功能為 Starter 方案以上的訂閱權益。Geovault 會每週自動為您撰寫並發布
                   AI 友善的長尾內容,持續累積品牌在 ChatGPT / Claude / Perplexity 的能見度。

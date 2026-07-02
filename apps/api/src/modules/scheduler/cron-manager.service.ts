@@ -116,14 +116,14 @@ const DEFAULT_TASKS: Array<{
   {
     taskKey: 'auto_fill_articles',
     name: '自動補齊品牌文章',
-    description: '為文章不足的客戶站點自動生成分析文章',
+    description: 'Legacy GEO 模板補文。預設停用；需 LEGACY_GEO_BULK_ENABLED=1 並手動啟用排程才會執行',
     cronExpr: '30 6 * * *',
-    enabled: true,
+    enabled: false,
   },
   {
     taskKey: 'client_daily_content',
-    name: '付費客戶每日代發內容',
-    description: '每日 08:00 UTC 為 isClient 站點生成當日 client_daily 文章（週日休）。改為 CronManager 驅動以支援 process restart 後的 missed-run catchup',
+    name: '付費客戶方案配額代發內容',
+    description: '每日 08:00 UTC 檢查 isClient 站點，依訂閱方案週配額生成當日 client_daily 文章（週日休）。改為 CronManager 驅動以支援 process restart 後的 missed-run catchup',
     cronExpr: '0 8 * * *',
     enabled: true,
   },
@@ -141,7 +141,6 @@ const FORCE_ENABLED_TASKS = new Set([
   'indexnow_batch_submit',
   'directory_seo_recovery',
   'auto_fill_qa',
-  'auto_fill_articles',
   'client_daily_content',
   'client_daily_sentinel',
 ]);
