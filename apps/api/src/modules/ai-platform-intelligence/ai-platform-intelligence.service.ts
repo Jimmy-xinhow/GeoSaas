@@ -51,12 +51,6 @@ const OFFICIAL_SOURCES: OfficialSourceSeed[] = [
     sourceType: 'crawler_guidance',
   },
   {
-    platform: 'openai',
-    title: 'ChatGPT Search help',
-    url: 'https://help.openai.com/en/articles/9237897-chatgpt-search',
-    sourceType: 'ai_search_guidance',
-  },
-  {
     platform: 'anthropic',
     title: 'Anthropic crawler and Claude user agents',
     url: 'https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler',
@@ -103,6 +97,7 @@ export class AiPlatformIntelligenceService {
       checked: 0,
       changed: 0,
       unchanged: 0,
+      enriched: 0,
       failed: 0,
       appliedFixes: [] as string[],
     };
@@ -156,6 +151,16 @@ export class AiPlatformIntelligenceService {
           result.changed++;
           result.appliedFixes.push(...appliedFixes);
         } else {
+          const enriched = await this.enrichLatestSnapshotWithContentLogic({
+            sourceId: source.id,
+            platform: source.platform,
+            hash: page.hash,
+            title: page.title || source.title,
+            summary,
+            text: page.text,
+            actionItems: snapshotActionItems,
+          });
+          if (enriched) result.enriched++;
           result.unchanged++;
         }
 
@@ -186,11 +191,11 @@ export class AiPlatformIntelligenceService {
     }
 
     this.logger.log(
-      `AI platform official monitor: checked=${result.checked} changed=${result.changed} unchanged=${result.unchanged} failed=${result.failed}`,
+      `AI platform official monitor: checked=${result.checked} changed=${result.changed} unchanged=${result.unchanged} enriched=${result.enriched} failed=${result.failed}`,
     );
     await this.refreshArticleGenerationGuidance({
       source: 'official-monitor',
-      summary: `checked=${result.checked}; changed=${result.changed}; failed=${result.failed}`,
+      summary: `checked=${result.checked}; changed=${result.changed}; enriched=${result.enriched}; failed=${result.failed}`,
     });
     return result;
   }
@@ -359,6 +364,61 @@ export class AiPlatformIntelligenceService {
         },
       });
     }
+    await this.prisma.aiPlatformOfficialSource.updateMany({
+      where: {
+        url: 'https://help.openai.com/en/articles/9237897-chatgpt-search',
+      },
+      data: {
+        enabled: false,
+        lastStatus: 'disabled_unfetchable_in_production',
+      },
+    });
+  }
+
+  private async enrichLatestSnapshotWithContentLogic(args: {
+    sourceId: string;
+    platform: string;
+    hash: string;
+    title: string;
+    summary: string;
+    text: string;
+    actionItems: { items: string[]; contentLogic: PlatformContentLogic };
+  }) {
+    const latest = await this.prisma.aiPlatformOfficialSnapshot.findFirst({
+      where: { sourceId: args.sourceId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, actionItems: true },
+    });
+
+    if (latest && this.getSnapshotContentLogic(latest.actionItems)) {
+      return false;
+    }
+
+    if (latest) {
+      await this.prisma.aiPlatformOfficialSnapshot.update({
+        where: { id: latest.id },
+        data: {
+          title: args.title,
+          summary: args.summary,
+          rawText: args.text.slice(0, 20000),
+          actionItems: args.actionItems,
+        },
+      });
+      return true;
+    }
+
+    await this.prisma.aiPlatformOfficialSnapshot.create({
+      data: {
+        sourceId: args.sourceId,
+        platform: args.platform,
+        hash: args.hash,
+        title: args.title,
+        summary: args.summary,
+        rawText: args.text.slice(0, 20000),
+        actionItems: args.actionItems,
+      },
+    });
+    return true;
   }
 
   private async fetchOfficialPage(url: string): Promise<ExtractedOfficialPage> {
