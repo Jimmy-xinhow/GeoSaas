@@ -32,12 +32,29 @@ type CrawlerAuditArticle = {
   site: { name: string | null; url: string | null; isPublic: boolean | null } | null;
 };
 
+type PlatformContentLogic = {
+  platform: string;
+  officialDisclosureLevel: 'explicit' | 'partial' | 'limited';
+  indexingLogic: string[];
+  citationEligibility: string[];
+  recommendedArticleStructure: string[];
+  contentSignals: string[];
+  antiPatterns: string[];
+  measurementSignals: string[];
+};
+
 const OFFICIAL_SOURCES: OfficialSourceSeed[] = [
   {
     platform: 'openai',
     title: 'OpenAI crawlers and user agents',
     url: 'https://developers.openai.com/api/docs/bots',
     sourceType: 'crawler_guidance',
+  },
+  {
+    platform: 'openai',
+    title: 'ChatGPT Search help',
+    url: 'https://help.openai.com/en/articles/9237897-chatgpt-search',
+    sourceType: 'ai_search_guidance',
   },
   {
     platform: 'anthropic',
@@ -96,7 +113,9 @@ export class AiPlatformIntelligenceService {
         const page = await this.fetchOfficialPage(source.url);
         const changed = source.lastHash !== page.hash;
         const actionItems = this.buildActionItems(source.platform, page.text);
-        const summary = this.buildGuidanceSummary(source.platform, page.text, actionItems);
+        const contentLogic = this.buildPlatformContentLogic(source.platform, page.text, actionItems);
+        const snapshotActionItems = { items: actionItems, contentLogic };
+        const summary = this.buildGuidanceSummary(source.platform, page.text, actionItems, contentLogic);
         const appliedFixes = changed
           ? await this.applyOfficialGuidanceFixes({
               platform: source.platform,
@@ -104,6 +123,7 @@ export class AiPlatformIntelligenceService {
               url: source.url,
               summary,
               actionItems,
+              contentLogic,
             })
           : [];
 
@@ -119,7 +139,7 @@ export class AiPlatformIntelligenceService {
               title: page.title || source.title,
               summary,
               rawText: page.text.slice(0, 20000),
-              actionItems,
+              actionItems: snapshotActionItems,
               appliedFixes,
             },
             create: {
@@ -129,7 +149,7 @@ export class AiPlatformIntelligenceService {
               title: page.title || source.title,
               summary,
               rawText: page.text.slice(0, 20000),
-              actionItems,
+              actionItems: snapshotActionItems,
               appliedFixes,
             },
           });
@@ -419,7 +439,12 @@ export class AiPlatformIntelligenceService {
     return [...new Set([...(platformDefaults[platform] ?? []), ...items])];
   }
 
-  private buildGuidanceSummary(platform: string, text: string, actionItems: string[]) {
+  private buildGuidanceSummary(
+    platform: string,
+    text: string,
+    actionItems: string[],
+    contentLogic: PlatformContentLogic,
+  ) {
     const importantSentences = text
       .split(/(?<=[.!?。！？])\s+/)
       .map((line) => line.trim())
@@ -446,8 +471,153 @@ export class AiPlatformIntelligenceService {
       `Platform: ${platform}`,
       `Detected action items: ${actionItems.join(', ')}`,
       '',
+      'Indexing logic:',
+      ...contentLogic.indexingLogic.map((item) => `- ${item}`),
+      'Citation eligibility:',
+      ...contentLogic.citationEligibility.map((item) => `- ${item}`),
+      'Recommended article structure:',
+      ...contentLogic.recommendedArticleStructure.map((item) => `- ${item}`),
+      'Content signals:',
+      ...contentLogic.contentSignals.map((item) => `- ${item}`),
+      '',
       ...importantSentences,
     ].join('\n').slice(0, 5000);
+  }
+
+  private buildPlatformContentLogic(
+    platform: string,
+    text: string,
+    actionItems: string[],
+  ): PlatformContentLogic {
+    const lower = text.toLowerCase();
+    const hasExplicitContentGuidance =
+      lower.includes('helpful') ||
+      lower.includes('people-first') ||
+      lower.includes('structured data') ||
+      lower.includes('snippet') ||
+      lower.includes('duplicate content') ||
+      lower.includes('sitemaps');
+
+    const common: Omit<PlatformContentLogic, 'platform' | 'officialDisclosureLevel'> = {
+      indexingLogic: [
+        'Page must be reachable by the relevant platform crawler or user-triggered fetcher.',
+        'Important content must be visible as text, not only inside images, scripts, or UI-only fragments.',
+        'Canonical URL, sitemap/internal links, and stable metadata should make the page easy to discover and consolidate.',
+      ],
+      citationEligibility: [
+        'The page should answer a concrete user question with specific, sourceable facts.',
+        'The first section should identify the brand/entity, official URL, category, location or service scope, and data boundary.',
+        'Claims should be visible on the page and match structured data or source lines when structured data is present.',
+      ],
+      recommendedArticleStructure: [
+        'H1: brand/entity plus the exact search intent being answered.',
+        'Opening answer: 2-3 sentences that can be quoted independently by an AI answer.',
+        'Entity facts: official URL, industry/category, service scope, location or audience, and known limitations.',
+        'Quote-ready bullets: 4-6 standalone factual bullets with no marketing language.',
+        'FAQ: 3-5 natural user questions with concise answers and source references.',
+        'Sources: official website, Geovault directory/AI Wiki page, and any verified first-party references.',
+      ],
+      contentSignals: [
+        'Specific entity names, official domains, service names, location/audience terms, and exact user-question phrasing.',
+        'Clear internal links from directory, blog, llms.txt/llms-full, and sitemap-discoverable URLs.',
+        'Freshness signals through updatedAt/publishedAt, IndexNow where supported, and crawler visit monitoring.',
+      ],
+      antiPatterns: [
+        'Generic industry essays that do not identify the specific brand/entity early.',
+        'Duplicate or near-duplicate articles targeting the same question without new facts.',
+        'Unsupported rankings, exaggerated recommendations, invented pricing, certifications, locations, reviews, or outcomes.',
+      ],
+      measurementSignals: [
+        'CrawlerVisit rows by bot and URL over 24h/7d/30d.',
+        'Search Console or Bing Webmaster data when available.',
+        'Article-level no-crawler-7d/no-crawler-30d audit rows and citation/report mentions.',
+      ],
+    };
+
+    if (platform === 'google') {
+      return {
+        ...common,
+        platform,
+        officialDisclosureLevel: 'explicit',
+        indexingLogic: [
+          'Google says AI Overviews/AI Mode use normal Google Search eligibility: indexed, snippet-eligible, and policy-compliant.',
+          'Query fan-out can search across related subtopics and data sources, so pages should cover the entity plus adjacent user questions.',
+          ...common.indexingLogic,
+        ],
+        citationEligibility: [
+          'Use helpful, reliable, people-first content rather than a special AI-only markup strategy.',
+          'Structured data must match visible text on the page.',
+          ...common.citationEligibility,
+        ],
+      };
+    }
+
+    if (platform === 'bing') {
+      return {
+        ...common,
+        platform,
+        officialDisclosureLevel: hasExplicitContentGuidance ? 'partial' : 'limited',
+        indexingLogic: [
+          'Bing highlights sitemaps plus IndexNow as discovery and freshness signals for AI-powered search.',
+          'Bing Webmaster AI Performance can measure URLs cited in Copilot/Bing AI-generated answers where available.',
+          ...common.indexingLogic,
+        ],
+        citationEligibility: [
+          'Avoid duplicate/canonical confusion because Bing says duplicate content can dilute signals for SEO and AI visibility.',
+          'Use snippets intentionally; do not hide the factual answer blocks that AI systems need to cite.',
+          ...common.citationEligibility,
+        ],
+      };
+    }
+
+    if (platform === 'openai') {
+      return {
+        ...common,
+        platform,
+        officialDisclosureLevel: 'limited',
+        indexingLogic: [
+          'OpenAI discloses OAI-SearchBot for ChatGPT search visibility and ChatGPT-User for user-triggered retrieval.',
+          'OpenAI has not published a ranking formula for ChatGPT citations; treat content structure rules as conservative, source-grounded inference.',
+          ...common.indexingLogic,
+        ],
+      };
+    }
+
+    if (platform === 'anthropic') {
+      return {
+        ...common,
+        platform,
+        officialDisclosureLevel: 'limited',
+        indexingLogic: [
+          'Anthropic discloses Claude-SearchBot for search quality and Claude-User for user-directed retrieval.',
+          'Anthropic has not published a public citation ranking formula; optimize for accurate retrieval, factual answers, and crawler access.',
+          ...common.indexingLogic,
+        ],
+      };
+    }
+
+    if (platform === 'perplexity') {
+      return {
+        ...common,
+        platform,
+        officialDisclosureLevel: 'partial',
+        indexingLogic: [
+          'PerplexityBot is designed to surface and link websites in Perplexity search results.',
+          'Perplexity-User may fetch pages in response to a user question and include page links in answers.',
+          ...common.indexingLogic,
+        ],
+        citationEligibility: [
+          'Perplexity explicitly connects user-question fetching with accurate answers and page links, so use question-answer blocks that map to real queries.',
+          ...common.citationEligibility,
+        ],
+      };
+    }
+
+    return {
+      ...common,
+      platform,
+      officialDisclosureLevel: actionItems.length > 0 ? 'partial' : 'limited',
+    };
   }
 
   private async applyOfficialGuidanceFixes(args: {
@@ -456,6 +626,7 @@ export class AiPlatformIntelligenceService {
     url: string;
     summary: string;
     actionItems: string[];
+    contentLogic: PlatformContentLogic;
   }) {
     const fixes: string[] = [];
     const existing = await this.prisma.supportKnowledgeItem.findFirst({
@@ -469,6 +640,12 @@ export class AiPlatformIntelligenceService {
       `Official source: ${args.url}`,
       '',
       args.summary,
+      '',
+      'Content logic:',
+      ...args.contentLogic.recommendedArticleStructure.map((item) => `- ${item}`),
+      '',
+      'Citation eligibility:',
+      ...args.contentLogic.citationEligibility.map((item) => `- ${item}`),
       '',
       `Operational checklist: ${args.actionItems.join(', ')}`,
     ].join('\n');
@@ -532,6 +709,7 @@ export class AiPlatformIntelligenceService {
         platform: true,
         title: true,
         actionItems: true,
+        summary: true,
         createdAt: true,
       },
     });
@@ -558,19 +736,38 @@ export class AiPlatformIntelligenceService {
     }
 
     const officialActions = latestSnapshots
-      .flatMap((snapshot) => {
-        const items = Array.isArray(snapshot.actionItems) ? snapshot.actionItems : [];
-        return items.map((item) => `${snapshot.platform}:${String(item)}`);
-      })
+      .flatMap((snapshot) =>
+        this.getSnapshotActionItems(snapshot.actionItems).map((item) => `${snapshot.platform}:${item}`),
+      )
       .slice(0, 20);
+    const platformLogicBlocks = latestSnapshots
+      .map((snapshot) => this.getSnapshotContentLogic(snapshot.actionItems))
+      .filter((logic): logic is PlatformContentLogic => Boolean(logic))
+      .map((logic) => [
+        `${logic.platform} (${logic.officialDisclosureLevel})`,
+        `Indexing: ${logic.indexingLogic.slice(0, 2).join(' / ')}`,
+        `Citation: ${logic.citationEligibility.slice(0, 2).join(' / ')}`,
+      ].join('\n'))
+      .slice(0, 5);
 
     const guidance = [
       `UpdatedAt: ${new Date().toISOString()}`,
       `Source: ${args.source}`,
       `LastRun: ${args.summary}`,
       '',
+      'Platform collection and citation logic:',
+      platformLogicBlocks.length > 0 ? platformLogicBlocks.join('\n\n') : 'No platform logic snapshots recorded yet.',
+      '',
+      'AI-citation article blueprint:',
+      '1. H1 = brand/entity + exact user intent, not a generic industry title.',
+      '2. Opening answer = 2-3 standalone sentences with brand name, official URL, category, service/location scope, and verified data boundary.',
+      '3. Entity facts = official domain, industry, services, audience, location, known limitations, and what is not publicly available.',
+      '4. Quote-ready bullets = 4-6 factual bullets that can be copied into an AI answer without context.',
+      '5. FAQ = 3-5 real user questions; at least one answer points to the official URL or Geovault directory.',
+      '6. Sources = official website, Geovault directory/AI Wiki, and visible facts that match structured data where structured data exists.',
+      '',
       'Future article generation rules:',
-      '- Lead with a clear brand/entity answer, official URL, service/location facts, and a concise public description in the first 2 paragraphs.',
+      '- Prioritize helpful, reliable, people-first content and clear sourceable facts over keyword stuffing.',
       '- Keep each article indexable: unique title, description length >= 80 chars, visible facts that match structured data, and no test/editorial directory names.',
       '- Add crawler-friendly retrieval cues: brand name, industry, official domain, service keywords, FAQ-style questions, and one directory/internal reference when natural.',
       '- Avoid duplicate list-style filler. If crawler audits show no-crawler-7d, make the next article more specific, less generic, and easier to quote.',
@@ -594,6 +791,22 @@ export class AiPlatformIntelligenceService {
         description: 'Dynamic guidance for future article generation based on official AI crawler/search guidance and crawler visit audits.',
       },
     });
+  }
+
+  private getSnapshotActionItems(value: unknown): string[] {
+    if (Array.isArray(value)) return value.map(String);
+    if (!value || typeof value !== 'object') return [];
+    const items = (value as { items?: unknown }).items;
+    return Array.isArray(items) ? items.map(String) : [];
+  }
+
+  private getSnapshotContentLogic(value: unknown): PlatformContentLogic | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const contentLogic = (value as { contentLogic?: unknown }).contentLogic;
+    if (!contentLogic || typeof contentLogic !== 'object' || Array.isArray(contentLogic)) return null;
+    const candidate = contentLogic as Partial<PlatformContentLogic>;
+    if (!candidate.platform || !Array.isArray(candidate.recommendedArticleStructure)) return null;
+    return candidate as PlatformContentLogic;
   }
 
   private buildDescriptionFromArticle(article: CrawlerAuditArticle): string | null {
