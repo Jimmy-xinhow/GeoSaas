@@ -3,13 +3,20 @@ import { ConfigService } from '@nestjs/config';
 import { matchBrand } from './match-brand';
 import { classifyDetectorError, withDetectorRetry } from './detector-error';
 
+// Gemini retires model ids too (gemini-2.0-flash was pulled and returned a
+// 404 NOT_FOUND), so keep this overridable via env — a rotation is then a
+// config change, not a code change.
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+
 @Injectable()
 export class GeminiDetector {
   private apiKey: string;
+  private model: string;
   private logger = new Logger(GeminiDetector.name);
 
   constructor(private config: ConfigService) {
     this.apiKey = this.config.get('GEMINI_API_KEY') || '';
+    this.model = this.config.get<string>('MONITOR_GEMINI_MODEL') || DEFAULT_GEMINI_MODEL;
   }
 
   async detect(query: string, brandName: string, brandUrl: string): Promise<{ mentioned: boolean; position: number | null; response: string }> {
@@ -17,7 +24,7 @@ export class GeminiDetector {
     try {
       const text = await withDetectorRetry(async () => {
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
