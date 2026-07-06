@@ -20,6 +20,11 @@ export const revalidate = 0;
 const FETCH_TIMEOUT_MS = 15000;
 const SITEMAP_DATA_TTL_MS = 30 * 60 * 1000;
 
+// Baseline "last modified" for pages without real per-page timestamps.
+// Using the current time on every request makes lastModified meaningless to
+// crawlers; a stable deploy-baseline date is honest and cache-friendly.
+const STATIC_LAST_MODIFIED = new Date('2026-07-01');
+
 interface SitemapData {
   sites: Array<{ id: string; bestScoreAt: string | null }>;
   blogArticles: Array<{ slug: string; createdAt: string }>;
@@ -72,7 +77,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const url = page.url === '/' ? BASE_URL : `${BASE_URL}${page.url}`;
     entries.push({
       url,
-      lastModified: now,
+      lastModified: STATIC_LAST_MODIFIED,
       changeFrequency: page.changeFrequency,
       priority: page.priority,
     });
@@ -88,12 +93,32 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
+  // ─── Single aggregate API call (also feeds industry lastModified below) ───
+  const data = await fetchSitemapData();
+
+  // Latest scan time per industry, derived from the industry→siteIds map and
+  // each site's bestScoreAt. Falls back to the static baseline when unknown.
+  const siteScoreAt = new Map<string, string | null>(
+    (data?.sites ?? []).map((s) => [s.id, s.bestScoreAt]),
+  );
+  const industryLastModified = (industry: string): Date => {
+    const siteIds = data?.industrySites?.[industry] ?? [];
+    let latest = 0;
+    for (const id of siteIds) {
+      const at = siteScoreAt.get(id);
+      if (!at) continue;
+      const ts = new Date(at).getTime();
+      if (!Number.isNaN(ts) && ts > latest) latest = ts;
+    }
+    return latest > 0 ? new Date(latest) : STATIC_LAST_MODIFIED;
+  };
+
   // ─── Industry directory index pages ───
   for (const ind of INDUSTRIES) {
     if (ind.value === 'other') continue;
     entries.push({
       url: `${BASE_URL}/directory/industry/${ind.value}`,
-      lastModified: now,
+      lastModified: industryLastModified(ind.value),
       changeFrequency: 'weekly',
       priority: 0.7,
     });
@@ -104,14 +129,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (ind.value === 'other') continue;
     entries.push({
       url: `${BASE_URL}/industry/${ind.value}`,
-      lastModified: now,
+      lastModified: industryLastModified(ind.value),
       changeFrequency: 'weekly',
       priority: 0.8,
     });
   }
 
-  // ─── Single aggregate API call ───
-  const data = await fetchSitemapData();
   if (!data) return entries;
 
   // Directory sites + per-brand feeds

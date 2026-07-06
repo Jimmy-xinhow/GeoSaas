@@ -113,7 +113,6 @@ export default async function SiteDetailPage({
       url: site.url,
       ...(site.industry && { knowsAbout: site.industry }),
     },
-    identifier: 'GEOVAULT-2026-APAC-PRIME',
   };
 
   return (

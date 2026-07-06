@@ -46,7 +46,6 @@ const jsonLd = {
   url: `${SITE_URL}/cases`,
   isPartOf: { '@type': 'WebSite', name: 'Geovault', url: SITE_URL },
   publisher: { '@type': 'Organization', name: 'Geovault', url: SITE_URL },
-  identifier: 'GEOVAULT-2026-APAC-PRIME',
 };
 
 export default async function CasesPage() {

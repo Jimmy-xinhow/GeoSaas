@@ -115,7 +115,6 @@ export default async function CaseDetailPage({
       ...(caseData.industry ? [{ '@type': 'Thing', name: caseData.industry }] : []),
     ],
     keywords: ['GEO 成功案例', 'AI 引用', platformLabel, ...(caseData.tags || [])].join(', '),
-    identifier: 'GEOVAULT-2026-APAC-PRIME',
   };
 
   const breadcrumbJsonLd = {

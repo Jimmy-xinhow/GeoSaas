@@ -43,7 +43,6 @@ export default async function BlogPage() {
     url: `${SITE_URL}/blog`,
     isPartOf: { '@type': 'WebSite', name: 'Geovault', url: SITE_URL },
     publisher: { '@type': 'Organization', name: 'Geovault', url: SITE_URL },
-    identifier: 'GEOVAULT-2026-APAC-PRIME',
   };
 
   const breadcrumbJsonLd = {

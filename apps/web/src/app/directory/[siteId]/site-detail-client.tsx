@@ -75,32 +75,10 @@ function JsonLdScript({ site }: { site: DirectorySiteDetail }) {
             },
           ]
         : []),
-      {
-        '@type': 'LocalBusiness',
-        name: site.name,
-        url: site.url,
-        description: site.profile?.description || `${site.name} — GEO Score: ${site.bestScore}/100`,
-        ...(site.industry && { industry: site.industry }),
-        aggregateRating: {
-          '@type': 'AggregateRating',
-          ratingValue: site.bestScore,
-          bestRating: 100,
-          worstRating: 0,
-          ratingCount: site.latestScan ? 1 : 0,
-        },
-        review: {
-          '@type': 'Review',
-          author: { '@type': 'Organization', name: 'Geovault', url: 'https://www.geovault.app' },
-          reviewRating: {
-            '@type': 'Rating',
-            ratingValue: site.bestScore,
-            bestRating: 100,
-            worstRating: 0,
-          },
-          name: `${site.name} GEO AI 可讀性評分`,
-          reviewBody: `${site.name} 的 GEO 分數為 ${site.bestScore}/100，由 Geovault 平台的 9 項 AI 可讀性指標評估。`,
-        },
-      },
+      // LocalBusiness node removed: its aggregateRating/review were fabricated
+      // from the platform's self-assessed GEO score (Google structured-data
+      // policy risk), and without address/telephone the node was an empty
+      // shell duplicating Organization above.
       {
         '@type': 'BreadcrumbList',
         itemListElement: [

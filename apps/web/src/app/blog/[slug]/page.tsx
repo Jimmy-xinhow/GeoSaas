@@ -193,7 +193,6 @@ export default async function BlogPostPage({ params }: Props) {
     about: post.site ? [{ '@type': 'Thing', name: post.site.name, url: post.site.url }] : undefined,
     mentions: post.targetKeywords?.map((name) => ({ '@type': 'Thing', name })),
     keywords: post.targetKeywords?.join(', '),
-    identifier: 'GEOVAULT-2026-APAC-PRIME',
   };
   const faqJsonLd = extractFaqJsonLd(post.content);
 

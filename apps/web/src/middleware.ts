@@ -154,7 +154,13 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   response.headers.set('X-DNS-Prefetch-Control', 'on');
 
   // ─── Prevent indexing of private pages ───
-  if (pathname.startsWith('/admin') || pathname.startsWith('/dashboard') || pathname.startsWith('/settings') || pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')) {
+  const PRIVATE_PREFIXES = [
+    '/admin', '/dashboard', '/settings',
+    '/login', '/register', '/forgot-password', '/reset-password', '/verify-email',
+    '/sites', '/monitor', '/content', '/publish', '/playbook',
+    '/affiliate', '/brand-spread', '/published-content', '/support',
+  ];
+  if (PRIVATE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
 

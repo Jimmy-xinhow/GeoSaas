@@ -13,8 +13,18 @@ const PRIVATE_PATHS = [
   '/api/',
   '/settings',
   '/admin/',
-  '/dashboard/',
+  '/dashboard',
   '/cdn-cgi/',
+  // Logged-in dashboard-group pages (no public routes share these prefixes)
+  '/sites',
+  '/monitor',
+  '/content',
+  '/publish',
+  '/playbook',
+  '/affiliate',
+  '/brand-spread',
+  '/published-content',
+  '/support',
 ];
 const AUTH_NOINDEX_PATHS = [
   '/login',
