@@ -10,6 +10,10 @@ import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
 import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
 import { ContentQualityRunner } from '../content-quality/content-quality.runner';
 import {
+  DEFAULT_DUPLICATE_THRESHOLD,
+  maxSimilarity,
+} from '../content-quality/text-similarity.util';
+import {
   ClientDailyData,
   createClientDailySpec,
 } from '../content-quality/specs/client-daily.spec';
@@ -2215,6 +2219,15 @@ ${args.currentDraft || '(empty draft)'}`;
    */
   @Cron('0 3 * * *', { name: 'article-citation-upgrade' })
   async scheduledCitationUpgrade(): Promise<void> {
+    // Paused with the GEO factory (same flag as bulk-generation/format-refresh).
+    // This cron unpublishes up to 100 non-compliant articles per day and relies
+    // on scheduledBulkGeneration to refill them — but that refill pipeline is
+    // disabled unless LEGACY_GEO_BULK_ENABLED=1, so running this alone causes a
+    // net content drain with no replacement. Demote + refill must move together.
+    if (this.config.get('LEGACY_GEO_BULK_ENABLED') !== '1') {
+      this.logger.warn('Legacy GEO citation-upgrade disabled (set LEGACY_GEO_BULK_ENABLED=1 to re-enable with the refill pipeline)');
+      return;
+    }
     this.logger.log('Starting article citation upgrade batch...');
 
     const articles = await this.prisma.blogArticle.findMany({
@@ -2257,6 +2270,77 @@ ${args.currentDraft || '(empty draft)'}`;
     this.logger.log(
       `Citation upgrade: unpublished ${unpublished} old articles (${nonCompliant.length - unpublished} remaining)`,
     );
+  }
+
+  /**
+   * Admin one-shot: batch-unpublish every still-published legacy GEO-score
+   * template article (the 6 self-rated templates the CRG proved are citation
+   * poison). Independent of the per-site brand_profile demotion — this cleans
+   * the whole corpus regardless of whether a replacement brand_profile exists.
+   *
+   * Defaults to dry-run (hard requirement): callers get the grouped counts and
+   * must pass dryRun=false explicitly to actually unpublish.
+   *
+   * Excludes category 'case-study': success-case stories were historically
+   * mislabeled templateType geo_overview but are user-submitted case articles,
+   * not self-rated GEO pages.
+   */
+  async demoteLegacyGeoArticles(
+    opts: { dryRun?: boolean; limit?: number } = {},
+  ): Promise<{
+    dryRun: boolean;
+    totalMatched: number;
+    selected: number;
+    demoted?: number;
+    byTemplateType: Record<string, number>;
+    bySiteId: Record<string, number>;
+  }> {
+    const dryRun = opts.dryRun !== false; // only an explicit false executes
+    const articles = await this.prisma.blogArticle.findMany({
+      where: {
+        published: true,
+        templateType: { in: ALL_TEMPLATE_TYPES },
+        category: { not: 'case-study' },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, siteId: true, templateType: true },
+    });
+    const totalMatched = articles.length;
+    const targets =
+      typeof opts.limit === 'number' && opts.limit > 0
+        ? articles.slice(0, opts.limit)
+        : articles;
+
+    const byTemplateType: Record<string, number> = {};
+    const bySiteId: Record<string, number> = {};
+    for (const article of targets) {
+      byTemplateType[article.templateType] = (byTemplateType[article.templateType] ?? 0) + 1;
+      const siteKey = article.siteId ?? 'no_site';
+      bySiteId[siteKey] = (bySiteId[siteKey] ?? 0) + 1;
+    }
+
+    if (dryRun) {
+      return { dryRun: true, totalMatched, selected: targets.length, byTemplateType, bySiteId };
+    }
+
+    const result = await this.prisma.blogArticle.updateMany({
+      where: { id: { in: targets.map((article) => article.id) } },
+      data: { published: false, lastRegeneratedAt: new Date() },
+    });
+    if (result.count > 0) {
+      this.llmsHostingService.invalidatePlatformLlmsFull();
+    }
+    this.logger.log(
+      `demote-legacy-geo: unpublished ${result.count}/${totalMatched} legacy GEO-template articles`,
+    );
+    return {
+      dryRun: false,
+      totalMatched,
+      selected: targets.length,
+      demoted: result.count,
+      byTemplateType,
+      bySiteId,
+    };
   }
 
   /**
@@ -4214,6 +4298,41 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
       };
     }
 
+    // Fallback content is fixed-template assembly — the exact failure mode
+    // behind the client_daily duplicate wave. It must never publish directly:
+    // (1) near-duplicates of the site's recent client_daily corpus are skipped
+    // outright, (2) survivors are saved as unpublished drafts for manual
+    // review. Only LLM output that passed the gates keeps published:true.
+    const usedFallback = fallbackReasons.length > 0;
+    if (usedFallback) {
+      const recent = await this.prisma.blogArticle.findMany({
+        where: { siteId: site.id, templateType: 'client_daily' },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        select: { slug: true, content: true },
+      });
+      const similarity = maxSimilarity(content, recent.map((a) => a.content || ''));
+      if (similarity.score > DEFAULT_DUPLICATE_THRESHOLD) {
+        const matchedSlug =
+          similarity.matchedIndex >= 0 ? recent[similarity.matchedIndex]?.slug : undefined;
+        this.logger.warn(
+          `client_daily fallback skipped ${site.name}/${resolvedDay}: near-duplicate of recent client_daily` +
+            ` (similarity=${similarity.score.toFixed(3)} > ${DEFAULT_DUPLICATE_THRESHOLD}` +
+            `${matchedSlug ? `, matched=${matchedSlug}` : ''})`,
+        );
+        return {
+          status: 'skipped',
+          reasons: [
+            'fallback_duplicate_skipped',
+            `max_similarity:${similarity.score.toFixed(3)}`,
+            ...fallbackReasons,
+          ],
+          dayType: resolvedDay,
+          totalScore: Math.max(result.totalScore ?? 0, operatingAudit.score),
+        };
+      }
+    }
+
     let article: { id: string };
     try {
       article = await this.prisma.blogArticle.create({
@@ -4228,7 +4347,7 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
           targetKeywords: clientDailyTargetKeywords,
           readingTimeMinutes: this.templateService.estimateReadingTime('client_daily'),
           readTime: `${this.templateService.estimateReadingTime('client_daily')} 分鐘`,
-          published: true,
+          published: !usedFallback,
           lastRegeneratedAt: new Date(),
         },
       });
@@ -4259,14 +4378,18 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
         `client_daily quality-log attach failed ${site.name}/${resolvedDay}: ${err instanceof Error ? err.message : err}`,
       );
     }
-    this.llmsHostingService.invalidatePlatformLlmsFull(site.id);
-    this.pingIndexNow(slug);
+    // Drafts (fallback path) are not public — no llms-full invalidation and
+    // no IndexNow ping until a human reviews and publishes them.
+    if (!usedFallback) {
+      this.llmsHostingService.invalidatePlatformLlmsFull(site.id);
+      this.pingIndexNow(slug);
+    }
     return {
       status: 'generated',
       slug,
       dayType: resolvedDay,
       totalScore: Math.max(result.totalScore ?? 0, operatingAudit.score),
-      reasons: fallbackReasons.length > 0 ? fallbackReasons : undefined,
+      reasons: usedFallback ? ['fallback_saved_as_draft', ...fallbackReasons] : undefined,
     };
   }
 

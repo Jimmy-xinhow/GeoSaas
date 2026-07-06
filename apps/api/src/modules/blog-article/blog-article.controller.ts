@@ -606,4 +606,28 @@ export class AdminBlogController {
   generateSite(@Param('siteId') siteId: string) {
     return this.service.generateArticlesForSite(normalizeRequiredText(siteId, 'siteId', 220));
   }
+
+  @Post('demote-legacy-geo')
+  @ApiOperation({
+    summary:
+      '批次下架 6 種 legacy GEO-score 毒藥模板文章（CRG 證明不可引用）。預設 dryRun=true 只回報 templateType/siteId 分組統計；必須明確傳 { "dryRun": false } 才會真的下架並清 llms-full 快取。可選 limit 限制單次處理量。',
+  })
+  demoteLegacyGeo(@Body() body: { dryRun?: unknown; limit?: unknown } = {}) {
+    // Hard default: dry-run. Anything other than an explicit boolean false
+    // (including omission, strings, truthy junk) stays in preview mode.
+    const dryRun = body?.dryRun !== false;
+    let limit: number | undefined;
+    if (body?.limit !== undefined && body?.limit !== null) {
+      if (
+        typeof body.limit !== 'number' ||
+        !Number.isSafeInteger(body.limit) ||
+        body.limit < 1 ||
+        body.limit > 100000
+      ) {
+        throw new BadRequestException('limit must be an integer between 1 and 100000');
+      }
+      limit = body.limit;
+    }
+    return this.service.demoteLegacyGeoArticles({ dryRun, limit });
+  }
 }

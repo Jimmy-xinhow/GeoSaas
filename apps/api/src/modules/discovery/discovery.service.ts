@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScanPipelineService } from '../scan/scan-pipeline.service';
@@ -355,8 +355,20 @@ export class DiscoveryService {
 
   /**
    * Enrich industry content: search for discussions/reviews and create Q&A.
+   *
+   * Disabled by default (DISCOVERY_ENRICH_ENABLED=1 to re-enable): it writes
+   * AI-synthesized Q&A straight into SiteQa with NO quality/citation gate,
+   * attributing generic industry answers to real brands (category
+   * 'enrichment'). Downstream consumers (brand-profile context, faq-article
+   * candidates) now exclude category 'enrichment' to keep the pollution
+   * isolated either way.
    */
   async enrichIndustryContent(): Promise<{ created: number }> {
+    if (this.config.get('DISCOVERY_ENRICH_ENABLED') !== '1') {
+      throw new BadRequestException(
+        'Industry content enrichment is disabled: it writes ungated AI-generated Q&A into SiteQa. Set DISCOVERY_ENRICH_ENABLED=1 to re-enable.',
+      );
+    }
     const openaiKey = this.config.get<string>('OPENAI_API_KEY');
     if (!openaiKey) return { created: 0 };
 

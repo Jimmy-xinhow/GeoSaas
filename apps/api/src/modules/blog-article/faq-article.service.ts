@@ -284,6 +284,10 @@ export class FaqArticleService {
     }
 
     const scored: FaqSource[] = qas
+      // Exclude discovery-enrichment Q&A: AI-synthesized industry answers
+      // written to SiteQa without any quality gate — not brand facts, so they
+      // must never seed a faq_deepdive article.
+      .filter((qa) => qa.category !== 'enrichment')
       .filter((qa) => !coveredQaIds.has(qa.id))
       .filter((qa) => (qa.question || '').trim().length >= 6)
       .filter((qa) => (qa.answer || '').replace(/\s+/g, '').length >= 40)

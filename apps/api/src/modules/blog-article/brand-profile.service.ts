@@ -10,8 +10,17 @@ import { CitationReadinessResult } from '../citation-readiness/citation-readines
 const TEMPLATE_TYPE = 'brand_profile';
 const DEFAULT_GEN_MODEL = 'claude-opus-4-8';
 // Old GEO-score brand pages superseded by brand_profile — demoted once a
-// citable page exists for the site.
-const DEMOTE_TYPES = ['geo_overview', 'brand_reputation', 'industry_benchmark', 'competitor_comparison'];
+// citable page exists for the site. Covers all 6 legacy self-rated GEO-score
+// templates the CRG proved uncitable (score_breakdown / improvement_tips were
+// previously missing and leaked through the demotion).
+const DEMOTE_TYPES = [
+  'geo_overview',
+  'score_breakdown',
+  'competitor_comparison',
+  'improvement_tips',
+  'industry_benchmark',
+  'brand_reputation',
+];
 // Daily rollout cap → spreads the ~617 brands-with-facts across ~30 days.
 const DEFAULT_DAILY = 21;
 
@@ -246,7 +255,14 @@ export class BrandProfileService {
   private async buildContext(siteId: string, profile: Record<string, any>): Promise<BrandShowcaseContext> {
     const enriched = (profile._enriched as Record<string, any>) || {};
     const qaRows = await this.prisma.siteQa.findMany({
-      where: { siteId },
+      // Exclude category 'enrichment': ungated AI-synthesized industry Q&A
+      // (discovery.enrichIndustryContent) attributed to brands without
+      // verification — must not leak into citation-first brand_profile pages.
+      // OR-with-null keeps rows whose category is NULL (Prisma `not` drops them).
+      where: {
+        siteId,
+        OR: [{ category: null }, { category: { not: 'enrichment' } }],
+      },
       orderBy: { sortOrder: 'asc' },
       select: { question: true, answer: true },
       take: 30,
