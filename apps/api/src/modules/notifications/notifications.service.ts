@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { NotificationType } from './notification-types';
 
 @Injectable()
 export class NotificationsService {
@@ -47,7 +48,7 @@ export class NotificationsService {
     if (!user) return;
 
     switch (type) {
-      case 'scan_complete':
+      case NotificationType.SCAN_COMPLETE:
         await this.email.sendScanComplete(user.email, {
           siteName: title.replace('掃描完成 — ', ''),
           score: parseInt(message.match(/(\d+)\/100/)?.[1] || '0'),
@@ -55,23 +56,23 @@ export class NotificationsService {
         });
         break;
 
-      case 'badge_earned':
+      case NotificationType.BADGE_EARNED:
         await this.email.sendBadgeEarned(user.email, {
           siteName: title,
           badgeLabel: message,
         });
         break;
 
-      case 'monitor_change':
+      case NotificationType.MONITOR_CHANGE:
         await this.email.sendMonitorChange(user.email, { changes: message });
         break;
 
-      case 'welcome':
+      case NotificationType.WELCOME:
         await this.email.sendWelcome(user.email, user.name || '使用者');
         break;
 
       default:
-        // Other notification types: in-app only, no email
+        // Other notification types (incl. score_drop): in-app only, no email
         break;
     }
   }

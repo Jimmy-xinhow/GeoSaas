@@ -1158,12 +1158,9 @@ export class DirectoryService {
       },
     });
 
-    // Auto-submit to IndexNow when site goes public
-    if (dto.isPublic && this.indexNowService) {
-      this.indexNowService.submitUrl(site.url).catch((err) => {
-        this.logger.warn(`IndexNow auto-submit failed for ${site.url}: ${err}`);
-      });
-    }
+    // 注意：不要對 site.url（品牌外部網域）做 IndexNow submitUrl——金鑰驗證必失敗。
+    // 上架時的 IndexNow ping 已由 invalidatePublicDirectoryCaches → invalidatePlatformLlmsFull
+    // 提交平台自己的 /directory/{siteId} 頁面。
     this.invalidatePublicDirectoryCaches(siteId);
 
     return updated;

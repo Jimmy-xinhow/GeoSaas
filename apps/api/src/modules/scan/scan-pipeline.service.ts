@@ -16,6 +16,8 @@ import { IIndicatorAnalyzer, IndicatorResult, AnalysisInput } from './indicators
 import { BadgeService } from '../badge/badge.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/notification-types';
 
 @Injectable()
 export class ScanPipelineService {
@@ -39,6 +41,7 @@ export class ScanPipelineService {
     private readonly badgeService: BadgeService,
     private readonly indexNowService: IndexNowService,
     private readonly llmsHostingService: LlmsHostingService,
+    private readonly notificationsService: NotificationsService,
   ) {
     this.indicators = [
       this.jsonLd,
@@ -115,12 +118,17 @@ export class ScanPipelineService {
       // Step 4: Calculate total weighted score
       const totalScore = this.scoring.calculateTotalScore(resultsMap);
 
-      // Step 5: Get siteId for this scan
+      // Step 5: Get siteId for this scan (and site info before overwriting bestScore,
+      // so we can detect score drops and notify the owner)
       const scanRecord = await this.prisma.scan.findUnique({
         where: { id: scanId },
-        select: { siteId: true },
+        select: {
+          siteId: true,
+          site: { select: { userId: true, name: true, bestScore: true } },
+        },
       });
       const siteId = scanRecord?.siteId;
+      const previousBestScore = scanRecord?.site?.bestScore ?? null;
 
       // Calculate tier from score
       const tier = totalScore >= 80 ? 'gold' : totalScore >= 70 ? 'silver' : totalScore >= 60 ? 'bronze' : null;
@@ -166,6 +174,36 @@ export class ScanPipelineService {
 
       // Post-scan automations (fire-and-forget)
       if (siteId) {
+        // 0. Notify site owner (authenticated scans only — guest scans use executeGuestScan)
+        const ownerId = scanRecord?.site?.userId;
+        const siteName = scanRecord?.site?.name || url;
+        if (ownerId) {
+          this.notificationsService
+            .create(
+              ownerId,
+              NotificationType.SCAN_COMPLETE,
+              `掃描完成 — ${siteName}`,
+              `${siteName} 的 GEO 掃描已完成，總分 ${totalScore}/100。`,
+            )
+            .catch((err) => {
+              this.logger.warn(`Scan-complete notification failed for site ${siteId}: ${err}`);
+            });
+
+          // Score drop detection: notify when new score is more than 5 points below previous best
+          if (previousBestScore !== null && previousBestScore - totalScore > 5) {
+            this.notificationsService
+              .create(
+                ownerId,
+                NotificationType.SCORE_DROP,
+                `分數下降警示 — ${siteName}`,
+                `${siteName} 的 GEO 分數由 ${previousBestScore} 降至 ${totalScore}（下降 ${previousBestScore - totalScore} 分），建議檢查網站近期變更。`,
+              )
+              .catch((err) => {
+                this.logger.warn(`Score-drop notification failed for site ${siteId}: ${err}`);
+              });
+          }
+        }
+
         // 1. Badge evaluation
         this.badgeService.evaluateBadges(siteId).catch((err) => {
           this.logger.warn(`Badge evaluation failed for site ${siteId}: ${err}`);

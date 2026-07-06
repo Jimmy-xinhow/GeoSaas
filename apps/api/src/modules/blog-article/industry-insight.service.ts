@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import OpenAI from 'openai';
 import { INDUSTRIES } from '@geovault/shared';
@@ -115,8 +114,10 @@ export class IndustryInsightService {
     return { slug: article.slug };
   }
 
-  /** Cron: 每週一凌晨 3 點，為每個行業輪流生成一種洞察文章 */
-  @Cron('0 3 * * 1', { name: 'weekly-industry-insights' })
+  /**
+   * 每週一凌晨 3 點，為每個行業輪流生成一種洞察文章。
+   * 由 CronManager 排程（task-registry 的 'weekly_industry_insights'），勿再加 @Cron 以免雙跑。
+   */
   async weeklyInsightGeneration(): Promise<void> {
     this.logger.log('Starting weekly industry insight generation...');
 

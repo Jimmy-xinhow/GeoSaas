@@ -1,64 +1,115 @@
 /**
- * Smart brand mention detection.
- * Checks if AI response text mentions the brand by:
- * 1. Full brand name match
- * 2. Each word/segment of the brand name (e.g. "蝦皮購物網" → ["蝦皮", "購物網"])
- * 3. URL domain match (e.g. "shopee.tw" → "shopee")
- * 4. Full URL match
+ * Smart brand mention detection (tightened to avoid citation-rate inflation).
+ *
+ * A response counts as "mentioned" only when:
+ * 1. The full brand name appears; or
+ * 2. The site's URL host appears (e.g. "shopee.tw") — strong match; or
+ * 3. The full brand URL appears; or
+ * 4. A distinctive partial segment appears: contiguous CJK run of >= 3 chars
+ *    (or English word of >= 4 chars) from the brand name that is NOT a generic
+ *    term. 2-char CJK fragments (e.g. 「蝦皮購物網」→「購物」) are no longer
+ *    accepted — they caused false positives on generic vocabulary.
  */
+
+/** Generic terms that must never count as a brand mention on their own. */
+const GENERIC_TERMS = new Set([
+  // CJK generic words (3+ chars; 2-char fragments are excluded by length rule)
+  '有限公司',
+  '股份有限公司',
+  '工作室',
+  '事務所',
+  '購物網',
+  '購物中心',
+  '生活館',
+  '專賣店',
+  '旗艦店',
+  '服務中心',
+  '科技公司',
+  '國際公司',
+  '企業社',
+  '商行網',
+  '官方網站',
+  '網路商店',
+  '線上商店',
+  // English generic words
+  'shop',
+  'store',
+  'online',
+  'official',
+  'company',
+  'group',
+  'studio',
+  'global',
+  'taiwan',
+  'service',
+  'services',
+  'tech',
+  'technology',
+  'digital',
+  'brand',
+  'best',
+  'home',
+  'life',
+  'world',
+  'international',
+]);
+
+const CJK_RUN_REGEX = /[一-鿿]{3,}/g;
+const ENGLISH_WORD_REGEX = /[a-zA-Z]{4,}/g;
+
+function toPosition(text: string, idx: number): number {
+  const position = Math.ceil(((idx + 1) / text.length) * 10);
+  return Math.min(position, 10);
+}
+
 export function matchBrand(
   text: string,
   brandName: string,
   brandUrl: string,
 ): { mentioned: boolean; position: number | null } {
+  if (!text) return { mentioned: false, position: null };
+
   const lowerText = text.toLowerCase();
+  const keywords: string[] = [];
 
-  // Build keyword list from brand name
-  const keywords: string[] = [brandName.toLowerCase()];
+  // (a) Full brand name — always a valid match
+  const fullName = brandName.trim().toLowerCase();
+  if (fullName.length >= 2) keywords.push(fullName);
 
-  // Split Chinese/English brand name into segments (2+ chars)
-  // e.g. "蝦皮購物網" → ["蝦皮", "購物", "購物網"]
-  // e.g. "立如整復" → ["立如", "整復", "立如整復"]
-  const chineseSegments = brandName.match(/[\u4e00-\u9fff]{2,}/g) || [];
-  for (const seg of chineseSegments) {
-    if (seg.length >= 2) keywords.push(seg.toLowerCase());
-    // Also try 2-char sub-segments for longer words
-    if (seg.length > 2) {
-      keywords.push(seg.substring(0, 2).toLowerCase());
-    }
-  }
-
-  // Extract English words
-  const englishWords = brandName.match(/[a-zA-Z]{2,}/gi) || [];
-  for (const w of englishWords) {
-    keywords.push(w.toLowerCase());
-  }
-
-  // Extract domain from URL (e.g. "https://shopee.tw/" → "shopee")
+  // (c) URL host — strong match (e.g. "shopee.tw", with or without www)
   try {
-    const url = new URL(brandUrl);
-    const hostParts = url.hostname.replace('www.', '').split('.');
-    if (hostParts[0] && hostParts[0].length >= 3) {
-      keywords.push(hostParts[0].toLowerCase());
-    }
+    const host = new URL(brandUrl).hostname.toLowerCase();
+    const bareHost = host.replace(/^www\./, '');
+    keywords.push(host);
+    if (bareHost !== host) keywords.push(bareHost);
   } catch {
     // invalid URL, skip
   }
 
-  // Also check full URL
-  if (brandUrl) {
-    keywords.push(brandUrl.toLowerCase());
+  // Full URL match
+  if (brandUrl) keywords.push(brandUrl.toLowerCase());
+
+  // (b) Distinctive partial segments only:
+  // CJK runs of >= 3 chars and English words of >= 4 chars, excluding generic terms.
+  const cjkRuns = brandName.match(CJK_RUN_REGEX) || [];
+  for (const seg of cjkRuns) {
+    const lower = seg.toLowerCase();
+    if (lower !== fullName && !GENERIC_TERMS.has(lower)) keywords.push(lower);
+  }
+
+  const englishWords = brandName.match(ENGLISH_WORD_REGEX) || [];
+  for (const w of englishWords) {
+    const lower = w.toLowerCase();
+    if (lower !== fullName && !GENERIC_TERMS.has(lower)) keywords.push(lower);
   }
 
   // Deduplicate
   const uniqueKeywords = [...new Set(keywords)].filter((k) => k.length >= 2);
 
-  // Check if any keyword is mentioned
   for (const keyword of uniqueKeywords) {
     const idx = lowerText.indexOf(keyword);
     if (idx !== -1) {
-      const position = Math.ceil(((idx + 1) / text.length) * 10);
-      return { mentioned: true, position: Math.min(position, 10) };
+      return { mentioned: true, position: toPosition(text, idx) };
     }
   }
 

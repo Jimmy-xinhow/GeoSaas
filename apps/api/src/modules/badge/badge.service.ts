@@ -2,6 +2,8 @@ import { ForbiddenException, Injectable, Logger, OnModuleDestroy } from '@nestjs
 import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { canAccessSite } from '../../common/auth/site-access';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/notification-types';
 
 interface BadgeDef {
   badge: string;
@@ -39,7 +41,10 @@ export class BadgeService implements OnModuleDestroy {
   private readonly redis: Redis | null;
   private redisAvailable = true;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {
     try {
       this.redis = new Redis({
         host: process.env.REDIS_HOST || 'localhost',
@@ -89,6 +94,8 @@ export class BadgeService implements OnModuleDestroy {
       where: { id: siteId },
       select: {
         bestScore: true,
+        userId: true,
+        name: true,
         _count: {
           select: {
             scans: { where: { status: 'COMPLETED' } },
@@ -138,6 +145,15 @@ export class BadgeService implements OnModuleDestroy {
             data: { siteId, badge: def.badge, label: def.label },
           });
           newBadges.push(def.badge);
+
+          // Notify owner only for newly awarded badges (existing ones never reach here)
+          if (site.userId) {
+            this.notificationsService
+              .create(site.userId, NotificationType.BADGE_EARNED, site.name, def.label)
+              .catch((err) => {
+                this.logger.warn(`Badge-earned notification failed for site ${siteId}: ${err}`);
+              });
+          }
         } catch {
           // unique constraint — already exists
         }

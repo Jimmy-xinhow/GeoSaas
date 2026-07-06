@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MonitorService } from './monitor.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/notification-types';
 
 @Injectable()
 export class MonitorSchedulerService {
@@ -17,16 +17,16 @@ export class MonitorSchedulerService {
 
   /**
    * 每天凌晨 3:00 執行 — 檢查 Pro/Enterprise 用戶的所有 Monitor
+   * 由 CronManager 排程（task-registry 的 'monitor_daily_pro'），勿再加 @Cron 以免雙跑。
    */
-  @Cron(CronExpression.EVERY_DAY_AT_3AM, { name: 'monitor-daily-pro' })
   async handleDailyProCheck() {
     await this.runScheduledChecks(['PRO'], 'daily');
   }
 
   /**
    * 每週一凌晨 4:00 執行 — 檢查 Free/Starter 用戶的所有 Monitor
+   * 由 CronManager 排程（task-registry 的 'monitor_weekly_free'），勿再加 @Cron 以免雙跑。
    */
-  @Cron('0 4 * * 1', { name: 'monitor-weekly-free' })
   async handleWeeklyFreeCheck() {
     await this.runScheduledChecks(['FREE', 'STARTER'], 'weekly');
   }
@@ -127,7 +127,7 @@ export class MonitorSchedulerService {
       if (parts.length > 0) {
         await this.notificationsService.create(
           userId,
-          'MONITOR_CHANGE',
+          NotificationType.MONITOR_CHANGE,
           'AI 引用變動通知',
           parts.join('\n'),
         );
