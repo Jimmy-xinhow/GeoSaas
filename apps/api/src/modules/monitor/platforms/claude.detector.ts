@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { matchBrand } from './match-brand';
+import { classifyDetectorError, withDetectorRetry } from './detector-error';
 
 @Injectable()
 export class ClaudeDetector {
@@ -16,27 +17,23 @@ export class ClaudeDetector {
     const key = this.config.get('ANTHROPIC_API_KEY');
     if (!key) return { mentioned: false, position: null, response: '[Error] ANTHROPIC_API_KEY 未設定' };
     try {
-      const response = await this.client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: query }],
-      });
+      const response = await withDetectorRetry(
+        () =>
+          this.client.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1024,
+            messages: [{ role: 'user', content: query }],
+          }),
+        'Claude',
+      );
 
       const text = response.content.find((b) => b.type === 'text')?.text || '';
       const { mentioned, position } = matchBrand(text, brandName, brandUrl);
       return { mentioned, position, response: text };
     } catch (error) {
-      const errMsg = String(error);
-      this.logger.error(`Claude detection failed: ${errMsg}`);
-
-      let userMessage = errMsg;
-      if (errMsg.includes('credit balance') || errMsg.includes('billing') || errMsg.includes('402')) {
-        userMessage = 'AI API 餘額不足，請確認 Anthropic 帳戶餘額';
-      } else if (errMsg.includes('authentication') || errMsg.includes('invalid') || errMsg.includes('401')) {
-        userMessage = 'AI API 金鑰無效，請確認 ANTHROPIC_API_KEY 並重啟伺服器';
-      }
-
-      return { mentioned: false, position: null, response: `[Error] ${userMessage}` };
+      const info = classifyDetectorError(error, 'Claude');
+      this.logger.error(`Claude detection failed: ${info.logLine}`);
+      return { mentioned: false, position: null, response: `[Error] ${info.userMessage}` };
     }
   }
 }

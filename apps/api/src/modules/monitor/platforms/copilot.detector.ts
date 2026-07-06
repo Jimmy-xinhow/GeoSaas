@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { matchBrand } from './match-brand';
+import { classifyDetectorError, withDetectorRetry } from './detector-error';
 
 @Injectable()
 export class CopilotDetector {
@@ -41,24 +42,29 @@ export class CopilotDetector {
     }
 
     try {
-      const completion = await this.client.chat.completions.create({
-        model: this.model,
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful AI assistant. When the user asks about products, services, or recommendations, provide specific brand names, websites, and detailed information. Always cite sources when possible.',
-          },
-          { role: 'user', content: query },
-        ],
-      });
+      const completion = await withDetectorRetry(
+        () =>
+          this.client!.chat.completions.create({
+            model: this.model,
+            max_tokens: 1024,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a helpful AI assistant. When the user asks about products, services, or recommendations, provide specific brand names, websites, and detailed information. Always cite sources when possible.',
+              },
+              { role: 'user', content: query },
+            ],
+          }),
+        'Copilot',
+      );
 
       const text = completion.choices[0]?.message?.content || '';
       const { mentioned, position } = matchBrand(text, brandName, brandUrl);
       return { mentioned, position, response: text };
     } catch (error) {
-      this.logger.error(`Copilot detection failed: ${error}`);
-      return { mentioned: false, position: null, response: `[Error] ${error}` };
+      const info = classifyDetectorError(error, 'Copilot');
+      this.logger.error(`Copilot detection failed: ${info.logLine}`);
+      return { mentioned: false, position: null, response: `[Error] ${info.userMessage}` };
     }
   }
 }

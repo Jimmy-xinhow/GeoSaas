@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { matchBrand } from './match-brand';
+import { classifyDetectorError, withDetectorRetry } from './detector-error';
 
 @Injectable()
 export class PerplexityDetector {
@@ -19,18 +20,23 @@ export class PerplexityDetector {
     const key = this.config.get('PERPLEXITY_API_KEY');
     if (!key) return { mentioned: false, position: null, response: '[Error] PERPLEXITY_API_KEY 未設定' };
     try {
-      const completion = await this.client.chat.completions.create({
-        model: 'sonar',
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: query }],
-      });
+      const completion = await withDetectorRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: 'sonar',
+            max_tokens: 1024,
+            messages: [{ role: 'user', content: query }],
+          }),
+        'Perplexity',
+      );
 
       const text = completion.choices[0]?.message?.content || '';
       const { mentioned, position } = matchBrand(text, brandName, brandUrl);
       return { mentioned, position, response: text };
     } catch (error) {
-      this.logger.error(`Perplexity detection failed: ${error}`);
-      return { mentioned: false, position: null, response: `[Error] ${error}` };
+      const info = classifyDetectorError(error, 'Perplexity');
+      this.logger.error(`Perplexity detection failed: ${info.logLine}`);
+      return { mentioned: false, position: null, response: `[Error] ${info.userMessage}` };
     }
   }
 }
