@@ -122,6 +122,35 @@ function getBillingCycleFromAmount(plan: string, amount: number): BillingCycle {
     : 'monthly';
 }
 
+/** 續扣失敗後的寬限天數：planExpiresAt = 當期結束 + 寬限，逾期由 PlanGuard 惰性降級 */
+const PLAN_RENEWAL_GRACE_DAYS = 7;
+
+function addBillingCycle(from: Date, billingCycle: BillingCycle): Date {
+  const next = new Date(from);
+  if (billingCycle === 'yearly') {
+    next.setFullYear(next.getFullYear() + 1);
+  } else {
+    next.setMonth(next.getMonth() + 1);
+  }
+  return next;
+}
+
+/** 滾動到期日：授權成功當下 + 一期 + 7 天寬限 */
+function getRollingPlanExpiry(billingCycle: BillingCycle, from = new Date()): Date {
+  const expiry = addBillingCycle(from, billingCycle);
+  expiry.setDate(expiry.getDate() + PLAN_RENEWAL_GRACE_DAYS);
+  return expiry;
+}
+
+/** 從訂單判斷計費週期：優先取建單時存在 rawResponse 的 billingCycle，否則由金額反推 */
+function getOrderBillingCycle(order: { plan: string; amount: number; rawResponse?: unknown }): BillingCycle {
+  if (isPlainRecord(order.rawResponse)) {
+    const cycle = order.rawResponse.billingCycle;
+    if (cycle === 'yearly' || cycle === 'monthly') return cycle;
+  }
+  return getBillingCycleFromAmount(order.plan, order.amount);
+}
+
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
@@ -372,7 +401,11 @@ export class BillingService {
 
     const order = await this.prisma.order.findUnique({ where: { merchantOrderNo } });
     if (!order) throw new BadRequestException('訂單不存在');
-    if (order.status === 'PAID') return { message: 'OK' };
+    // 首次授權已入帳（PAID）後，藍新每期續扣（成功/失敗）仍會通知同一 MerOrderNo：
+    // 交由續期處理，不可直接忽略（否則續扣結果全部流失）。
+    if (order.status === 'PAID') {
+      return this.handlePeriodRenewalNotify(order, decrypted);
+    }
 
     if (decrypted.Status === 'SUCCESS') {
       const paidAmount = Number(result.PeriodAmt ?? result.Amt ?? order.amount);
@@ -384,6 +417,8 @@ export class BillingService {
         throw new BadRequestException('Invalid period subscription order');
       }
 
+      const billingCycle = getOrderBillingCycle(order);
+
       await this.prisma.order.update({
         where: { merchantOrderNo },
         data: {
@@ -391,7 +426,8 @@ export class BillingService {
           tradeNo: result.TradeNo || result.PeriodNo,
           paymentType: 'PERIOD',
           paidAt: new Date(),
-          rawResponse: decrypted,
+          // 保留 billingCycle（建單時的 rawResponse 會被覆寫），續期延長時需要它判斷週期
+          rawResponse: { ...decrypted, billingCycle },
         },
       });
 
@@ -407,7 +443,12 @@ export class BillingService {
       } else {
         await this.prisma.user.update({
           where: { id: order.userId },
-          data: { plan: order.plan as any, planExpiresAt: null, planSource: 'paid_subscription' },
+          data: {
+            plan: order.plan as any,
+            // 滾動到期制：當期結束 + 寬限，之後由每期續扣成功往後延，卡片失效則自然到期降級
+            planExpiresAt: getRollingPlanExpiry(billingCycle),
+            planSource: 'paid_subscription',
+          },
         });
         await this.prisma.notification.create({
           data: {
@@ -429,6 +470,152 @@ export class BillingService {
         data: { status: 'FAILED', rawResponse: decrypted },
       });
     }
+
+    return { message: 'OK' };
+  }
+
+  /**
+   * 處理定期定額「後續期」授權通知（訂單已 PAID 之後的每期續扣結果）。
+   *
+   * 藍新每期授權通知的 Result 帶 AlreadyTimes（已授權完成期數）/ TotalTimes / TradeNo / AuthDate；
+   * 首次委託建立通知則帶 AuthTimes（總期數）+ PeriodNo + 首期授權 TradeNo（已由首扣流程處理）。
+   *
+   * - 續扣成功：user.planExpiresAt 往後延一期 + 7 天寬限（滾動到期制），發 subscription_renewed 通知
+   * - 續扣失敗：不動 order.status、不立即降級（寬限期由 planExpiresAt 自然到期），發 payment_failed 通知
+   * - 冪等：以期別（AlreadyTimes 或 TradeNo）記錄在 order.rawResponse.periodAuths，重送不重複處理
+   */
+  private async handlePeriodRenewalNotify(
+    order: {
+      merchantOrderNo: string;
+      userId: string;
+      plan: string;
+      amount: number;
+      tradeNo: string | null;
+      rawResponse: unknown;
+    },
+    decrypted: any,
+  ): Promise<{ message: string }> {
+    const result = decrypted?.Result ?? {};
+    const merchantOrderNo = order.merchantOrderNo;
+
+    // 只有定期定額方案訂單才有續期概念
+    if (!RECURRING_PLAN_KEYS.includes(order.plan)) {
+      return { message: 'OK' };
+    }
+
+    const alreadyTimes = Number(result.AlreadyTimes);
+    const hasAlreadyTimes = Number.isFinite(alreadyTimes);
+    const renewalTradeNo = result.TradeNo || result.PeriodNo || null;
+
+    // 首期通知重送（AlreadyTimes <= 1，或無期別欄位且交易號與首次授權相同）→ 冪等忽略
+    if (hasAlreadyTimes && alreadyTimes <= 1) {
+      this.logger.log(`定期定額首期通知重送，忽略: ${merchantOrderNo}`);
+      return { message: 'OK' };
+    }
+    if (!hasAlreadyTimes && (!renewalTradeNo || renewalTradeNo === order.tradeNo)) {
+      this.logger.log(`定期定額通知無法識別為新期別（視為首期重送），忽略: ${merchantOrderNo}`);
+      return { message: 'OK' };
+    }
+
+    const existingRaw = isPlainRecord(order.rawResponse) ? order.rawResponse : {};
+    const existingPeriodAuths = isPlainRecord(existingRaw.periodAuths) ? existingRaw.periodAuths : {};
+    const periodKey = hasAlreadyTimes ? `times_${alreadyTimes}` : `trade_${renewalTradeNo}`;
+
+    // 冪等：同一期通知重送不得重複延長 / 重複通知
+    if (existingPeriodAuths[periodKey]) {
+      this.logger.log(`定期定額第 ${periodKey} 期通知重送，忽略: ${merchantOrderNo}`);
+      return { message: 'OK' };
+    }
+
+    const isSuccess = decrypted.Status === 'SUCCESS';
+    const billingCycle = getOrderBillingCycle({ ...order, rawResponse: existingRaw });
+    const paidAmount = Number(result.PeriodAmt ?? result.AuthAmt ?? result.Amt ?? NaN);
+    const planLabel = MANAGED_PLAN_DESC[order.plan] || PLAN_DESC[order.plan] || order.plan;
+
+    // 續期紀錄落點：order.rawResponse.periodAuths（不改 schema、可回溯每期結果）
+    await this.prisma.order.update({
+      where: { merchantOrderNo },
+      data: {
+        rawResponse: {
+          ...existingRaw,
+          billingCycle,
+          periodAuths: {
+            ...existingPeriodAuths,
+            [periodKey]: {
+              status: decrypted.Status ?? 'UNKNOWN',
+              message: decrypted.Message ?? null,
+              tradeNo: renewalTradeNo,
+              authDate: result.AuthDate ?? null,
+              amount: Number.isFinite(paidAmount) ? paidAmount : null,
+              alreadyTimes: hasAlreadyTimes ? alreadyTimes : null,
+              totalTimes: result.TotalTimes ?? null,
+              recordedAt: new Date().toISOString(),
+            },
+          },
+        },
+      },
+    });
+
+    if (!isSuccess) {
+      // 續扣失敗：不立即降級，寬限期滿由 PlanGuard 依 planExpiresAt 惰性降級；先催告用戶
+      this.logger.warn(
+        `定期定額續扣失敗: ${merchantOrderNo} 期別 ${periodKey}，Status=${decrypted.Status} Message=${decrypted.Message ?? ''}`,
+      );
+      await this.prisma.notification.create({
+        data: {
+          userId: order.userId,
+          type: 'payment_failed',
+          title: '訂閱續扣失敗',
+          message: `${planLabel} 本期定期扣款失敗，請儘速確認信用卡狀態或更新付款資訊，以免方案於寬限期後停用。訂單編號：${merchantOrderNo}`,
+        },
+      });
+      return { message: 'OK' };
+    }
+
+    // 續扣成功
+    if (Number.isFinite(paidAmount) && paidAmount !== order.amount) {
+      this.logger.warn(
+        `定期定額續扣金額異常: ${merchantOrderNo} 預期 ${order.amount}，實收 ${paidAmount}，不延長方案效期`,
+      );
+      return { message: 'OK' };
+    }
+
+    if (isTerminatedRawResponse(existingRaw)) {
+      this.logger.warn(`已終止的定期定額委託仍收到續扣成功通知: ${merchantOrderNo}`);
+    }
+
+    if (isSelfServicePlan(order.plan)) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: order.userId },
+        select: { plan: true, planExpiresAt: true },
+      });
+      if (user) {
+        const newExpiry = getRollingPlanExpiry(billingCycle);
+        const data: Record<string, any> = {};
+        // 滾動延長：只往後延不往前縮；planExpiresAt 為 null（舊制永不過期）者一併轉入滾動制
+        if (!user.planExpiresAt || user.planExpiresAt < newExpiry) {
+          data.planExpiresAt = newExpiry;
+        }
+        // 寬限期滿被惰性降級成 FREE 後續扣終於成功 → 恢復付費方案
+        if (user.plan === 'FREE') {
+          data.plan = order.plan as any;
+        }
+        if (Object.keys(data).length > 0) {
+          data.planSource = 'paid_subscription';
+          await this.prisma.user.update({ where: { id: order.userId }, data });
+        }
+      }
+    }
+
+    await this.prisma.notification.create({
+      data: {
+        userId: order.userId,
+        type: 'subscription_renewed',
+        title: '訂閱續扣成功',
+        message: `${planLabel} 本期定期扣款成功${hasAlreadyTimes ? `（第 ${alreadyTimes} 期）` : ''}，方案效期已延長。訂單編號：${merchantOrderNo}`,
+      },
+    });
+    this.logger.log(`定期定額續扣成功: ${merchantOrderNo} 期別 ${periodKey}，方案效期已延長`);
 
     return { message: 'OK' };
   }
@@ -763,10 +950,14 @@ export class BillingService {
         });
         this.logger.log(`用戶 ${order.userId} 購買 ${order.plan}`);
       } else {
-        // Plan upgrade order
+        // Plan upgrade order — 滾動到期制：當期結束 + 寬限，避免一次付款換到永久方案
         await this.prisma.user.update({
           where: { id: order.userId },
-          data: { plan: order.plan as any, planExpiresAt: null, planSource: 'paid_subscription' },
+          data: {
+            plan: order.plan as any,
+            planExpiresAt: getRollingPlanExpiry(getOrderBillingCycle(order)),
+            planSource: 'paid_subscription',
+          },
         });
         this.logger.log(`用戶 ${order.userId} 升級為 ${order.plan}`);
       }

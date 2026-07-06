@@ -373,8 +373,17 @@ describe('BillingService', () => {
       });
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: userId },
-        data: { plan: 'PRO' },
+        data: {
+          plan: 'PRO',
+          planExpiresAt: expect.any(Date),
+          planSource: 'paid_subscription',
+        },
       });
+      // 滾動到期制：首次授權成功 = 當期結束（月繳 +1 月）+ 7 天寬限，而不是永不過期
+      const expiresAt: Date = prisma.user.update.mock.calls[0][0].data.planExpiresAt;
+      const lowerBound = new Date();
+      lowerBound.setMonth(lowerBound.getMonth() + 1);
+      expect(expiresAt.getTime()).toBeGreaterThan(lowerBound.getTime());
       expect(prisma.notification.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           userId,
@@ -382,6 +391,191 @@ describe('BillingService', () => {
         }),
       });
       expect(result).toEqual({ message: 'OK' });
+    });
+
+    it('should extend planExpiresAt and notify on successful renewal of a PAID subscription', async () => {
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: {
+          MerOrderNo: 'GEO123',
+          TradeNo: 'TN_PERIOD_2',
+          AuthDate: '2026-08-06',
+          AlreadyTimes: '2',
+          TotalTimes: '48',
+          PeriodAmt: 1090,
+        },
+      });
+      const previousExpiry = new Date('2026-07-13T00:00:00.000Z');
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'GEO123',
+        userId,
+        plan: 'PRO',
+        amount: 1090,
+        status: 'PAID',
+        tradeNo: 'PERIOD123',
+        rawResponse: { Status: 'SUCCESS', billingCycle: 'monthly' },
+      });
+      prisma.user.findUnique.mockResolvedValue({ plan: 'PRO', planExpiresAt: previousExpiry });
+      prisma.order.update.mockResolvedValue({});
+      prisma.user.update.mockResolvedValue({});
+      prisma.notification.create.mockResolvedValue({});
+
+      const result = await service.handlePeriodNotify('period_encrypted');
+
+      // 續期紀錄寫入 rawResponse.periodAuths（不改 order.status）
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { merchantOrderNo: 'GEO123' },
+        data: {
+          rawResponse: expect.objectContaining({
+            periodAuths: expect.objectContaining({
+              times_2: expect.objectContaining({ status: 'SUCCESS', tradeNo: 'TN_PERIOD_2', amount: 1090 }),
+            }),
+          }),
+        },
+      });
+      expect(prisma.order.update.mock.calls[0][0].data).not.toHaveProperty('status');
+      // planExpiresAt 往後延一期 + 寬限
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: userId },
+        data: {
+          planExpiresAt: expect.any(Date),
+          planSource: 'paid_subscription',
+        },
+      });
+      const newExpiry: Date = prisma.user.update.mock.calls[0][0].data.planExpiresAt;
+      expect(newExpiry.getTime()).toBeGreaterThan(previousExpiry.getTime());
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ userId, type: 'subscription_renewed' }),
+      });
+      expect(result).toEqual({ message: 'OK' });
+    });
+
+    it('should notify payment_failed without downgrading or failing the order when a renewal charge fails', async () => {
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'TRA10054',
+        Message: '卡片授權失敗',
+        Result: {
+          MerOrderNo: 'GEO123',
+          AlreadyTimes: '3',
+          TotalTimes: '48',
+        },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'GEO123',
+        userId,
+        plan: 'PRO',
+        amount: 1090,
+        status: 'PAID',
+        tradeNo: 'PERIOD123',
+        rawResponse: { Status: 'SUCCESS', billingCycle: 'monthly' },
+      });
+      prisma.order.update.mockResolvedValue({});
+      prisma.notification.create.mockResolvedValue({});
+
+      const result = await service.handlePeriodNotify('period_encrypted');
+
+      // 不動用戶方案（寬限期由 planExpiresAt 自然到期降級）、不把已付款訂單改成 FAILED
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.order.update.mock.calls[0][0].data).not.toHaveProperty('status');
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { merchantOrderNo: 'GEO123' },
+        data: {
+          rawResponse: expect.objectContaining({
+            periodAuths: expect.objectContaining({
+              times_3: expect.objectContaining({ status: 'TRA10054' }),
+            }),
+          }),
+        },
+      });
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ userId, type: 'payment_failed' }),
+      });
+      expect(result).toEqual({ message: 'OK' });
+    });
+
+    it('should ignore a resent renewal notification for an already-recorded period (idempotency)', async () => {
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: {
+          MerOrderNo: 'GEO123',
+          TradeNo: 'TN_PERIOD_2',
+          AlreadyTimes: '2',
+          PeriodAmt: 1090,
+        },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'GEO123',
+        userId,
+        plan: 'PRO',
+        amount: 1090,
+        status: 'PAID',
+        tradeNo: 'PERIOD123',
+        rawResponse: {
+          billingCycle: 'monthly',
+          periodAuths: { times_2: { status: 'SUCCESS', tradeNo: 'TN_PERIOD_2' } },
+        },
+      });
+
+      const result = await service.handlePeriodNotify('period_encrypted');
+
+      expect(prisma.order.update).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ message: 'OK' });
+    });
+
+    it('should ignore a resent first-authorization notification for a PAID order', async () => {
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: { MerOrderNo: 'GEO123', PeriodNo: 'PERIOD123', TradeNo: 'PERIOD123', PeriodAmt: 1090 },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'GEO123',
+        userId,
+        plan: 'PRO',
+        amount: 1090,
+        status: 'PAID',
+        tradeNo: 'PERIOD123',
+        rawResponse: { Status: 'SUCCESS', billingCycle: 'monthly' },
+      });
+
+      const result = await service.handlePeriodNotify('period_encrypted');
+
+      expect(prisma.order.update).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ message: 'OK' });
+    });
+
+    it('should restore the paid plan when a renewal succeeds after a lazy downgrade to FREE', async () => {
+      (newebpayUtil.decryptTradeInfo as jest.Mock).mockReturnValue({
+        Status: 'SUCCESS',
+        Result: { MerOrderNo: 'GEO123', TradeNo: 'TN_PERIOD_5', AlreadyTimes: '5', PeriodAmt: 1090 },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        merchantOrderNo: 'GEO123',
+        userId,
+        plan: 'PRO',
+        amount: 1090,
+        status: 'PAID',
+        tradeNo: 'PERIOD123',
+        rawResponse: { Status: 'SUCCESS', billingCycle: 'monthly' },
+      });
+      prisma.user.findUnique.mockResolvedValue({ plan: 'FREE', planExpiresAt: null });
+      prisma.order.update.mockResolvedValue({});
+      prisma.user.update.mockResolvedValue({});
+      prisma.notification.create.mockResolvedValue({});
+
+      await service.handlePeriodNotify('period_encrypted');
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: userId },
+        data: {
+          plan: 'PRO',
+          planExpiresAt: expect.any(Date),
+          planSource: 'paid_subscription',
+        },
+      });
     });
 
     it('should accept managed period payment without changing self-service plan', async () => {
@@ -461,7 +655,7 @@ describe('BillingService', () => {
       });
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: userId },
-        data: { plan: 'FREE' },
+        data: { plan: 'FREE', planExpiresAt: null, planSource: 'subscription_cancelled' },
       });
       expect(result.message).toContain('已終止');
     });
@@ -509,7 +703,11 @@ describe('BillingService', () => {
       });
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: userId },
-        data: { plan: 'PRO' },
+        data: {
+          plan: 'PRO',
+          planExpiresAt: expect.any(Date),
+          planSource: 'paid_subscription',
+        },
       });
       expect(result).toEqual({ message: 'OK' });
     });
