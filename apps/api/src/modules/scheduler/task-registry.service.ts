@@ -274,7 +274,7 @@ export class TaskRegistryService implements OnModuleInit {
       for (const s of clients) {
         const profile = (s.profile as Record<string, any>) || {};
         if (profile.dailyContentPaused) continue;
-        const allowedDays = getClientDailyActiveDays(s.user?.plan, s.user?.role);
+        const allowedDays = getClientDailyActiveDays(s.user?.plan, s.user?.role, profile);
         if (allowedDays.includes(dayType)) {
           expected.push({ id: s.id, name: s.name });
         }

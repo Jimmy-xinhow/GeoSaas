@@ -212,7 +212,7 @@ export class SchedulerController {
       ? clientSites.filter((site) => {
           const profile = (site.profile as Record<string, unknown>) || {};
           if (profile.dailyContentPaused === true) return false;
-          return getClientDailyActiveDays(site.user?.plan, site.user?.role).includes(todayDayType);
+          return getClientDailyActiveDays(site.user?.plan, site.user?.role, profile).includes(todayDayType);
         })
       : [];
     const actualToday = todayDayType && expectedToday.length > 0

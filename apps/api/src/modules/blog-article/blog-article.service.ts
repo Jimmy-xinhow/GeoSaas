@@ -21,6 +21,8 @@ import {
   CLIENT_DAILY_DAY_SEQUENCE,
   clientDailyDayTypeForDate,
   getClientDailyActiveDays,
+  getClientDailyPlanOverride,
+  getEffectiveClientDailyPlan,
 } from './client-daily-policy';
 import {
   BrandShowcaseData,
@@ -3523,8 +3525,8 @@ ${args.currentDraft || '(empty draft)'}`;
    * types (Q&A deep-dive + competitive comparison) because those produce
    * the most crawler-friendly unique content per client.
    */
-  private activeDaysForClient(plan?: string | null, role?: string | null): ClientDailyDay[] {
-    return getClientDailyActiveDays(plan, role);
+  private activeDaysForClient(plan?: string | null, role?: string | null, profile?: unknown): ClientDailyDay[] {
+    return getClientDailyActiveDays(plan, role, profile);
   }
 
   private async getDynamicArticleGenerationGuidance(): Promise<string> {
@@ -3830,8 +3832,8 @@ ${bodyHeadings}
     if (!resolvedDay) return { status: 'skipped', reasons: ['sunday_off_day'] };
 
     // Plan gate — STARTER only gets 2 day types, PRO gets all 6
-    const planTier = site.user?.plan || 'FREE';
-    const allowedDays = this.activeDaysForClient(planTier, site.user?.role);
+    const planTier = getEffectiveClientDailyPlan(site.user?.plan, site.user?.role, profile);
+    const allowedDays = this.activeDaysForClient(site.user?.plan, site.user?.role, profile);
     if (!allowedDays.includes(resolvedDay)) {
       return { status: 'skipped', reasons: [`day_not_in_plan:${planTier}:${resolvedDay}`] };
     }
@@ -4566,10 +4568,12 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     const monthCount = publicVisibleRows.filter((r) => r.createdAt >= monthStart).length;
     const weekCount = publicVisibleRows.filter((r) => r.createdAt >= weekStart).length;
     const recent = rowsWithSafety.slice(0, 10);
-    const plan = site?.user?.plan || 'FREE';
+    const accountPlan = site?.user?.plan || 'FREE';
     const prof = (site?.profile as Record<string, any>) || {};
     const paused = !!prof.dailyContentPaused;
-    const activeDays = this.activeDaysForClient(plan, site?.user?.role);
+    const planOverride = getClientDailyPlanOverride(prof);
+    const plan = getEffectiveClientDailyPlan(accountPlan, site?.user?.role, prof);
+    const activeDays = this.activeDaysForClient(accountPlan, site?.user?.role, prof);
 
     return {
       totalCount,
@@ -4578,7 +4582,9 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
       hiddenUnsafeCount,
       monthCount,
       weekCount,
+      accountPlan,
       plan,
+      planOverride,
       paused,
       activeDaysPerWeek: activeDays.length,
       activeDayTypes: activeDays,
