@@ -288,7 +288,7 @@ export default function PublishedContentPage() {
                           hour: '2-digit', minute: '2-digit',
                         });
                         const inner = (
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium text-white truncate group-hover:text-blue-300 transition-colors">
                                 {article.title}
@@ -323,7 +323,7 @@ export default function PublishedContentPage() {
                                 </p>
                               ) : null}
                             </div>
-                            <div className="flex shrink-0 items-center gap-2">
+                            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:shrink-0">
                               {canPublish && (
                                 <Button
                                   type="button"
@@ -371,24 +371,40 @@ export default function PublishedContentPage() {
                                   </Button>
                                 </Link>
                               )}
-                              {publicVisible ? (
-                                <ExternalLink className="h-4 w-4 text-gray-500 group-hover:text-blue-400 mt-0.5" />
-                              ) : (
-                                <AlertTriangle className="h-4 w-4 text-amber-300 mt-0.5" />
+                              {publicVisible && (
+                                <>
+                                  <Link
+                                    href={`/published-content/${article.slug}`}
+                                    className="inline-flex min-h-11 min-w-[132px] items-center justify-center rounded-md border border-blue-400/40 px-3 text-xs text-blue-100 transition-colors hover:bg-blue-500/10 hover:text-blue-50"
+                                    aria-label={`查看「${article.title}」的官網發布包`}
+                                  >
+                                    <FileText className="mr-1.5 h-4 w-4" />
+                                    查看發布包
+                                  </Link>
+                                  <a
+                                    href={article.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={`開啟「${article.title}」的官網文章`}
+                                    className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                  </a>
+                                </>
                               )}
+                              {!publicVisible ? (
+                                <AlertTriangle className="h-4 w-4 text-amber-300" />
+                              ) : null}
                             </div>
                           </div>
                         );
                         return publicVisible ? (
-                          <a
+                          <div
                             key={article.slug}
-                            href={article.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             className="block p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-blue-500/30 transition-colors group"
                           >
                             {inner}
-                          </a>
+                          </div>
                         ) : (
                           <div
                             key={article.slug}
