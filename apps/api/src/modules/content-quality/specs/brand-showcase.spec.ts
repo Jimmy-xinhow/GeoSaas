@@ -21,6 +21,7 @@ import {
   hasSummarySection,
   industrySaturation,
   lengthFloor,
+  medicalBoundary,
   noCTABoilerplate,
   noFabricatedContact,
   noFabricatedPersona,
@@ -39,19 +40,22 @@ export interface BrandShowcaseData {
   profileRefText: string;
 }
 
-// v3 weighting — keeps the v2 neutrality lean and adds the four AI-citation
+// v4 weighting — keeps the v3 neutrality lean and adds a hard medical boundary
+// for medical-adjacent brands. The total remains 100.
+//
+// v3 added the four AI-citation
 // signal detectors (noHyperbole, noFirstPersonPromo, noCTABoilerplate,
 // hasSpecificFacts). Most weight pulled from brand/industry/length rules
 // which v2 already started reducing.
 const rules: ScoringRule[] = [
-  brandSaturation(7, 8),           // ↓ 10 → 7
-  industrySaturation(6, 4),        // ↓ 8 → 6
+  brandSaturation(6, 8),
+  industrySaturation(5, 4),
   geovaultMin(3, 1),               // ↓ 4 → 3
   faqCount(8, 5),                  // ↓ 10 → 8
   faqDepth(8, 2.5),                // ↓ 10 → 8
   hasComparisonSection(10),        // ↓ 12 → 10 (still highest weight)
   hasSummarySection(6),            // ↓ 8 → 6
-  lengthFloor(5, 1000),            // ↓ 8 → 5
+  lengthFloor(4, 1000),
   noSlugLeak(4),                   // ↓ 5 → 4
   noGeoJargon(4),                  // ↓ 5 → 4
   noFabricatedPersona(3),
@@ -62,10 +66,11 @@ const rules: ScoringRule[] = [
   noHyperbole(5),                  // ↓ 8 → 5 (freed 3 for unverified-claims)
   noFirstPersonPromo(6),
   noCTABoilerplate(4),
-  hasSpecificFacts(4, 3),
+  hasSpecificFacts(3, 3),
   noUnverifiedSellingClaims(3),    // gate fabricated 天然/認證/醫療級/專利 claims
+  medicalBoundary(4),              // hard fail for medical-adjacent brands
 ];
-// Sum: 7+6+3+8+8+10+6+5+4+4+3+8+4+2 + 5+6+4+4+3 = 100
+// Sum: 6+5+3+8+8+10+6+4+4+4+3+8+4+2 + 5+6+4+3+3+4 = 100
 
 function buildPatch(args: {
   data: BrandShowcaseData;
@@ -90,6 +95,7 @@ ${args.failedRules.map((r) => `- ${r}`).join('\n')}
 - title_missing_brand → 改寫主標題加入品牌名
 - industry_slug_leak / geo_jargon_leak → 改用消費者語言
 - fabricated_contact / forbidden_phrase → 刪除違規句改寫成「請至官網查詢」
+- medical_boundary_violation → 刪除療效、治療、恢復、疼痛改善等結果宣稱，改寫成可核對的服務流程與官方資料
 - too_short → 擴充細節而非堆砌空話
 
 直接輸出修正後的完整文章,不要解釋你做了什麼修改。`;
@@ -98,12 +104,13 @@ ${args.failedRules.map((r) => `- ${r}`).join('\n')}
 export function createBrandShowcaseSpec(): ContentSpec<BrandShowcaseData> {
   return {
     templateType: 'brand_showcase',
-    promptVersion: 'v3',
+    promptVersion: 'v4',
     fullModel: 'gpt-4o-mini',         // brand_showcase historically uses mini
     fullMaxTokens: 2400,
     buildFullPrompt: ({ data }) => data.basePrompt,
     rules,
     passThreshold: 75,
+    hardFailRules: ['medical_boundary_violation'],
     maxFullRetries: 1,
     maxPatchRetries: 2,
     patchMaxTokens: 2400,

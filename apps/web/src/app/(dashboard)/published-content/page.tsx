@@ -85,8 +85,8 @@ export default function PublishedContentPage() {
     <div className="space-y-6 w-full max-w-full overflow-hidden">
       <PageHeader
         icon={FileText}
-        title="Geovault 為您發布的內容"
-        description="您訂閱方案內含的 AI 可引用內容配額,Geovault 依方案每週自動為您撰寫並發布在 geovault.app/blog/...,專為 ChatGPT、Claude、Perplexity 等 AI 引用而設計。所有發布記錄完整透明列出。"
+        title="每週內容與官網發布包"
+        description="Geovault 會依方案維持每週文章生成與公開記錄。文章通過品質檢查後，也可開啟內容頁，複製 Markdown、HTML 與 JSON-LD，自行貼到客戶官方網站。"
         actions={
           <Button
             variant="outline"
@@ -133,6 +133,17 @@ export default function PublishedContentPage() {
           </div>
         </CardContent>
       </Card>
+
+      {selectedSiteId && (
+        <Card className="border-blue-400/20 bg-blue-500/5">
+          <CardContent className="p-4 text-sm leading-6 text-blue-50/85">
+            <p className="font-medium text-blue-100">每週文章生成不受官網發布流程影響</p>
+            <p className="mt-1">
+              Geovault 仍會按原方案生成文章。客戶可在已公開文章的內容頁取得手動發布包；一般 CMS 不需修改後端程式，自建網站才需要加入內容檔並重新部署。
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {!selectedSiteId ? (
         <Card>
@@ -245,7 +256,9 @@ export default function PublishedContentPage() {
                   </div>
                 ) : !list || list.items.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    尚無發布記錄。下次自動發布時間:每天 UTC 08:00(台灣時間 16:00)
+                    {weeklyQuota > 0
+                      ? `尚無發布記錄。系統會依方案排程於每週 ${weeklyQuota} 個指定日生成文章。`
+                      : '目前方案沒有每週文章配額。'}
                   </p>
                 ) : (
                   <>

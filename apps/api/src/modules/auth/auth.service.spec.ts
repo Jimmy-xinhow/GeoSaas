@@ -7,12 +7,17 @@ import { AuthService } from './auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
+import { AffiliateService } from '../affiliate/affiliate.service';
 
 describe('AuthService', () => {
   let service: AuthService;
   let prisma: any;
   let jwtService: { signAsync: jest.Mock; verify: jest.Mock };
-  let email: { sendPasswordReset: jest.Mock };
+  let email: {
+    sendPasswordReset: jest.Mock;
+    sendEmailVerification: jest.Mock;
+    isConfigured: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -28,6 +33,12 @@ describe('AuthService', () => {
         findUnique: jest.fn(),
         update: jest.fn(),
       },
+      emailVerificationToken: {
+        create: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
       $transaction: jest.fn((ops) => Promise.all(ops)),
     };
     jwtService = {
@@ -36,6 +47,8 @@ describe('AuthService', () => {
     };
     email = {
       sendPasswordReset: jest.fn().mockResolvedValue(undefined),
+      sendEmailVerification: jest.fn().mockResolvedValue(undefined),
+      isConfigured: jest.fn().mockReturnValue(true),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -46,6 +59,7 @@ describe('AuthService', () => {
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('test-secret') } },
         { provide: NotificationsService, useValue: { create: jest.fn().mockResolvedValue({}) } },
         { provide: EmailService, useValue: email },
+        { provide: AffiliateService, useValue: { attributeSignup: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -53,7 +67,7 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('should create a new user and return tokens', async () => {
+    it('should create a new user and require email verification', async () => {
       prisma.user.findFirst.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue({
         id: '1', email: 'test@test.com', name: 'Test', role: 'USER', plan: 'FREE', createdAt: new Date(),
@@ -62,7 +76,12 @@ describe('AuthService', () => {
       const result = await service.register({ email: ' TEST@Test.com ', password: 'password123', name: ' Test ' });
 
       expect(result.user.email).toBe('test@test.com');
-      expect(result.token).toBe('mock-token');
+      expect(result.requiresEmailVerification).toBe(true);
+      expect(email.sendEmailVerification).toHaveBeenCalledWith(
+        'test@test.com',
+        'Test',
+        expect.stringContaining('/verify-email?token='),
+      );
       expect(prisma.user.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ email: 'test@test.com', name: 'Test' }),
@@ -82,7 +101,7 @@ describe('AuthService', () => {
     it('should return user and tokens on valid credentials', async () => {
       const hash = await bcrypt.hash('password123', 10);
       prisma.user.findFirst.mockResolvedValue({
-        id: '1', email: 'test@test.com', name: 'Test', passwordHash: hash, role: 'USER', plan: 'FREE',
+        id: '1', email: 'test@test.com', name: 'Test', passwordHash: hash, role: 'USER', plan: 'FREE', emailVerified: true,
       });
 
       const result = await service.login({ email: ' TEST@Test.com ', password: 'password123' });

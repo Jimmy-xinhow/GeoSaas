@@ -1,26 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron } from '@nestjs/schedule';
 import Anthropic from '@anthropic-ai/sdk';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BlogTemplateService, BrandShowcaseContext, BrandProfileMedicalMode } from './blog-template.service';
 import { CitationReadinessService } from '../citation-readiness/citation-readiness.service';
 import { CitationReadinessResult } from '../citation-readiness/citation-readiness.types';
+import {
+  LEGACY_REPLACEMENT_APPLY_ENV,
+  LegacyContentReplacementService,
+} from './legacy-content-replacement.service';
 
 const TEMPLATE_TYPE = 'brand_profile';
 const DEFAULT_GEN_MODEL = 'claude-opus-4-8';
-// Old GEO-score brand pages superseded by brand_profile — demoted once a
-// citable page exists for the site. Covers all 6 legacy self-rated GEO-score
-// templates the CRG proved uncitable (score_breakdown / improvement_tips were
-// previously missing and leaked through the demotion).
-const DEMOTE_TYPES = [
-  'geo_overview',
-  'score_breakdown',
-  'competitor_comparison',
-  'improvement_tips',
-  'industry_benchmark',
-  'brand_reputation',
-];
 // Daily rollout cap → spreads the ~617 brands-with-facts across ~30 days.
 const DEFAULT_DAILY = 21;
 
@@ -33,6 +24,9 @@ export interface BrandProfileOutcome {
   slug?: string;
   repaired?: boolean;
   reasons?: string[];
+  demotedArticles?: number;
+  aliasesAdded?: number;
+  replacementPending?: boolean;
 }
 
 /**
@@ -53,12 +47,16 @@ export class BrandProfileService {
     private readonly config: ConfigService,
     private readonly templateService: BlogTemplateService,
     private readonly crg: CitationReadinessService,
+    private readonly legacyReplacement: LegacyContentReplacementService,
   ) {
     this.anthropic = new Anthropic({ apiKey: this.config.get('ANTHROPIC_API_KEY') });
     this.genModel = this.config.get<string>('BRAND_PROFILE_MODEL') || DEFAULT_GEN_MODEL;
   }
 
-  async generateBrandProfile(siteId: string, opts: { force?: boolean } = {}): Promise<BrandProfileOutcome> {
+  async generateBrandProfile(
+    siteId: string,
+    opts: { force?: boolean; applyReplacement?: boolean } = {},
+  ): Promise<BrandProfileOutcome> {
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
       select: { id: true, name: true, url: true, industry: true, isPublic: true, profile: true },
@@ -138,16 +136,20 @@ export class BrandProfileService {
     }
 
     const slug = await this.persist(site.id, site.name, site.url, site.industry, content);
-    // A citable page now exists → demote the old GEO-score brand pages.
-    await this.prisma.blogArticle.updateMany({
-      where: { siteId: site.id, templateType: { in: DEMOTE_TYPES }, published: true },
-      data: { published: false },
-    });
+    // A citable page now exists. Replacement is a separate guarded phase:
+    // only an explicit admin sample or the enabled rollout flag may transfer
+    // old aliases and demote legacy pages. Preview mode leaves old pages intact.
+    const replacement = opts.applyReplacement
+      ? await this.legacyReplacement.replaceForSite(site.id)
+      : null;
     await this.markStatus(site.id, 'ready');
     this.logger.log(`brand_profile ${site.name}: READY ${result.score} → ${slug}`);
     return {
       siteId, siteName: site.name, status: 'generated', verdict: result.verdict,
       score: result.score, slug, repaired,
+      demotedArticles: replacement?.demotedArticles ?? 0,
+      aliasesAdded: replacement?.aliasesAdded ?? 0,
+      replacementPending: !opts.applyReplacement,
     };
   }
 
@@ -160,18 +162,24 @@ export class BrandProfileService {
    * later only by clearing its status flag (e.g. after fact enrichment).
    * Uses BRAND_PROFILE_MODEL (gen) + CRG_JUDGE_MODEL (judge) from env.
    */
-  @Cron('0 6 * * *', { name: 'brand-profile-rollout' })
   async scheduledBrandProfileRollout(): Promise<void> {
-    const dailyN = Number(this.config.get('BRAND_PROFILE_DAILY') || DEFAULT_DAILY);
+    const configuredDaily = Number(this.config.get('BRAND_PROFILE_DAILY') || DEFAULT_DAILY);
+    const dailyN = Number.isFinite(configuredDaily)
+      ? Math.max(1, Math.min(Math.floor(configuredDaily), 100))
+      : DEFAULT_DAILY;
     const pool = await this.prisma.site.findMany({
-      where: { isPublic: true, isClient: false },
+      // Client brands also need a citation-ready canonical profile. This
+      // rollout is independent from client_daily, so it does not consume or
+      // interrupt their weekly article quota.
+      where: { isPublic: true },
       select: {
         id: true,
         name: true,
         profile: true,
         blogArticles: { where: { templateType: TEMPLATE_TYPE }, select: { id: true } },
       },
-      orderBy: { createdAt: 'asc' },
+      // Paid client brands first, then the oldest public directory brands.
+      orderBy: [{ isClient: 'desc' }, { createdAt: 'asc' }],
       take: 1500,
     });
 
@@ -193,9 +201,14 @@ export class BrandProfileService {
 
     let ready = 0;
     let rejected = 0;
+    const applyReplacement =
+      this.config.get<string>(LEGACY_REPLACEMENT_APPLY_ENV) === '1';
     for (const id of candidates) {
       try {
-        const r = await this.generateBrandProfile(id, { force: false });
+        const r = await this.generateBrandProfile(id, {
+          force: false,
+          applyReplacement,
+        });
         if (r.status === 'generated') ready++;
         else rejected++; // generateBrandProfile already marked the status
       } catch (err) {

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound, redirect } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ChevronRight, Clock, List } from 'lucide-react';
 import { getPost, getAllPosts } from '@/content/blog/posts';
@@ -144,10 +144,10 @@ export default async function BlogPostPage({ params }: Props) {
     if (!resolvedArticle) notFound();
   }
 
-  // 301 legacy slugs to canonical. redirect() throws NEXT_REDIRECT — placed
+  // Permanent legacy-slug redirect. permanentRedirect() throws NEXT_REDIRECT — placed
   // OUTSIDE any try/catch so the exception bubbles to Next's router.
   if (resolvedArticle && resolvedArticle.slug && resolvedArticle.slug !== params.slug) {
-    redirect(`/blog/${resolvedArticle.slug}`);
+    permanentRedirect(`/blog/${resolvedArticle.slug}`);
   }
 
   const post: ResolvedPost = staticPost

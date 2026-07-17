@@ -47,15 +47,13 @@ import {
 } from '../../common/utils/public-data-filter';
 import { assertSiteAccess } from '../../common/auth/site-access';
 import { INDUSTRIES } from '@geovault/shared';
+import {
+  isLegacyGeoGenerationEnabled,
+  LEGACY_GEO_GENERATION_ENV,
+  LEGACY_GEO_TEMPLATE_TYPES,
+} from './legacy-geo-content-audit';
 
-const ALL_TEMPLATE_TYPES: TemplateType[] = [
-  'geo_overview',
-  'score_breakdown',
-  'competitor_comparison',
-  'improvement_tips',
-  'industry_benchmark',
-  'brand_reputation',
-];
+const ALL_TEMPLATE_TYPES: TemplateType[] = [...LEGACY_GEO_TEMPLATE_TYPES];
 
 // Curated content gated by the Citation-Readiness Gate / content-quality runner.
 // The GEO-template maintenance crons (citation-upgrade, format-refresh) must NOT
@@ -106,7 +104,12 @@ export interface BatchRunRecord {
 }
 
 export interface ClientDailyGenerationResult {
-  status: 'skipped' | 'rejected' | 'generated';
+  /**
+   * generated means a public article was delivered (except dryRun previews).
+   * draft_saved is kept separate so fallback drafts can never inflate weekly
+   * delivery counts.
+   */
+  status: 'skipped' | 'rejected' | 'generated' | 'draft_saved';
   reasons?: string[];
   slug?: string;
   dayType?: string;
@@ -135,6 +138,7 @@ export interface ClientDailyBatchSiteResult {
 export interface ClientDailyBatchResult {
   attempted: number;
   generated: number;
+  draftSaved: number;
   rejected: number;
   skipped: number;
   rejectedReasons: Record<string, number>;
@@ -1726,17 +1730,17 @@ ${args.currentDraft || '(empty draft)'}`;
       where: { slug },
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
-    if (direct) {
-      if (!direct.published) return null;
-      if (!isPublicSafeArticle(direct)) return null;
-      if (!isIndexablePublicBlogArticle(direct)) return null;
-      if (direct.templateType === 'client_daily' && !this.isClientDailyArticleSafe(direct)) {
-        return null;
-      }
+    if (
+      direct?.published &&
+      isPublicSafeArticle(direct) &&
+      isIndexablePublicBlogArticle(direct) &&
+      (direct.templateType !== 'client_daily' || this.isClientDailyArticleSafe(direct))
+    ) {
       return direct;
     }
     const alias = await this.prisma.blogArticle.findFirst({
       where: publicIndexableBlogArticleWhere({ published: true, aliasSlugs: { has: slug } }),
+      orderBy: { updatedAt: 'desc' },
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
     if (alias?.templateType === 'client_daily' && !this.isClientDailyArticleSafe(alias)) {
@@ -1961,8 +1965,28 @@ ${args.currentDraft || '(empty draft)'}`;
     return lines.join('\n');
   }
 
-  /** Generate template-based AI articles for a site (all missing types) */
-  async generateArticlesForSite(siteId: string): Promise<{ generated: string[] }> {
+  /**
+   * Generate the old self-rated GEO templates for a site.
+   *
+   * This guard lives at the shared entry point so admin endpoints, scheduler
+   * handlers and direct service callers cannot bypass the default freeze.
+   */
+  async generateArticlesForSite(siteId: string): Promise<{
+    generated: string[];
+    disabled?: boolean;
+    reason?: string;
+  }> {
+    if (!isLegacyGeoGenerationEnabled(this.config.get(LEGACY_GEO_GENERATION_ENV))) {
+      this.logger.warn(
+        `Legacy GEO template generation blocked for ${siteId} (${LEGACY_GEO_GENERATION_ENV}=1 is required)`,
+      );
+      return {
+        generated: [],
+        disabled: true,
+        reason: 'legacy_geo_generation_disabled',
+      };
+    }
+
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
       select: {
@@ -2100,7 +2124,7 @@ ${args.currentDraft || '(empty draft)'}`;
     // GEO pages are demoted it sees "<6 published" and regenerates them. The
     // brand-profile-rollout cron is the replacement. Re-enable only with
     // LEGACY_GEO_BULK_ENABLED=1.
-    if (this.config.get('LEGACY_GEO_BULK_ENABLED') !== '1') {
+    if (!isLegacyGeoGenerationEnabled(this.config.get(LEGACY_GEO_GENERATION_ENV))) {
       this.logger.warn('Legacy GEO bulk-generation disabled (set LEGACY_GEO_BULK_ENABLED=1 to re-enable)');
       return;
     }
@@ -2226,7 +2250,7 @@ ${args.currentDraft || '(empty draft)'}`;
     // on scheduledBulkGeneration to refill them — but that refill pipeline is
     // disabled unless LEGACY_GEO_BULK_ENABLED=1, so running this alone causes a
     // net content drain with no replacement. Demote + refill must move together.
-    if (this.config.get('LEGACY_GEO_BULK_ENABLED') !== '1') {
+    if (!isLegacyGeoGenerationEnabled(this.config.get(LEGACY_GEO_GENERATION_ENV))) {
       this.logger.warn('Legacy GEO citation-upgrade disabled (set LEGACY_GEO_BULK_ENABLED=1 to re-enable with the refill pipeline)');
       return;
     }
@@ -2301,7 +2325,7 @@ ${args.currentDraft || '(empty draft)'}`;
     const articles = await this.prisma.blogArticle.findMany({
       where: {
         published: true,
-        templateType: { in: ALL_TEMPLATE_TYPES },
+        templateType: { in: [...LEGACY_GEO_TEMPLATE_TYPES] },
         category: { not: 'case-study' },
       },
       orderBy: { createdAt: 'asc' },
@@ -2355,7 +2379,7 @@ ${args.currentDraft || '(empty draft)'}`;
     // articles and regenerates them via the legacy GEO templates (and can turn
     // correct facts into hallucinations on a format-only trigger). Gated by the
     // same flag as bulk-generation.
-    if (this.config.get('LEGACY_GEO_BULK_ENABLED') !== '1') {
+    if (!isLegacyGeoGenerationEnabled(this.config.get(LEGACY_GEO_GENERATION_ENV))) {
       this.logger.warn('Legacy GEO format-refresh disabled (set LEGACY_GEO_BULK_ENABLED=1 to re-enable)');
       return;
     }
@@ -2505,10 +2529,29 @@ ${args.currentDraft || '(empty draft)'}`;
       socialLinks: previewEnriched.socialLinks,
     };
 
-    const prompt = this.templateService.buildBrandShowcasePrompt(
+    const medicalAdjacent =
+      ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(site.industry ?? '') ||
+      this.isMedicalAdjacentText([
+        site.name,
+        site.industry,
+        profile.description,
+        profile.services,
+        profile.positioning,
+        previewEnriched.description,
+        previewEnriched.cleanName,
+      ].filter(Boolean).join('\n'));
+    const basePrompt = this.templateService.buildBrandShowcasePrompt(
       { name: site.name, url: site.url, industry: site.industry ?? undefined },
       ctx,
     );
+    const prompt = medicalAdjacent
+      ? `${basePrompt}
+
+【醫療與健康宣稱邊界（違反即拒絕發布）】
+- 不得宣稱治療、療效、治癒、根治、恢復、疼痛緩解、改善健康或替代醫師。
+- 不得用否定句重複上述宣稱；請只描述可核對的服務流程、地點、預約方式與官方公開資料。
+- 品牌資料若出現相關用語，也不可直接改寫成成果承諾。`
+      : basePrompt;
 
     const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
     const completion = await openai.chat.completions.create({
@@ -2607,10 +2650,29 @@ ${args.currentDraft || '(empty draft)'}`;
       socialLinks,
     };
 
-    const prompt = this.templateService.buildBrandShowcasePrompt(
+    const medicalAdjacent =
+      ['traditional_medicine', 'healthcare', 'dental', 'beauty_salon'].includes(site.industry ?? '') ||
+      this.isMedicalAdjacentText([
+        site.name,
+        site.industry,
+        profile.description,
+        profile.services,
+        profile.positioning,
+        enriched.description,
+        enriched.cleanName,
+      ].filter(Boolean).join('\n'));
+    const basePrompt = this.templateService.buildBrandShowcasePrompt(
       { name: site.name, url: site.url, industry: site.industry ?? undefined },
       ctx,
     );
+    const prompt = medicalAdjacent
+      ? `${basePrompt}
+
+【醫療與健康宣稱邊界（違反即拒絕發布）】
+- 不得宣稱治療、療效、治癒、根治、恢復、疼痛緩解、改善健康或替代醫師。
+- 不得用否定句重複上述宣稱；請只描述可核對的服務流程、地點、預約方式與官方公開資料。
+- 品牌資料若出現相關用語，也不可直接改寫成成果承諾。`
+      : basePrompt;
 
     const openai = new OpenAI({ apiKey: this.config.get<string>('OPENAI_API_KEY') });
     const industryLabelMap: Record<string, string> = {};
@@ -2661,6 +2723,7 @@ ${args.currentDraft || '(empty draft)'}`;
           forbidden: forbiddenList,
           profileRefText,
           siteUrl: site.url,
+          medicalAdjacent,
         },
       },
       site.id,
@@ -2674,6 +2737,10 @@ ${args.currentDraft || '(empty draft)'}`;
     }
 
     const content = result.content;
+    if (medicalAdjacent && this.hasMedicalBoundaryViolation(content)) {
+      this.logger.warn(`brand_showcase hard rejected for ${site.name}: medical boundary violation after quality gate`);
+      return { status: 'rejected', reasons: ['medical_boundary_violation_post_gate'] };
+    }
 
     const titleMatch = content.match(/^#{1,2}\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : `${site.name} — 消費者選購指南`;
@@ -4387,7 +4454,7 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
       this.pingIndexNow(slug);
     }
     return {
-      status: 'generated',
+      status: usedFallback ? 'draft_saved' : 'generated',
       slug,
       dayType: resolvedDay,
       totalScore: Math.max(result.totalScore ?? 0, operatingAudit.score),
@@ -4458,7 +4525,7 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     const dayType = this.dayTypeFor(today);
     if (!dayType) {
       this.logger.log('client_daily batch: Sunday off');
-      return { attempted: 0, generated: 0, rejected: 0, skipped: 0, rejectedReasons: {}, perSite: [] };
+      return { attempted: 0, generated: 0, draftSaved: 0, rejected: 0, skipped: 0, rejectedReasons: {}, perSite: [] };
     }
 
     const sites = await this.prisma.site.findMany({
@@ -4470,7 +4537,7 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     const queue = pLimit(2);
     const perSite: ClientDailyBatchSiteResult[] = [];
     const rejectedReasons: Record<string, number> = {};
-    let attempted = 0, generated = 0, rejected = 0, skipped = 0;
+    let attempted = 0, generated = 0, draftSaved = 0, rejected = 0, skipped = 0;
 
     await Promise.all(
       sites.map((s) =>
@@ -4488,6 +4555,13 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
               reasons: r.reasons,
             });
             if (r.status === 'generated') generated++;
+            else if (r.status === 'draft_saved') {
+              draftSaved++;
+              for (const reason of r.reasons ?? ['draft_saved']) {
+                const bucket = this.bucketClientDailyReason(reason);
+                rejectedReasons[bucket] = (rejectedReasons[bucket] ?? 0) + 1;
+              }
+            }
             else if (r.status === 'rejected') {
               rejected++;
               for (const reason of r.reasons ?? ['rejected']) {
@@ -4505,9 +4579,9 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     );
 
     this.logger.log(
-      `client_daily batch done: ${generated} generated, ${rejected} rejected, ${skipped} skipped; reasons=${JSON.stringify(rejectedReasons)}`,
+      `client_daily batch done: ${generated} delivered, ${draftSaved} drafts, ${rejected} rejected, ${skipped} skipped; reasons=${JSON.stringify(rejectedReasons)}`,
     );
-    return { attempted, generated, rejected, skipped, rejectedReasons, perSite };
+    return { attempted, generated, draftSaved, rejected, skipped, rejectedReasons, perSite };
   }
 
   /**

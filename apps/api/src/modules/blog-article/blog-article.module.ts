@@ -11,11 +11,13 @@ import { LlmsHostingModule } from '../llms-hosting/llms-hosting.module';
 import { SitesModule } from '../sites/sites.module';
 import { ContentQualityModule } from '../content-quality/content-quality.module';
 import { CitationReadinessModule } from '../citation-readiness/citation-readiness.module';
+import { ArticlePublishPackageService } from './article-publish-package.service';
+import { LegacyContentReplacementService } from './legacy-content-replacement.service';
 
 @Module({
   imports: [IndexNowModule, LlmsHostingModule, SitesModule, ContentQualityModule, CitationReadinessModule],
   controllers: [BlogArticleController, AdminBlogController],
-  providers: [BlogArticleService, BlogTemplateService, BrandFactService, BrandProfileService, FaqArticleService, IndustryInsightService],
-  exports: [BlogArticleService, BrandFactService, BrandProfileService, FaqArticleService, IndustryInsightService],
+  providers: [BlogArticleService, BlogTemplateService, BrandFactService, BrandProfileService, FaqArticleService, IndustryInsightService, ArticlePublishPackageService, LegacyContentReplacementService],
+  exports: [BlogArticleService, BrandFactService, BrandProfileService, FaqArticleService, IndustryInsightService, LegacyContentReplacementService],
 })
 export class BlogArticleModule {}

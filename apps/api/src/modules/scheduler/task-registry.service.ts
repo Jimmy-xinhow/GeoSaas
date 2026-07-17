@@ -15,6 +15,15 @@ import {
   getClientDailyActiveDays,
 } from '../blog-article/client-daily-policy';
 import { AiPlatformIntelligenceService } from '../ai-platform-intelligence/ai-platform-intelligence.service';
+import {
+  isLegacyGeoGenerationEnabled,
+  LEGACY_GEO_GENERATION_ENV,
+} from '../blog-article/legacy-geo-content-audit';
+import { BrandProfileService } from '../blog-article/brand-profile.service';
+import {
+  LEGACY_REPLACEMENT_APPLY_ENV,
+  LegacyContentReplacementService,
+} from '../blog-article/legacy-content-replacement.service';
 
 @Injectable()
 export class TaskRegistryService implements OnModuleInit {
@@ -33,6 +42,8 @@ export class TaskRegistryService implements OnModuleInit {
     private readonly discoveryService: DiscoveryService,
     private readonly knowledgeService: KnowledgeService,
     private readonly aiPlatformIntelligence: AiPlatformIntelligenceService,
+    private readonly brandProfileService: BrandProfileService,
+    private readonly legacyReplacement: LegacyContentReplacementService,
   ) {}
 
   onModuleInit() {
@@ -48,6 +59,23 @@ export class TaskRegistryService implements OnModuleInit {
 
     this.cronManager.registerHandler('blog_bulk_generation', async () => {
       await this.blogArticleService.scheduledBulkGeneration();
+    });
+
+    this.cronManager.registerHandler('brand_profile_rollout', async () => {
+      await this.brandProfileService.scheduledBrandProfileRollout();
+    });
+
+    this.cronManager.registerHandler('legacy_content_replacement', async () => {
+      const applyEnabled = process.env[LEGACY_REPLACEMENT_APPLY_ENV] === '1';
+      const result = await this.legacyReplacement.runBatch({ dryRun: !applyEnabled, limit: 25 });
+      this.logger.log(
+        `legacy replacement task: mode=${applyEnabled ? 'apply' : 'preview'} selected=${result.selectedSites} sites=${result.updatedSites} demoted=${result.demotedArticles} aliases=${result.aliasesAdded}`,
+      );
+      if (!applyEnabled && result.selectedSites > 0) {
+        this.logger.warn(
+          `Legacy replacement preview only. Verify a small admin batch, then set ${LEGACY_REPLACEMENT_APPLY_ENV}=1 to enable scheduled writes.`,
+        );
+      }
     });
 
     this.cronManager.registerHandler('monitor_daily_pro', async () => {
@@ -194,7 +222,7 @@ export class TaskRegistryService implements OnModuleInit {
 
     // --- Depth: Auto-fill articles for brands with < 3 articles ---
     this.cronManager.registerHandler('auto_fill_articles', async () => {
-      if (process.env.LEGACY_GEO_BULK_ENABLED !== '1') {
+      if (!isLegacyGeoGenerationEnabled(process.env[LEGACY_GEO_GENERATION_ENV])) {
         this.logger.warn('Auto-fill articles disabled (set LEGACY_GEO_BULK_ENABLED=1 to re-enable legacy GEO templates)');
         return;
       }
@@ -238,16 +266,16 @@ export class TaskRegistryService implements OnModuleInit {
         .map(([reason, count]) => `${reason}:${count}`)
         .join(',');
       this.logger.log(
-        `client_daily batch: attempted=${r.attempted} generated=${r.generated} rejected=${r.rejected} skipped=${r.skipped} reasons=${reasonSummary || 'none'}`,
+        `client_daily batch: attempted=${r.attempted} delivered=${r.generated} drafts=${r.draftSaved} rejected=${r.rejected} skipped=${r.skipped} reasons=${reasonSummary || 'none'}`,
       );
-      if (r.attempted > 0 && r.generated === 0 && r.rejected > 0 && r.skipped === 0) {
+      if (r.attempted > 0 && r.generated === 0 && (r.rejected > 0 || r.draftSaved > 0)) {
         const failedSites = r.perSite
-          .filter((site) => site.status === 'rejected' || site.status === 'error')
+          .filter((site) => site.status === 'rejected' || site.status === 'draft_saved' || site.status === 'error')
           .slice(0, 6)
           .map((site) => `${site.name}:${(site.reasons ?? ['unknown']).join('|')}`)
           .join('; ');
         throw new Error(
-          `client_daily generated 0 articles; rejected=${r.rejected}; reasons=${reasonSummary || 'unknown'}; sites=${failedSites}`,
+          `client_daily delivered 0 public articles; drafts=${r.draftSaved}; rejected=${r.rejected}; reasons=${reasonSummary || 'unknown'}; sites=${failedSites}`,
         );
       }
     });
@@ -285,6 +313,7 @@ export class TaskRegistryService implements OnModuleInit {
         where: {
           siteId: { in: expected.map((e) => e.id) },
           templateType: 'client_daily',
+          published: true,
           createdAt: { gte: todayStart },
           targetKeywords: { has: dayType },
         },
@@ -298,9 +327,11 @@ export class TaskRegistryService implements OnModuleInit {
         return;
       }
 
-      this.logger.error(
-        `client_daily sentinel ALERT: ${missing.length}/${expected.length} ${dayType} 篇遺漏 — sites: ${missing.map((m) => m.name).join(', ')}`,
-      );
+      const alertMessage =
+        `client_daily sentinel ALERT: ${missing.length}/${expected.length} ${dayType} 篇未公開` +
+        ` — sites: ${missing.map((m) => m.name).join(', ')}`;
+      this.logger.error(alertMessage);
+      throw new Error(alertMessage);
     });
   }
 }

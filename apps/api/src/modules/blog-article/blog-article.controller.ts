@@ -7,6 +7,9 @@ import { BlogArticleService } from './blog-article.service';
 import { FaqArticleService } from './faq-article.service';
 import { IndustryInsightService, InsightType } from './industry-insight.service';
 import { GenerateInsightDto, PreviewBrandShowcaseDto } from './dto/blog-admin.dto';
+import { ArticlePublishPackageService } from './article-publish-package.service';
+import { LegacyContentReplacementService } from './legacy-content-replacement.service';
+import { BrandProfileService } from './brand-profile.service';
 
 const ALLOWED_LOCALES = new Set(['zh-TW', 'en', 'ja']);
 
@@ -81,6 +84,7 @@ export class BlogArticleController {
     private readonly service: BlogArticleService,
     private readonly insightService: IndustryInsightService,
     private readonly faqService: FaqArticleService,
+    private readonly publishPackageService: ArticlePublishPackageService,
   ) {}
 
   @Public()
@@ -499,6 +503,26 @@ export class BlogArticleController {
   }
 
   @ApiBearerAuth()
+  @Get('client-daily/articles/:slug/publish-package')
+  @ApiOperation({
+    summary:
+      'Build a manual official-site publishing package for one client_daily article. Returns Markdown, portable HTML, JSON-LD, meta tags and crawler verification guidance without publishing anything automatically.',
+  })
+  getClientDailyPublishPackage(
+    @Param('slug') slug: string,
+    @Query('canonicalUrl') canonicalUrl: string | undefined,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.publishPackageService.getClientDailyPackage(
+      normalizeRequiredText(slug, 'slug', 220),
+      normalizeOptionalText(canonicalUrl, 'canonicalUrl', 2048),
+      userId,
+      role,
+    );
+  }
+
+  @ApiBearerAuth()
   @Patch('client-daily/articles/:slug/review')
   @ApiOperation({
     summary:
@@ -590,7 +614,11 @@ export class BlogArticleController {
 @UseGuards(RolesGuard)
 @Roles('ADMIN', 'SUPER_ADMIN')
 export class AdminBlogController {
-  constructor(private readonly service: BlogArticleService) {}
+  constructor(
+    private readonly service: BlogArticleService,
+    private readonly legacyReplacement: LegacyContentReplacementService,
+    private readonly brandProfile: BrandProfileService,
+  ) {}
 
   @Post('generate-bulk')
   @ApiOperation({ summary: 'Trigger bulk template article generation' })
@@ -616,6 +644,11 @@ export class AdminBlogController {
     // Hard default: dry-run. Anything other than an explicit boolean false
     // (including omission, strings, truthy junk) stays in preview mode.
     const dryRun = body?.dryRun !== false;
+    if (!dryRun) {
+      throw new BadRequestException(
+        'Unsafe bulk demotion is disabled. Use POST /admin/blog/legacy-replacement/run with dryRun=false; it preserves old URLs and requires a published brand_profile replacement.',
+      );
+    }
     let limit: number | undefined;
     if (body?.limit !== undefined && body?.limit !== null) {
       if (
@@ -629,5 +662,53 @@ export class AdminBlogController {
       limit = body.limit;
     }
     return this.service.demoteLegacyGeoArticles({ dryRun, limit });
+  }
+
+  @Get('legacy-replacement/status')
+  @ApiOperation({ summary: 'Preview safe legacy replacement progress and blockers' })
+  legacyReplacementStatus(@Query('limit') limit?: string) {
+    return this.legacyReplacement.getStatus(parseBoundedInt(limit, 'limit', 20, 1, 100));
+  }
+
+  @Post('legacy-replacement/run')
+  @ApiOperation({
+    summary:
+      'Safely transfer old slugs to published brand_profile pages, then demote legacy content. Defaults to dryRun=true and is idempotent.',
+  })
+  runLegacyReplacement(@Body() body: { dryRun?: unknown; limit?: unknown } = {}) {
+    const dryRun = body?.dryRun !== false;
+    let limit = 25;
+    if (body?.limit !== undefined) {
+      if (
+        typeof body.limit !== 'number' ||
+        !Number.isSafeInteger(body.limit) ||
+        body.limit < 1 ||
+        body.limit > 100
+      ) {
+        throw new BadRequestException('limit must be an integer between 1 and 100');
+      }
+      limit = body.limit;
+    }
+    return this.legacyReplacement.runBatch({ dryRun, limit });
+  }
+
+  @Post('brand-profile/generate/:siteId')
+  @ApiOperation({
+    summary:
+      'Generate one CRG-gated brand_profile. Legacy replacement is preview-safe by default and only applies when applyReplacement=true.',
+  })
+  generateBrandProfile(
+    @Param('siteId') siteId: string,
+    @Query('force') force?: string,
+    @Query('applyReplacement') applyReplacement?: string,
+  ) {
+    return this.brandProfile.generateBrandProfile(
+      normalizeRequiredText(siteId, 'siteId', 220),
+      {
+        force: force === '1' || force === 'true',
+        applyReplacement:
+          applyReplacement === '1' || applyReplacement === 'true',
+      },
+    );
   }
 }

@@ -128,6 +128,20 @@ const DEFAULT_TASKS: Array<{
     enabled: true,
   },
   {
+    taskKey: 'brand_profile_rollout',
+    name: '引用就緒品牌頁逐步替換',
+    description: '每天依 BRAND_PROFILE_DAILY 產生通過 CRG 的 brand_profile；只有成功才進入舊文安全替換。',
+    cronExpr: '0 6 * * *',
+    enabled: true,
+  },
+  {
+    taskKey: 'legacy_content_replacement',
+    name: '舊型 GEO 文章安全替換',
+    description: '預設只預演；LEGACY_REPLACEMENT_APPLY_ENABLED=1 後，才會把舊網址加入已通過 CRG 的 brand_profile，再下架舊文。',
+    cronExpr: '30 7 * * *',
+    enabled: true,
+  },
+  {
     taskKey: 'auto_fill_articles',
     name: '自動補齊品牌文章',
     description: 'Legacy GEO 模板補文。預設停用；需 LEGACY_GEO_BULK_ENABLED=1 並手動啟用排程才會執行',
@@ -159,6 +173,8 @@ const FORCE_ENABLED_TASKS = new Set([
   'client_daily_sentinel',
   'ai_platform_official_monitor',
   'published_article_crawler_audit',
+  'brand_profile_rollout',
+  'legacy_content_replacement',
 ]);
 
 @Injectable()

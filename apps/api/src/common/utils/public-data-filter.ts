@@ -14,6 +14,10 @@ const articleExclusions = [
 ];
 
 const indexableBlogTemplateTypes = [
+  // Citation-first replacements. These must stay indexable or the safe legacy
+  // migration would redirect old URLs into pages omitted from sitemap/listing.
+  'brand_profile',
+  'faq_deepdive',
   'brand_showcase',
   'client_daily',
   'industry_top10',

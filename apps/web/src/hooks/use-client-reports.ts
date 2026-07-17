@@ -297,6 +297,62 @@ export interface ClientDailyArticleReview extends ClientDailyListItem {
   } | null;
 }
 
+export interface ClientDailyPublishPackage {
+  article: {
+    slug: string;
+    title: string;
+    description: string;
+    updatedAt: string;
+    dayType: ClientDailyDayType | null;
+  };
+  officialSite: {
+    name: string;
+    url: string;
+    canonicalUrl: string;
+    suggestedPath: string;
+  };
+  formats: {
+    markdown: string;
+    cmsHtml: string;
+    jsonLd: string;
+    jsonLdScript: string;
+    metaTags: string;
+    htmlDocument: string;
+    llmsTxtEntry: string;
+    sitemapXmlEntry: string;
+  };
+  crawlerGuidance: {
+    requiresBackendSourceEdit: boolean;
+    explanation: string;
+    codeBasedSiteSteps: string[];
+  };
+  publicationWorkflow: Array<{
+    phase: string;
+    title: string;
+    steps: string[];
+  }>;
+  updateMatrix: {
+    alwaysUpdate: string[];
+    updateWhenApplicable: string[];
+    usuallyUnchanged: string[];
+  };
+  cmsInstructions: Record<string, string[]>;
+  verificationChecklist: string[];
+  verificationSteps: Array<{
+    id: string;
+    category: string;
+    required: boolean;
+    title: string;
+    howToVerify: string;
+    successCriteria: string;
+  }>;
+  reviewReminder: {
+    intervalDays: number;
+    nextReviewAt: string;
+    message: string;
+  };
+}
+
 export interface ClientDailyList {
   total: number;
   page: number;
@@ -314,6 +370,27 @@ export function useClientDailyArticleReview(slug: string) {
       return data;
     },
     enabled: !!slug,
+  });
+}
+
+export function useClientDailyPublishPackage(
+  slug: string,
+  canonicalUrl = '',
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['client-reports', 'client-daily-publish-package', slug, canonicalUrl],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (canonicalUrl.trim()) params.set('canonicalUrl', canonicalUrl.trim());
+      const query = params.toString();
+      const { data } = await apiClient.get<ClientDailyPublishPackage>(
+        `/blog/client-daily/articles/${slug}/publish-package${query ? `?${query}` : ''}`,
+      );
+      return data;
+    },
+    enabled: enabled && !!slug,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

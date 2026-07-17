@@ -18,6 +18,7 @@ describe('FixController', () => {
   };
   let credits: {
     checkAndDeduct: jest.Mock;
+    assertAllowed: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -33,6 +34,7 @@ describe('FixController', () => {
     };
     credits = {
       checkAndDeduct: jest.fn().mockResolvedValue({ allowed: true }),
+      assertAllowed: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -81,6 +83,7 @@ describe('FixController', () => {
       'USER',
     );
     expect(credits.checkAndDeduct).toHaveBeenCalledWith('user-1', 1, 'Smart fix generation');
+    expect(credits.assertAllowed).toHaveBeenCalledWith({ allowed: true });
     expect(fixService.smartGenerate).toHaveBeenCalledWith(
       'site-1',
       'json_ld',

@@ -13,6 +13,16 @@ import {
   clientDailyDayTypeForDate,
   getClientDailyActiveDays,
 } from '../blog-article/client-daily-policy';
+import {
+  auditPublishedArticleShadow,
+  isLegacyGeoGenerationEnabled,
+  LEGACY_GEO_TEMPLATE_TYPES,
+  QUALITY_GATED_TEMPLATE_TYPES,
+} from '../blog-article/legacy-geo-content-audit';
+import {
+  LEGACY_REPLACEMENT_APPLY_ENV,
+  LegacyContentReplacementService,
+} from '../blog-article/legacy-content-replacement.service';
 
 type AutomationStatus = 'healthy' | 'warning' | 'critical';
 
@@ -24,6 +34,8 @@ const CONTENT_TASK_KEYS = [
   'client_daily_sentinel',
   'ai_platform_official_monitor',
   'published_article_crawler_audit',
+  'brand_profile_rollout',
+  'legacy_content_replacement',
   'indexnow_batch_submit',
   'directory_seo_recovery',
   'retry_failed_seeds',
@@ -39,6 +51,8 @@ const TASK_LABELS: Record<string, string> = {
   client_daily_sentinel: '客戶每日內容哨兵',
   ai_platform_official_monitor: 'AI 官方規則週監控',
   published_article_crawler_audit: '已公開文章爬蟲成效稽核',
+  brand_profile_rollout: '引用就緒品牌頁逐步替換',
+  legacy_content_replacement: '舊型 GEO 文章安全替換',
   indexnow_batch_submit: 'IndexNow 批量推送',
   directory_seo_recovery: '目錄 SEO 修復',
   retry_failed_seeds: '失敗 Seed 重試',
@@ -86,6 +100,7 @@ export class SchedulerController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cronManager: CronManagerService,
+    private readonly legacyReplacement: LegacyContentReplacementService,
   ) {}
 
   @Get('tasks')
@@ -120,6 +135,9 @@ export class SchedulerController {
       crawler24h,
       crawler7d,
       articleCrawlerVisits,
+      legacyTemplateCounts,
+      qualityGatedPublished,
+      legacyReplacementStatus,
     ] = await Promise.all([
       this.prisma.scheduledTask.findMany({
         where: { taskKey: { in: CONTENT_TASK_KEYS } },
@@ -163,9 +181,11 @@ export class SchedulerController {
           slug: true,
           title: true,
           description: true,
+          content: true,
+          category: true,
           templateType: true,
           createdAt: true,
-          site: { select: { name: true, url: true, isPublic: true } },
+          site: { select: { name: true, url: true, industry: true, isPublic: true } },
         },
       }),
       Promise.all([
@@ -206,7 +226,49 @@ export class SchedulerController {
           visitedAt: true,
         },
       }),
+      this.prisma.blogArticle.groupBy({
+        by: ['templateType'],
+        where: {
+          published: true,
+          category: { not: 'case-study' },
+          templateType: { in: [...LEGACY_GEO_TEMPLATE_TYPES] },
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.blogArticle.count({
+        where: {
+          published: true,
+          templateType: { in: [...QUALITY_GATED_TEMPLATE_TYPES] },
+        },
+      }),
+      this.legacyReplacement.getStatus(20),
     ]);
+
+    const legacyGenerationEnabled = isLegacyGeoGenerationEnabled(
+      process.env.LEGACY_GEO_BULK_ENABLED,
+    );
+    const legacyReplacementApplyEnabled =
+      process.env[LEGACY_REPLACEMENT_APPLY_ENV] === '1';
+    const legacyByTemplateType = Object.fromEntries(
+      legacyTemplateCounts.map((row) => [row.templateType, row._count._all]),
+    );
+    const legacyPublishedTotal = legacyTemplateCounts.reduce(
+      (sum, row) => sum + row._count._all,
+      0,
+    );
+    const shadowFlaggedSamples = publishedArticleSamples
+      .map((article) => ({
+        article,
+        issues: auditPublishedArticleShadow(article),
+      }))
+      .filter((result) => result.issues.length > 0);
+    const shadowIssueCounts = shadowFlaggedSamples.reduce<Record<string, number>>(
+      (counts, result) => {
+        for (const issue of result.issues) counts[issue] = (counts[issue] ?? 0) + 1;
+        return counts;
+      },
+      {},
+    );
 
     const expectedToday = todayDayType
       ? clientSites.filter((site) => {
@@ -304,23 +366,30 @@ export class SchedulerController {
     const articleCrawlerVisited30d = articleCrawlerRows.filter((row) => row.last30d > 0).length;
 
     const rows = tasks.map((task) => {
-      const status = classifyTask(task, now);
+      const isLegacyGenerationTask = ['blog_bulk_generation', 'auto_fill_articles'].includes(task.taskKey);
+      const status: AutomationStatus = isLegacyGenerationTask && !legacyGenerationEnabled
+        ? 'healthy'
+        : classifyTask(task, now);
       return {
         key: task.taskKey,
         name: TASK_LABELS[task.taskKey] ?? task.name ?? task.taskKey,
         area: 'scheduler',
         status,
-        enabled: task.enabled,
+        enabled: isLegacyGenerationTask && !legacyGenerationEnabled ? false : task.enabled,
         cronExpr: task.cronExpr,
         lastRunAt: task.lastRunAt,
         nextRunAt: task.nextRunAt,
         lastResult: task.lastResult,
-        evidence: task.lastResult?.startsWith('error:')
+        evidence: isLegacyGenerationTask && !legacyGenerationEnabled
+          ? '舊型 GEO 補文已由系統開關凍結，不會影響客戶每週文章'
+          : task.lastResult?.startsWith('error:')
           ? task.lastResult
           : task.lastRunAt
             ? `上次執行：${task.lastRunAt.toISOString()}`
             : '尚無執行紀錄',
-        action: status === 'critical'
+        action: isLegacyGenerationTask && !legacyGenerationEnabled
+          ? '維持凍結；改由 brand_profile、FAQ 與 client_daily 品質管線產出'
+          : status === 'critical'
           ? '檢查排程是否停用或執行錯誤，可在排程管理手動執行'
           : status === 'warning'
             ? '觀察下次排程或手動執行一次確認'
@@ -367,6 +436,58 @@ export class SchedulerController {
       action: nonIndexablePublishedSamples.length > 0
         ? '下架或修復 short title/thin description/non-public site 文章'
         : '正常',
+    });
+
+    rows.push({
+      key: 'legacy_geo_generation_guard',
+      name: '舊型 GEO 文章生成保護',
+      area: 'content-safety',
+      status: legacyGenerationEnabled ? 'warning' : 'healthy',
+      enabled: !legacyGenerationEnabled,
+      cronExpr: 'environment-guard',
+      lastRunAt: null,
+      nextRunAt: null,
+      lastResult: null,
+      evidence: legacyGenerationEnabled
+        ? `舊模板生成已明確開啟；目前仍有 ${legacyPublishedTotal} 篇舊型公開文章`
+        : `舊模板生成入口已全面凍結；目前 ${legacyPublishedTotal} 篇舊文只觀測、不自動下架`,
+      action: legacyGenerationEnabled
+        ? '確認是否為必要的短期維運；完成後將 LEGACY_GEO_BULK_ENABLED 改回 0'
+        : '正常；每週 client_daily 使用獨立管線，持續照方案交付',
+    });
+
+    rows.push({
+      key: 'published_content_shadow_audit',
+      name: '公開內容影子品質稽核',
+      area: 'content-quality',
+      status: shadowFlaggedSamples.length > 0 ? 'warning' : 'healthy',
+      enabled: true,
+      cronExpr: 'read-only',
+      lastRunAt: now,
+      nextRunAt: null,
+      lastResult: null,
+      evidence: `最近 ${publishedArticleSamples.length} 篇公開文章中，${shadowFlaggedSamples.length} 篇有舊模板、內部策略語句或醫療宣稱風險`,
+      action: shadowFlaggedSamples.length > 0
+        ? '先依影子稽核清單規劃替換；本檢查不下架文章、不阻擋每週交付'
+        : '正常',
+    });
+
+    rows.push({
+      key: 'legacy_replacement_progress',
+      name: '舊型 GEO 文章替換進度',
+      area: 'content-migration',
+      status: legacyReplacementStatus.legacyPublishedWithoutReplacement > 0 ? 'warning' : 'healthy',
+      enabled: legacyReplacementApplyEnabled,
+      cronExpr: '30 7 * * *',
+      lastRunAt: null,
+      nextRunAt: null,
+      lastResult: null,
+      evidence: `自動套用${legacyReplacementApplyEnabled ? '已開啟' : '仍為預演'}；可立即安全替換 ${legacyReplacementStatus.legacyPublishedWithReplacement} 篇；尚缺 brand_profile 的舊文 ${legacyReplacementStatus.legacyPublishedWithoutReplacement} 篇`,
+      action: !legacyReplacementApplyEnabled
+        ? `先用 Admin API 套用 5 個網站並驗證舊網址，再設定 ${LEGACY_REPLACEMENT_APPLY_ENV}=1`
+        : legacyReplacementStatus.legacyPublishedWithoutReplacement > 0
+          ? '持續執行 brand_profile_rollout；只有通過 CRG 才會轉移舊網址並下架舊文'
+          : '正常',
     });
 
     rows.push({
@@ -430,6 +551,27 @@ export class SchedulerController {
             ...getPublicBlogArticleSeoIssues(article),
           ],
         })),
+        legacyGeo: {
+          generationEnabled: legacyGenerationEnabled,
+          generationFrozen: !legacyGenerationEnabled,
+          publishedTotal: legacyPublishedTotal,
+          byTemplateType: legacyByTemplateType,
+          qualityGatedPublished,
+          shadowSampleSize: publishedArticleSamples.length,
+          shadowFlagged: shadowFlaggedSamples.length,
+          shadowIssueCounts,
+          flaggedSamples: shadowFlaggedSamples.slice(0, 20).map(({ article, issues }) => ({
+            slug: article.slug,
+            title: article.title,
+            templateType: article.templateType,
+            issues,
+          })),
+          weeklyClientDailyProtected: true,
+          replacement: {
+            ...legacyReplacementStatus,
+            automaticApplyEnabled: legacyReplacementApplyEnabled,
+          },
+        },
       },
       seed: {
         total: seedCounts[0],
