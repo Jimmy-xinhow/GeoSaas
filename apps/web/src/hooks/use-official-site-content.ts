@@ -13,6 +13,11 @@ export interface OfficialQualityReport {
   passed: boolean;
   score: number;
   minimumScore: number;
+  scorePassed?: boolean;
+  requiredPassed?: boolean;
+  requiredChecks?: string[];
+  failedRequiredChecks?: string[];
+  advisoryFailedChecks?: string[];
   attempts?: number;
   finalAttempt?: number;
   checks: Record<string, boolean>;

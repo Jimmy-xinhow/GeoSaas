@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/shared/page-header'
 import { SiteWorkspaceTabs } from '@/components/layout/site-workspace-tabs'
+import { MarkdownArticlePreview } from '@/components/content/markdown-article-preview'
 import { useSite } from '@/hooks/use-sites'
 import {
   useApproveOfficialSiteArticle,
@@ -21,6 +22,7 @@ import {
   useOfficialSiteArticle,
   useOfficialSiteArticles,
   useVerifyOfficialSiteArticle,
+  type OfficialQualityReport,
   type OfficialSiteArticle,
 } from '@/hooks/use-official-site-content'
 
@@ -37,6 +39,7 @@ const CHECK_LABELS: Record<string, string> = {
   minimumLength: '文章長度達標',
   maximumLength: '文章長度沒有過長',
   hasHeading: '包含文章標題',
+  hasTitleConsistency: '正文標題與文章標題一致',
   hasStructuredSections: '段落結構清楚',
   includesBrandName: '包含品牌名稱',
   includesGroundedEntity: '包含已驗證的品牌/服務事實',
@@ -54,6 +57,48 @@ const CHECK_LABELS: Record<string, string> = {
   noUnsupportedPromises: '無未證實排名或成效承諾',
   isScanAware: '已參考網站檢測重點',
   belowDuplicateThreshold: '與既有內容相似度低於門檻',
+}
+
+const DEFAULT_REQUIRED_GEO_CHECKS = [
+  'minimumLength',
+  'maximumLength',
+  'hasHeading',
+  'hasTitleConsistency',
+  'hasStructuredSections',
+  'includesBrandName',
+  'includesGroundedEntity',
+  'hasFactCoverage',
+  'hasAnswerFirstOpening',
+  'noPlaceholders',
+  'noPlatformReferences',
+  'hasFaq',
+  'hasVisibleFaq',
+  'hasAudienceBoundary',
+  'noUnsupportedPromises',
+  'belowDuplicateThreshold',
+]
+
+function getQualitySummary(report: OfficialQualityReport) {
+  const requiredChecks = new Set(
+    (report.requiredChecks?.length ? report.requiredChecks : DEFAULT_REQUIRED_GEO_CHECKS)
+      .filter((key) => key in report.checks),
+  )
+  const failedRequiredChecks = report.failedRequiredChecks
+    ?? [...requiredChecks].filter((key) => !report.checks[key])
+  const advisoryFailedChecks = report.advisoryFailedChecks
+    ?? Object.entries(report.checks)
+      .filter(([key, passed]) => !passed && !requiredChecks.has(key))
+      .map(([key]) => key)
+  const scorePassed = report.scorePassed ?? report.score >= report.minimumScore
+  const requiredPassed = report.requiredPassed ?? failedRequiredChecks.length === 0
+
+  return {
+    requiredChecks,
+    failedRequiredChecks,
+    advisoryFailedChecks,
+    scorePassed,
+    requiredPassed,
+  }
 }
 
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
@@ -157,6 +202,10 @@ export default function OfficialSiteContentPage() {
 
   const selectedArticleQuery = useOfficialSiteArticle(siteId, selectedId)
   const selectedArticle = selectedArticleQuery.data
+  const qualitySummary = useMemo(
+    () => selectedArticle?.qualityReport ? getQualitySummary(selectedArticle.qualityReport) : null,
+    [selectedArticle?.qualityReport],
+  )
   const packageQuery = useOfficialPublishPackage(siteId, selectedId, packageRequested)
   const articles = articlesQuery.data ?? []
   const recommendation = recommendationQuery.data
@@ -470,23 +519,52 @@ export default function OfficialSiteContentPage() {
               </div>
             </div>
 
-            {selectedArticle.qualityReport && (
+            {selectedArticle.qualityReport && qualitySummary && (
               <div className="rounded-lg border border-white/10 bg-black/10 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-white">GEO 高品質檢查</p>
-                  <span className="text-xs text-gray-500">品質 {selectedArticle.qualityReport.score ?? 0} 分（門檻 {selectedArticle.qualityReport.minimumScore ?? 82}）· {selectedArticle.qualityReport.charLength} 字 · 第 {selectedArticle.qualityReport.finalAttempt ?? selectedArticle.qualityReport.attempts ?? 1} 次</span>
+                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">GEO 高品質檢查</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      核准條件＝總分達 {selectedArticle.qualityReport.minimumScore ?? 82} 分以上，且所有「必過」項目通過。
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Badge variant={qualitySummary.scorePassed ? 'default' : 'destructive'}>
+                      總分{qualitySummary.scorePassed ? '達標' : '未達標'}：{selectedArticle.qualityReport.score ?? 0}/{selectedArticle.qualityReport.minimumScore ?? 82}
+                    </Badge>
+                    <Badge variant={qualitySummary.requiredPassed ? 'default' : 'destructive'}>
+                      必過條件{qualitySummary.requiredPassed ? '全數通過' : `缺 ${qualitySummary.failedRequiredChecks.length} 項`}
+                    </Badge>
+                    <span className="text-gray-500">{selectedArticle.qualityReport.charLength} 字 · 第 {selectedArticle.qualityReport.finalAttempt ?? selectedArticle.qualityReport.attempts ?? 1} 次</span>
+                  </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {Object.entries(selectedArticle.qualityReport.checks).map(([key, passed]) => (
                     <div key={key} className="flex items-center gap-2 text-xs text-gray-300">
                       {passed ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> : <AlertTriangle className="h-3.5 w-3.5 text-amber-300" />}
-                      {CHECK_LABELS[key] || key}
+                      <span>{CHECK_LABELS[key] || key}</span>
+                      {qualitySummary.requiredChecks.has(key) && (
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${passed ? 'bg-white/5 text-gray-500' : 'bg-red-400/10 text-red-200'}`}>
+                          必過
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
-                <p className="mt-3 text-xs leading-5 text-gray-500">除了總分達標，品牌事實、直接答案、FAQ、結構與重複度等核心條件也必須全部通過。</p>
-                {!selectedArticle.qualityReport.passed && selectedArticle.rejectionReason && (
-                  <p className="mt-3 text-xs leading-5 text-amber-200">未通過原因：{selectedArticle.rejectionReason}</p>
+                {!selectedArticle.qualityReport.passed && (
+                  <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-500/[0.07] p-3 text-xs leading-6 text-amber-100">
+                    <p className="font-semibold">
+                      {qualitySummary.scorePassed
+                        ? `總分已達標，但仍有 ${qualitySummary.failedRequiredChecks.length} 項必過條件未通過，因此不能交付。`
+                        : `總分尚未達 ${selectedArticle.qualityReport.minimumScore ?? 82} 分，因此不能交付。`}
+                    </p>
+                    {qualitySummary.failedRequiredChecks.length > 0 && (
+                      <p className="mt-1">必須修正：{qualitySummary.failedRequiredChecks.map((key) => CHECK_LABELS[key] || key).join('、')}</p>
+                    )}
+                    {qualitySummary.advisoryFailedChecks.length > 0 && (
+                      <p className="mt-1 text-amber-100/70">其他待優化：{qualitySummary.advisoryFailedChecks.map((key) => CHECK_LABELS[key] || key).join('、')}</p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -506,12 +584,20 @@ export default function OfficialSiteContentPage() {
             {selectedArticle.content && (
               <div className="rounded-lg border border-white/10 bg-black/20 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-white">文章預覽</p>
+                  <div>
+                    <p className="text-sm font-semibold text-white">正式文章排版預覽</p>
+                    <p className="mt-1 text-xs text-gray-500">標題、粗體、清單與段落已轉為讀者實際看到的格式，不顯示 Markdown 符號。</p>
+                  </div>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setShowFullPreview((value) => !value)}>
                     {showFullPreview ? '收合' : '查看全文'}
                   </Button>
                 </div>
-                <pre className={`whitespace-pre-wrap text-sm leading-7 text-gray-300 ${showFullPreview ? '' : 'max-h-48 overflow-hidden'}`}>{selectedArticle.content}</pre>
+                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-[#0b1220] p-5 sm:p-7">
+                  <div className={showFullPreview ? '' : 'max-h-80 overflow-hidden'}>
+                    <MarkdownArticlePreview markdown={selectedArticle.content} />
+                  </div>
+                  {!showFullPreview && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0b1220] to-transparent" />}
+                </div>
               </div>
             )}
 
@@ -534,11 +620,33 @@ export default function OfficialSiteContentPage() {
               <div className="space-y-4 rounded-lg border border-emerald-400/20 bg-emerald-500/[0.04] p-4">
                 <div>
                   <p className="font-semibold text-emerald-100">官網內容包已準備完成</p>
-                  <p className="mt-1 text-xs leading-5 text-emerald-50/70">這是獨立生成的官網版本，不是 Geovault 平台文章。請貼到客戶 CMS，完成後再回到下方驗證正式網址。</p>
+                  <p className="mt-1 text-xs leading-5 text-emerald-50/70">這是獨立生成的官網版本，不是 Geovault 平台文章。一般 CMS 請優先使用「CMS HTML」，不要把 Markdown 原始符號直接貼進視覺編輯器。</p>
                 </div>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-gray-300">Markdown 正文</p><CopyButton label="Markdown" value={packageQuery.data.formats.markdown} /></div>
-                  <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-white/10 bg-black/30 p-3 text-xs leading-6 text-gray-300">{packageQuery.data.formats.markdown}</pre>
+                  <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+                    <p className="mb-3 text-xs font-semibold text-gray-300">交付排版預覽</p>
+                    <div className="max-h-80 overflow-auto rounded-lg border border-white/10 bg-[#0b1220] p-5">
+                      <MarkdownArticlePreview markdown={packageQuery.data.formats.markdown} />
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-blue-400/20 bg-blue-500/[0.05] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-blue-100">CMS HTML（一般官網建議使用）</p>
+                        <p className="mt-1 text-[11px] leading-5 text-blue-100/60">貼到 WordPress 自訂 HTML、Webflow Embed 或 CMS 原始碼模式，標題與段落會正常排版。</p>
+                      </div>
+                      <CopyButton label="CMS HTML" value={packageQuery.data.formats.cmsHtml} />
+                    </div>
+                  </div>
+                  <details className="rounded-lg border border-white/10 bg-black/20 text-xs text-gray-400">
+                    <summary className="cursor-pointer px-3 py-3 font-medium text-gray-300">CMS 支援 Markdown 時才使用 Markdown 原始碼</summary>
+                    <div className="space-y-3 border-t border-white/10 p-3">
+                      <div className="flex items-center justify-between gap-3"><p className="font-semibold text-gray-300">Markdown 原始碼</p><CopyButton label="Markdown" value={packageQuery.data.formats.markdown} /></div>
+                      <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-white/10 bg-black/30 p-3 text-xs leading-6 text-gray-300">{packageQuery.data.formats.markdown}</pre>
+                    </div>
+                  </details>
+                  <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-gray-300">SEO Meta / Canonical / Open Graph</p><CopyButton label="Meta Tags" value={packageQuery.data.formats.metaTags} /></div>
+                  <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-white/10 bg-black/30 p-3 text-xs leading-6 text-gray-300">{packageQuery.data.formats.metaTags}</pre>
                   <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-gray-300">Article / FAQ JSON-LD</p><CopyButton label="JSON-LD" value={packageQuery.data.formats.jsonLd} /></div>
                   <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-white/10 bg-black/30 p-3 text-xs leading-6 text-gray-300">{packageQuery.data.formats.jsonLd}</pre>
                 </div>

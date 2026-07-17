@@ -155,6 +155,35 @@ describe('OfficialSiteContentService', () => {
     );
   });
 
+  it('returns a formatted CMS article plus canonical, Open Graph and JSON-LD metadata', async () => {
+    jest.spyOn(service, 'findOne').mockResolvedValue({
+      id: 'official-1',
+      siteId,
+      slug: 'acme-guide',
+      title: aiResponse.title,
+      description: aiResponse.metaDescription,
+      content: `${aiResponse.content}\n\n**官方資料重點**`,
+      status: 'export_ready',
+      targetKeywords: aiResponse.keywords,
+      publishBaseUrl: 'https://acme.example/blog',
+      canonicalUrl: 'https://acme.example/blog/acme-guide',
+      metaTitle: aiResponse.title,
+      metaDescription: aiResponse.metaDescription,
+      articleSchema: { headline: aiResponse.title },
+      faqSchema: { mainEntity: [] },
+      site,
+    } as any);
+
+    const result = await service.getPublishPackage('official-1', siteId, userId, 'USER');
+
+    expect(result.formats.cmsHtml).toContain(`<h1>${aiResponse.title}</h1>`);
+    expect(result.formats.cmsHtml).toContain('<strong>官方資料重點</strong>');
+    expect(result.formats.cmsHtml).not.toContain('**官方資料重點**');
+    expect(result.formats.metaTags).toContain('rel="canonical"');
+    expect(result.formats.metaTags).toContain('property="og:title"');
+    expect(result.formats.jsonLd).toContain('FAQPage');
+  });
+
   it('blocks official-site generation until first-party facts meet the high-quality threshold', async () => {
     brandFacts.buildForSite.mockResolvedValue({
       ...graph,
@@ -258,7 +287,7 @@ describe('OfficialSiteContentService', () => {
     expect(recommendation.dataUsed.reportAvailable).toBe(true);
   });
 
-  it('automatically retries a failed draft and records the attempt count', async () => {
+  it('automatically retries a draft that still misses required visible FAQ content', async () => {
     const create = (service as any).openai.chat.completions.create as jest.Mock;
     const goodContent = `# Acme 企業軟體導入指南\n\nAcme 提供企業軟體顧問與導入服務，本文先說明結論，再整理適用對象與實作步驟。\n\n## 重點結論\n\nAcme 提供企業軟體顧問與導入服務，協助企業依照實際流程整理需求。\n\n## 適用對象與限制\n\n適合需要企業軟體顧問與導入的中小企業行銷團隊，不提供代操廣告。\n\n## 執行步驟\n\n1. 整理需求。\n2. 確認導入流程。\n3. 依照可驗證資料執行。\n\n## 常見問題\n\nAcme 官方品牌協助企業依照實際流程整理需求，並以可驗證的導入步驟降低溝通成本。`.repeat(3);
     create
@@ -279,7 +308,47 @@ describe('OfficialSiteContentService', () => {
 
     expect(result.status).toBe('draft');
     expect((result.qualityReport as any).attempts).toBe(3);
+    expect((result.qualityReport as any).scorePassed).toBe(true);
+    expect((result.qualityReport as any).requiredPassed).toBe(true);
     expect(create).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps a high-scoring article blocked when a required first-party boundary is missing', async () => {
+    const report = await (service as any).runQualityChecks(
+      siteId,
+      site.name,
+      aiResponse.content,
+      aiResponse,
+      {
+        ...graph,
+        targetAudiences: ['大型企業法務團隊'],
+        notFor: ['僅提供海外服務'],
+      },
+      { latestScanScore: null, latestScanAt: null, indicators: [], latestReportSummary: null },
+    );
+
+    expect(report.score).toBeGreaterThanOrEqual(82);
+    expect(report.scorePassed).toBe(true);
+    expect(report.requiredPassed).toBe(false);
+    expect(report.failedRequiredChecks).toContain('hasAudienceBoundary');
+    expect(report.passed).toBe(false);
+  });
+
+  it('allows non-blocking optimization misses when the score and every required check pass', async () => {
+    const report = await (service as any).runQualityChecks(
+      siteId,
+      site.name,
+      aiResponse.content,
+      { ...aiResponse, keywords: ['企業軟體'] },
+      graph,
+      { latestScanScore: null, latestScanAt: null, indicators: [], latestReportSummary: null },
+    );
+
+    expect(report.checks.keywordSetReady).toBe(false);
+    expect(report.advisoryFailedChecks).toContain('keywordSetReady');
+    expect(report.scorePassed).toBe(true);
+    expect(report.requiredPassed).toBe(true);
+    expect(report.passed).toBe(true);
   });
 
   it('switches to a semantic slug when the requested slug is occupied', async () => {
@@ -308,7 +377,7 @@ describe('OfficialSiteContentService', () => {
     );
 
     expect(result.status).toBe('quality_failed');
-    expect(result.rejectionReason).toContain('belowDuplicateThreshold');
+    expect(result.rejectionReason).toContain('與既有內容相似度過高');
     expect(result.rejectionReason).toContain('建議換一個主題方向');
     expect((result.qualityReport as any).finalAttempt).toBe(3);
   });

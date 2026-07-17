@@ -26,6 +26,48 @@ const MAX_QUALITY_ATTEMPTS = 3;
 const MIN_GEO_QUALITY_SCORE = 82;
 const MIN_OFFICIAL_FACT_CONFIDENCE = 70;
 const OFFICIAL_ARTICLE_STATUSES = ['draft', 'approved', 'export_ready'] as const;
+const REQUIRED_GEO_CHECKS = [
+  'minimumLength',
+  'maximumLength',
+  'hasHeading',
+  'hasTitleConsistency',
+  'hasStructuredSections',
+  'includesBrandName',
+  'includesGroundedEntity',
+  'hasFactCoverage',
+  'hasAnswerFirstOpening',
+  'noPlaceholders',
+  'noPlatformReferences',
+  'hasFaq',
+  'hasVisibleFaq',
+  'hasAudienceBoundary',
+  'noUnsupportedPromises',
+  'belowDuplicateThreshold',
+] as const;
+
+const QUALITY_REASON_LABELS: Record<string, string> = {
+  minimumLength: '文章長度不足',
+  maximumLength: '文章長度過長',
+  hasHeading: '缺少文章主標題',
+  hasTitleConsistency: '正文主標題與文章標題不一致',
+  hasStructuredSections: '缺少清楚的段落結構',
+  includesBrandName: '正文缺少品牌名稱',
+  includesGroundedEntity: '缺少可由第一方資料驗證的品牌或服務事實',
+  hasFactCoverage: '可驗證的品牌事實不足兩項',
+  hasAnswerFirstOpening: '開頭沒有直接回答品牌、服務與適用情境',
+  noPlaceholders: '正文仍有待補資料或佔位符',
+  noPlatformReferences: '正文含有 Geovault 或平台內部字樣',
+  hasFaq: 'FAQ 少於三組或答案不完整',
+  hasVisibleFaq: 'FAQ 問題沒有完整顯示於正文',
+  hasAudienceBoundary: '適用對象或不適用限制沒有說清楚',
+  hasActionableAnswer: '缺少可執行的直接答案',
+  hasAiReadableStructure: '缺少 AI 容易擷取的問答結構',
+  metaDescriptionReady: 'Meta Description 尚未達可用標準',
+  keywordSetReady: '關鍵字數量應為 3 至 8 組',
+  noUnsupportedPromises: '含有未經證實的排名或成效承諾',
+  isScanAware: '內容尚未回應網站檢測重點',
+  belowDuplicateThreshold: '與既有內容相似度過高',
+};
 
 interface SourceArticle {
   id: string;
@@ -96,6 +138,11 @@ interface QualityReport {
   passed: boolean;
   score: number;
   minimumScore: number;
+  scorePassed: boolean;
+  requiredPassed: boolean;
+  requiredChecks: string[];
+  failedRequiredChecks: string[];
+  advisoryFailedChecks: string[];
   attempts?: number;
   finalAttempt?: number;
   checks: Record<string, boolean>;
@@ -117,6 +164,14 @@ function cleanMarkdown(value: string): string {
 
 function normalizeText(value: string): string {
   return value.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function factSegments(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values
+    .filter((value): value is string => Boolean(value?.trim()))
+    .flatMap((value) => value.split(/[，、；;。\n]+/))
+    .map((value) => value.trim())
+    .filter((value) => value.length >= 2 && value.length <= 120))];
 }
 
 function parseJsonResponse(raw: string): GeneratedPayload {
@@ -479,7 +534,7 @@ export class OfficialSiteContentService {
         quality.attempts = attempt;
         quality.finalAttempt = attempt;
         if (quality.passed) break;
-        qualityFeedback = `上一版未達標，請重新改寫，不要只補字數：${quality.failedReasons.join('、')}。品質分數 ${quality.score}/${quality.minimumScore}。請優先改善直接回答、可引用的事實、清楚段落與 FAQ。`;
+        qualityFeedback = this.buildQualityFeedback(quality, graph);
       } catch (error) {
         if (attempt === MAX_QUALITY_ATTEMPTS) throw error;
         qualityFeedback = `上一版生成格式失敗，請重新輸出完整 JSON，並確保正文與 FAQ 都是繁體中文且資料可由客戶第一方資料支持。`;
@@ -494,20 +549,22 @@ export class OfficialSiteContentService {
     quality.attempts = quality.attempts || finalAttempt;
     quality.finalAttempt = quality.finalAttempt || finalAttempt;
     const status = quality.passed ? 'draft' : 'quality_failed';
-    const articleSchema = this.buildArticleSchema({
-      title: generated.title,
-      description,
-      canonicalUrl,
-      siteName: site.name,
-      siteUrl: site.url,
-    });
-    const faqSchema = this.buildFaqSchema(generated.faq || []);
     const targetKeywords = [...new Set([
       topic,
       ...(topicDirection ? [topicDirection] : []),
       ...(generated.keywords || []),
       ...(site.industry ? [site.industry] : []),
     ].map((item) => item.trim()).filter(Boolean))].slice(0, 12);
+    const articleSchema = this.buildArticleSchema({
+      title: generated.title,
+      description,
+      canonicalUrl,
+      siteName: site.name,
+      siteUrl: site.url,
+      industry: site.industry,
+      keywords: targetKeywords,
+    });
+    const faqSchema = this.buildFaqSchema(generated.faq || []);
 
     const created = await this.prisma.officialSiteArticle.create({
       data: {
@@ -532,7 +589,7 @@ export class OfficialSiteContentService {
         similarityScore: quality.similarityScore,
         similarityMatchedArticleId: quality.matchedArticleId,
         rejectionReason: quality.failedReasons.length > 0
-          ? `${quality.failedReasons.join('; ')}${quality.passed ? '' : `；已自動優化 ${quality.finalAttempt || MAX_QUALITY_ATTEMPTS} 次仍未達標，建議換一個主題方向`}`
+          ? `${quality.failedReasons.map((reason) => QUALITY_REASON_LABELS[reason] || reason).join('；')}${quality.passed ? '' : `；已自動優化 ${quality.finalAttempt || MAX_QUALITY_ATTEMPTS} 次仍未達標，建議換一個主題方向`}`
           : null,
         generatedAt: new Date(),
       },
@@ -612,6 +669,13 @@ export class OfficialSiteContentService {
       `<title>${this.escapeHtml(article.metaTitle || article.title)}</title>`,
       `<meta name="description" content="${this.escapeHtml(article.metaDescription || article.description)}">`,
       `<link rel="canonical" href="${this.escapeHtml(article.canonicalUrl)}">`,
+      '<meta property="og:type" content="article">',
+      `<meta property="og:title" content="${this.escapeHtml(article.metaTitle || article.title)}">`,
+      `<meta property="og:description" content="${this.escapeHtml(article.metaDescription || article.description)}">`,
+      `<meta property="og:url" content="${this.escapeHtml(article.canonicalUrl)}">`,
+      '<meta name="twitter:card" content="summary_large_image">',
+      `<meta name="twitter:title" content="${this.escapeHtml(article.metaTitle || article.title)}">`,
+      `<meta name="twitter:description" content="${this.escapeHtml(article.metaDescription || article.description)}">`,
     ].join('\n');
     const packageResult = {
       officialSite: {
@@ -773,6 +837,8 @@ export class OfficialSiteContentService {
 3. 不要引用或重現任何平台文章正文；平台資料只用來決定主題方向。
 4. 文章要以客戶官網讀者的實際問題為中心，加入客戶自己的服務情境、適用對象與限制。
 5. 產出 900–1400 字繁體中文，使用 Markdown 標題與段落，FAQ 至少 3 題。
+6. Markdown 只作為內容結構格式：第一行只能有一個 H1；H2/H3 必須各自獨立成行；粗體只用於短語；清單每項各自一行，確保轉成 CMS HTML 後是正常文章版面。
+7. 第一方資料中的服務、適用對象與不適用限制若有值，正文需各自至少逐字使用一個可驗證短語；不要只用意思相近但無法核對的改寫。
 
 客戶網站：${site.name}
 官方網域：${site.url}
@@ -806,7 +872,7 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
 請只回傳 JSON object，不要 Markdown code fence：
 {
   "title": "官網文章標題",
-  "content": "完整 Markdown 正文，第一行使用 # 標題",
+  "content": "完整且可無損轉成 CMS HTML 的 Markdown 正文，第一行使用唯一的 # 標題",
   "metaDescription": "包含品牌名稱、60–180 字的官網摘要",
   "keywords": ["3-8 個官網關鍵字"],
   "faq": [
@@ -840,17 +906,23 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
     const matchedArticleId = similarity.matchedIndex >= 0 ? corpus[similarity.matchedIndex]?.id || null : null;
     const failedReasons: string[] = [];
     const headingCount = (content.match(/^#{2,3}\s+.+/gm) || []).length;
+    const contentTitle = content.match(/^#\s+(.+)$/m)?.[1]?.trim() || '';
     const opening = cleanMarkdown(content.replace(/^#\s+.+$/m, '')).slice(0, 600);
-    const hasGroundedEntity = [graph.services, graph.industry, graph.positioning, graph.location]
-      .filter((value): value is string => Boolean(value))
+    const groundedEntityAnchors = factSegments([
+      graph.services,
+      graph.industry,
+      graph.positioning,
+      graph.location,
+    ]);
+    const hasGroundedEntity = groundedEntityAnchors
       .some((value) => normalizeText(plain).includes(normalizeText(value)));
-    const factAnchors = [
+    const factAnchors = factSegments([
       graph.services,
       graph.positioning,
       graph.location,
       ...graph.targetAudiences,
       ...graph.notFor,
-    ].filter((value): value is string => Boolean(value && value.trim().length >= 2));
+    ]);
     const matchedFactAnchors = factAnchors.filter((value) =>
       normalizeText(plain).includes(normalizeText(value)),
     ).length;
@@ -871,6 +943,7 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       minimumLength: plain.length >= MIN_ARTICLE_CHARS,
       maximumLength: plain.length <= MAX_ARTICLE_CHARS,
       hasHeading: /^#\s+.+/m.test(content),
+      hasTitleConsistency: normalizeText(contentTitle) === normalizeText(generated.title),
       hasStructuredSections: headingCount >= 4,
       includesBrandName: normalizeText(plain).includes(normalizeText(siteName)),
       includesGroundedEntity: hasGroundedEntity,
@@ -882,9 +955,9 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       hasFaq: usefulFaq,
       hasVisibleFaq: visibleFaqQuestions >= Math.min(3, generated.faq?.length || 0),
       hasAudienceBoundary: (graph.targetAudiences.length === 0
-        || graph.targetAudiences.some((value) => normalizeText(plain).includes(normalizeText(value))))
+        || factSegments(graph.targetAudiences).some((value) => normalizeText(plain).includes(normalizeText(value))))
         && (graph.notFor.length === 0
-          || graph.notFor.some((value) => normalizeText(plain).includes(normalizeText(value)))),
+          || factSegments(graph.notFor).some((value) => normalizeText(plain).includes(normalizeText(value)))),
       hasActionableAnswer: /(?:結論|重點|步驟|建議|可以|應該|適合|不適合)/i.test(content),
       hasAiReadableStructure: /(?:常見問題|FAQ|問：|Q[:：])/i.test(content),
       metaDescriptionReady: metaDescription.length >= 60
@@ -899,10 +972,21 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       if (!passed) failedReasons.push(key);
     }
     const score = Math.round((Object.values(checks).filter(Boolean).length / Object.keys(checks).length) * 100);
+    const requiredChecks = [...REQUIRED_GEO_CHECKS];
+    const requiredSet = new Set<string>(requiredChecks);
+    const failedRequiredChecks = requiredChecks.filter((key) => !checks[key]);
+    const advisoryFailedChecks = failedReasons.filter((key) => !requiredSet.has(key));
+    const scorePassed = score >= MIN_GEO_QUALITY_SCORE;
+    const requiredPassed = failedRequiredChecks.length === 0;
     return {
-      passed: failedReasons.length === 0 && score >= MIN_GEO_QUALITY_SCORE,
+      passed: scorePassed && requiredPassed,
       score,
       minimumScore: MIN_GEO_QUALITY_SCORE,
+      scorePassed,
+      requiredPassed,
+      requiredChecks,
+      failedRequiredChecks,
+      advisoryFailedChecks,
       checks,
       charLength: plain.length,
       similarityScore: similarity.score,
@@ -912,13 +996,38 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
     };
   }
 
+  private buildQualityFeedback(quality: QualityReport, graph: BrandFactGraph): string {
+    const details = quality.failedReasons.map((reason) => {
+      if (reason === 'includesGroundedEntity') {
+        const examples = factSegments([
+          graph.services,
+          graph.positioning,
+          graph.location,
+          graph.industry,
+        ]).slice(0, 3);
+        return `${QUALITY_REASON_LABELS[reason]}${examples.length > 0 ? `，請逐字使用至少一項：「${examples.join('」或「')}」` : ''}`;
+      }
+      if (reason === 'hasAudienceBoundary') {
+        const audience = factSegments(graph.targetAudiences).slice(0, 3).join('、');
+        const notFor = factSegments(graph.notFor).slice(0, 3).join('、');
+        return `${QUALITY_REASON_LABELS[reason]}${audience ? `；適用對象需包含「${audience}」` : ''}${notFor ? `；不適用限制需包含「${notFor}」` : ''}`;
+      }
+      return QUALITY_REASON_LABELS[reason] || reason;
+    });
+
+    return `上一版未達標，請重新改寫，不要只補字數：${details.join('、')}。品質分數 ${quality.score}/${quality.minimumScore}。請優先改善直接回答、可引用的事實、清楚段落與 FAQ。`;
+  }
+
   private buildArticleSchema(input: {
     title: string;
     description: string;
     canonicalUrl: string;
     siteName: string;
     siteUrl: string;
+    industry: string | null;
+    keywords: string[];
   }) {
+    const generatedAt = new Date().toISOString();
     return {
       headline: input.title,
       description: input.description,
@@ -926,8 +1035,11 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       mainEntityOfPage: input.canonicalUrl,
       author: { '@type': 'Organization', name: input.siteName, url: input.siteUrl },
       publisher: { '@type': 'Organization', name: input.siteName, url: input.siteUrl },
+      about: [input.siteName, input.industry].filter(Boolean),
+      keywords: input.keywords,
       inLanguage: 'zh-TW',
-      dateModified: new Date().toISOString(),
+      datePublished: generatedAt,
+      dateModified: generatedAt,
     };
   }
 
