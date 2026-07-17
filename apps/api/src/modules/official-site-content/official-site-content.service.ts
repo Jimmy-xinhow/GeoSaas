@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertSiteAccess } from '../../common/auth/site-access';
 import { BrandFactGraph, BrandFactService } from '../blog-article/brand-fact.service';
@@ -18,7 +18,7 @@ import {
 } from '../content-quality/text-similarity.util';
 import { GenerateOfficialArticleDto, VerifyOfficialArticleDto } from './dto';
 
-const DEFAULT_MODEL = 'gpt-4o';
+const DEFAULT_CLAUDE_MODEL = 'claude-opus-4-8';
 const MIN_ARTICLE_CHARS = 900;
 const MAX_ARTICLE_CHARS = 8000;
 const SOURCE_ARTICLE_LIMIT = 30;
@@ -42,6 +42,7 @@ const REQUIRED_GEO_CHECKS = [
   'hasVisibleFaq',
   'hasAudienceBoundary',
   'noUnsupportedPromises',
+  'noUnsupportedSpecificClaims',
   'belowDuplicateThreshold',
 ] as const;
 
@@ -65,6 +66,7 @@ const QUALITY_REASON_LABELS: Record<string, string> = {
   metaDescriptionReady: 'Meta Description 尚未達可用標準',
   keywordSetReady: '關鍵字數量應為 3 至 8 組',
   noUnsupportedPromises: '含有未經證實的排名或成效承諾',
+  noUnsupportedSpecificClaims: '含有第一方資料未支持的年限、數據或效果宣稱',
   isScanAware: '內容尚未回應網站檢測重點',
   belowDuplicateThreshold: '與既有內容相似度過高',
 };
@@ -109,6 +111,7 @@ interface GenerationBrief {
   canonicalUrl: string;
   topicDirection?: string;
   qualityFeedback?: string;
+  previousDraft?: GeneratedPayload;
   geoContext: GeoContext;
 }
 
@@ -150,8 +153,32 @@ interface QualityReport {
   similarityScore: number;
   similarityThreshold: number;
   matchedArticleId: string | null;
+  unsupportedSpecificClaims: string[];
   failedReasons: string[];
 }
+
+const OFFICIAL_ARTICLE_OUTPUT_TOOL: Anthropic.Tool = {
+  name: 'submit_official_site_article',
+  description: '提交已依第一方資料完成、可供官網發布及 GEO 引用的文章內容。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: '官網文章標題，必須與正文唯一 H1 完全一致' },
+      content: { type: 'string', description: '完整繁體中文 Markdown 正文' },
+      metaDescription: { type: 'string', description: '包含品牌名稱的 60–180 字摘要' },
+      keywords: { type: 'array', items: { type: 'string' }, minItems: 3, maxItems: 8 },
+      faq: {
+        type: 'array', minItems: 3, maxItems: 6,
+        items: {
+          type: 'object',
+          properties: { question: { type: 'string' }, answer: { type: 'string' } },
+          required: ['question', 'answer'],
+        },
+      },
+    },
+    required: ['title', 'content', 'metaDescription', 'keywords', 'faq'],
+  },
+};
 
 function cleanMarkdown(value: string): string {
   return value
@@ -174,6 +201,31 @@ function factSegments(values: Array<string | null | undefined>): string[] {
     .filter((value) => value.length >= 2 && value.length <= 120))];
 }
 
+function extractUnsupportedSpecificClaims(content: string, graph: BrandFactGraph): string[] {
+  const source = normalizeText([
+    graph.brandName,
+    graph.industry,
+    graph.url,
+    graph.location,
+    graph.services,
+    graph.positioning,
+    graph.contact,
+    ...graph.targetAudiences,
+    ...graph.notFor,
+    ...graph.verifiedFacts,
+    ...graph.qaPairs.flatMap((pair) => [pair.question, pair.answer]),
+  ].filter(Boolean).join(' '));
+  const measurableClaims = content.match(
+    /(?:\d+(?:\.\d+)?|[一二三四五六七八九十百千數幾兩]+)\s*(?:年|個?月|週|星期|天|日|小時|分鐘|%|％|倍)(?:以上|以下|左右|內|外|起)?/g,
+  ) || [];
+  const effectClaims = [
+    '防污', '抗刮', '耐高溫', '耐酸鹼', '防潑水', '抗紫外線', '抗氧化',
+  ].filter((phrase) => content.includes(phrase));
+  return [...new Set([...measurableClaims, ...effectClaims])]
+    .map((claim) => claim.replace(/\s+/g, ' ').trim())
+    .filter((claim) => !source.includes(normalizeText(claim)));
+}
+
 function parseJsonResponse(raw: string): GeneratedPayload {
   const cleaned = raw
     .trim()
@@ -188,8 +240,12 @@ function parseJsonResponse(raw: string): GeneratedPayload {
     throw new BadRequestException('AI 回傳格式無法解析，請重新生成');
   }
 
-  const record = parsed && typeof parsed === 'object'
-    ? parsed as Record<string, unknown>
+  return parseGeneratedRecord(parsed);
+}
+
+function parseGeneratedRecord(value: unknown): GeneratedPayload {
+  const record = value && typeof value === 'object'
+    ? value as Record<string, unknown>
     : {};
   const title = typeof record.title === 'string' ? record.title.trim() : '';
   const content = typeof record.content === 'string' ? record.content.trim() : '';
@@ -223,7 +279,8 @@ function asJson(value: unknown): Prisma.InputJsonValue {
 @Injectable()
 export class OfficialSiteContentService {
   private readonly logger = new Logger(OfficialSiteContentService.name);
-  private readonly openai: OpenAI | null;
+  private readonly anthropic: Anthropic | null;
+  private readonly claudeModel: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -231,8 +288,9 @@ export class OfficialSiteContentService {
     private readonly brandFactService: BrandFactService,
     private readonly indexNow: IndexNowService,
   ) {
-    const apiKey = this.config.get<string>('OPENAI_API_KEY');
-    this.openai = apiKey ? new OpenAI({ apiKey }) : null;
+    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
+    this.anthropic = apiKey ? new Anthropic({ apiKey }) : null;
+    this.claudeModel = this.config.get<string>('OFFICIAL_SITE_ARTICLE_CLAUDE_MODEL') || DEFAULT_CLAUDE_MODEL;
   }
 
   private async assertAccess(siteId: string, userId: string, role?: string) {
@@ -461,8 +519,8 @@ export class OfficialSiteContentService {
     role?: string,
   ) {
     const site = await this.assertAccess(siteId, userId, role);
-    if (!this.openai) {
-      throw new BadRequestException('目前尚未設定 OPENAI_API_KEY，無法生成官網專屬文章');
+    if (!this.anthropic) {
+      throw new BadRequestException('目前尚未設定 ANTHROPIC_API_KEY，無法生成官網專屬文章');
     }
 
     const graph = await this.brandFactService.buildForSite(siteId);
@@ -503,38 +561,48 @@ export class OfficialSiteContentService {
     let generated: GeneratedPayload | null = null;
     let quality: QualityReport | null = null;
     let qualityFeedback = '';
+    let previousDraft: GeneratedPayload | undefined;
     let finalAttempt = 0;
 
     for (let attempt = 1; attempt <= MAX_QUALITY_ATTEMPTS; attempt += 1) {
       finalAttempt = attempt;
       const prompt = this.buildPrompt(
         site,
-        { topic, angle, canonicalUrl, topicDirection, qualityFeedback, geoContext },
+        { topic, angle, canonicalUrl, topicDirection, qualityFeedback, previousDraft, geoContext },
         source,
         firstPartySnapshot,
       );
       try {
-        const response = await this.openai.chat.completions.create({
-          model: this.config.get<string>('OFFICIAL_SITE_ARTICLE_AI_MODEL') || DEFAULT_MODEL,
+        const response = await this.anthropic.messages.create({
+          model: this.claudeModel,
           temperature: attempt === 1 ? 0.65 : 0.45,
           max_tokens: 6500,
-          response_format: { type: 'json_object' },
+          tools: [OFFICIAL_ARTICLE_OUTPUT_TOOL],
+          tool_choice: { type: 'tool', name: OFFICIAL_ARTICLE_OUTPUT_TOOL.name },
+          system: '你是專業 GEO 官網內容總編。目標是讓真實品牌更容易被 AI 收錄、引用、推薦與摘要。只使用客戶第一方資料，不得捏造服務、地點、聯絡方式、價格、成效或案例；每次輸出都必須依品質回饋修正。',
           messages: [
-            {
-              role: 'system',
-              content: '你是專業 GEO 官網內容總編。目標是讓真實品牌更容易被 AI 收錄、引用、推薦與摘要。只使用客戶第一方資料，不得捏造服務、地點、聯絡方式、價格、成效或案例；每次輸出都必須依品質回饋修正。',
-            },
             { role: 'user', content: prompt },
           ],
         });
 
-        const raw = response.choices[0]?.message?.content || '';
-        generated = parseJsonResponse(raw);
+        const legacyRaw = (response as unknown as { choices?: Array<{ message?: { content?: string } }> })
+          .choices?.[0]?.message?.content;
+        const toolBlock = response.content?.find((block) => block.type === 'tool_use');
+        if (toolBlock?.type === 'tool_use') {
+          generated = parseGeneratedRecord(toolBlock.input);
+        } else if (legacyRaw) {
+          // Kept only for older unit-test/provider adapters during rollout.
+          generated = parseJsonResponse(legacyRaw);
+        } else {
+          const textBlock = response.content?.find((block) => block.type === 'text');
+          generated = parseJsonResponse(textBlock?.type === 'text' ? textBlock.text : '');
+        }
         quality = await this.runQualityChecks(siteId, site.name, generated.content, generated, graph, geoContext);
         quality.attempts = attempt;
         quality.finalAttempt = attempt;
         if (quality.passed) break;
         qualityFeedback = this.buildQualityFeedback(quality, graph);
+        previousDraft = generated;
       } catch (error) {
         if (attempt === MAX_QUALITY_ATTEMPTS) throw error;
         qualityFeedback = `上一版生成格式失敗，請重新輸出完整 JSON，並確保正文與 FAQ 都是繁體中文且資料可由客戶第一方資料支持。`;
@@ -836,7 +904,7 @@ export class OfficialSiteContentService {
 2. 不要提及 Geovault、client_daily、平台文章、發布包、平台分數或第三方平台。
 3. 不要引用或重現任何平台文章正文；平台資料只用來決定主題方向。
 4. 文章要以客戶官網讀者的實際問題為中心，加入客戶自己的服務情境、適用對象與限制。
-5. 產出 900–1400 字繁體中文，使用 Markdown 標題與段落，FAQ 至少 3 題。
+5. 產出清理後至少 1200、目標 1200–1600 字的繁體中文正文，使用 Markdown 標題與段落，FAQ 至少 3 題。不要用重複句灌水；每一段都要提供新的判斷、條件、步驟或第一方事實。
 6. Markdown 只作為內容結構格式：第一行只能有一個 H1；H2/H3 必須各自獨立成行；粗體只用於短語；清單每項各自一行，確保轉成 CMS HTML 後是正常文章版面。
 7. 第一方資料中的服務、適用對象與不適用限制若有值，正文需各自至少逐字使用一個可驗證短語；不要只用意思相近但無法核對的改寫。
 
@@ -856,12 +924,15 @@ GEO 內容目標：
 - 正文至少明確使用兩項第一方事實；FAQ 的問題必須真的出現在正文中，每個答案要完整可獨立引用。
 - Meta Description 需包含品牌名稱與直接價值，控制在 60–180 字；keywords 提供 3–8 個不重複詞組。
 - 禁止「唯一、第一、最佳、保證、一定、大幅提升、100%」等無來源的排名、成效或絕對承諾。
+- 任何年、月、週、天、百分比、價格、耐久期間，或「防污、抗刮、耐高溫」等效果宣稱，只能在客戶第一方資料中有逐字依據時使用；沒有依據就不要自行補充常識或推估。
 - 不要提及 Geovault、平台文章、GEO 分數或第三方來源，也不要把檢測分數當成客戶成效宣稱。
 
 最新網站掃描與 AI 引用檢測摘要（僅用於判斷內容重點，不可在文章中捏造或宣稱）：
 ${JSON.stringify(brief.geoContext, null, 2)}
 
 ${brief.qualityFeedback ? `上一輪品質回饋（本輪必須修正）：\n${brief.qualityFeedback}\n` : ''}
+
+${brief.previousDraft ? `上一版完整草稿（請針對回饋修復，不要忽略或只重新改寫一次）：\n${JSON.stringify(brief.previousDraft, null, 2)}\n` : ''}
 
 平台文章僅提供以下「主題靈感 metadata」，不可使用其正文：
 ${source ? JSON.stringify({ title: source.title, description: source.description, keywords: source.targetKeywords }, null, 2) : '(沒有指定平台文章，請依主題重新規劃)'}
@@ -937,6 +1008,7 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
     );
     const keywords = [...new Set((generated.keywords || []).map((keyword) => normalizeText(keyword)).filter(Boolean))];
     const metaDescription = generated.metaDescription?.trim() || '';
+    const unsupportedSpecificClaims = extractUnsupportedSpecificClaims(content, graph);
     const hasScanAwareStructure = geoContext.indicators.length === 0
       || /(?:FAQ|常見問題|結構化|可讀|回答|步驟|描述|標題)/i.test(content);
     const checks: Record<string, boolean> = {
@@ -965,6 +1037,7 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
         && normalizeText(metaDescription).includes(normalizeText(siteName)),
       keywordSetReady: keywords.length >= 3 && keywords.length <= 8,
       noUnsupportedPromises: !/(?:唯一|第一名|業界第一|最佳選擇|保證|一定會|大幅提升|100\s*%)/i.test(content),
+      noUnsupportedSpecificClaims: unsupportedSpecificClaims.length === 0,
       isScanAware: hasScanAwareStructure,
       belowDuplicateThreshold: similarity.score < DEFAULT_DUPLICATE_THRESHOLD,
     };
@@ -992,12 +1065,26 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       similarityScore: similarity.score,
       similarityThreshold: DEFAULT_DUPLICATE_THRESHOLD,
       matchedArticleId,
+      unsupportedSpecificClaims,
       failedReasons,
     };
   }
 
   private buildQualityFeedback(quality: QualityReport, graph: BrandFactGraph): string {
     const details = quality.failedReasons.map((reason) => {
+      if (reason === 'minimumLength') {
+        const missing = Math.max(0, MIN_ARTICLE_CHARS - quality.charLength);
+        return `目前清理後正文只有 ${quality.charLength} 字，最低要求 ${MIN_ARTICLE_CHARS} 字，還差 ${missing} 字；本輪請完整修復上一稿，產出至少 1200 字，不得用重複句灌水`;
+      }
+      if (reason === 'maximumLength') {
+        return `目前清理後正文 ${quality.charLength} 字，超過 ${MAX_ARTICLE_CHARS} 字；請保留事實與答案，刪除重複背景與空泛段落`;
+      }
+      if (reason === 'metaDescriptionReady') {
+        return `Meta Description 目前長度不足或未包含品牌名；請重新寫成 80–150 字，且必須包含品牌名稱與直接價值`;
+      }
+      if (reason === 'noUnsupportedSpecificClaims') {
+        return `以下宣稱沒有在第一方資料逐字找到依據：「${quality.unsupportedSpecificClaims.join('」、「')}」；請刪除或改為不帶年限、數據與效果保證的可驗證描述`;
+      }
       if (reason === 'includesGroundedEntity') {
         const examples = factSegments([
           graph.services,
@@ -1015,7 +1102,7 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       return QUALITY_REASON_LABELS[reason] || reason;
     });
 
-    return `上一版未達標，請重新改寫，不要只補字數：${details.join('、')}。品質分數 ${quality.score}/${quality.minimumScore}。請優先改善直接回答、可引用的事實、清楚段落與 FAQ。`;
+    return `上一版未達標，請針對上一版草稿逐項修復，不要忽略回饋：${details.join('、')}。品質分數 ${quality.score}/${quality.minimumScore}，清理後正文 ${quality.charLength} 字。請優先改善直接回答、可引用的第一方事實、清楚段落、FAQ 與安全的具體描述。`;
   }
 
   private buildArticleSchema(input: {

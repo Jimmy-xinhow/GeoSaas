@@ -81,8 +81,8 @@ describe('OfficialSiteContentService', () => {
     indexNow = { submitUrl: jest.fn().mockResolvedValue(undefined) };
     const config = {
       get: jest.fn((key: string) => {
-        if (key === 'OPENAI_API_KEY') return 'test-key';
-        if (key === 'OFFICIAL_SITE_ARTICLE_AI_MODEL') return 'gpt-4o-mini';
+        if (key === 'ANTHROPIC_API_KEY') return 'test-key';
+        if (key === 'OFFICIAL_SITE_ARTICLE_CLAUDE_MODEL') return 'claude-opus-4-8';
         return undefined;
       }),
     };
@@ -106,14 +106,12 @@ describe('OfficialSiteContentService', () => {
     aiResponse.content = `# ${aiResponse.title}\n\n${site.name} 提供 ${graph.services}，協助 ${graph.targetAudiences[0]} 理解適用情境、導入步驟與判斷標準。\n\n## 服務重點\n\n${graph.positioning}。本文依據品牌官方資料整理，讓讀者可以直接理解服務內容與適用條件。\n\n## 適用對象與限制\n\n適合對象：${graph.targetAudiences.join('、')}。不適用的情況：${graph.notFor.join('、')}。\n\n## 執行步驟\n\n1. 先確認需求與現況。2. 根據品牌官方資料比對服務條件。3. 依據實際情境規劃導入、驗收與後續優化。\n\n## 常見問題\n\n${aiResponse.faq.map((item) => `### ${item.question}\n\n${item.answer}`).join('\n\n')}\n\n## 結論\n\n${`${site.name} 的官方資料已明確說明服務內容、適用對象、限制與執行步驟。讀者應先確認自身需求，再參考品牌第一方資料與實際條件作出判斷。`.repeat(12)}`;
     aiResponse.metaDescription = `${site.name} 官方品牌服務指南，完整說明服務內容、適用對象、不適用情況、執行步驟與常見問題，協助企業根據實際需求做出清楚的導入判斷。`;
     aiResponse.keywords = ['品牌官方資料', 'GEO 優化', 'AI 搜尋', '服務導入指南'];
-    (service as any).openai = {
-      chat: {
-        completions: {
-          create: jest.fn(async (args: any) => {
-            prompt = args.messages[1].content;
-            return { choices: [{ message: { content: JSON.stringify(aiResponse) } }] };
-          }),
-        },
+    (service as any).anthropic = {
+      messages: {
+        create: jest.fn(async (args: any) => {
+          prompt = args.messages[0].content;
+          return { content: [{ type: 'tool_use', input: aiResponse }] };
+        }),
       },
     };
   });
@@ -153,6 +151,16 @@ describe('OfficialSiteContentService', () => {
         }),
       }),
     );
+  });
+
+  it('uses Claude Opus 4.8 with structured output and an explicit repair buffer', async () => {
+    await service.generate(siteId, {}, userId, 'USER');
+
+    const request = ((service as any).anthropic.messages.create as jest.Mock).mock.calls[0][0];
+    expect(request.model).toBe('claude-opus-4-8');
+    expect(request.tool_choice).toEqual({ type: 'tool', name: 'submit_official_site_article' });
+    expect(request.tools[0].name).toBe('submit_official_site_article');
+    expect(prompt).toContain('至少 1200、目標 1200–1600 字');
   });
 
   it('returns a formatted CMS article plus canonical, Open Graph and JSON-LD metadata', async () => {
@@ -199,7 +207,7 @@ describe('OfficialSiteContentService', () => {
       }),
     });
 
-    expect((service as any).openai.chat.completions.create).not.toHaveBeenCalled();
+    expect((service as any).anthropic.messages.create).not.toHaveBeenCalled();
   });
 
   it('recommends a topic and publish location from existing first-party data', async () => {
@@ -288,7 +296,7 @@ describe('OfficialSiteContentService', () => {
   });
 
   it('automatically retries a draft that still misses required visible FAQ content', async () => {
-    const create = (service as any).openai.chat.completions.create as jest.Mock;
+    const create = (service as any).anthropic.messages.create as jest.Mock;
     const goodContent = `# Acme 企業軟體導入指南\n\nAcme 提供企業軟體顧問與導入服務，本文先說明結論，再整理適用對象與實作步驟。\n\n## 重點結論\n\nAcme 提供企業軟體顧問與導入服務，協助企業依照實際流程整理需求。\n\n## 適用對象與限制\n\n適合需要企業軟體顧問與導入的中小企業行銷團隊，不提供代操廣告。\n\n## 執行步驟\n\n1. 整理需求。\n2. 確認導入流程。\n3. 依照可驗證資料執行。\n\n## 常見問題\n\nAcme 官方品牌協助企業依照實際流程整理需求，並以可驗證的導入步驟降低溝通成本。`.repeat(3);
     create
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ title: '短文', content: '只有一句話' }) } }] })
@@ -311,6 +319,44 @@ describe('OfficialSiteContentService', () => {
     expect((result.qualityReport as any).scorePassed).toBe(true);
     expect((result.qualityReport as any).requiredPassed).toBe(true);
     expect(create).toHaveBeenCalledTimes(3);
+  });
+
+  it('passes the previous failed draft and exact deficit into the next repair prompt', async () => {
+    const create = (service as any).anthropic.messages.create as jest.Mock;
+    const shortDraft = {
+      title: aiResponse.title,
+      content: '# Acme 企業軟體導入指南\n\nAcme 提供企業軟體顧問與導入服務。',
+      metaDescription: aiResponse.metaDescription,
+      keywords: aiResponse.keywords,
+      faq: aiResponse.faq,
+    };
+    const prompts: string[] = [];
+    create.mockImplementation(async (args: any) => {
+      prompts.push(args.messages[0].content);
+      return { content: [{ type: 'tool_use', input: prompts.length <= 2 ? shortDraft : aiResponse }] };
+    });
+
+    await service.generate(siteId, {}, userId, 'USER');
+
+    expect(prompts).toHaveLength(3);
+    expect(prompts[1]).toContain('上一版完整草稿');
+    expect(prompts[1]).toContain('目前清理後正文只有');
+    expect(prompts[1]).toContain('還差');
+  });
+
+  it('rejects measurable or effect claims that are not present in first-party facts', async () => {
+    const report = await (service as any).runQualityChecks(
+      siteId,
+      site.name,
+      `${aiResponse.content}\n\n通常可維持數年，並具備防污與抗刮效果。`,
+      { ...aiResponse, content: `${aiResponse.content}\n\n通常可維持數年，並具備防污與抗刮效果。` },
+      graph,
+      { latestScanScore: null, latestScanAt: null, indicators: [], latestReportSummary: null },
+    );
+
+    expect(report.checks.noUnsupportedSpecificClaims).toBe(false);
+    expect(report.failedRequiredChecks).toContain('noUnsupportedSpecificClaims');
+    expect(report.unsupportedSpecificClaims).toEqual(expect.arrayContaining(['數年', '防污', '抗刮']));
   });
 
   it('keeps a high-scoring article blocked when a required first-party boundary is missing', async () => {

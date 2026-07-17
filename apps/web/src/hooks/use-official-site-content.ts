@@ -25,6 +25,7 @@ export interface OfficialQualityReport {
   similarityScore: number;
   similarityThreshold: number;
   matchedArticleId: string | null;
+  unsupportedSpecificClaims?: string[];
   failedReasons: string[];
 }
 

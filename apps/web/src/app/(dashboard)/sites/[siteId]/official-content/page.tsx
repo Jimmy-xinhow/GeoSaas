@@ -55,6 +55,7 @@ const CHECK_LABELS: Record<string, string> = {
   metaDescriptionReady: 'Meta Description 可直接使用',
   keywordSetReady: '關鍵字組合完整',
   noUnsupportedPromises: '無未證實排名或成效承諾',
+  noUnsupportedSpecificClaims: '無第一方未支持的年限、數據或效果宣稱',
   isScanAware: '已參考網站檢測重點',
   belowDuplicateThreshold: '與既有內容相似度低於門檻',
 }
@@ -75,6 +76,7 @@ const DEFAULT_REQUIRED_GEO_CHECKS = [
   'hasVisibleFaq',
   'hasAudienceBoundary',
   'noUnsupportedPromises',
+  'noUnsupportedSpecificClaims',
   'belowDuplicateThreshold',
 ]
 
