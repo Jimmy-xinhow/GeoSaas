@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertSiteAccess } from '../../common/auth/site-access';
 import { BrandFactGraph, BrandFactService } from '../blog-article/brand-fact.service';
@@ -19,6 +20,7 @@ import {
 import { GenerateOfficialArticleDto, VerifyOfficialArticleDto } from './dto';
 
 const DEFAULT_CLAUDE_MODEL = 'claude-opus-4-8';
+const DEFAULT_OPENAI_MODEL = 'gpt-4o';
 const MIN_ARTICLE_CHARS = 900;
 const MAX_ARTICLE_CHARS = 8000;
 const SOURCE_ARTICLE_LIMIT = 30;
@@ -280,7 +282,9 @@ function asJson(value: unknown): Prisma.InputJsonValue {
 export class OfficialSiteContentService {
   private readonly logger = new Logger(OfficialSiteContentService.name);
   private readonly anthropic: Anthropic | null;
+  private readonly openai: OpenAI | null;
   private readonly claudeModel: string;
+  private readonly openaiModel: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -291,6 +295,9 @@ export class OfficialSiteContentService {
     const apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
     this.anthropic = apiKey ? new Anthropic({ apiKey }) : null;
     this.claudeModel = this.config.get<string>('OFFICIAL_SITE_ARTICLE_CLAUDE_MODEL') || DEFAULT_CLAUDE_MODEL;
+    const openAiKey = this.config.get<string>('OPENAI_API_KEY');
+    this.openai = openAiKey ? new OpenAI({ apiKey: openAiKey }) : null;
+    this.openaiModel = this.config.get<string>('OFFICIAL_SITE_ARTICLE_AI_MODEL') || DEFAULT_OPENAI_MODEL;
   }
 
   private async assertAccess(siteId: string, userId: string, role?: string) {
@@ -519,8 +526,8 @@ export class OfficialSiteContentService {
     role?: string,
   ) {
     const site = await this.assertAccess(siteId, userId, role);
-    if (!this.anthropic) {
-      throw new BadRequestException('目前尚未設定 ANTHROPIC_API_KEY，無法生成官網專屬文章');
+    if (!this.anthropic && !this.openai) {
+      throw new BadRequestException('目前尚未設定 AI 生成金鑰（ANTHROPIC_API_KEY 或 OPENAI_API_KEY），無法生成官網專屬文章');
     }
 
     const graph = await this.brandFactService.buildForSite(siteId);
@@ -573,30 +580,7 @@ export class OfficialSiteContentService {
         firstPartySnapshot,
       );
       try {
-        const response = await this.anthropic.messages.create({
-          model: this.claudeModel,
-          temperature: attempt === 1 ? 0.65 : 0.45,
-          max_tokens: 6500,
-          tools: [OFFICIAL_ARTICLE_OUTPUT_TOOL],
-          tool_choice: { type: 'tool', name: OFFICIAL_ARTICLE_OUTPUT_TOOL.name },
-          system: '你是專業 GEO 官網內容總編。目標是讓真實品牌更容易被 AI 收錄、引用、推薦與摘要。只使用客戶第一方資料，不得捏造服務、地點、聯絡方式、價格、成效或案例；每次輸出都必須依品質回饋修正。',
-          messages: [
-            { role: 'user', content: prompt },
-          ],
-        });
-
-        const legacyRaw = (response as unknown as { choices?: Array<{ message?: { content?: string } }> })
-          .choices?.[0]?.message?.content;
-        const toolBlock = response.content?.find((block) => block.type === 'tool_use');
-        if (toolBlock?.type === 'tool_use') {
-          generated = parseGeneratedRecord(toolBlock.input);
-        } else if (legacyRaw) {
-          // Kept only for older unit-test/provider adapters during rollout.
-          generated = parseJsonResponse(legacyRaw);
-        } else {
-          const textBlock = response.content?.find((block) => block.type === 'text');
-          generated = parseJsonResponse(textBlock?.type === 'text' ? textBlock.text : '');
-        }
+        generated = await this.requestGeneratedPayload(prompt, attempt);
         quality = await this.runQualityChecks(siteId, site.name, generated.content, generated, graph, geoContext);
         quality.attempts = attempt;
         quality.finalAttempt = attempt;
@@ -872,6 +856,67 @@ export class OfficialSiteContentService {
     });
     if (!source) throw new NotFoundException('Platform source article not found');
     return source;
+  }
+
+  private async requestGeneratedPayload(prompt: string, attempt: number): Promise<GeneratedPayload> {
+    const temperature = attempt === 1 ? 0.65 : 0.45;
+    let claudeError: unknown;
+
+    if (this.anthropic) {
+      try {
+        const response = await this.anthropic.messages.create({
+          model: this.claudeModel,
+          temperature,
+          max_tokens: 6500,
+          tools: [OFFICIAL_ARTICLE_OUTPUT_TOOL],
+          tool_choice: { type: 'tool', name: OFFICIAL_ARTICLE_OUTPUT_TOOL.name },
+          system: '你是專業 GEO 官網內容總編。目標是讓真實品牌更容易被 AI 收錄、引用、推薦與摘要。只使用客戶第一方資料，不得捏造服務、地點、聯絡方式、價格、成效或案例；每次輸出都必須依品質回饋修正。',
+          messages: [{ role: 'user', content: prompt }],
+        });
+        const legacyRaw = (response as unknown as { choices?: Array<{ message?: { content?: string } }> })
+          .choices?.[0]?.message?.content;
+        if (legacyRaw) return parseJsonResponse(legacyRaw);
+        const toolBlock = response.content.find((block) => block.type === 'tool_use');
+        if (toolBlock?.type === 'tool_use') return parseGeneratedRecord(toolBlock.input);
+        const textBlock = response.content.find((block) => block.type === 'text');
+        return parseJsonResponse(textBlock?.type === 'text' ? textBlock.text : '');
+      } catch (error) {
+        claudeError = error;
+        this.logger.warn(`Claude official article generation failed (${this.claudeModel}): ${this.describeProviderError(error)}`);
+      }
+    }
+
+    if (this.openai) {
+      try {
+        const response = await this.openai.chat.completions.create({
+          model: this.openaiModel,
+          temperature,
+          max_tokens: 6500,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: '你是專業 GEO 官網內容總編。只使用客戶第一方資料，不得捏造服務、地點、聯絡方式、價格、成效或案例；請依使用者指令只回傳完整 JSON。',
+            },
+            { role: 'user', content: prompt },
+          ],
+        });
+        return parseJsonResponse(response.choices[0]?.message?.content || '');
+      } catch (error) {
+        this.logger.error(`OpenAI official article fallback failed (${this.openaiModel}): ${this.describeProviderError(error)}`);
+        if (claudeError) {
+          throw new BadRequestException('Claude Opus 4.8 暫時無法生成，備援 AI 也無法完成請求，請稍後再試');
+        }
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('Claude Opus 4.8 暫時無法生成，且未設定備援 AI 金鑰，請聯絡管理員');
+  }
+
+  private describeProviderError(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]').slice(0, 240);
   }
 
   private buildFirstPartySnapshot(graph: BrandFactGraph) {

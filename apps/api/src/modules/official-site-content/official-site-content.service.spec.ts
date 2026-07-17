@@ -163,6 +163,20 @@ describe('OfficialSiteContentService', () => {
     expect(prompt).toContain('至少 1200、目標 1200–1600 字');
   });
 
+  it('falls back to OpenAI when Claude is unavailable instead of returning a server error', async () => {
+    const claudeCreate = (service as any).anthropic.messages.create as jest.Mock;
+    claudeCreate.mockRejectedValue(new Error('model access unavailable'));
+    const openAiCreate = jest.fn(async () => ({
+      choices: [{ message: { content: JSON.stringify(aiResponse) } }],
+    }));
+    (service as any).openai = { chat: { completions: { create: openAiCreate } } };
+
+    const result = await service.generate(siteId, {}, userId, 'USER');
+
+    expect(result.status).toBe('draft');
+    expect(openAiCreate).toHaveBeenCalled();
+  });
+
   it('returns a formatted CMS article plus canonical, Open Graph and JSON-LD metadata', async () => {
     jest.spyOn(service, 'findOne').mockResolvedValue({
       id: 'official-1',
