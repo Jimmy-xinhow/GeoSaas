@@ -20,7 +20,7 @@ import {
 import { GenerateOfficialArticleDto, VerifyOfficialArticleDto } from './dto';
 
 const DEFAULT_CLAUDE_MODEL = 'claude-opus-4-8';
-const DEFAULT_OPENAI_MODEL = 'gpt-4o';
+const DEFAULT_OPENAI_MODEL = 'gpt-5.6-sol';
 const MIN_ARTICLE_CHARS = 900;
 const MAX_ARTICLE_CHARS = 8000;
 const SOURCE_ARTICLE_LIMIT = 30;
@@ -870,8 +870,7 @@ export class OfficialSiteContentService {
     return source;
   }
 
-  private async requestGeneratedPayload(prompt: string, attempt: number): Promise<GeneratedPayload> {
-    const temperature = attempt === 1 ? 0.65 : 0.45;
+  private async requestGeneratedPayload(prompt: string, _attempt: number): Promise<GeneratedPayload> {
     let claudeError: unknown;
 
     if (this.anthropic) {
@@ -901,8 +900,8 @@ export class OfficialSiteContentService {
       try {
         const response = await this.openai.chat.completions.create({
           model: this.openaiModel,
-          temperature,
-          max_tokens: 6500,
+          reasoning_effort: 'high',
+          max_completion_tokens: 12000,
           response_format: { type: 'json_object' },
           messages: [
             {

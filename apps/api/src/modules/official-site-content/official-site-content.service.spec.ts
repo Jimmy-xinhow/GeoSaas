@@ -176,6 +176,12 @@ describe('OfficialSiteContentService', () => {
 
     expect(result.status).toBe('draft');
     expect(openAiCreate).toHaveBeenCalled();
+    const request = openAiCreate.mock.calls[0][0];
+    expect(request.model).toBe('gpt-5.6-sol');
+    expect(request.reasoning_effort).toBe('high');
+    expect(request.max_completion_tokens).toBe(12000);
+    expect(request).not.toHaveProperty('temperature');
+    expect(request).not.toHaveProperty('max_tokens');
   });
 
   it('returns a formatted CMS article plus canonical, Open Graph and JSON-LD metadata', async () => {
