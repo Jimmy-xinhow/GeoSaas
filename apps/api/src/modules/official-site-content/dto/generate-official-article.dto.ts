@@ -1,10 +1,22 @@
-import { IsOptional, IsString, IsUrl, MaxLength, MinLength } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsUrl,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class GenerateOfficialArticleDto {
+  /**
+   * Optional on purpose: the recommendation endpoint and the generation
+   * service can derive this from the customer's Brand Facts and Q&A.
+   */
+  @IsOptional()
   @IsString()
   @MinLength(8)
   @MaxLength(180)
-  topic!: string;
+  topic?: string;
 
   @IsOptional()
   @IsString()
@@ -16,7 +28,27 @@ export class GenerateOfficialArticleDto {
   @MaxLength(120)
   sourceArticleId?: string;
 
+  /** The customer's CMS collection URL, for example https://brand.com/blog. */
+  @IsOptional()
   @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
   @MaxLength(2048)
-  canonicalUrl!: string;
+  publishBaseUrl?: string;
+
+  /** Optional override. When omitted the service uses its suggested slug. */
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-z0-9\u4e00-\u9fff][a-z0-9\u4e00-\u9fff-]*$/i, {
+    message: 'slug 只能包含英數字、中文與連字號',
+  })
+  @MaxLength(100)
+  slug?: string;
+
+  /**
+   * Kept for clients using the previous contract. New clients should send
+   * publishBaseUrl + slug (or omit both and accept the recommendation).
+   */
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  @MaxLength(2048)
+  canonicalUrl?: string;
 }

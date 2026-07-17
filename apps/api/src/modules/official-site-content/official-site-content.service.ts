@@ -33,6 +33,34 @@ interface SourceArticle {
   createdAt: Date;
 }
 
+export interface OfficialArticleRecommendation {
+  topic: string;
+  angle: string;
+  suggestedSlug: string;
+  publishBaseUrl: string;
+  canonicalUrl: string;
+  reasoning: string;
+  sourceArticleId?: string;
+  sourceArticle?: Pick<SourceArticle, 'id' | 'slug' | 'title' | 'description' | 'targetKeywords'>;
+  firstPartyReadiness: {
+    ready: boolean;
+    confidenceScore: number;
+    missingFacts: string[];
+  };
+  dataUsed: {
+    verifiedFacts: number;
+    qaPairs: number;
+    recentPlatformTopics: number;
+    existingOfficialArticles: number;
+  };
+}
+
+interface GenerationBrief {
+  topic: string;
+  angle: string;
+  canonicalUrl: string;
+}
+
 interface GeneratedPayload {
   title: string;
   content: string;
@@ -148,6 +176,7 @@ export class OfficialSiteContentService {
         status: true,
         targetQuestion: true,
         targetKeywords: true,
+        publishBaseUrl: true,
         canonicalUrl: true,
         similarityScore: true,
         qualityReport: true,
@@ -160,6 +189,89 @@ export class OfficialSiteContentService {
         updatedAt: true,
       },
     });
+  }
+
+  /** Build a reviewable plan from data the customer has already supplied. */
+  async recommend(siteId: string, userId: string, role?: string): Promise<OfficialArticleRecommendation> {
+    const site = await this.assertAccess(siteId, userId, role);
+    const graph = await this.brandFactService.buildForSite(siteId);
+    return this.buildRecommendation(site, graph);
+  }
+
+  private async buildRecommendation(
+    site: { id: string; name: string; url: string; industry: string | null },
+    graph: BrandFactGraph,
+  ): Promise<OfficialArticleRecommendation> {
+    const [sources, existing] = await Promise.all([
+      this.prisma.blogArticle.findMany({
+        where: { siteId: site.id, published: true, templateType: 'client_daily' },
+        orderBy: { createdAt: 'desc' },
+        take: SOURCE_ARTICLE_LIMIT,
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          description: true,
+          targetKeywords: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.officialSiteArticle.findMany({
+        where: { siteId: site.id, status: { not: 'archived' } },
+        select: { title: true, targetQuestion: true, publishBaseUrl: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 30,
+      }),
+    ]);
+
+    const existingTopics = new Set(
+      existing
+        .flatMap((article) => [article.title, article.targetQuestion])
+        .filter((value): value is string => Boolean(value))
+        .map((value) => normalizeText(value)),
+    );
+    const qaTopic = graph.qaPairs
+      .map((pair) => pair.question.trim())
+      .find((question) => question.length >= 8 && !existingTopics.has(normalizeText(question)));
+    const topic = qaTopic || `${site.name}${site.industry ? ` ${site.industry}` : ''}服務與適用對象指南`;
+    const angle = `以${graph.services || site.industry || '官方服務'}、適用對象、實際流程與常見疑問回答讀者，僅使用已確認的第一方資料。`;
+    const suggestedSlug = this.buildSuggestedSlug(site.id, topic);
+    const publishBaseUrl = existing.find((article) => article.publishBaseUrl)?.publishBaseUrl
+      || this.defaultPublishBaseUrl(site.url);
+    const canonicalUrl = this.buildCanonicalFromBase(publishBaseUrl, suggestedSlug);
+    const source = sources.find((item) => Boolean(item.title && item.description));
+
+    return {
+      topic,
+      angle,
+      suggestedSlug,
+      publishBaseUrl,
+      canonicalUrl,
+      reasoning: source
+        ? `系統讀取了品牌資料、${graph.qaPairs.length} 組 FAQ，以及近期平台主題「${source.title}」作為方向參考；文章正文仍會重新以官網第一方資料生成。`
+        : `系統讀取了品牌資料與 ${graph.qaPairs.length} 組 FAQ，先挑選尚未使用的客戶問題作為文章方向。`,
+      sourceArticleId: source?.id,
+      sourceArticle: source
+        ? {
+            id: source.id,
+            slug: source.slug,
+            title: source.title,
+            description: source.description,
+            targetKeywords: source.targetKeywords,
+          }
+        : undefined,
+      firstPartyReadiness: {
+        ready: this.brandFactService.isReadyForCitationContent(graph),
+        confidenceScore: graph.confidenceScore,
+        missingFacts: graph.missingFacts,
+      },
+      dataUsed: {
+        verifiedFacts: graph.verifiedFacts.length,
+        qaPairs: graph.qaPairs.length,
+        recentPlatformTopics: sources.length,
+        existingOfficialArticles: existing.length,
+      },
+    };
   }
 
   async findOne(id: string, siteId: string, userId: string, role?: string) {
@@ -220,12 +332,26 @@ export class OfficialSiteContentService {
       });
     }
 
-    const canonicalUrl = this.normalizeCanonicalUrl(site.url, dto.canonicalUrl);
-    const source = dto.sourceArticleId
-      ? await this.getSourceArticle(siteId, dto.sourceArticleId)
+    const recommendation = await this.buildRecommendation(site, graph);
+    const topic = dto.topic?.trim() || recommendation.topic;
+    const angle = dto.angle?.trim() || recommendation.angle;
+    const sourceArticleId = dto.sourceArticleId || recommendation.sourceArticleId;
+    const source = sourceArticleId
+      ? await this.getSourceArticle(siteId, sourceArticleId)
       : null;
+    const publishBaseUrl = this.normalizePublishBaseUrl(
+      site.url,
+      dto.publishBaseUrl || (dto.canonicalUrl ? this.getUrlBase(dto.canonicalUrl) : recommendation.publishBaseUrl),
+    );
+    const suggestedSlug = this.normalizeSlug(
+      dto.slug || (dto.canonicalUrl ? this.getSlugFromUrl(dto.canonicalUrl) : recommendation.suggestedSlug),
+    );
+    const slug = await this.ensureUniqueSlug(siteId, suggestedSlug);
+    const canonicalUrl = dto.canonicalUrl
+      ? this.normalizeCanonicalUrl(site.url, dto.canonicalUrl)
+      : this.buildCanonicalFromBase(publishBaseUrl, slug);
     const firstPartySnapshot = this.buildFirstPartySnapshot(graph);
-    const prompt = this.buildPrompt(site, dto, source, firstPartySnapshot);
+    const prompt = this.buildPrompt(site, { topic, angle, canonicalUrl }, source, firstPartySnapshot);
 
     const response = await this.openai.chat.completions.create({
       model: this.config.get<string>('OFFICIAL_SITE_ARTICLE_AI_MODEL') || DEFAULT_MODEL,
@@ -245,7 +371,6 @@ export class OfficialSiteContentService {
     const generated = parseJsonResponse(raw);
     const content = generated.content.trim();
     const description = cleanMarkdown(generated.metaDescription || content).slice(0, 180);
-    const slug = this.buildSlug(siteId, generated.title);
     const quality = await this.runQualityChecks(siteId, site.name, content);
     const status = quality.passed ? 'draft' : 'quality_failed';
     const articleSchema = this.buildArticleSchema({
@@ -257,7 +382,7 @@ export class OfficialSiteContentService {
     });
     const faqSchema = this.buildFaqSchema(generated.faq || []);
     const targetKeywords = [...new Set([
-      dto.topic,
+      topic,
       ...(generated.keywords || []),
       ...(site.industry ? [site.industry] : []),
     ].map((item) => item.trim()).filter(Boolean))].slice(0, 12);
@@ -272,8 +397,9 @@ export class OfficialSiteContentService {
         description,
         content,
         status,
-        targetQuestion: dto.topic,
+        targetQuestion: topic,
         targetKeywords,
+        publishBaseUrl,
         canonicalUrl,
         metaTitle: generated.title.slice(0, 180),
         metaDescription: description,
@@ -294,6 +420,7 @@ export class OfficialSiteContentService {
         status: true,
         targetQuestion: true,
         targetKeywords: true,
+        publishBaseUrl: true,
         canonicalUrl: true,
         similarityScore: true,
         qualityReport: true,
@@ -363,7 +490,12 @@ export class OfficialSiteContentService {
       `<link rel="canonical" href="${this.escapeHtml(article.canonicalUrl)}">`,
     ].join('\n');
     const packageResult = {
-      officialSite: { name: article.site.name, url: article.site.url, canonicalUrl: article.canonicalUrl },
+      officialSite: {
+        name: article.site.name,
+        url: article.site.url,
+        publishBaseUrl: article.publishBaseUrl,
+        canonicalUrl: article.canonicalUrl,
+      },
       article: {
         id: article.id,
         slug: article.slug,
@@ -505,7 +637,7 @@ export class OfficialSiteContentService {
 
   private buildPrompt(
     site: { name: string; url: string; industry: string | null },
-    dto: GenerateOfficialArticleDto,
+    brief: GenerationBrief,
     source: SourceArticle | null,
     firstPartySnapshot: ReturnType<OfficialSiteContentService['buildFirstPartySnapshot']>,
   ) {
@@ -521,9 +653,9 @@ export class OfficialSiteContentService {
 客戶網站：${site.name}
 官方網域：${site.url}
 行業：${site.industry || '未分類'}
-文章主題：${dto.topic}
-內容角度：${dto.angle || '以官方服務與讀者決策需求為中心'}
-預計 canonical URL：${dto.canonicalUrl}
+文章主題：${brief.topic}
+內容角度：${brief.angle || '以官方服務與讀者決策需求為中心'}
+預計 canonical URL：${brief.canonicalUrl}
 
 平台文章僅提供以下「主題靈感 metadata」，不可使用其正文：
 ${source ? JSON.stringify({ title: source.title, description: source.description, keywords: source.targetKeywords }, null, 2) : '(沒有指定平台文章，請依主題重新規劃)'}
@@ -613,13 +745,85 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
     };
   }
 
-  private buildSlug(siteId: string, title: string): string {
+  private buildSuggestedSlug(siteId: string, title: string): string {
     const titlePart = title
       .toLowerCase()
       .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 70) || 'article';
-    return `${siteId.slice(0, 10)}-official-${titlePart}-${Date.now().toString(36)}`;
+    return `${titlePart}-${siteId.slice(0, 8)}`;
+  }
+
+  private normalizeSlug(value: string): string {
+    const slug = value
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 100);
+    if (!slug || !/^[a-z0-9\u4e00-\u9fff][a-z0-9\u4e00-\u9fff-]*$/i.test(slug)) {
+      throw new BadRequestException('slug 只能包含英數字、中文與連字號');
+    }
+    return slug;
+  }
+
+  private async ensureUniqueSlug(siteId: string, requestedSlug: string): Promise<string> {
+    const base = this.normalizeSlug(requestedSlug);
+    let candidate = base;
+    for (let suffix = 1; suffix <= 20; suffix += 1) {
+      const existing = await this.prisma.officialSiteArticle.findFirst({
+        where: { siteId, slug: candidate },
+        select: { id: true },
+      });
+      if (!existing) return candidate;
+      candidate = `${base}-${suffix + 1}`.slice(0, 100);
+    }
+    return `${base}-${Date.now().toString(36)}`.slice(0, 100);
+  }
+
+  private defaultPublishBaseUrl(siteUrl: string): string {
+    try {
+      const url = new URL(/^https?:\/\//i.test(siteUrl) ? siteUrl : `https://${siteUrl}`);
+      return `${url.origin}/blog`;
+    } catch {
+      throw new BadRequestException('客戶官網網址無效，無法建立發布位置');
+    }
+  }
+
+  private getUrlBase(candidate: string): string {
+    try {
+      const url = new URL(candidate);
+      const segments = url.pathname.split('/').filter(Boolean);
+      url.pathname = `/${segments.slice(0, -1).join('/')}` || '/';
+      url.search = '';
+      url.hash = '';
+      return url.toString().replace(/\/$/, '');
+    } catch {
+      return candidate;
+    }
+  }
+
+  private getSlugFromUrl(candidate: string): string {
+    try {
+      const segments = new URL(candidate).pathname.split('/').filter(Boolean);
+      return segments[segments.length - 1] || 'official-article';
+    } catch {
+      return 'official-article';
+    }
+  }
+
+  private buildCanonicalFromBase(publishBaseUrl: string, slug: string): string {
+    return `${publishBaseUrl.replace(/\/+$/, '')}/${slug}`;
+  }
+
+  private normalizePublishBaseUrl(siteUrl: string, candidate: string): string {
+    const normalized = this.normalizeCanonicalUrl(siteUrl, candidate);
+    const url = new URL(normalized);
+    url.search = '';
+    url.hash = '';
+    url.pathname = url.pathname.replace(/\/+$/, '') || '/';
+    return url.toString().replace(/\/$/, '');
   }
 
   private normalizeCanonicalUrl(siteUrl: string, candidate: string): string {

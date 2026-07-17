@@ -28,6 +28,7 @@ export interface OfficialSiteArticle {
   status: OfficialArticleStatus;
   targetQuestion?: string | null;
   targetKeywords: string[];
+  publishBaseUrl?: string | null;
   canonicalUrl?: string | null;
   metaTitle?: string | null;
   metaDescription?: string | null;
@@ -61,8 +62,30 @@ export interface OfficialArticleSource {
   platformUrl: string;
 }
 
+export interface OfficialArticleRecommendation {
+  topic: string;
+  angle: string;
+  suggestedSlug: string;
+  publishBaseUrl: string;
+  canonicalUrl: string;
+  reasoning: string;
+  sourceArticleId?: string;
+  sourceArticle?: Pick<OfficialArticleSource, 'id' | 'slug' | 'title' | 'description' | 'targetKeywords'>;
+  firstPartyReadiness: {
+    ready: boolean;
+    confidenceScore: number;
+    missingFacts: string[];
+  };
+  dataUsed: {
+    verifiedFacts: number;
+    qaPairs: number;
+    recentPlatformTopics: number;
+    existingOfficialArticles: number;
+  };
+}
+
 export interface OfficialPublishPackage {
-  officialSite: { name: string; url: string; canonicalUrl: string };
+  officialSite: { name: string; url: string; publishBaseUrl?: string | null; canonicalUrl: string };
   article: {
     id: string;
     slug: string;
@@ -118,6 +141,19 @@ export function useOfficialArticleSources(siteId: string) {
   });
 }
 
+export function useOfficialArticleRecommendation(siteId: string) {
+  return useQuery({
+    queryKey: ['official-site-article-recommendation', siteId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<OfficialArticleRecommendation>(
+        `/sites/${siteId}/official-articles/recommendation`,
+      );
+      return data;
+    },
+    enabled: !!siteId,
+  });
+}
+
 export function useOfficialSiteArticle(siteId: string, articleId: string | null) {
   return useQuery({
     queryKey: ['official-site-article', siteId, articleId],
@@ -135,10 +171,12 @@ export function useGenerateOfficialSiteArticle(siteId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: {
-      topic: string;
+      topic?: string;
       angle?: string;
       sourceArticleId?: string;
-      canonicalUrl: string;
+      publishBaseUrl?: string;
+      slug?: string;
+      canonicalUrl?: string;
     }) => {
       const { data } = await apiClient.post<OfficialSiteArticle>(
         `/sites/${siteId}/official-articles/generate`,

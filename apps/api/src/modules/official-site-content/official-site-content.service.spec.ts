@@ -145,6 +145,34 @@ describe('OfficialSiteContentService', () => {
     );
   });
 
+  it('recommends a topic and publish location from existing first-party data', async () => {
+    const recommendation = await service.recommend(siteId, userId, 'USER');
+
+    expect(recommendation.topic).toBe('Acme 提供什麼服務？');
+    expect(recommendation.angle).toContain('企業軟體顧問與導入');
+    expect(recommendation.publishBaseUrl).toBe('https://acme.example/blog');
+    expect(recommendation.canonicalUrl).toContain('/blog/');
+    expect(recommendation.suggestedSlug).toContain('acme');
+    expect(recommendation.firstPartyReadiness.ready).toBe(true);
+    expect(recommendation.dataUsed.qaPairs).toBe(1);
+  });
+
+  it('can generate with no topic or full URL by applying the recommendation', async () => {
+    const result = await service.generate(siteId, {}, userId, 'USER');
+
+    expect(result.status).toBe('draft');
+    expect(prisma.officialSiteArticle.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          targetQuestion: 'Acme 提供什麼服務？',
+          publishBaseUrl: 'https://acme.example/blog',
+          canonicalUrl: expect.stringMatching(/^https:\/\/acme\.example\/blog\//),
+        }),
+      }),
+    );
+    expect(prompt).toContain('Acme 提供什麼服務？');
+  });
+
   it('saves a quality_failed draft when the candidate is too similar', async () => {
     const candidate = `# Acme 企業軟體導入指南\n\n${'Acme 協助企業依照實際流程整理需求，並以可驗證的導入步驟降低溝通成本。 '.repeat(30)}\n\n## 常見問題`;
     prisma.blogArticle.findMany.mockResolvedValue([{ id: 'platform-1', content: candidate }]);

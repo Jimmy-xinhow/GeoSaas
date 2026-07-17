@@ -34,6 +34,16 @@ export class OfficialSiteContentController {
     return this.service.listSources(siteId, userId, role);
   }
 
+  @Get('recommendation')
+  @ApiOperation({ summary: 'Recommend a first-party topic, publish location, and slug' })
+  recommendation(
+    @Param('siteId') siteId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.recommend(siteId, userId, role);
+  }
+
   @Post('generate')
   @ApiOperation({ summary: 'Generate a distinct first-party official-site article' })
   async generate(

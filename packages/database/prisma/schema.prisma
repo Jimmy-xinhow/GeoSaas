@@ -779,6 +779,8 @@ model OfficialSiteArticle {
   status          String   @default("draft") // draft | generating | quality_failed | approved | export_ready | archived
   targetQuestion  String?
   targetKeywords  String[] @default([])
+  // CMS collection URL selected before generation (for example /blog).
+  publishBaseUrl  String?
   canonicalUrl    String?
   metaTitle       String?
   metaDescription String?

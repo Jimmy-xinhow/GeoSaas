@@ -15,7 +15,7 @@ import { useSite } from '@/hooks/use-sites'
 import {
   useApproveOfficialSiteArticle,
   useGenerateOfficialSiteArticle,
-  useOfficialArticleSources,
+  useOfficialArticleRecommendation,
   useOfficialPublishPackage,
   useOfficialSiteArticle,
   useOfficialSiteArticles,
@@ -49,10 +49,10 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
   return 'outline'
 }
 
-function defaultCanonical(siteUrl?: string) {
+function defaultPublishBaseUrl(siteUrl?: string) {
   if (!siteUrl) return ''
   try {
-    return `${new URL(siteUrl).origin}/blog/official-article`
+    return `${new URL(siteUrl).origin}/blog`
   } catch {
     return ''
   }
@@ -125,14 +125,15 @@ export default function OfficialSiteContentPage() {
   const siteId = params.siteId as string
   const { data: site } = useSite(siteId)
   const articlesQuery = useOfficialSiteArticles(siteId)
-  const sourcesQuery = useOfficialArticleSources(siteId)
+  const recommendationQuery = useOfficialArticleRecommendation(siteId)
   const generateMutation = useGenerateOfficialSiteArticle(siteId)
   const approveMutation = useApproveOfficialSiteArticle(siteId)
   const verifyMutation = useVerifyOfficialSiteArticle(siteId)
 
   const [topic, setTopic] = useState('')
   const [angle, setAngle] = useState('')
-  const [canonicalUrl, setCanonicalUrl] = useState('')
+  const [publishBaseUrl, setPublishBaseUrl] = useState('')
+  const [slug, setSlug] = useState('')
   const [sourceArticleId, setSourceArticleId] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [packageRequested, setPackageRequested] = useState(false)
@@ -143,24 +144,32 @@ export default function OfficialSiteContentPage() {
   const selectedArticle = selectedArticleQuery.data
   const packageQuery = useOfficialPublishPackage(siteId, selectedId, packageRequested)
   const articles = articlesQuery.data ?? []
-  const sources = useMemo(() => sourcesQuery.data ?? [], [sourcesQuery.data])
+  const recommendation = recommendationQuery.data
+  const canonicalPreview = useMemo(() => {
+    if (!publishBaseUrl.trim() || !slug.trim()) return ''
+    return `${publishBaseUrl.replace(/\/+$/, '')}/${slug.trim()}`
+  }, [publishBaseUrl, slug])
 
   useEffect(() => {
-    if (!canonicalUrl && site?.url) setCanonicalUrl(defaultCanonical(site.url))
-  }, [canonicalUrl, site?.url])
+    if (!recommendation) return
+    setTopic((value) => value || recommendation.topic)
+    setAngle((value) => value || recommendation.angle)
+    setPublishBaseUrl((value) => value || recommendation.publishBaseUrl)
+    setSlug((value) => value || recommendation.suggestedSlug)
+    setSourceArticleId((value) => value || recommendation.sourceArticleId || '')
+  }, [recommendation])
+
+  useEffect(() => {
+    if (!publishBaseUrl && site?.url) setPublishBaseUrl(defaultPublishBaseUrl(site.url))
+  }, [publishBaseUrl, site?.url])
 
   useEffect(() => {
     if (selectedArticle?.canonicalUrl) setVerifyUrl(selectedArticle.publishedUrl || selectedArticle.canonicalUrl)
   }, [selectedArticle?.canonicalUrl, selectedArticle?.publishedUrl])
 
-  const selectedSource = useMemo(
-    () => sources.find((source) => source.id === sourceArticleId),
-    [sourceArticleId, sources],
-  )
-
   const handleGenerate = () => {
-    if (!topic.trim() || !canonicalUrl.trim()) {
-      toast.error('請填寫文章主題與預計 canonical URL')
+    if (!publishBaseUrl.trim() || !slug.trim()) {
+      toast.error('請先確認官網發布位置與 SLUG')
       return
     }
     generateMutation.mutate(
@@ -168,7 +177,8 @@ export default function OfficialSiteContentPage() {
         topic: topic.trim(),
         angle: angle.trim() || undefined,
         sourceArticleId: sourceArticleId || undefined,
-        canonicalUrl: canonicalUrl.trim(),
+        publishBaseUrl: publishBaseUrl.trim(),
+        slug: slug.trim(),
       },
       {
         onSuccess: (article) => {
@@ -243,53 +253,65 @@ export default function OfficialSiteContentPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="rounded-lg border border-blue-400/20 bg-blue-500/[0.06] p-4 text-sm leading-6 text-blue-50/90">
+              <div className="flex items-center gap-2 font-semibold text-blue-100">
+                <Sparkles className="h-4 w-4" />
+                {recommendationQuery.isLoading ? 'AI 正在整理你的品牌資料…' : '系統已先替你整理文章企劃'}
+              </div>
+              <p className="mt-1 text-xs text-blue-100/70">
+                已自動參考 Brand Facts、FAQ、近期主題與既有官網文章；你只要確認下面內容即可，不需要自己想主題。
+              </p>
+              {recommendation && (
+                <p className="mt-2 text-xs text-blue-100/70">{recommendation.reasoning}</p>
+              )}
+              {recommendation && !recommendation.firstPartyReadiness.ready && (
+                <p className="mt-2 text-xs text-amber-200">目前第一方資料完整度 {recommendation.firstPartyReadiness.confidenceScore} 分，建議先補齊：{recommendation.firstPartyReadiness.missingFacts.join('、')}</p>
+              )}
+            </div>
             <div className="space-y-1.5">
-              <label htmlFor="official-topic" className="text-sm text-gray-300">文章主題或客戶問題</label>
+              <label htmlFor="official-topic" className="text-sm text-gray-300">AI 建議文章主題（可直接確認）</label>
               <Input
                 id="official-topic"
                 value={topic}
                 onChange={(event) => setTopic(event.target.value)}
-                placeholder="例如：第一次導入企業軟體前，管理者應該準備哪些資料？"
+                placeholder="系統會從品牌 FAQ 自動帶入"
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="official-angle" className="text-sm text-gray-300">官網角度（選填）</label>
+              <label htmlFor="official-angle" className="text-sm text-gray-300">AI 建議內容角度（可直接確認）</label>
               <Textarea
                 id="official-angle"
                 value={angle}
                 onChange={(event) => setAngle(event.target.value)}
-                placeholder="例如：說明適合哪些企業、服務範圍與不適用情境"
+                placeholder="系統會依品牌服務與適用對象自動整理"
                 className="min-h-[82px]"
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="official-canonical" className="text-sm text-gray-300">預計官網文章網址（canonical）</label>
+              <label htmlFor="official-publish-base" className="text-sm text-gray-300">官網發布位置（先綁定一次）</label>
               <Input
-                id="official-canonical"
+                id="official-publish-base"
                 type="url"
-                value={canonicalUrl}
-                onChange={(event) => setCanonicalUrl(event.target.value)}
-                placeholder="https://your-domain.com/blog/your-article"
+                value={publishBaseUrl}
+                onChange={(event) => setPublishBaseUrl(event.target.value)}
+                placeholder="https://your-domain.com/blog"
               />
-              <p className="text-xs leading-5 text-gray-500">必須是客戶官方網域；之後客戶實際上線網址可再進行驗證。</p>
+              <p className="text-xs leading-5 text-gray-500">填官網 CMS 的文章集合位置即可，不用事先知道文章完整網址。</p>
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="official-source" className="text-sm text-gray-300">主題靈感來源（選填）</label>
-              <select
-                id="official-source"
-                value={sourceArticleId}
-                onChange={(event) => setSourceArticleId(event.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">不指定，直接依第一方資料規劃</option>
-                {sources.map((source) => (
-                  <option key={source.id} value={source.id}>{source.title}</option>
-                ))}
-              </select>
-              {selectedSource && (
-                <p className="text-xs leading-5 text-gray-500">只使用這篇平台文章的主題 metadata，不會使用它的正文。</p>
-              )}
+              <label htmlFor="official-slug" className="text-sm text-gray-300">AI 建議 SLUG（可直接確認）</label>
+              <Input
+                id="official-slug"
+                value={slug}
+                onChange={(event) => setSlug(event.target.value)}
+                placeholder="official-article"
+              />
+              <p className="text-xs leading-5 text-gray-500">正式網址預覽：{canonicalPreview || '等待發布位置與 SLUG'}</p>
             </div>
+            <details className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-gray-400">
+              <summary className="cursor-pointer text-gray-300">查看參考主題（進階，可不修改）</summary>
+              <p className="mt-2 leading-5">{recommendation?.sourceArticle ? `系統參考：${recommendation.sourceArticle.title}（只取標題、摘要與關鍵字，不取正文）` : '目前沒有可用的平台主題 metadata，會完全依第一方資料生成。'}</p>
+            </details>
             <Button
               type="button"
               className="w-full bg-blue-600 text-white hover:bg-blue-700"
@@ -297,9 +319,9 @@ export default function OfficialSiteContentPage() {
               disabled={generateMutation.isPending}
             >
               {generateMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              {generateMutation.isPending ? '生成中…' : '生成官網專屬文章'}
+              {generateMutation.isPending ? '生成中…' : '確認企劃並生成官網專屬文章'}
             </Button>
-            <p className="text-center text-xs text-gray-500">生成後會先進入審核，不會自動發布到客戶官網。</p>
+            <p className="text-center text-xs text-gray-500">生成後會先進入審核，不會自動發布到客戶官網；每週平台文章流程也不會受影響。</p>
           </CardContent>
         </Card>
 
