@@ -563,6 +563,9 @@ export default function OfficialSiteContentPage() {
                     {qualitySummary.failedRequiredChecks.length > 0 && (
                       <p className="mt-1">必須修正：{qualitySummary.failedRequiredChecks.map((key) => CHECK_LABELS[key] || key).join('、')}</p>
                     )}
+                    {(selectedArticle.qualityReport.unsupportedPromiseClaims?.length || 0) > 0 && (
+                      <p className="mt-1">偵測到的違規原句：{selectedArticle.qualityReport.unsupportedPromiseClaims?.join('；')}</p>
+                    )}
                     {qualitySummary.advisoryFailedChecks.length > 0 && (
                       <p className="mt-1 text-amber-100/70">其他待優化：{qualitySummary.advisoryFailedChecks.map((key) => CHECK_LABELS[key] || key).join('、')}</p>
                     )}

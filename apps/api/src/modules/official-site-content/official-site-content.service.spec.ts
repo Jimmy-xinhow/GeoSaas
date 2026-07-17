@@ -158,6 +158,7 @@ describe('OfficialSiteContentService', () => {
 
     const request = ((service as any).anthropic.messages.create as jest.Mock).mock.calls[0][0];
     expect(request.model).toBe('claude-opus-4-8');
+    expect(request).not.toHaveProperty('temperature');
     expect(request.tool_choice).toEqual({ type: 'tool', name: 'submit_official_site_article' });
     expect(request.tools[0].name).toBe('submit_official_site_article');
     expect(prompt).toContain('至少 1200、目標 1200–1600 字');
@@ -371,6 +372,25 @@ describe('OfficialSiteContentService', () => {
     expect(report.checks.noUnsupportedSpecificClaims).toBe(false);
     expect(report.failedRequiredChecks).toContain('noUnsupportedSpecificClaims');
     expect(report.unsupportedSpecificClaims).toEqual(expect.arrayContaining(['數年', '防污', '抗刮']));
+  });
+
+  it('quotes the exact unsupported promise in the next repair instruction', async () => {
+    const unsafeSentence = '專業服務將保證更好的效果和持久性';
+    const unsafeContent = `${aiResponse.content}\n\n${unsafeSentence}。`;
+    const report = await (service as any).runQualityChecks(
+      siteId,
+      site.name,
+      unsafeContent,
+      { ...aiResponse, content: unsafeContent },
+      graph,
+      { latestScanScore: null, latestScanAt: null, indicators: [], latestReportSummary: null },
+    );
+    const feedback = (service as any).buildQualityFeedback(report, graph);
+
+    expect(report.checks.noUnsupportedPromises).toBe(false);
+    expect(report.unsupportedPromiseClaims).toContain(unsafeSentence);
+    expect(feedback).toContain(unsafeSentence);
+    expect(feedback).toContain('完整重寫這些句子');
   });
 
   it('keeps a high-scoring article blocked when a required first-party boundary is missing', async () => {

@@ -155,6 +155,7 @@ interface QualityReport {
   similarityScore: number;
   similarityThreshold: number;
   matchedArticleId: string | null;
+  unsupportedPromiseClaims: string[];
   unsupportedSpecificClaims: string[];
   failedReasons: string[];
 }
@@ -226,6 +227,17 @@ function extractUnsupportedSpecificClaims(content: string, graph: BrandFactGraph
   return [...new Set([...measurableClaims, ...effectClaims])]
     .map((claim) => claim.replace(/\s+/g, ' ').trim())
     .filter((claim) => !source.includes(normalizeText(claim)));
+}
+
+function extractUnsupportedPromiseClaims(content: string): string[] {
+  const pattern = /(?:唯一|第一名|業界第一|最佳選擇|保證|一定會|大幅提升|100\s*%)/i;
+  return [...new Set(
+    cleanMarkdown(content)
+      .split(/[。！？\n]+/)
+      .map((sentence) => sentence.trim())
+      .filter((sentence) => sentence.length > 0 && pattern.test(sentence))
+      .map((sentence) => sentence.slice(0, 180)),
+  )];
 }
 
 function parseJsonResponse(raw: string): GeneratedPayload {
@@ -866,7 +878,6 @@ export class OfficialSiteContentService {
       try {
         const response = await this.anthropic.messages.create({
           model: this.claudeModel,
-          temperature,
           max_tokens: 6500,
           tools: [OFFICIAL_ARTICLE_OUTPUT_TOOL],
           tool_choice: { type: 'tool', name: OFFICIAL_ARTICLE_OUTPUT_TOOL.name },
@@ -969,6 +980,7 @@ GEO 內容目標：
 - 正文至少明確使用兩項第一方事實；FAQ 的問題必須真的出現在正文中，每個答案要完整可獨立引用。
 - Meta Description 需包含品牌名稱與直接價值，控制在 60–180 字；keywords 提供 3–8 個不重複詞組。
 - 禁止「唯一、第一、最佳、保證、一定、大幅提升、100%」等無來源的排名、成效或絕對承諾。
+- 送出前必須逐字掃描正文與 FAQ；只要仍出現上述禁用承諾字眼，就先重寫該句再提交。
 - 任何年、月、週、天、百分比、價格、耐久期間，或「防污、抗刮、耐高溫」等效果宣稱，只能在客戶第一方資料中有逐字依據時使用；沒有依據就不要自行補充常識或推估。
 - 不要提及 Geovault、平台文章、GEO 分數或第三方來源，也不要把檢測分數當成客戶成效宣稱。
 
@@ -1053,6 +1065,7 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
     );
     const keywords = [...new Set((generated.keywords || []).map((keyword) => normalizeText(keyword)).filter(Boolean))];
     const metaDescription = generated.metaDescription?.trim() || '';
+    const unsupportedPromiseClaims = extractUnsupportedPromiseClaims(content);
     const unsupportedSpecificClaims = extractUnsupportedSpecificClaims(content, graph);
     const hasScanAwareStructure = geoContext.indicators.length === 0
       || /(?:FAQ|常見問題|結構化|可讀|回答|步驟|描述|標題)/i.test(content);
@@ -1081,7 +1094,7 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
         && metaDescription.length <= 180
         && normalizeText(metaDescription).includes(normalizeText(siteName)),
       keywordSetReady: keywords.length >= 3 && keywords.length <= 8,
-      noUnsupportedPromises: !/(?:唯一|第一名|業界第一|最佳選擇|保證|一定會|大幅提升|100\s*%)/i.test(content),
+      noUnsupportedPromises: unsupportedPromiseClaims.length === 0,
       noUnsupportedSpecificClaims: unsupportedSpecificClaims.length === 0,
       isScanAware: hasScanAwareStructure,
       belowDuplicateThreshold: similarity.score < DEFAULT_DUPLICATE_THRESHOLD,
@@ -1110,6 +1123,7 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       similarityScore: similarity.score,
       similarityThreshold: DEFAULT_DUPLICATE_THRESHOLD,
       matchedArticleId,
+      unsupportedPromiseClaims,
       unsupportedSpecificClaims,
       failedReasons,
     };
@@ -1126,6 +1140,9 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       }
       if (reason === 'metaDescriptionReady') {
         return `Meta Description 目前長度不足或未包含品牌名；請重新寫成 80–150 字，且必須包含品牌名稱與直接價值`;
+      }
+      if (reason === 'noUnsupportedPromises') {
+        return `以下原句含有禁止的排名、保證或成效承諾：「${quality.unsupportedPromiseClaims.join('」；「')}」；請完整重寫這些句子，移除「唯一、第一、最佳選擇、保證、一定、大幅提升、100%」等字眼，不得只換標點或保留同義承諾`;
       }
       if (reason === 'noUnsupportedSpecificClaims') {
         return `以下宣稱沒有在第一方資料逐字找到依據：「${quality.unsupportedSpecificClaims.join('」、「')}」；請刪除或改為不帶年限、數據與效果保證的可驗證描述`;
