@@ -23,6 +23,12 @@ export class GenerateOfficialArticleDto {
   @MaxLength(240)
   angle?: string;
 
+  /** Optional direction from the customer; the system validates and refines it against first-party data. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(240)
+  topicDirection?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(120)

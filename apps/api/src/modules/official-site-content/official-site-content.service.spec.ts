@@ -43,6 +43,8 @@ describe('OfficialSiteContentService', () => {
   beforeEach(() => {
     prisma = {
       site: { findUnique: jest.fn() },
+      scan: { findFirst: jest.fn().mockResolvedValue(null) },
+      monitorReport: { findFirst: jest.fn().mockResolvedValue(null) },
       blogArticle: { findFirst: jest.fn(), findMany: jest.fn() },
       officialSiteArticle: {
         findMany: jest.fn(),
@@ -91,10 +93,14 @@ describe('OfficialSiteContentService', () => {
     );
     const aiResponse = {
       title: 'Acme 企業軟體導入指南',
-      content: `# Acme 企業軟體導入指南\n\n${'Acme 官方品牌協助企業依照實際流程整理需求，並以可驗證的導入步驟降低溝通成本。 '.repeat(30)}\n\n## 常見問題`,
+      content: `# Acme 企業軟體導入指南\n\nAcme 提供企業軟體顧問與導入服務，本文先說明結論，再整理適用對象與實作步驟。\n\n## 重點結論\n\nAcme 提供企業軟體顧問與導入服務，協助企業依照實際流程整理需求。\n\n## 適用對象與限制\n\n適合需要企業軟體顧問與導入的中小企業行銷團隊，不提供代操廣告。\n\n## 執行步驟\n\n1. 整理需求。\n2. 確認導入流程。\n3. 依照可驗證資料執行。\n\n## 常見問題\n\n${'Acme 官方品牌協助企業依照實際流程整理需求，並以可驗證的導入步驟降低溝通成本。 '.repeat(24)}`,
       metaDescription: 'Acme 企業軟體導入指南，說明適用對象與導入流程。',
       keywords: ['企業軟體', '導入顧問'],
-      faq: [{ question: 'Acme 提供什麼服務？', answer: 'Acme 提供企業軟體顧問與導入服務。' }],
+      faq: [
+        { question: 'Acme 提供什麼服務？', answer: 'Acme 提供企業軟體顧問與導入服務，協助企業依照實際流程整理需求。' },
+        { question: '哪些對象適合使用？', answer: '適合需要企業軟體顧問與導入的中小企業行銷團隊。' },
+        { question: 'Acme 不提供哪些服務？', answer: 'Acme 不提供代操廣告，文章只描述已確認的官方服務範圍。' },
+      ],
     };
     (service as any).openai = {
       chat: {
@@ -183,8 +189,59 @@ describe('OfficialSiteContentService', () => {
     expect(recommendation.canonicalUrl).toBe('https://acme.example/blog/business-software-implementation-guide');
   });
 
+  it('uses scan and citation report state when judging the topic direction', async () => {
+    prisma.scan.findFirst.mockResolvedValue({
+      totalScore: 42,
+      completedAt: new Date('2026-07-17T00:00:00Z'),
+      results: [{ indicator: 'faq_schema', score: 0, status: 'fail', suggestion: '請補充可回答客戶問題的 FAQ。' }],
+    });
+    prisma.monitorReport.findFirst.mockResolvedValue({ summary: { mentionRate: 12 } });
+
+    const recommendation = await service.recommend(siteId, userId, 'USER');
+
+    expect(recommendation.angle).toContain('faq_schema');
+    expect(recommendation.reasoning).toContain('42/100');
+    expect(recommendation.dataUsed.scanIndicators).toBe(1);
+    expect(recommendation.dataUsed.reportAvailable).toBe(true);
+  });
+
+  it('automatically retries a failed draft and records the attempt count', async () => {
+    const create = (service as any).openai.chat.completions.create as jest.Mock;
+    const goodContent = `# Acme 企業軟體導入指南\n\nAcme 提供企業軟體顧問與導入服務，本文先說明結論，再整理適用對象與實作步驟。\n\n## 重點結論\n\nAcme 提供企業軟體顧問與導入服務，協助企業依照實際流程整理需求。\n\n## 適用對象與限制\n\n適合需要企業軟體顧問與導入的中小企業行銷團隊，不提供代操廣告。\n\n## 執行步驟\n\n1. 整理需求。\n2. 確認導入流程。\n3. 依照可驗證資料執行。\n\n## 常見問題\n\nAcme 官方品牌協助企業依照實際流程整理需求，並以可驗證的導入步驟降低溝通成本。`.repeat(3);
+    create
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ title: '短文', content: '只有一句話' }) } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({
+        title: 'Acme 企業軟體導入指南',
+        content: goodContent,
+        metaDescription: 'Acme 企業軟體導入指南。',
+        keywords: ['企業軟體'],
+        faq: [
+          { question: 'Acme 提供什麼服務？', answer: 'Acme 提供企業軟體顧問與導入服務，協助企業依照實際流程整理需求。' },
+          { question: '哪些對象適合使用？', answer: '適合需要企業軟體顧問與導入的中小企業行銷團隊。' },
+          { question: 'Acme 不提供哪些服務？', answer: 'Acme 不提供代操廣告，文章只描述已確認的官方服務範圍。' },
+        ],
+      }) } }] });
+
+    const result = await service.generate(siteId, {}, userId, 'USER');
+
+    expect(result.status).toBe('draft');
+    expect((result.qualityReport as any).attempts).toBe(3);
+    expect(create).toHaveBeenCalledTimes(3);
+  });
+
+  it('switches to a semantic slug when the requested slug is occupied', async () => {
+    prisma.officialSiteArticle.findFirst
+      .mockResolvedValueOnce({ id: 'existing-slug' })
+      .mockResolvedValueOnce(undefined);
+
+    const result = await service.generate(siteId, { slug: 'acme-services' }, userId, 'USER');
+
+    expect(result.slug).toBe('acme-solutions');
+    expect(result.slug).not.toMatch(/-2$/);
+  });
+
   it('saves a quality_failed draft when the candidate is too similar', async () => {
-    const candidate = `# Acme 企業軟體導入指南\n\n${'Acme 協助企業依照實際流程整理需求，並以可驗證的導入步驟降低溝通成本。 '.repeat(30)}\n\n## 常見問題`;
+    const candidate = `# Acme 企業軟體導入指南\n\nAcme 提供企業軟體顧問與導入服務，本文先說明結論，再整理適用對象與實作步驟。\n\n## 重點結論\n\nAcme 提供企業軟體顧問與導入服務，協助企業依照實際流程整理需求。\n\n## 適用對象與限制\n\n適合需要企業軟體顧問與導入的中小企業行銷團隊，不提供代操廣告。\n\n## 執行步驟\n\n1. 整理需求。\n2. 確認導入流程。\n3. 依照可驗證資料執行。\n\n## 常見問題\n\n${'Acme 官方品牌協助企業依照實際流程整理需求，並以可驗證的導入步驟降低溝通成本。 '.repeat(24)}`;
     prisma.blogArticle.findMany.mockResolvedValue([{ id: 'platform-1', content: candidate }]);
 
     const result = await service.generate(
@@ -199,6 +256,8 @@ describe('OfficialSiteContentService', () => {
 
     expect(result.status).toBe('quality_failed');
     expect(result.rejectionReason).toContain('belowDuplicateThreshold');
+    expect(result.rejectionReason).toContain('建議換一個主題方向');
+    expect((result.qualityReport as any).finalAttempt).toBe(3);
   });
 
   it('refuses to approve a quality_failed article', async () => {

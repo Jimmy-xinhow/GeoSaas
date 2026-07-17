@@ -22,6 +22,8 @@ const DEFAULT_MODEL = 'gpt-4o';
 const MIN_ARTICLE_CHARS = 900;
 const MAX_ARTICLE_CHARS = 8000;
 const SOURCE_ARTICLE_LIMIT = 30;
+const MAX_QUALITY_ATTEMPTS = 3;
+const MIN_GEO_QUALITY_SCORE = 82;
 const OFFICIAL_ARTICLE_STATUSES = ['draft', 'approved', 'export_ready'] as const;
 
 interface SourceArticle {
@@ -52,6 +54,8 @@ export interface OfficialArticleRecommendation {
     qaPairs: number;
     recentPlatformTopics: number;
     existingOfficialArticles: number;
+    scanIndicators: number;
+    reportAvailable: boolean;
   };
 }
 
@@ -59,6 +63,23 @@ interface GenerationBrief {
   topic: string;
   angle: string;
   canonicalUrl: string;
+  topicDirection?: string;
+  qualityFeedback?: string;
+  geoContext: GeoContext;
+}
+
+interface GeoIndicatorContext {
+  indicator: string;
+  score: number;
+  status: string;
+  suggestion: string | null;
+}
+
+interface GeoContext {
+  latestScanScore: number | null;
+  latestScanAt: Date | null;
+  indicators: GeoIndicatorContext[];
+  latestReportSummary: Record<string, unknown> | null;
 }
 
 interface GeneratedPayload {
@@ -71,6 +92,10 @@ interface GeneratedPayload {
 
 interface QualityReport {
   passed: boolean;
+  score: number;
+  minimumScore: number;
+  attempts?: number;
+  finalAttempt?: number;
   checks: Record<string, boolean>;
   charLength: number;
   similarityScore: number;
@@ -195,12 +220,44 @@ export class OfficialSiteContentService {
   async recommend(siteId: string, userId: string, role?: string): Promise<OfficialArticleRecommendation> {
     const site = await this.assertAccess(siteId, userId, role);
     const graph = await this.brandFactService.buildForSite(siteId);
-    return this.buildRecommendation(site, graph);
+    const geoContext = await this.loadGeoContext(siteId);
+    return this.buildRecommendation(site, graph, geoContext);
+  }
+
+  private async loadGeoContext(siteId: string): Promise<GeoContext> {
+    const [latestScan, latestReport] = await Promise.all([
+      this.prisma.scan.findFirst({
+        where: { siteId, status: 'COMPLETED' },
+        orderBy: { completedAt: 'desc' },
+        select: {
+          totalScore: true,
+          completedAt: true,
+          results: {
+            select: { indicator: true, score: true, status: true, suggestion: true },
+          },
+        },
+      }),
+      this.prisma.monitorReport.findFirst({
+        where: { siteId, status: 'completed' },
+        orderBy: { createdAt: 'desc' },
+        select: { summary: true },
+      }),
+    ]);
+
+    return {
+      latestScanScore: latestScan?.totalScore ?? null,
+      latestScanAt: latestScan?.completedAt ?? null,
+      indicators: latestScan?.results ?? [],
+      latestReportSummary: latestReport?.summary && typeof latestReport.summary === 'object'
+        ? latestReport.summary as Record<string, unknown>
+        : null,
+    };
   }
 
   private async buildRecommendation(
     site: { id: string; name: string; url: string; industry: string | null },
     graph: BrandFactGraph,
+    geoContext: GeoContext,
   ): Promise<OfficialArticleRecommendation> {
     const [sources, existing] = await Promise.all([
       this.prisma.blogArticle.findMany({
@@ -233,8 +290,15 @@ export class OfficialSiteContentService {
     const qaTopic = graph.qaPairs
       .map((pair) => pair.question.trim())
       .find((question) => question.length >= 8 && !existingTopics.has(normalizeText(question)));
+    const weakIndicator = geoContext.indicators.find((item) => item.status === 'fail' || item.status === 'warning');
     const topic = qaTopic || `${site.name}${site.industry ? ` ${site.industry}` : ''}服務與適用對象指南`;
-    const angle = `以${graph.services || site.industry || '官方服務'}、適用對象、實際流程與常見疑問回答讀者，僅使用已確認的第一方資料。`;
+    const scanDirection = weakIndicator?.suggestion
+      ? `同時回應最新網站檢測的「${weakIndicator.indicator}」問題：${weakIndicator.suggestion}`
+      : '以最新網站檢測結果確認文章中的品牌與服務敘述一致';
+    const reportDirection = geoContext.latestReportSummary
+      ? '並參考最新 AI 引用綜合報告的查詢表現，補足讀者最需要的直接答案'
+      : '目前沒有可用的 AI 引用綜合報告，先以已確認的品牌資料與 FAQ 為主';
+    const angle = `以${graph.services || site.industry || '官方服務'}、適用對象、實際流程與常見疑問回答讀者，${scanDirection}；${reportDirection}。僅使用已確認的第一方資料。`;
     const suggestedSlug = this.buildSuggestedSlug(topic);
     const publishBaseUrl = existing.find((article) => article.publishBaseUrl)?.publishBaseUrl
       || this.defaultPublishBaseUrl(site.url);
@@ -248,8 +312,8 @@ export class OfficialSiteContentService {
       publishBaseUrl,
       canonicalUrl,
       reasoning: source
-        ? `系統讀取了品牌資料、${graph.qaPairs.length} 組 FAQ，以及近期平台主題「${source.title}」作為方向參考；文章正文仍會重新以官網第一方資料生成。`
-        : `系統讀取了品牌資料與 ${graph.qaPairs.length} 組 FAQ，先挑選尚未使用的客戶問題作為文章方向。`,
+        ? `系統讀取品牌資料、${graph.qaPairs.length} 組 FAQ、${geoContext.indicators.length} 項最新網站檢測，以及近期平台主題「${source.title}」；${geoContext.latestScanScore !== null ? `最新掃描 ${geoContext.latestScanScore}/100` : '尚無完成掃描'}。文章正文仍會重新以官網第一方資料生成。`
+        : `系統讀取品牌資料、${graph.qaPairs.length} 組 FAQ 與 ${geoContext.indicators.length} 項網站檢測，先挑選尚未使用的客戶問題作為方向；${geoContext.latestScanScore !== null ? `最新掃描 ${geoContext.latestScanScore}/100` : '尚無完成掃描'}。`,
       sourceArticleId: source?.id,
       sourceArticle: source
         ? {
@@ -270,6 +334,8 @@ export class OfficialSiteContentService {
         qaPairs: graph.qaPairs.length,
         recentPlatformTopics: sources.length,
         existingOfficialArticles: existing.length,
+        scanIndicators: geoContext.indicators.length,
+        reportAvailable: Boolean(geoContext.latestReportSummary),
       },
     };
   }
@@ -332,8 +398,10 @@ export class OfficialSiteContentService {
       });
     }
 
-    const recommendation = await this.buildRecommendation(site, graph);
-    const topic = dto.topic?.trim() || recommendation.topic;
+    const geoContext = await this.loadGeoContext(siteId);
+    const recommendation = await this.buildRecommendation(site, graph, geoContext);
+    const topicDirection = dto.topicDirection?.trim() || undefined;
+    const topic = topicDirection || dto.topic?.trim() || recommendation.topic;
     const angle = dto.angle?.trim() || recommendation.angle;
     const sourceArticleId = dto.sourceArticleId || recommendation.sourceArticleId;
     const source = sourceArticleId
@@ -351,27 +419,54 @@ export class OfficialSiteContentService {
       ? this.normalizeCanonicalUrl(site.url, dto.canonicalUrl)
       : this.buildCanonicalFromBase(publishBaseUrl, slug);
     const firstPartySnapshot = this.buildFirstPartySnapshot(graph);
-    const prompt = this.buildPrompt(site, { topic, angle, canonicalUrl }, source, firstPartySnapshot);
+    let generated: GeneratedPayload | null = null;
+    let quality: QualityReport | null = null;
+    let qualityFeedback = '';
+    let finalAttempt = 0;
 
-    const response = await this.openai.chat.completions.create({
-      model: this.config.get<string>('OFFICIAL_SITE_ARTICLE_AI_MODEL') || DEFAULT_MODEL,
-      temperature: 0.65,
-      max_tokens: 6500,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content: '你是繁體中文官網內容編輯。你必須只使用客戶第一方資料，不得捏造服務、地點、聯絡方式或成效。這篇文章要和任何第三方平台文章保持明顯不同。',
-        },
-        { role: 'user', content: prompt },
-      ],
-    });
+    for (let attempt = 1; attempt <= MAX_QUALITY_ATTEMPTS; attempt += 1) {
+      finalAttempt = attempt;
+      const prompt = this.buildPrompt(
+        site,
+        { topic, angle, canonicalUrl, topicDirection, qualityFeedback, geoContext },
+        source,
+        firstPartySnapshot,
+      );
+      try {
+        const response = await this.openai.chat.completions.create({
+          model: this.config.get<string>('OFFICIAL_SITE_ARTICLE_AI_MODEL') || DEFAULT_MODEL,
+          temperature: attempt === 1 ? 0.65 : 0.45,
+          max_tokens: 6500,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: '你是專業 GEO 官網內容總編。目標是讓真實品牌更容易被 AI 收錄、引用、推薦與摘要。只使用客戶第一方資料，不得捏造服務、地點、聯絡方式、價格、成效或案例；每次輸出都必須依品質回饋修正。',
+            },
+            { role: 'user', content: prompt },
+          ],
+        });
 
-    const raw = response.choices[0]?.message?.content || '';
-    const generated = parseJsonResponse(raw);
+        const raw = response.choices[0]?.message?.content || '';
+        generated = parseJsonResponse(raw);
+        quality = await this.runQualityChecks(siteId, site.name, generated.content, generated, graph, geoContext);
+        quality.attempts = attempt;
+        quality.finalAttempt = attempt;
+        if (quality.passed) break;
+        qualityFeedback = `上一版未達標，請重新改寫，不要只補字數：${quality.failedReasons.join('、')}。品質分數 ${quality.score}/${quality.minimumScore}。請優先改善直接回答、可引用的事實、清楚段落與 FAQ。`;
+      } catch (error) {
+        if (attempt === MAX_QUALITY_ATTEMPTS) throw error;
+        qualityFeedback = `上一版生成格式失敗，請重新輸出完整 JSON，並確保正文與 FAQ 都是繁體中文且資料可由客戶第一方資料支持。`;
+      }
+    }
+
+    if (!generated || !quality) {
+      throw new BadRequestException('文章生成未完成，請更換主題方向後再試');
+    }
     const content = generated.content.trim();
     const description = cleanMarkdown(generated.metaDescription || content).slice(0, 180);
-    const quality = await this.runQualityChecks(siteId, site.name, content);
+    quality.attempts = quality.attempts || finalAttempt;
+    quality.finalAttempt = quality.finalAttempt || finalAttempt;
     const status = quality.passed ? 'draft' : 'quality_failed';
     const articleSchema = this.buildArticleSchema({
       title: generated.title,
@@ -383,6 +478,7 @@ export class OfficialSiteContentService {
     const faqSchema = this.buildFaqSchema(generated.faq || []);
     const targetKeywords = [...new Set([
       topic,
+      ...(topicDirection ? [topicDirection] : []),
       ...(generated.keywords || []),
       ...(site.industry ? [site.industry] : []),
     ].map((item) => item.trim()).filter(Boolean))].slice(0, 12);
@@ -409,7 +505,9 @@ export class OfficialSiteContentService {
         qualityReport: asJson(quality),
         similarityScore: quality.similarityScore,
         similarityMatchedArticleId: quality.matchedArticleId,
-        rejectionReason: quality.failedReasons.length > 0 ? quality.failedReasons.join('; ') : null,
+        rejectionReason: quality.failedReasons.length > 0
+          ? `${quality.failedReasons.join('; ')}${quality.passed ? '' : `；已自動優化 ${quality.finalAttempt || MAX_QUALITY_ATTEMPTS} 次仍未達標，建議換一個主題方向`}`
+          : null,
         generatedAt: new Date(),
       },
       select: {
@@ -654,8 +752,20 @@ export class OfficialSiteContentService {
 官方網域：${site.url}
 行業：${site.industry || '未分類'}
 文章主題：${brief.topic}
+客戶指定方向：${brief.topicDirection || '未指定，請依品牌資料與檢測結果判斷'}
 內容角度：${brief.angle || '以官方服務與讀者決策需求為中心'}
 預計 canonical URL：${brief.canonicalUrl}
+
+GEO 內容目標：
+- 文章必須先回答讀者問題，再補充背景與步驟，讓 AI 能直接擷取明確答案。
+- 只使用可從客戶第一方資料驗證的品牌、服務、適用對象、限制與聯絡資訊。
+- 使用清楚的 H2/H3、定義、條件、步驟與至少 3 組 FAQ，避免空泛行銷語。
+- 不要提及 Geovault、平台文章、GEO 分數或第三方來源，也不要把檢測分數當成客戶成效宣稱。
+
+最新網站掃描與 AI 引用檢測摘要（僅用於判斷內容重點，不可在文章中捏造或宣稱）：
+${JSON.stringify(brief.geoContext, null, 2)}
+
+${brief.qualityFeedback ? `上一輪品質回饋（本輪必須修正）：\n${brief.qualityFeedback}\n` : ''}
 
 平台文章僅提供以下「主題靈感 metadata」，不可使用其正文：
 ${source ? JSON.stringify({ title: source.title, description: source.description, keywords: source.targetKeywords }, null, 2) : '(沒有指定平台文章，請依主題重新規劃)'}
@@ -675,7 +785,14 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
 }`;
   }
 
-  private async runQualityChecks(siteId: string, siteName: string, content: string): Promise<QualityReport> {
+  private async runQualityChecks(
+    siteId: string,
+    siteName: string,
+    content: string,
+    generated: GeneratedPayload,
+    graph: BrandFactGraph,
+    geoContext: GeoContext,
+  ): Promise<QualityReport> {
     const plain = cleanMarkdown(content);
     const platformCorpus = await this.prisma.blogArticle.findMany({
       where: { siteId, published: true },
@@ -692,20 +809,35 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
     const similarity = maxSimilarity(content, corpus.map((item) => item.content));
     const matchedArticleId = similarity.matchedIndex >= 0 ? corpus[similarity.matchedIndex]?.id || null : null;
     const failedReasons: string[] = [];
+    const headingCount = (content.match(/^#{2,3}\s+.+/gm) || []).length;
+    const hasGroundedEntity = [graph.services, graph.industry, graph.positioning, graph.location]
+      .filter((value): value is string => Boolean(value))
+      .some((value) => normalizeText(plain).includes(normalizeText(value)));
+    const hasScanAwareStructure = geoContext.indicators.length === 0
+      || /(?:FAQ|常見問題|結構化|可讀|回答|步驟|描述|標題)/i.test(content);
     const checks: Record<string, boolean> = {
       minimumLength: plain.length >= MIN_ARTICLE_CHARS,
       maximumLength: plain.length <= MAX_ARTICLE_CHARS,
       hasHeading: /^#\s+.+/m.test(content),
+      hasStructuredSections: headingCount >= 4,
       includesBrandName: normalizeText(plain).includes(normalizeText(siteName)),
+      includesGroundedEntity: hasGroundedEntity,
       noPlaceholders: !/(?:TODO|TBD|XXX|\[待補|\{.*?\})/i.test(content),
       noPlatformReferences: !/(?:Geovault|client_daily|平台文章|發布包)/i.test(content),
+      hasFaq: Boolean(generated.faq && generated.faq.length >= 3),
+      hasActionableAnswer: /(?:結論|重點|步驟|建議|可以|應該|適合|不適合)/i.test(content),
+      hasAiReadableStructure: /(?:常見問題|FAQ|問：|Q[:：])/i.test(content),
+      isScanAware: hasScanAwareStructure,
       belowDuplicateThreshold: similarity.score < DEFAULT_DUPLICATE_THRESHOLD,
     };
     for (const [key, passed] of Object.entries(checks)) {
       if (!passed) failedReasons.push(key);
     }
+    const score = Math.round((Object.values(checks).filter(Boolean).length / Object.keys(checks).length) * 100);
     return {
-      passed: failedReasons.length === 0,
+      passed: failedReasons.length === 0 && score >= MIN_GEO_QUALITY_SCORE,
+      score,
+      minimumScore: MIN_GEO_QUALITY_SCORE,
       checks,
       charLength: plain.length,
       similarityScore: similarity.score,
@@ -792,16 +924,44 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
 
   private async ensureUniqueSlug(siteId: string, requestedSlug: string): Promise<string> {
     const base = this.normalizeSlug(requestedSlug);
-    let candidate = base;
-    for (let suffix = 1; suffix <= 20; suffix += 1) {
+    const candidates = this.slugAlternatives(base);
+    for (const candidate of candidates) {
       const existing = await this.prisma.officialSiteArticle.findFirst({
         where: { siteId, slug: candidate },
         select: { id: true },
       });
       if (!existing) return candidate;
-      candidate = `${base}-${suffix + 1}`.slice(0, 100);
     }
-    return `${base}-${Date.now().toString(36)}`.slice(0, 100);
+    throw new BadRequestException('這個主題的網址已存在多個相近版本，請更換主題方向後再生成');
+  }
+
+  private slugAlternatives(base: string): string[] {
+    const alternatives = new Set<string>([base]);
+    const replacements: Array<[string, string]> = [
+      ['services', 'solutions'],
+      ['solutions', 'services'],
+      ['guide', 'overview'],
+      ['overview', 'guide'],
+      ['implementation', 'process'],
+      ['process', 'implementation'],
+      ['how-to', 'best-practices'],
+      ['best-practices', 'how-to'],
+      ['faq', 'questions'],
+      ['questions', 'faq'],
+      ['comparison', 'benchmark'],
+      ['benchmark', 'comparison'],
+      ['selection', 'choosing'],
+      ['choosing', 'selection'],
+      ['pricing', 'cost'],
+      ['cost', 'pricing'],
+    ];
+    for (const [from, to] of replacements) {
+      if (base.split('-').includes(from)) alternatives.add(base.replace(`-${from}`, `-${to}`).replace(`${from}-`, `${to}-`));
+    }
+    alternatives.add(`${base}-insights`);
+    alternatives.add(`${base}-explained`);
+    alternatives.add(`${base}-checklist`);
+    return [...alternatives].map((value) => value.slice(0, 100));
   }
 
   private defaultPublishBaseUrl(siteUrl: string): string {

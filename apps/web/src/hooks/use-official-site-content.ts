@@ -11,6 +11,10 @@ export type OfficialArticleStatus =
 
 export interface OfficialQualityReport {
   passed: boolean;
+  score: number;
+  minimumScore: number;
+  attempts?: number;
+  finalAttempt?: number;
   checks: Record<string, boolean>;
   charLength: number;
   similarityScore: number;
@@ -81,6 +85,8 @@ export interface OfficialArticleRecommendation {
     qaPairs: number;
     recentPlatformTopics: number;
     existingOfficialArticles: number;
+    scanIndicators: number;
+    reportAvailable: boolean;
   };
 }
 
@@ -173,6 +179,7 @@ export function useGenerateOfficialSiteArticle(siteId: string) {
     mutationFn: async (payload: {
       topic?: string;
       angle?: string;
+      topicDirection?: string;
       sourceArticleId?: string;
       publishBaseUrl?: string;
       slug?: string;
@@ -186,6 +193,7 @@ export function useGenerateOfficialSiteArticle(siteId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['official-site-articles', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['official-site-article-recommendation', siteId] });
     },
   });
 }

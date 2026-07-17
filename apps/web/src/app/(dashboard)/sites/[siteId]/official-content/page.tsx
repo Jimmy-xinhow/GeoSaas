@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Copy, FileText, Globe2, Loader2, ShieldCheck, Sparkles } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Copy, FileText, Globe2, Loader2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { useParams } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
@@ -36,9 +36,15 @@ const CHECK_LABELS: Record<string, string> = {
   minimumLength: '文章長度達標',
   maximumLength: '文章長度沒有過長',
   hasHeading: '包含文章標題',
+  hasStructuredSections: '段落結構清楚',
   includesBrandName: '包含品牌名稱',
+  includesGroundedEntity: '包含已驗證的品牌/服務事實',
   noPlaceholders: '沒有待補資料或佔位符',
   noPlatformReferences: '沒有平台內容字樣',
+  hasFaq: '至少 3 組 FAQ',
+  hasActionableAnswer: '包含直接答案與可執行步驟',
+  hasAiReadableStructure: '具備 AI 可擷取的問答結構',
+  isScanAware: '已參考網站檢測重點',
   belowDuplicateThreshold: '與既有內容相似度低於門檻',
 }
 
@@ -132,6 +138,7 @@ export default function OfficialSiteContentPage() {
 
   const [topic, setTopic] = useState('')
   const [angle, setAngle] = useState('')
+  const [topicDirection, setTopicDirection] = useState('')
   const [publishBaseUrl, setPublishBaseUrl] = useState('')
   const [slug, setSlug] = useState('')
   const [sourceArticleId, setSourceArticleId] = useState('')
@@ -176,6 +183,7 @@ export default function OfficialSiteContentPage() {
       {
         topic: topic.trim(),
         angle: angle.trim() || undefined,
+        topicDirection: topicDirection.trim() || undefined,
         sourceArticleId: sourceArticleId || undefined,
         publishBaseUrl: publishBaseUrl.trim(),
         slug: slug.trim(),
@@ -191,6 +199,17 @@ export default function OfficialSiteContentPage() {
         },
       },
     )
+  }
+
+  const handleChangeTopic = async () => {
+    setSelectedId(null)
+    setPackageRequested(false)
+    setTopic('')
+    setAngle('')
+    setTopicDirection('')
+    setSourceArticleId('')
+    await recommendationQuery.refetch()
+    toast.success('已重新判斷下一個主題方向')
   }
 
   const handleApprove = () => {
@@ -259,10 +278,15 @@ export default function OfficialSiteContentPage() {
                 {recommendationQuery.isLoading ? 'AI 正在整理你的品牌資料…' : '系統已先替你整理文章企劃'}
               </div>
               <p className="mt-1 text-xs text-blue-100/70">
-                已自動參考 Brand Facts、FAQ、近期主題與既有官網文章；你只要確認下面內容即可，不需要自己想主題。
+                已自動參考 Brand Facts、FAQ、近期主題、網站掃描與 AI 引用綜合檢測；你只要確認下面內容即可，不需要自己想主題。
               </p>
               {recommendation && (
                 <p className="mt-2 text-xs text-blue-100/70">{recommendation.reasoning}</p>
+              )}
+              {recommendation && (
+                <p className="mt-2 text-xs text-blue-100/60">
+                  判斷依據：{recommendation.dataUsed.verifiedFacts ?? 0} 筆品牌事實、{recommendation.dataUsed.qaPairs ?? 0} 組 FAQ、{recommendation.dataUsed.scanIndicators ?? 0} 項網站掃描指標，{recommendation.dataUsed.reportAvailable ? '已納入 AI 引用綜合報告' : '目前沒有可用的 AI 引用綜合報告'}。
+                </p>
               )}
               {recommendation && !recommendation.firstPartyReadiness.ready && (
                 <p className="mt-2 text-xs text-amber-200">目前第一方資料完整度 {recommendation.firstPartyReadiness.confidenceScore} 分，建議先補齊：{recommendation.firstPartyReadiness.missingFacts.join('、')}</p>
@@ -276,6 +300,17 @@ export default function OfficialSiteContentPage() {
                 onChange={(event) => setTopic(event.target.value)}
                 placeholder="系統會從品牌 FAQ 自動帶入"
               />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="official-topic-direction" className="text-sm text-gray-300">想發展的主題方向（選填）</label>
+              <Textarea
+                id="official-topic-direction"
+                value={topicDirection}
+                onChange={(event) => setTopicDirection(event.target.value)}
+                placeholder="例如：我想專門說明第一次導入企業軟體的準備流程；不填就由系統依品牌資料、網站掃描與 AI 引用報告判斷。"
+                className="min-h-[78px]"
+              />
+              <p className="text-xs leading-5 text-gray-500">填寫後系統會先用你的方向，再檢查是否符合品牌事實、掃描問題與 AI 可引用結構。</p>
             </div>
             <div className="space-y-1.5">
               <label htmlFor="official-angle" className="text-sm text-gray-300">AI 建議內容角度（可直接確認）</label>
@@ -306,7 +341,7 @@ export default function OfficialSiteContentPage() {
                 onChange={(event) => setSlug(event.target.value)}
                 placeholder="official-article"
               />
-              <p className="text-xs leading-5 text-gray-500">系統會建議可讀的英文 SLUG；只有網址重複時才會加上 `-2`。正式網址預覽：{canonicalPreview || '等待發布位置與 SLUG'}</p>
+              <p className="text-xs leading-5 text-gray-500">系統會建議可讀的英文 SLUG；若網址撞名會改用另一個語意版本，不加無意義序號。正式網址預覽：{canonicalPreview || '等待發布位置與 SLUG'}</p>
             </div>
             <details className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-gray-400">
               <summary className="cursor-pointer text-gray-300">查看參考主題（進階，可不修改）</summary>
@@ -387,8 +422,8 @@ export default function OfficialSiteContentPage() {
             {selectedArticle.qualityReport && (
               <div className="rounded-lg border border-white/10 bg-black/10 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-white">內容安全檢查</p>
-                  <span className="text-xs text-gray-500">{selectedArticle.qualityReport.charLength} 字</span>
+                  <p className="text-sm font-semibold text-white">GEO 高品質檢查</p>
+                  <span className="text-xs text-gray-500">品質 {selectedArticle.qualityReport.score ?? 0}/{selectedArticle.qualityReport.minimumScore ?? 82} · {selectedArticle.qualityReport.charLength} 字 · 第 {selectedArticle.qualityReport.finalAttempt ?? selectedArticle.qualityReport.attempts ?? 1} 次</span>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {Object.entries(selectedArticle.qualityReport.checks).map(([key, passed]) => (
@@ -406,7 +441,13 @@ export default function OfficialSiteContentPage() {
 
             {selectedArticle.status === 'quality_failed' && (
               <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-50/90">
-                這篇文章目前不能核准，也不會提供給客戶貼到官網。請調整主題或第一方資料後重新生成。
+                這篇文章已經過最多三次自動優化仍未達到 GEO 高品質門檻，目前不能核准，也不會提供給客戶貼到官網。建議換一個主題方向，或補充品牌第一方資料後再生成。
+                <div className="mt-3">
+                  <Button type="button" variant="outline" onClick={handleChangeTopic} disabled={recommendationQuery.isFetching}>
+                    {recommendationQuery.isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    換一個主題
+                  </Button>
+                </div>
               </div>
             )}
 
