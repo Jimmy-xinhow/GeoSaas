@@ -58,6 +58,7 @@ export function useCreateQa(siteId: string) {
         );
       });
       queryClient.invalidateQueries({ queryKey: ['knowledge', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }
@@ -81,6 +82,7 @@ export function useBatchCreateQa(siteId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['knowledge', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }
@@ -100,6 +102,7 @@ export function useUpdateQa(siteId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['knowledge', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }
@@ -112,6 +115,7 @@ export function useDeleteQa(siteId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['knowledge', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }
@@ -128,6 +132,7 @@ export function useDeleteQas(siteId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['knowledge', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }
@@ -231,6 +236,7 @@ export function useCommitKnowledgeImport(siteId: string) {
     onSuccess: (result) => {
       queryClient.setQueryData<QaItem[]>(['knowledge', siteId], result.items);
       queryClient.invalidateQueries({ queryKey: ['knowledge', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
       queryClient.invalidateQueries({ queryKey: ['knowledge-import-quota', siteId] });
     },
   });

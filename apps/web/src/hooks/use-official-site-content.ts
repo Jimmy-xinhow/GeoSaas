@@ -78,6 +78,7 @@ export interface OfficialArticleRecommendation {
   firstPartyReadiness: {
     ready: boolean;
     confidenceScore: number;
+    minimumConfidenceScore: number;
     missingFacts: string[];
   };
   dataUsed: {
@@ -194,6 +195,7 @@ export function useGenerateOfficialSiteArticle(siteId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['official-site-articles', siteId] });
       queryClient.invalidateQueries({ queryKey: ['official-site-article-recommendation', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }
@@ -210,6 +212,7 @@ export function useApproveOfficialSiteArticle(siteId: string) {
     onSuccess: (_, articleId) => {
       queryClient.invalidateQueries({ queryKey: ['official-site-articles', siteId] });
       queryClient.invalidateQueries({ queryKey: ['official-site-article', siteId, articleId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }
@@ -250,6 +253,7 @@ export function useVerifyOfficialSiteArticle(siteId: string) {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['official-site-articles', siteId] });
       queryClient.invalidateQueries({ queryKey: ['official-site-article', siteId, variables.articleId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }

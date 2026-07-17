@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, Copy, FileText, Globe2, Loader2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { useParams } from 'next/navigation'
@@ -39,11 +40,18 @@ const CHECK_LABELS: Record<string, string> = {
   hasStructuredSections: '段落結構清楚',
   includesBrandName: '包含品牌名稱',
   includesGroundedEntity: '包含已驗證的品牌/服務事實',
+  hasFactCoverage: '至少使用兩項可驗證品牌事實',
+  hasAnswerFirstOpening: '開頭直接回答品牌與服務',
   noPlaceholders: '沒有待補資料或佔位符',
   noPlatformReferences: '沒有平台內容字樣',
   hasFaq: '至少 3 組 FAQ',
+  hasVisibleFaq: 'FAQ 問題完整出現在正文',
+  hasAudienceBoundary: '適用對象與服務限制清楚',
   hasActionableAnswer: '包含直接答案與可執行步驟',
   hasAiReadableStructure: '具備 AI 可擷取的問答結構',
+  metaDescriptionReady: 'Meta Description 可直接使用',
+  keywordSetReady: '關鍵字組合完整',
+  noUnsupportedPromises: '無未證實排名或成效承諾',
   isScanAware: '已參考網站檢測重點',
   belowDuplicateThreshold: '與既有內容相似度低於門檻',
 }
@@ -251,15 +259,31 @@ export default function OfficialSiteContentPage() {
       />
 
       <Card className="border-emerald-400/25 bg-emerald-500/[0.06]">
-        <CardContent className="space-y-2 p-5 text-sm leading-6 text-emerald-50/90">
-          <p className="flex items-center gap-2 font-semibold text-emerald-100">
-            <ShieldCheck className="h-4 w-4" />
-            這裡產生的是客戶官網自己的文章，不是平台文章複製版
-          </p>
-          <p>
-            平台文章只會提供主題方向與問題 metadata，正文不會送進這個生成流程。系統會用 Brand Facts、官網知識庫與已確認的第一方資料重新寫作，並在提供內容包前執行相似度檢查。
-          </p>
-          <p className="text-emerald-100/70">客戶不需要修改後端程式碼；通過審核後，將內容貼到原本使用的 CMS 即可。</p>
+        <CardContent className="p-5">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+            <div>
+              <p className="font-semibold text-emerald-100">官網文章交付流程</p>
+              <p className="mt-1 text-sm leading-6 text-emerald-50/75">
+                這裡只產生客戶官網自己的第一方文章，不複製 Geovault 平台正文，也不會自動發佈。
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {[
+              ['1', '系統規劃主題', '讀取品牌事實、FAQ、網站掃描與 AI 引用報告。'],
+              ['2', '高品質生成', '品牌事實至少 70 分；文章需過 82 分與所有核心檢查，最多自動修正三次。'],
+              ['3', '客戶發布驗收', '通過後提供 CMS 內容包，發布後再驗證 canonical、Schema 與可讀內容。'],
+            ].map(([number, title, description]) => (
+              <div key={number} className="rounded-lg border border-emerald-300/15 bg-black/10 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-300/15 text-xs font-bold text-emerald-100">{number}</span>
+                  <p className="text-sm font-semibold text-emerald-50">{title}</p>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-emerald-50/65">{description}</p>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
@@ -289,20 +313,11 @@ export default function OfficialSiteContentPage() {
                 </p>
               )}
               {recommendation && !recommendation.firstPartyReadiness.ready && (
-                <p className="mt-2 text-xs text-amber-200">目前第一方資料完整度 {recommendation.firstPartyReadiness.confidenceScore} 分，建議先補齊：{recommendation.firstPartyReadiness.missingFacts.join('、')}</p>
+                <p className="mt-2 text-xs text-amber-200">目前第一方資料完整度 {recommendation.firstPartyReadiness.confidenceScore}/{recommendation.firstPartyReadiness.minimumConfidenceScore}，請先補齊：{recommendation.firstPartyReadiness.missingFacts.join('、') || '品牌服務、對象與 FAQ'}</p>
               )}
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="official-topic" className="text-sm text-gray-300">AI 建議文章主題（可直接確認）</label>
-              <Input
-                id="official-topic"
-                value={topic}
-                onChange={(event) => setTopic(event.target.value)}
-                placeholder="系統會從品牌 FAQ 自動帶入"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="official-topic-direction" className="text-sm text-gray-300">想發展的主題方向（選填）</label>
+              <label htmlFor="official-topic-direction" className="text-sm font-medium text-gray-200">你想發展的主題方向（選填）</label>
               <Textarea
                 id="official-topic-direction"
                 value={topicDirection}
@@ -313,17 +328,7 @@ export default function OfficialSiteContentPage() {
               <p className="text-xs leading-5 text-gray-500">填寫後系統會先用你的方向，再檢查是否符合品牌事實、掃描問題與 AI 可引用結構。</p>
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="official-angle" className="text-sm text-gray-300">AI 建議內容角度（可直接確認）</label>
-              <Textarea
-                id="official-angle"
-                value={angle}
-                onChange={(event) => setAngle(event.target.value)}
-                placeholder="系統會依品牌服務與適用對象自動整理"
-                className="min-h-[82px]"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="official-publish-base" className="text-sm text-gray-300">官網發布位置（先綁定一次）</label>
+              <label htmlFor="official-publish-base" className="text-sm font-medium text-gray-200">官網文章發布位置</label>
               <Input
                 id="official-publish-base"
                 type="url"
@@ -333,29 +338,60 @@ export default function OfficialSiteContentPage() {
               />
               <p className="text-xs leading-5 text-gray-500">填官網 CMS 的文章集合位置即可，不用事先知道文章完整網址。</p>
             </div>
-            <div className="space-y-1.5">
-              <label htmlFor="official-slug" className="text-sm text-gray-300">AI 建議 SLUG（可直接確認）</label>
-              <Input
-                id="official-slug"
-                value={slug}
-                onChange={(event) => setSlug(event.target.value)}
-                placeholder="official-article"
-              />
-              <p className="text-xs leading-5 text-gray-500">系統會建議可讀的英文 SLUG；若網址撞名會改用另一個語意版本，不加無意義序號。正式網址預覽：{canonicalPreview || '等待發布位置與 SLUG'}</p>
-            </div>
-            <details className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-gray-400">
-              <summary className="cursor-pointer text-gray-300">查看參考主題（進階，可不修改）</summary>
-              <p className="mt-2 leading-5">{recommendation?.sourceArticle ? `系統參考：${recommendation.sourceArticle.title}（只取標題、摘要與關鍵字，不取正文）` : '目前沒有可用的平台主題 metadata，會完全依第一方資料生成。'}</p>
+            <details className="rounded-lg border border-white/10 bg-white/[0.02] text-xs text-gray-400">
+              <summary className="cursor-pointer list-none px-3 py-3 font-medium text-gray-300 hover:bg-white/[0.03] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400">
+                查看 AI 企劃與網址設定（通常不用修改）
+              </summary>
+              <div className="space-y-4 border-t border-white/10 p-3">
+                <div className="space-y-1.5">
+                  <label htmlFor="official-topic" className="text-xs text-gray-400">AI 建議文章主題</label>
+                  <Input
+                    id="official-topic"
+                    value={topic}
+                    onChange={(event) => setTopic(event.target.value)}
+                    placeholder="系統會從品牌 FAQ 自動帶入"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="official-angle" className="text-xs text-gray-400">AI 建議內容角度</label>
+                  <Textarea
+                    id="official-angle"
+                    value={angle}
+                    onChange={(event) => setAngle(event.target.value)}
+                    placeholder="系統會依品牌服務與適用對象自動整理"
+                    className="min-h-[82px]"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="official-slug" className="text-xs text-gray-400">英文 SLUG</label>
+                  <Input
+                    id="official-slug"
+                    value={slug}
+                    onChange={(event) => setSlug(event.target.value)}
+                    placeholder="official-article"
+                  />
+                  <p className="text-xs leading-5 text-gray-500">撞名時會改用另一個語意版本，不加無意義序號。網址預覽：{canonicalPreview || '等待發布位置與 SLUG'}</p>
+                </div>
+                <p className="leading-5">{recommendation?.sourceArticle ? `系統參考：${recommendation.sourceArticle.title}（只取標題、摘要與關鍵字，不取正文）` : '目前沒有可用的平台主題 metadata，會完全依第一方資料生成。'}</p>
+              </div>
             </details>
-            <Button
-              type="button"
-              className="w-full bg-blue-600 text-white hover:bg-blue-700"
-              onClick={handleGenerate}
-              disabled={generateMutation.isPending}
-            >
-              {generateMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              {generateMutation.isPending ? '生成中…' : '確認企劃並生成官網專屬文章'}
-            </Button>
+            {recommendation && !recommendation.firstPartyReadiness.ready ? (
+              <Link href={`/sites/${siteId}/knowledge`} className="block">
+                <Button type="button" className="w-full bg-amber-600 text-white hover:bg-amber-700">
+                  先補齊品牌資料再生成
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                type="button"
+                className="w-full bg-blue-600 text-white hover:bg-blue-700"
+                onClick={handleGenerate}
+                disabled={generateMutation.isPending || recommendationQuery.isLoading}
+              >
+                {generateMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                {generateMutation.isPending ? '品質生成與檢查中…' : '生成並執行高品質檢查'}
+              </Button>
+            )}
             <p className="text-center text-xs text-gray-500">生成後會先進入審核，不會自動發布到客戶官網；每週平台文章流程也不會受影響。</p>
           </CardContent>
         </Card>
@@ -372,7 +408,7 @@ export default function OfficialSiteContentPage() {
               <div className="flex items-center gap-2 py-6 text-sm text-gray-400"><Loader2 className="h-4 w-4 animate-spin" />載入中…</div>
             ) : articles.length === 0 ? (
               <div className="rounded-lg border border-dashed border-white/15 p-6 text-center text-sm leading-6 text-gray-400">
-                尚未建立官網專屬文章。先補齊品牌資料與知識庫，再從左側輸入第一個主題。
+                尚未建立官網專屬文章。系統會先依品牌資料、網站掃描與 AI 引用報告規劃主題，你只需確認官網發布位置。
               </div>
             ) : (
               articles.map((article) => (
@@ -423,7 +459,7 @@ export default function OfficialSiteContentPage() {
               <div className="rounded-lg border border-white/10 bg-black/10 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-white">GEO 高品質檢查</p>
-                  <span className="text-xs text-gray-500">品質 {selectedArticle.qualityReport.score ?? 0}/{selectedArticle.qualityReport.minimumScore ?? 82} · {selectedArticle.qualityReport.charLength} 字 · 第 {selectedArticle.qualityReport.finalAttempt ?? selectedArticle.qualityReport.attempts ?? 1} 次</span>
+                  <span className="text-xs text-gray-500">品質 {selectedArticle.qualityReport.score ?? 0} 分（門檻 {selectedArticle.qualityReport.minimumScore ?? 82}）· {selectedArticle.qualityReport.charLength} 字 · 第 {selectedArticle.qualityReport.finalAttempt ?? selectedArticle.qualityReport.attempts ?? 1} 次</span>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {Object.entries(selectedArticle.qualityReport.checks).map(([key, passed]) => (
@@ -433,6 +469,7 @@ export default function OfficialSiteContentPage() {
                     </div>
                   ))}
                 </div>
+                <p className="mt-3 text-xs leading-5 text-gray-500">除了總分達標，品牌事實、直接答案、FAQ、結構與重複度等核心條件也必須全部通過。</p>
                 {!selectedArticle.qualityReport.passed && selectedArticle.rejectionReason && (
                   <p className="mt-3 text-xs leading-5 text-amber-200">未通過原因：{selectedArticle.rejectionReason}</p>
                 )}

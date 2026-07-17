@@ -47,6 +47,63 @@ export interface Site {
   updatedAt: string;
 }
 
+export type GeoGrowthStageKey =
+  | 'diagnose'
+  | 'technical'
+  | 'knowledge'
+  | 'content'
+  | 'measurement';
+
+export interface GeoGrowthStage {
+  key: GeoGrowthStageKey;
+  order: number;
+  title: string;
+  description: string;
+  outcome: string;
+  status: 'completed' | 'current' | 'upcoming';
+  href: string;
+  cta: string;
+  evidence: string[];
+}
+
+export interface GeoGrowthPlan {
+  site: { id: string; name: string; url: string };
+  progress: number;
+  currentStageKey: GeoGrowthStageKey | 'maintain';
+  nextAction: {
+    stageKey: GeoGrowthStageKey | 'maintain';
+    title: string;
+    description: string;
+    href: string;
+    cta: string;
+    action: 'navigate' | 'scan';
+  };
+  stages: GeoGrowthStage[];
+  quality: {
+    standard: 'high';
+    factConfidence: number;
+    minimumFactConfidence: number;
+    latestArticleScore: number | null;
+    officialMinimumScore: number;
+    passedAttempts30d: number;
+    autoRepairAttempts30d: number;
+    officialApprovedCount: number;
+    officialFailedCount: number;
+    platformPublishedCount: number;
+  };
+  signals: {
+    latestScanScore: number | null;
+    latestScanAt: string | null;
+    technicalIssues: number;
+    qaCount: number;
+    hasLlmsTxt: boolean;
+    querySetCount: number;
+    latestReportAt: string | null;
+    crawlerVisits: number;
+  };
+  generatedAt: string;
+}
+
 interface CreateSitePayload {
   url: string;
   name: string;
@@ -89,6 +146,18 @@ export function useSite(id: string) {
       return data;
     },
     enabled: !!id,
+  });
+}
+
+export function useGeoGrowthPlan(siteId: string) {
+  return useQuery({
+    queryKey: ['geo-growth-plan', siteId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<GeoGrowthPlan>(`/sites/${siteId}/growth-plan`);
+      return data;
+    },
+    enabled: !!siteId,
+    staleTime: 30_000,
   });
 }
 
@@ -142,6 +211,7 @@ export function useUpdateSite() {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.invalidateQueries({ queryKey: ['sites', site.id] });
       queryClient.invalidateQueries({ queryKey: ['brand-facts', site.id] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', site.id] });
     },
   });
 }
@@ -160,6 +230,7 @@ export function useUpdateSiteProfile(siteId: string) {
       queryClient.invalidateQueries({ queryKey: ['sites', siteId] });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.invalidateQueries({ queryKey: ['brand-facts', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }

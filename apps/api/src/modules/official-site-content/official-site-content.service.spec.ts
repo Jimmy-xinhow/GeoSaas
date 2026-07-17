@@ -39,6 +39,7 @@ describe('OfficialSiteContentService', () => {
   let indexNow: any;
   let service: OfficialSiteContentService;
   let prompt = '';
+  let aiResponse: any;
 
   beforeEach(() => {
     prisma = {
@@ -91,7 +92,7 @@ describe('OfficialSiteContentService', () => {
       brandFacts as BrandFactService,
       indexNow as IndexNowService,
     );
-    const aiResponse = {
+    aiResponse = {
       title: 'Acme 企業軟體導入指南',
       content: `# Acme 企業軟體導入指南\n\nAcme 提供企業軟體顧問與導入服務，本文先說明結論，再整理適用對象與實作步驟。\n\n## 重點結論\n\nAcme 提供企業軟體顧問與導入服務，協助企業依照實際流程整理需求。\n\n## 適用對象與限制\n\n適合需要企業軟體顧問與導入的中小企業行銷團隊，不提供代操廣告。\n\n## 執行步驟\n\n1. 整理需求。\n2. 確認導入流程。\n3. 依照可驗證資料執行。\n\n## 常見問題\n\n${'Acme 官方品牌協助企業依照實際流程整理需求，並以可驗證的導入步驟降低溝通成本。 '.repeat(24)}`,
       metaDescription: 'Acme 企業軟體導入指南，說明適用對象與導入流程。',
@@ -102,6 +103,9 @@ describe('OfficialSiteContentService', () => {
         { question: 'Acme 不提供哪些服務？', answer: 'Acme 不提供代操廣告，文章只描述已確認的官方服務範圍。' },
       ],
     };
+    aiResponse.content = `# ${aiResponse.title}\n\n${site.name} 提供 ${graph.services}，協助 ${graph.targetAudiences[0]} 理解適用情境、導入步驟與判斷標準。\n\n## 服務重點\n\n${graph.positioning}。本文依據品牌官方資料整理，讓讀者可以直接理解服務內容與適用條件。\n\n## 適用對象與限制\n\n適合對象：${graph.targetAudiences.join('、')}。不適用的情況：${graph.notFor.join('、')}。\n\n## 執行步驟\n\n1. 先確認需求與現況。2. 根據品牌官方資料比對服務條件。3. 依據實際情境規劃導入、驗收與後續優化。\n\n## 常見問題\n\n${aiResponse.faq.map((item) => `### ${item.question}\n\n${item.answer}`).join('\n\n')}\n\n## 結論\n\n${`${site.name} 的官方資料已明確說明服務內容、適用對象、限制與執行步驟。讀者應先確認自身需求，再參考品牌第一方資料與實際條件作出判斷。`.repeat(12)}`;
+    aiResponse.metaDescription = `${site.name} 官方品牌服務指南，完整說明服務內容、適用對象、不適用情況、執行步驟與常見問題，協助企業根據實際需求做出清楚的導入判斷。`;
+    aiResponse.keywords = ['品牌官方資料', 'GEO 優化', 'AI 搜尋', '服務導入指南'];
     (service as any).openai = {
       chat: {
         completions: {
@@ -149,6 +153,24 @@ describe('OfficialSiteContentService', () => {
         }),
       }),
     );
+  });
+
+  it('blocks official-site generation until first-party facts meet the high-quality threshold', async () => {
+    brandFacts.buildForSite.mockResolvedValue({
+      ...graph,
+      confidenceScore: 62,
+      missingFacts: ['qaPairs', 'targetAudiences'],
+    });
+
+    await expect(service.generate(siteId, {}, userId)).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'FIRST_PARTY_DATA_NOT_READY',
+        confidenceScore: 62,
+        minimumConfidenceScore: 70,
+      }),
+    });
+
+    expect((service as any).openai.chat.completions.create).not.toHaveBeenCalled();
   });
 
   it('recommends a topic and publish location from existing first-party data', async () => {
@@ -242,7 +264,7 @@ describe('OfficialSiteContentService', () => {
 
   it('saves a quality_failed draft when the candidate is too similar', async () => {
     const candidate = `# Acme 企業軟體導入指南\n\nAcme 提供企業軟體顧問與導入服務，本文先說明結論，再整理適用對象與實作步驟。\n\n## 重點結論\n\nAcme 提供企業軟體顧問與導入服務，協助企業依照實際流程整理需求。\n\n## 適用對象與限制\n\n適合需要企業軟體顧問與導入的中小企業行銷團隊，不提供代操廣告。\n\n## 執行步驟\n\n1. 整理需求。\n2. 確認導入流程。\n3. 依照可驗證資料執行。\n\n## 常見問題\n\n${'Acme 官方品牌協助企業依照實際流程整理需求，並以可驗證的導入步驟降低溝通成本。 '.repeat(24)}`;
-    prisma.blogArticle.findMany.mockResolvedValue([{ id: 'platform-1', content: candidate }]);
+    prisma.blogArticle.findMany.mockResolvedValue([{ id: 'platform-1', content: aiResponse.content }]);
 
     const result = await service.generate(
       siteId,

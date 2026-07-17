@@ -78,6 +78,9 @@ export function useTriggerScan() {
       queryClient.invalidateQueries({
         queryKey: ['scan-results'],
       });
+      queryClient.invalidateQueries({
+        queryKey: ['geo-growth-plan', data.siteId],
+      });
     },
   });
 }

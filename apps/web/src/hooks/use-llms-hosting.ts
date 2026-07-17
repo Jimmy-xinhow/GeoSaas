@@ -28,6 +28,7 @@ export function useUpdateLlmsTxt() {
     },
     onSuccess: (_, { siteId }) => {
       queryClient.invalidateQueries({ queryKey: ['llms-txt', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }
@@ -44,6 +45,7 @@ export function useGenerateLlmsTxtHosting() {
     },
     onSuccess: (_, siteId) => {
       queryClient.invalidateQueries({ queryKey: ['llms-txt', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
     },
   });
 }

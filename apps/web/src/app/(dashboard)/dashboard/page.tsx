@@ -44,11 +44,12 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageHeader } from '@/components/shared/page-header'
+import { GeoGrowthPlanPanel } from '@/components/geo/geo-growth-plan'
 import { useContents } from '@/hooks/use-content'
 import { useClientDailyStats } from '@/hooks/use-client-reports'
 import { useMonitorDashboard } from '@/hooks/use-monitor'
 import { useScoreTrend, useTriggerScan } from '@/hooks/use-scan'
-import { useCreateSite, useSites } from '@/hooks/use-sites'
+import { useCreateSite, useGeoGrowthPlan, useSites } from '@/hooks/use-sites'
 import { clearPendingGuestScan, loadPendingGuestScan } from '@/lib/pending-guest-scan'
 import { cn } from '@/lib/utils'
 
@@ -620,6 +621,13 @@ export default function DashboardPage() {
   const { data: sites, isLoading: sitesLoading, error: sitesError } = useSites()
   const { data: contents, isLoading: contentsLoading } = useContents()
   const { data: monitorData, isLoading: monitorLoading } = useMonitorDashboard()
+  const primarySite = useMemo(() => getPrimarySite((sites as any[] | undefined) ?? []), [sites])
+  const {
+    data: growthPlan,
+    isLoading: growthPlanLoading,
+    isError: growthPlanError,
+    refetch: refetchGrowthPlan,
+  } = useGeoGrowthPlan(primarySite?.id ?? '')
   const createSiteMutation = useCreateSite()
   const triggerScanMutation = useTriggerScan()
 
@@ -732,6 +740,19 @@ export default function DashboardPage() {
   const isScanning = createSiteMutation.isPending || triggerScanMutation.isPending
   const isLoading = sitesLoading || contentsLoading || monitorLoading
 
+  const handlePrimarySiteScan = () => {
+    if (!primarySite?.id) return
+    triggerScanMutation.mutate(primarySite.id, {
+      onSuccess: () => toast.success('已啟動網站掃描，完成後會自動更新下一步'),
+      onError: (error: any) => toast.error(error?.response?.data?.message || '掃描啟動失敗，請稍後再試'),
+    })
+  }
+
+  const primaryScanStatus = primarySite?.scans?.[0]?.status
+  useEffect(() => {
+    if (primaryScanStatus === 'COMPLETED') void refetchGrowthPlan()
+  }, [primaryScanStatus, refetchGrowthPlan])
+
   useEffect(() => {
     if (pendingRegistrationScanHandled.current || sitesLoading) return
     const pending = loadPendingGuestScan()
@@ -788,6 +809,15 @@ export default function DashboardPage() {
         }
       />
 
+      <GeoGrowthPlanPanel
+        plan={growthPlan}
+        isLoading={Boolean(primarySite) && growthPlanLoading}
+        hasError={growthPlanError}
+        onRetry={() => refetchGrowthPlan()}
+        onScan={primarySite ? handlePrimarySiteScan : undefined}
+        isActionPending={triggerScanMutation.isPending}
+      />
+
       <SiteNextActions
         sites={sites as any[] | undefined}
         isLoading={sitesLoading}
@@ -799,6 +829,20 @@ export default function DashboardPage() {
 
       <PublishedContentBanner sites={sites as any[]} />
 
+      <details className="group overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400">
+          <span className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/8 text-blue-200">
+              <BarChart3 className="h-4 w-4" />
+            </span>
+            <span>
+              <span className="block text-white">進階數據與例行工作</span>
+              <span className="mt-0.5 block text-xs font-normal text-slate-500">需要分析趨勢時再展開，不影響目前的下一步。</span>
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-90" />
+        </summary>
+        <div className="border-t border-white/10 p-4 sm:p-5">
       <Tabs defaultValue="stats">
         <TabsList className="bg-white/5">
           <TabsTrigger value="stats">數據總覽</TabsTrigger>
@@ -994,6 +1038,8 @@ export default function DashboardPage() {
       </Card>
         </TabsContent>
       </Tabs>
+        </div>
+      </details>
     </div>
   )
 }

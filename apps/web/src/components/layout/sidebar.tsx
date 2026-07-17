@@ -14,9 +14,7 @@ import {
   Shield,
   ClipboardCheck,
   ChevronDown,
-  Wrench,
   BookOpen,
-  BarChart3,
   Zap,
   MessageSquare,
   HandCoins,
@@ -34,39 +32,33 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    label: '主要',
+    label: 'GEO 核心流程',
     defaultOpen: true,
     items: [
       { href: '/dashboard', icon: LayoutDashboard, label: '工作台' },
       { href: '/sites', icon: Globe, label: '我的網站' },
+      { href: '/published-content', icon: FileText, label: '平台文章與品質' },
+      { href: '/monitor/reports', icon: ClipboardCheck, label: 'AI 引用成效' },
     ],
   },
   {
-    label: '全站總覽',
+    label: '進階工具',
     defaultOpen: false,
     items: [
-      { href: '/content', icon: FileText, label: '內容總表' },
-      { href: '/published-content', icon: FileText, label: 'Geovault 平台發布記錄' },
-      { href: '/monitor', icon: Eye, label: 'AI 監控總表' },
-      { href: '/monitor/reports', icon: ClipboardCheck, label: '驗收報告' },
-    ],
-  },
-  {
-    label: '推廣擴散',
-    defaultOpen: false,
-    items: [
+      { href: '/content', icon: FileText, label: '內容資產' },
+      { href: '/monitor', icon: Eye, label: 'AI 問題監測' },
       { href: '/publish', icon: Share2, label: '多平台發佈' },
       { href: '/brand-spread', icon: Zap, label: '品牌擴散' },
-      { href: '/affiliate', icon: HandCoins, label: '聯盟行銷' },
     ],
   },
   {
-    label: '資源',
+    label: '探索與支援',
     defaultOpen: false,
     items: [
-      { href: '/directory', icon: Trophy, label: '公開目錄' },
+      { href: '/directory', icon: Trophy, label: '公開品牌目錄' },
       { href: '/cases', icon: Trophy, label: '成功案例' },
       { href: '/support', icon: MessageSquare, label: '客服中心' },
+      { href: '/affiliate', icon: HandCoins, label: '合作夥伴' },
     ],
   },
 ]

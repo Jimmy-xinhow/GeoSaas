@@ -1,8 +1,26 @@
 'use client'
 
-import { useMemo } from 'react'
-import { useRouter } from 'next/navigation'
-import { Bell, CreditCard, Loader2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import {
+  Bell,
+  BookOpen,
+  ClipboardCheck,
+  CreditCard,
+  Eye,
+  FileText,
+  Globe,
+  LayoutDashboard,
+  Loader2,
+  Menu,
+  MessageSquare,
+  Settings,
+  Share2,
+  Sparkles,
+  Trophy,
+  X,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -14,6 +32,24 @@ import {
 import { useLogout } from '@/hooks/use-auth'
 import { useMarkNotificationRead, useNotifications, type NotificationItem } from '@/hooks/use-notifications'
 import useAuthStore from '@/stores/auth-store'
+import { GeovaultLogoCompactDark } from '@/components/logo'
+import { cn } from '@/lib/utils'
+
+const mobileCoreNavigation = [
+  { href: '/dashboard', label: '工作台', icon: LayoutDashboard },
+  { href: '/sites', label: '我的網站', icon: Globe },
+  { href: '/published-content', label: '平台文章與品質', icon: FileText },
+  { href: '/monitor/reports', label: 'AI 引用成效', icon: ClipboardCheck },
+]
+
+const mobileAdvancedNavigation = [
+  { href: '/content', label: '內容資產', icon: BookOpen },
+  { href: '/monitor', label: 'AI 問題監測', icon: Eye },
+  { href: '/publish', label: '多平台發佈', icon: Share2 },
+  { href: '/brand-spread', label: '品牌擴散', icon: Sparkles },
+  { href: '/directory', label: '公開品牌目錄', icon: Trophy },
+  { href: '/support', label: '客服中心', icon: MessageSquare },
+]
 
 function formatNotificationTime(createdAt: string) {
   const time = new Date(createdAt).getTime()
@@ -36,6 +72,10 @@ function routeForNotification(item: NotificationItem) {
 
 export default function Header() {
   const router = useRouter()
+  const pathname = usePathname()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const mobileMenuCloseRef = useRef<HTMLButtonElement>(null)
   const user = useAuthStore((s) => s.user)
   const logoutMutation = useLogout()
   const { data: notifications = [], isLoading } = useNotifications(Boolean(user))
@@ -46,6 +86,32 @@ export default function Header() {
     [notifications],
   )
   const avatarChar = user?.name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || '?'
+
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    mobileMenuCloseRef.current?.focus()
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setMobileMenuOpen(false)
+      requestAnimationFrame(() => mobileMenuTriggerRef.current?.focus())
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [mobileMenuOpen])
+
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false)
+    requestAnimationFrame(() => mobileMenuTriggerRef.current?.focus())
+  }
 
   const handleNotificationClick = (item: NotificationItem) => {
     if (!item.read) markRead.mutate(item.id)
@@ -61,7 +127,108 @@ export default function Header() {
   }
 
   return (
-    <header className="h-16 border-b border-white/5 bg-gray-900 flex items-center justify-end px-6 shrink-0">
+    <header className="h-16 border-b border-white/5 bg-gray-900 flex items-center justify-between px-4 sm:px-6 shrink-0 md:justify-end">
+      <div className="flex items-center gap-3 md:hidden">
+        <Button
+          ref={mobileMenuTriggerRef}
+          variant="ghost"
+          size="icon"
+          className="text-slate-300 hover:bg-white/10 hover:text-white"
+          onClick={() => setMobileMenuOpen(true)}
+          aria-label="開啟主選單"
+          aria-expanded={mobileMenuOpen}
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+        <Link href="/dashboard" aria-label="回到工作台">
+          <GeovaultLogoCompactDark className="h-6 w-auto" />
+        </Link>
+      </div>
+
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="主選單">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={closeMobileMenu}
+            aria-label="關閉主選單"
+          />
+          <aside className="absolute inset-y-0 left-0 flex w-[min(86vw,320px)] flex-col border-r border-white/10 bg-slate-950 shadow-2xl">
+            <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
+              <GeovaultLogoCompactDark className="h-7 w-auto" />
+              <Button
+                ref={mobileMenuCloseRef}
+                variant="ghost"
+                size="icon"
+                className="text-slate-400 hover:bg-white/10 hover:text-white"
+                onClick={closeMobileMenu}
+                aria-label="關閉主選單"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="行動版主選單">
+              <p className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">GEO 核心流程</p>
+              <div className="space-y-1">
+                {mobileCoreNavigation.map((item) => {
+                  const active = pathname === item.href || pathname?.startsWith(`${item.href}/`)
+                  const Icon = item.icon
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400',
+                        active ? 'bg-blue-500/15 text-blue-100' : 'text-slate-300 hover:bg-white/8 hover:text-white',
+                      )}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      <Icon className="h-5 w-5" />
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
+
+              <details className="mt-4 border-t border-white/10 pt-3">
+                <summary className="cursor-pointer list-none rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:bg-white/5 hover:text-slate-300">
+                  進階工具
+                </summary>
+                <div className="mt-1 space-y-1">
+                  {mobileAdvancedNavigation.map((item) => {
+                    const active = pathname === item.href || pathname?.startsWith(`${item.href}/`)
+                    const Icon = item.icon
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          'flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400',
+                          active ? 'bg-blue-500/15 text-blue-100' : 'text-slate-400 hover:bg-white/8 hover:text-white',
+                        )}
+                        aria-current={active ? 'page' : undefined}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </details>
+            </nav>
+            <div className="border-t border-white/10 p-3">
+              <Link
+                href="/settings"
+                className="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/8 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <Settings className="h-5 w-5" />
+                帳號與方案設定
+              </Link>
+            </div>
+          </aside>
+        </div>
+      )}
+
       <div className="flex items-center gap-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

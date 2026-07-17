@@ -24,6 +24,7 @@ const MAX_ARTICLE_CHARS = 8000;
 const SOURCE_ARTICLE_LIMIT = 30;
 const MAX_QUALITY_ATTEMPTS = 3;
 const MIN_GEO_QUALITY_SCORE = 82;
+const MIN_OFFICIAL_FACT_CONFIDENCE = 70;
 const OFFICIAL_ARTICLE_STATUSES = ['draft', 'approved', 'export_ready'] as const;
 
 interface SourceArticle {
@@ -47,6 +48,7 @@ export interface OfficialArticleRecommendation {
   firstPartyReadiness: {
     ready: boolean;
     confidenceScore: number;
+    minimumConfidenceScore: number;
     missingFacts: string[];
   };
   dataUsed: {
@@ -325,8 +327,10 @@ export class OfficialSiteContentService {
           }
         : undefined,
       firstPartyReadiness: {
-        ready: this.brandFactService.isReadyForCitationContent(graph),
+        ready: this.brandFactService.isReadyForCitationContent(graph)
+          && graph.confidenceScore >= MIN_OFFICIAL_FACT_CONFIDENCE,
         confidenceScore: graph.confidenceScore,
+        minimumConfidenceScore: MIN_OFFICIAL_FACT_CONFIDENCE,
         missingFacts: graph.missingFacts,
       },
       dataUsed: {
@@ -389,11 +393,15 @@ export class OfficialSiteContentService {
     }
 
     const graph = await this.brandFactService.buildForSite(siteId);
-    if (!this.brandFactService.isReadyForCitationContent(graph)) {
+    if (
+      !this.brandFactService.isReadyForCitationContent(graph)
+      || graph.confidenceScore < MIN_OFFICIAL_FACT_CONFIDENCE
+    ) {
       throw new BadRequestException({
         code: 'FIRST_PARTY_DATA_NOT_READY',
-        message: '官網第一方資料尚未完整，請先補齊品牌資料與知識庫 Q&A',
+        message: `官網第一方資料未達高品質生成門檻（至少 ${MIN_OFFICIAL_FACT_CONFIDENCE}/100），請先補齊品牌資料與知識庫 Q&A`,
         confidenceScore: graph.confidenceScore,
+        minimumConfidenceScore: MIN_OFFICIAL_FACT_CONFIDENCE,
         missingFacts: graph.missingFacts,
       });
     }
@@ -760,6 +768,10 @@ GEO 內容目標：
 - 文章必須先回答讀者問題，再補充背景與步驟，讓 AI 能直接擷取明確答案。
 - 只使用可從客戶第一方資料驗證的品牌、服務、適用對象、限制與聯絡資訊。
 - 使用清楚的 H2/H3、定義、條件、步驟與至少 3 組 FAQ，避免空泛行銷語。
+- H1 後前兩段必須直接說明品牌是誰、提供什麼、適合誰與已知限制；不要用故事或口號開場。
+- 正文至少明確使用兩項第一方事實；FAQ 的問題必須真的出現在正文中，每個答案要完整可獨立引用。
+- Meta Description 需包含品牌名稱與直接價值，控制在 60–180 字；keywords 提供 3–8 個不重複詞組。
+- 禁止「唯一、第一、最佳、保證、一定、大幅提升、100%」等無來源的排名、成效或絕對承諾。
 - 不要提及 Geovault、平台文章、GEO 分數或第三方來源，也不要把檢測分數當成客戶成效宣稱。
 
 最新網站掃描與 AI 引用檢測摘要（僅用於判斷內容重點，不可在文章中捏造或宣稱）：
@@ -777,7 +789,7 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
 {
   "title": "官網文章標題",
   "content": "完整 Markdown 正文，第一行使用 # 標題",
-  "metaDescription": "150 字以內的官網摘要",
+  "metaDescription": "包含品牌名稱、60–180 字的官網摘要",
   "keywords": ["3-8 個官網關鍵字"],
   "faq": [
     { "question": "問題", "answer": "只根據第一方資料回答" }
@@ -810,9 +822,31 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
     const matchedArticleId = similarity.matchedIndex >= 0 ? corpus[similarity.matchedIndex]?.id || null : null;
     const failedReasons: string[] = [];
     const headingCount = (content.match(/^#{2,3}\s+.+/gm) || []).length;
+    const opening = cleanMarkdown(content.replace(/^#\s+.+$/m, '')).slice(0, 600);
     const hasGroundedEntity = [graph.services, graph.industry, graph.positioning, graph.location]
       .filter((value): value is string => Boolean(value))
       .some((value) => normalizeText(plain).includes(normalizeText(value)));
+    const factAnchors = [
+      graph.services,
+      graph.positioning,
+      graph.location,
+      ...graph.targetAudiences,
+      ...graph.notFor,
+    ].filter((value): value is string => Boolean(value && value.trim().length >= 2));
+    const matchedFactAnchors = factAnchors.filter((value) =>
+      normalizeText(plain).includes(normalizeText(value)),
+    ).length;
+    const requiredFactAnchors = Math.min(2, factAnchors.length);
+    const visibleFaqQuestions = (generated.faq || []).filter((faq) =>
+      normalizeText(plain).includes(normalizeText(faq.question)),
+    ).length;
+    const usefulFaq = Boolean(
+      generated.faq
+      && generated.faq.length >= 3
+      && generated.faq.every((faq) => faq.question.trim().length >= 6 && faq.answer.trim().length >= 20),
+    );
+    const keywords = [...new Set((generated.keywords || []).map((keyword) => normalizeText(keyword)).filter(Boolean))];
+    const metaDescription = generated.metaDescription?.trim() || '';
     const hasScanAwareStructure = geoContext.indicators.length === 0
       || /(?:FAQ|常見問題|結構化|可讀|回答|步驟|描述|標題)/i.test(content);
     const checks: Record<string, boolean> = {
@@ -822,11 +856,24 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       hasStructuredSections: headingCount >= 4,
       includesBrandName: normalizeText(plain).includes(normalizeText(siteName)),
       includesGroundedEntity: hasGroundedEntity,
+      hasFactCoverage: requiredFactAnchors === 0 || matchedFactAnchors >= requiredFactAnchors,
+      hasAnswerFirstOpening: normalizeText(opening).includes(normalizeText(siteName))
+        && /(?:提供|協助|適合|服務|產品|專注|是)/.test(opening),
       noPlaceholders: !/(?:TODO|TBD|XXX|\[待補|\{.*?\})/i.test(content),
       noPlatformReferences: !/(?:Geovault|client_daily|平台文章|發布包)/i.test(content),
-      hasFaq: Boolean(generated.faq && generated.faq.length >= 3),
+      hasFaq: usefulFaq,
+      hasVisibleFaq: visibleFaqQuestions >= Math.min(3, generated.faq?.length || 0),
+      hasAudienceBoundary: (graph.targetAudiences.length === 0
+        || graph.targetAudiences.some((value) => normalizeText(plain).includes(normalizeText(value))))
+        && (graph.notFor.length === 0
+          || graph.notFor.some((value) => normalizeText(plain).includes(normalizeText(value)))),
       hasActionableAnswer: /(?:結論|重點|步驟|建議|可以|應該|適合|不適合)/i.test(content),
       hasAiReadableStructure: /(?:常見問題|FAQ|問：|Q[:：])/i.test(content),
+      metaDescriptionReady: metaDescription.length >= 60
+        && metaDescription.length <= 180
+        && normalizeText(metaDescription).includes(normalizeText(siteName)),
+      keywordSetReady: keywords.length >= 3 && keywords.length <= 8,
+      noUnsupportedPromises: !/(?:唯一|第一名|業界第一|最佳選擇|保證|一定會|大幅提升|100\s*%)/i.test(content),
       isScanAware: hasScanAwareStructure,
       belowDuplicateThreshold: similarity.score < DEFAULT_DUPLICATE_THRESHOLD,
     };

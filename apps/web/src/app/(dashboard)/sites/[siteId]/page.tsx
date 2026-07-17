@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -40,13 +40,14 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SiteWorkspaceTabs } from '@/components/layout/site-workspace-tabs'
+import { GeoGrowthPlanPanel } from '@/components/geo/geo-growth-plan'
 import { ScoreGauge } from '@/components/scan/score-gauge'
 import { IndicatorCard } from '@/components/scan/indicator-card'
 import ScanHistoryChart from '@/components/scan/scan-history-chart'
 import { CodeSnippetViewer } from '@/components/fix/code-snippet-viewer'
 import apiClient from '@/lib/api-client'
 import { isBillingRequiredError } from '@/lib/billing-error'
-import { useBrandFactReadiness, useSite, useUpdateSite, useUpdateSiteProfile, type BrandFactReadiness, type SiteProfile } from '@/hooks/use-sites'
+import { useBrandFactReadiness, useGeoGrowthPlan, useSite, useUpdateSite, useUpdateSiteProfile, type BrandFactReadiness, type SiteProfile } from '@/hooks/use-sites'
 import {
   useTriggerScan,
   useRunDeepAnalysis,
@@ -856,6 +857,7 @@ export default function SiteDetailPage() {
 
   const { data: site, isLoading: siteLoading } = useSite(siteId)
   const { data: brandFacts, isLoading: brandFactsLoading } = useBrandFactReadiness(siteId)
+  const growthPlanQuery = useGeoGrowthPlan(siteId)
   const queryClient = useQueryClient()
   const updateSiteMutation = useUpdateSite()
   const [isRenamingSite, setIsRenamingSite] = useState(false)
@@ -865,7 +867,7 @@ export default function SiteDetailPage() {
     isLoading: scansLoading,
     isRefetching: scansRefetching,
   } = useScanHistory(siteId)
-  const triggerScanMutation = useTriggerScan()
+  const { mutateAsync: triggerScan, isPending: isTriggeringScan } = useTriggerScan()
   const autoScanStartedRef = useRef(false)
   const redirectAfterScanRef = useRef(false)
 
@@ -883,6 +885,7 @@ export default function SiteDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['sites'] })
       queryClient.invalidateQueries({ queryKey: ['sites', siteId] })
       queryClient.invalidateQueries({ queryKey: ['scan-results'] })
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] })
       if (redirectAfterScanRef.current) {
         redirectAfterScanRef.current = false
         toast.success('修復後掃描已完成，正在開啟完成報告')
@@ -945,12 +948,12 @@ export default function SiteDetailPage() {
     return scanResults.filter((r) => r.status !== 'pass' || r.score < 90)
   }, [scanResults])
 
-  const handleScan = async (redirectToCompletionReport = false) => {
+  const handleScan = useCallback(async (redirectToCompletionReport = false) => {
     try {
       if (redirectToCompletionReport) {
         redirectAfterScanRef.current = true
       }
-      await triggerScanMutation.mutateAsync(siteId)
+      await triggerScan(siteId)
       toast.success(redirectToCompletionReport ? '修復後重新掃描已啟動，完成後會開啟完成報告' : '掃描已啟動，系統將自動更新結果')
     } catch (err: any) {
       if (redirectToCompletionReport) {
@@ -958,7 +961,7 @@ export default function SiteDetailPage() {
       }
       toast.error(err?.response?.data?.message || '掃描失敗，請稍後再試')
     }
-  }
+  }, [siteId, triggerScan])
 
   const startRenameSite = () => {
     if (!site) return
@@ -994,15 +997,15 @@ export default function SiteDetailPage() {
 
   useEffect(() => {
     if (!shouldAutoScanAfterCmsFix || autoScanStartedRef.current || scansLoading || !scans) return
-    if (hasActiveScan || triggerScanMutation.isPending) {
+    if (hasActiveScan || isTriggeringScan) {
       redirectAfterScanRef.current = true
       return
     }
     autoScanStartedRef.current = true
     handleScan(true)
-  }, [hasActiveScan, scans, scansLoading, shouldAutoScanAfterCmsFix, triggerScanMutation.isPending])
+  }, [handleScan, hasActiveScan, isTriggeringScan, scans, scansLoading, shouldAutoScanAfterCmsFix])
 
-  const isPostFixFlowActive = isAfterCmsFix && (hasActiveScan || triggerScanMutation.isPending || shouldAutoScanAfterCmsFix)
+  const isPostFixFlowActive = isAfterCmsFix && (hasActiveScan || isTriggeringScan || shouldAutoScanAfterCmsFix)
 
   const isLoading = siteLoading || scansLoading
 
@@ -1033,42 +1036,7 @@ export default function SiteDetailPage() {
   const lastScanDate = latestScan?.createdAt
     ? new Date(latestScan.createdAt).toLocaleString('zh-TW')
     : '尚未掃描'
-  const issueCount = actionableIssues.length
   const hasCompletedScan = completedScans.length > 0
-  const nextStep = hasActiveScan
-    ? {
-        title: '正在掃描網站',
-        description: '掃描完成後會自動整理分數、缺失項目與可修復內容。',
-        label: '掃描中...',
-        kind: 'active' as const,
-      }
-    : isAfterCmsFix && hasCompletedScan
-    ? {
-        title: '修復後重新掃描驗證',
-        description: '修復包已送出後，下一步是重新掃描網站，確認 WordPress 是否真的套用了結構化資料與 llms.txt。',
-        label: '開始重新掃描',
-        kind: 'scan' as const,
-      }
-    : !hasCompletedScan
-    ? {
-        title: '先完成第一次掃描',
-        description: '系統會先建立網站的 GEO 分數與缺失清單，後續修復才有依據。',
-        label: '開始第一次掃描',
-        kind: 'scan' as const,
-      }
-    : issueCount > 0
-    ? {
-        title: '依照引導修復缺失項目',
-        description: `目前有 ${issueCount} 個項目需要處理，建議先用引導流程逐步完成。`,
-        label: '開始引導修復',
-        kind: 'guided' as const,
-      }
-    : {
-        title: '補強 AI 可引用的品牌內容',
-        description: '分數已經穩定，下一步是補充品牌事實與問答，提升被 AI 正確引用的機率。',
-        label: '補強知識庫',
-        kind: 'knowledge' as const,
-      }
 
   return (
     <div className="space-y-6">
@@ -1155,35 +1123,6 @@ export default function SiteDetailPage() {
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
-            {nextStep.kind === 'guided' ? (
-              <Link href={`/sites/${siteId}/guided-fix`}>
-                <Button className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto">
-                  <SearchCheck className="h-4 w-4 mr-2" />
-                  {nextStep.label}
-                </Button>
-              </Link>
-            ) : nextStep.kind === 'knowledge' ? (
-              <Link href={`/sites/${siteId}/knowledge`}>
-                <Button className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto">
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  {nextStep.label}
-                </Button>
-              </Link>
-            ) : (
-              <Button
-                className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto"
-                onClick={() => handleScan(isAfterCmsFix)}
-                disabled={hasActiveScan || triggerScanMutation.isPending}
-              >
-                {hasActiveScan || triggerScanMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                )}
-                {hasActiveScan ? '掃描中...' : triggerScanMutation.isPending ? '啟動中...' : nextStep.label}
-              </Button>
-            )}
-
             <details className="group relative">
               <summary className="inline-flex h-10 w-full cursor-pointer list-none items-center justify-center rounded-md border border-white/15 px-4 text-sm font-medium text-white hover:bg-white/10 sm:w-auto">
                 更多工具
@@ -1213,7 +1152,7 @@ export default function SiteDetailPage() {
                 <button
                   type="button"
                   onClick={() => handleScan(false)}
-                  disabled={hasActiveScan || triggerScanMutation.isPending}
+                  disabled={hasActiveScan || isTriggeringScan}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCw className="h-4 w-4 text-blue-300" />
@@ -1225,58 +1164,14 @@ export default function SiteDetailPage() {
         </div>
       </div>
 
-      <Card className="border-blue-500/30">
-        <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-200">
-              建議下一步
-            </p>
-            <h2 className="text-lg font-semibold text-white">{nextStep.title}</h2>
-            <p className="max-w-2xl text-sm text-blue-100/80">{nextStep.description}</p>
-            {nextStep.kind === 'guided' && actionableIssues.length > 0 ? (
-              <div className="mt-3 flex max-w-3xl flex-wrap gap-2">
-                {actionableIssues.slice(0, 6).map((issue) => {
-                  const canAutoFix = issue.autoFixable || fixableIndicators.has(issue.indicator)
-                  return (
-                    <span
-                      key={issue.id}
-                      className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-xs text-blue-50"
-                    >
-                      <StatusIcon status={issue.status} />
-                      <span>{indicatorNames[issue.indicator] || issue.indicator}</span>
-                      <span className={canAutoFix ? 'text-green-300' : 'text-yellow-200'}>
-                        {canAutoFix ? '可自動修復' : '需人工處理'}
-                      </span>
-                    </span>
-                  )
-                })}
-                {actionableIssues.length > 6 ? (
-                  <span className="inline-flex items-center rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-xs text-blue-100/80">
-                    +{actionableIssues.length - 6} 個在下方指標分析
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-          <div className="grid grid-cols-4 gap-2 text-center text-xs text-blue-100/80">
-            {['掃描', '修復', '補內容', '追蹤'].map((step, index) => (
-              <div
-                key={step}
-                className={`rounded-md border px-3 py-2 ${
-                  (nextStep.kind === 'scan' && index === 0) ||
-                  (nextStep.kind === 'guided' && index === 1) ||
-                  (nextStep.kind === 'knowledge' && index === 2) ||
-                  (nextStep.kind === 'active' && index === 0)
-                    ? 'border-blue-300 bg-blue-300/15 text-white'
-                    : 'border-white/10 bg-white/5'
-                }`}
-              >
-                {step}
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <GeoGrowthPlanPanel
+        plan={growthPlanQuery.data}
+        isLoading={growthPlanQuery.isLoading}
+        hasError={growthPlanQuery.isError}
+        onRetry={() => growthPlanQuery.refetch()}
+        onScan={() => handleScan(isAfterCmsFix)}
+        isActionPending={hasActiveScan || isTriggeringScan}
+      />
 
       {isAfterCmsFix ? (
         <Card className="border-green-500/30">
@@ -1290,30 +1185,26 @@ export default function SiteDetailPage() {
             <Button
               className="bg-green-600 text-white hover:bg-green-700"
               onClick={() => handleScan(true)}
-              disabled={hasActiveScan || triggerScanMutation.isPending}
+              disabled={hasActiveScan || isTriggeringScan}
             >
-              {hasActiveScan || triggerScanMutation.isPending ? (
+              {hasActiveScan || isTriggeringScan ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              {hasActiveScan ? '掃描中...' : triggerScanMutation.isPending ? '啟動中...' : '修復後重新掃描'}
+              {hasActiveScan ? '掃描中...' : isTriggeringScan ? '啟動中...' : '修復後重新掃描'}
             </Button>
           </CardContent>
         </Card>
       ) : null}
 
-      {!isPostFixFlowActive ? (
-        <>
-          <BrandFactReadinessSection
-            readiness={brandFacts}
-            isLoading={brandFactsLoading}
-            siteId={siteId}
-            profile={site.profile}
-          />
-
-          <ProfileFactsEditor siteId={siteId} profile={site.profile} />
-        </>
+      {!isPostFixFlowActive && growthPlanQuery.data?.currentStageKey === 'knowledge' ? (
+        <BrandFactReadinessSection
+          readiness={brandFacts}
+          isLoading={brandFactsLoading}
+          siteId={siteId}
+          profile={site.profile}
+        />
       ) : null}
 
       {/* Scan progress banner */}

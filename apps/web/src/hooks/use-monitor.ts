@@ -75,8 +75,9 @@ export function useCreateMonitor() {
       );
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (monitor) => {
       queryClient.invalidateQueries({ queryKey: ['monitors'] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', monitor.siteId] });
     },
   });
 }
@@ -93,8 +94,9 @@ export function useCheckCitation() {
       );
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (monitor) => {
       queryClient.invalidateQueries({ queryKey: ['monitors'] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', monitor.siteId] });
     },
   });
 }
@@ -104,10 +106,12 @@ export function useDeleteMonitor() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiClient.delete(`/monitors/${id}`, { suppressGlobalErrorToast: true });
+      const { data } = await apiClient.delete<Monitor>(`/monitors/${id}`, { suppressGlobalErrorToast: true });
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (monitor) => {
       queryClient.invalidateQueries({ queryKey: ['monitors'] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', monitor.siteId] });
     },
   });
 }

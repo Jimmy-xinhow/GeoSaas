@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { SitesService } from './sites.service';
+import { GeoGrowthPlanService } from './geo-growth-plan.service';
 import { ProfileEnrichmentService } from './profile-enrichment.service';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
@@ -16,6 +17,7 @@ export class SitesController {
   constructor(
     private sitesService: SitesService,
     private profileEnrichment: ProfileEnrichmentService,
+    private geoGrowthPlan: GeoGrowthPlanService,
   ) {}
 
   @Post('admin/:siteId/enrich-profile')
@@ -80,6 +82,15 @@ export class SitesController {
     @CurrentUser('role') role: string,
   ) {
     return this.sitesService.findOne(id, userId, role);
+  }
+
+  @Get(':id/growth-plan')
+  getGrowthPlan(
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.geoGrowthPlan.getPlan(id, userId, role);
   }
 
   @Put(':id')
