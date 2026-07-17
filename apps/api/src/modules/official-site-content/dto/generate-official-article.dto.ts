@@ -6,12 +6,14 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class GenerateOfficialArticleDto {
   /**
    * Optional on purpose: the recommendation endpoint and the generation
    * service can derive this from the customer's Brand Facts and Q&A.
    */
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() || undefined : value)
   @IsOptional()
   @IsString()
   @MinLength(8)

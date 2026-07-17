@@ -186,6 +186,27 @@ describe('OfficialSiteContentService', () => {
     expect(recommendation.dataUsed.qaPairs).toBe(1);
   });
 
+  it('rotates to an unused semantic topic after a failed or existing article', async () => {
+    const firstQuestion = 'Acme 第一次導入前要準備什麼？';
+    const secondQuestion = 'Acme 適合哪些企業與使用情境？';
+    brandFacts.buildForSite.mockResolvedValue({
+      ...graph,
+      qaPairs: [
+        { question: firstQuestion, answer: '請先確認需求、資料與導入條件。' },
+        { question: secondQuestion, answer: '適合需要企業軟體與流程優化的團隊。' },
+      ],
+    });
+    prisma.officialSiteArticle.findMany.mockResolvedValue([
+      { title: '已失敗的文章', targetQuestion: firstQuestion, publishBaseUrl: 'https://acme.example/blog' },
+    ]);
+
+    const recommendation = await service.recommend(siteId, userId, 'USER');
+
+    expect(recommendation.topic).toBe(secondQuestion);
+    expect(recommendation.topic).not.toBe(firstQuestion);
+    expect(recommendation.topic.length).toBeGreaterThanOrEqual(8);
+  });
+
   it('can generate with no topic or full URL by applying the recommendation', async () => {
     const result = await service.generate(siteId, {}, userId, 'USER');
 
@@ -200,6 +221,16 @@ describe('OfficialSiteContentService', () => {
       }),
     );
     expect(prompt).toContain('Acme 提供什麼服務？');
+  });
+
+  it('uses customer input as direction without replacing the complete recommended topic', async () => {
+    const direction = '我想聚焦第一次導入前的準備流程';
+
+    const result = await service.generate(siteId, { topicDirection: direction }, userId, 'USER');
+
+    expect(result.targetQuestion).toBe(graph.qaPairs[0].question);
+    expect(result.targetQuestion).not.toBe(direction);
+    expect(prompt).toContain(direction);
   });
 
   it('uses readable ASCII words for a Chinese-only topic', async () => {

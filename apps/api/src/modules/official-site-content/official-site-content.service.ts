@@ -289,11 +289,29 @@ export class OfficialSiteContentService {
         .filter((value): value is string => Boolean(value))
         .map((value) => normalizeText(value)),
     );
-    const qaTopic = graph.qaPairs
+    const qaTopics = graph.qaPairs
       .map((pair) => pair.question.trim())
-      .find((question) => question.length >= 8 && !existingTopics.has(normalizeText(question)));
+      .filter((question) => question.length >= 8 && question.length <= 180);
+    const brandName = site.name.trim().slice(0, 60) || '品牌';
+    const industryName = site.industry?.trim().slice(0, 40) || '';
+    const topicCandidates = [
+      ...qaTopics,
+      `${brandName}的服務內容、適用對象與合作前準備`,
+      `${brandName}服務導入前需要確認的條件與流程`,
+      `${brandName}常見需求、適用範圍與不適用情況`,
+      `${brandName}${industryName ? ` ${industryName}` : ''}服務選擇與評估指南`,
+      `${brandName}官方服務常見問題與決策重點`,
+      `${brandName}合作流程、聯絡方式與下一步`,
+      `${brandName}適合哪些客戶？服務範圍與判斷方式`,
+    ].filter((candidate, index, all) => (
+      candidate.length >= 8
+      && candidate.length <= 180
+      && all.findIndex((item) => normalizeText(item) === normalizeText(candidate)) === index
+    ));
+    const topic = topicCandidates.find((candidate) => !existingTopics.has(normalizeText(candidate)))
+      || topicCandidates[0]
+      || `${brandName}官方服務與適用對象指南`;
     const weakIndicator = geoContext.indicators.find((item) => item.status === 'fail' || item.status === 'warning');
-    const topic = qaTopic || `${site.name}${site.industry ? ` ${site.industry}` : ''}服務與適用對象指南`;
     const scanDirection = weakIndicator?.suggestion
       ? `同時回應最新網站檢測的「${weakIndicator.indicator}」問題：${weakIndicator.suggestion}`
       : '以最新網站檢測結果確認文章中的品牌與服務敘述一致';
@@ -409,7 +427,7 @@ export class OfficialSiteContentService {
     const geoContext = await this.loadGeoContext(siteId);
     const recommendation = await this.buildRecommendation(site, graph, geoContext);
     const topicDirection = dto.topicDirection?.trim() || undefined;
-    const topic = topicDirection || dto.topic?.trim() || recommendation.topic;
+    const topic = dto.topic?.trim() || recommendation.topic;
     const angle = dto.angle?.trim() || recommendation.angle;
     const sourceArticleId = dto.sourceArticleId || recommendation.sourceArticleId;
     const source = sourceArticleId

@@ -187,9 +187,14 @@ export default function OfficialSiteContentPage() {
       toast.error('請先確認官網發布位置與 SLUG')
       return
     }
+    const normalizedTopic = topic.trim()
+    if (normalizedTopic && Array.from(normalizedTopic).length < 8) {
+      toast.error('主題至少需要 8 個字；也可清空主題，讓系統自動判斷')
+      return
+    }
     generateMutation.mutate(
       {
-        topic: topic.trim(),
+        topic: normalizedTopic || undefined,
         angle: angle.trim() || undefined,
         topicDirection: topicDirection.trim() || undefined,
         sourceArticleId: sourceArticleId || undefined,
@@ -210,14 +215,24 @@ export default function OfficialSiteContentPage() {
   }
 
   const handleChangeTopic = async () => {
-    setSelectedId(null)
-    setPackageRequested(false)
-    setTopic('')
-    setAngle('')
-    setTopicDirection('')
-    setSourceArticleId('')
-    await recommendationQuery.refetch()
-    toast.success('已重新判斷下一個主題方向')
+    try {
+      const result = await recommendationQuery.refetch()
+      if (result.isError || !result.data) throw result.error || new Error('無法取得新主題')
+      const next = result.data
+      if (Array.from(next.topic.trim()).length < 8) throw new Error('系統推薦的主題過短')
+
+      setSelectedId(null)
+      setPackageRequested(false)
+      setTopic(next.topic)
+      setAngle(next.angle)
+      setTopicDirection('')
+      setPublishBaseUrl((value) => value || next.publishBaseUrl)
+      setSlug(next.suggestedSlug)
+      setSourceArticleId(next.sourceArticleId || '')
+      toast.success(`已更換新主題：${next.topic}`)
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || '更換主題失敗，請稍後再試')
+    }
   }
 
   const handleApprove = () => {
@@ -386,7 +401,7 @@ export default function OfficialSiteContentPage() {
                 type="button"
                 className="w-full bg-blue-600 text-white hover:bg-blue-700"
                 onClick={handleGenerate}
-                disabled={generateMutation.isPending || recommendationQuery.isLoading}
+                disabled={generateMutation.isPending || recommendationQuery.isLoading || recommendationQuery.isFetching}
               >
                 {generateMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                 {generateMutation.isPending ? '品質生成與檢查中…' : '生成並執行高品質檢查'}
