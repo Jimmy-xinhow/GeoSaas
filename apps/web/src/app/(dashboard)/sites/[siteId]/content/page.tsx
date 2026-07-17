@@ -81,19 +81,27 @@ export default function SiteContentPage() {
         <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4 text-blue-300" />
-            Geovault 為您發布
+            Geovault 平台文章
             {dailyList && dailyList.total > 0 && (
               <span className="text-xs font-normal text-gray-400">
                 （共 {dailyList.total} 篇）
               </span>
             )}
           </CardTitle>
-          <Link
-            href="/published-content"
-            className="shrink-0 text-xs text-blue-400 hover:underline"
-          >
-            查看全部 →
-          </Link>
+          <div className="flex shrink-0 items-center gap-3 text-xs">
+            <Link
+              href={`/sites/${siteId}/official-content`}
+              className="text-emerald-300 hover:underline"
+            >
+              官網專屬內容
+            </Link>
+            <Link
+              href="/published-content"
+              className="text-blue-400 hover:underline"
+            >
+              Geovault 平台記錄
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           {dailyLoading && !dailyList ? (
@@ -166,7 +174,7 @@ export default function SiteContentPage() {
                   href="/published-content"
                   className="block pt-1 text-center text-xs text-blue-400 hover:underline"
                 >
-                  還有 {dailyList.total - dailyList.items.length} 篇，前往「Geovault 為您發布的內容」查看全部 →
+                  還有 {dailyList.total - dailyList.items.length} 篇，前往 Geovault 平台發布記錄查看全部 →
                 </Link>
               )}
             </div>

@@ -9,6 +9,7 @@ import {
   Eye,
   BookOpen,
   Bot,
+  Globe2,
   ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -27,6 +28,7 @@ const TABS: WorkspaceTab[] = [
   { key: 'overview', label: '總覽', icon: LayoutDashboard, sub: '', match: [] },
   { key: 'fix', label: '修復', icon: Wrench, sub: '/guided-fix', match: ['/guided-fix', '/fix', '/cms-fix'] },
   { key: 'content', label: '內容', icon: FileText, sub: '/content', match: ['/content'] },
+  { key: 'official-content', label: '官網專屬', icon: Globe2, sub: '/official-content', match: ['/official-content'] },
   { key: 'monitor', label: '監控', icon: Eye, sub: '/monitor', match: ['/monitor'] },
   { key: 'knowledge', label: '知識庫', icon: BookOpen, sub: '/knowledge', match: ['/knowledge'] },
   { key: 'crawler', label: '爬蟲追蹤', icon: Bot, sub: '/crawler', match: ['/crawler'] },

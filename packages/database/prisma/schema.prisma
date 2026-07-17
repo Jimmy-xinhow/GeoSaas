@@ -90,6 +90,7 @@ model User {
   supportConversationSummaries SupportConversationSummary[] @relation("SupportConversationSummaryUser")
   orders                       Order[]
   successCases                 GeoSuccessCase[]
+  officialSiteArticles         OfficialSiteArticle[]
   cmsConnections               CmsConnection[]
   requestedFixRuns             SiteFixRun[]                 @relation("SiteFixRunRequester")
   creditTransactions           CreditTransaction[]
@@ -217,6 +218,7 @@ model Site {
   blogArticles                 BlogArticle[]
   badges                       SiteBadge[]
   successCases                 GeoSuccessCase[]
+  officialSiteArticles         OfficialSiteArticle[]
   supportConversations         SupportConversation[]
   supportConversationSummaries SupportConversationSummary[]
   seedSource                   SeedSource?
@@ -738,6 +740,11 @@ model BlogArticle {
   // Success case relation
   successCase GeoSuccessCase?
 
+  // Inspiration metadata only. The official-site article has its own
+  // lifecycle and content storage so platform articles can never be
+  // exported verbatim to a customer's website.
+  officialSiteInspirations OfficialSiteArticle[] @relation("OfficialArticleInspiration")
+
   // Quality runner — every attempt that ultimately landed as this article
   // is linked back here for traceability.
   qualityLogs ArticleQualityLog[]
@@ -748,6 +755,55 @@ model BlogArticle {
   @@index([templateType, createdAt])
   @@index([industrySlug, createdAt])
   @@map("blog_articles")
+}
+
+// First-party article generated for a customer's own official website.
+// This is deliberately separate from BlogArticle (Geovault platform content)
+// to prevent cross-domain duplicate content and accidental publication reuse.
+model OfficialSiteArticle {
+  id     String @id @default(cuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Optional inspiration pointer. Generation receives only source metadata,
+  // never the source BlogArticle body.
+  sourceArticleId String?
+  sourceArticle   BlogArticle? @relation("OfficialArticleInspiration", fields: [sourceArticleId], references: [id], onDelete: SetNull)
+
+  slug            String
+  title           String
+  description     String
+  content         String   @db.Text
+  status          String   @default("draft") // draft | generating | quality_failed | approved | export_ready | archived
+  targetQuestion  String?
+  targetKeywords  String[] @default([])
+  canonicalUrl    String?
+  metaTitle       String?
+  metaDescription String?
+  articleSchema   Json?
+  faqSchema      Json?
+
+  firstPartySnapshot       Json?
+  qualityReport            Json?
+  similarityScore          Float?
+  similarityMatchedArticleId String?
+  rejectionReason          String? @db.Text
+  publishedUrl             String?
+  generatedAt              DateTime?
+  approvedAt               DateTime?
+  exportedAt               DateTime?
+  lastVerifiedAt           DateTime?
+  verificationReport       Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([siteId, slug])
+  @@index([siteId, status, updatedAt])
+  @@index([sourceArticleId])
+  @@map("official_site_articles")
 }
 
 // One row per generation attempt across all 8+ content paths

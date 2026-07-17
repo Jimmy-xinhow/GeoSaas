@@ -42,6 +42,7 @@ import { SupportModule } from './modules/support/support.module';
 import { AffiliateModule } from './modules/affiliate/affiliate.module';
 import { CmsFixModule } from './modules/cms-fix/cms-fix.module';
 import { GuidedFixModule } from './modules/guided-fix/guided-fix.module';
+import { OfficialSiteContentModule } from './modules/official-site-content/official-site-content.module';
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { GuidedFixModule } from './modules/guided-fix/guided-fix.module';
     AffiliateModule,
     CmsFixModule,
     GuidedFixModule,
+    OfficialSiteContentModule,
   ],
   controllers: [HealthController],
   providers: [
