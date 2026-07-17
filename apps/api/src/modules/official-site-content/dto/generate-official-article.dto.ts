@@ -34,11 +34,11 @@ export class GenerateOfficialArticleDto {
   @MaxLength(2048)
   publishBaseUrl?: string;
 
-  /** Optional override. When omitted the service uses its suggested slug. */
+  /** Optional ASCII override. When omitted the service uses its suggested slug. */
   @IsOptional()
   @IsString()
-  @Matches(/^[a-z0-9\u4e00-\u9fff][a-z0-9\u4e00-\u9fff-]*$/i, {
-    message: 'slug 只能包含英數字、中文與連字號',
+  @Matches(/^[a-z0-9][a-z0-9-]*$/i, {
+    message: 'slug 只能包含英文字母、數字與連字號',
   })
   @MaxLength(100)
   slug?: string;

@@ -152,7 +152,8 @@ describe('OfficialSiteContentService', () => {
     expect(recommendation.angle).toContain('企業軟體顧問與導入');
     expect(recommendation.publishBaseUrl).toBe('https://acme.example/blog');
     expect(recommendation.canonicalUrl).toContain('/blog/');
-    expect(recommendation.suggestedSlug).toContain('acme');
+    expect(recommendation.suggestedSlug).toMatch(/^[a-z0-9-]+$/);
+    expect(recommendation.suggestedSlug).not.toMatch(/site-1|acme-?official/);
     expect(recommendation.firstPartyReadiness.ready).toBe(true);
     expect(recommendation.dataUsed.qaPairs).toBe(1);
   });
@@ -171,6 +172,15 @@ describe('OfficialSiteContentService', () => {
       }),
     );
     expect(prompt).toContain('Acme 提供什麼服務？');
+  });
+
+  it('uses readable ASCII words for a Chinese-only topic', async () => {
+    graph.qaPairs = [{ question: '企業軟體導入指南', answer: 'Acme 提供企業軟體顧問與導入服務。' }];
+
+    const recommendation = await service.recommend(siteId, userId, 'USER');
+
+    expect(recommendation.suggestedSlug).toBe('business-software-implementation-guide');
+    expect(recommendation.canonicalUrl).toBe('https://acme.example/blog/business-software-implementation-guide');
   });
 
   it('saves a quality_failed draft when the candidate is too similar', async () => {

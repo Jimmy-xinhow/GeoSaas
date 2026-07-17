@@ -306,7 +306,7 @@ export default function OfficialSiteContentPage() {
                 onChange={(event) => setSlug(event.target.value)}
                 placeholder="official-article"
               />
-              <p className="text-xs leading-5 text-gray-500">正式網址預覽：{canonicalPreview || '等待發布位置與 SLUG'}</p>
+              <p className="text-xs leading-5 text-gray-500">系統會建議可讀的英文 SLUG；只有網址重複時才會加上 `-2`。正式網址預覽：{canonicalPreview || '等待發布位置與 SLUG'}</p>
             </div>
             <details className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-gray-400">
               <summary className="cursor-pointer text-gray-300">查看參考主題（進階，可不修改）</summary>

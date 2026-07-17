@@ -235,7 +235,7 @@ export class OfficialSiteContentService {
       .find((question) => question.length >= 8 && !existingTopics.has(normalizeText(question)));
     const topic = qaTopic || `${site.name}${site.industry ? ` ${site.industry}` : ''}服務與適用對象指南`;
     const angle = `以${graph.services || site.industry || '官方服務'}、適用對象、實際流程與常見疑問回答讀者，僅使用已確認的第一方資料。`;
-    const suggestedSlug = this.buildSuggestedSlug(site.id, topic);
+    const suggestedSlug = this.buildSuggestedSlug(topic);
     const publishBaseUrl = existing.find((article) => article.publishBaseUrl)?.publishBaseUrl
       || this.defaultPublishBaseUrl(site.url);
     const canonicalUrl = this.buildCanonicalFromBase(publishBaseUrl, suggestedSlug);
@@ -745,13 +745,35 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
     };
   }
 
-  private buildSuggestedSlug(siteId: string, title: string): string {
-    const titlePart = title
+  private buildSuggestedSlug(title: string): string {
+    const phraseMap: Array<[RegExp, string]> = [
+      [/常見問題|常見問答|FAQ/gi, 'faq'],
+      [/適用對象/g, 'target-audience'],
+      [/提供什麼服務|提供哪些服務|服務內容/g, 'services'],
+      [/服務/g, 'services'],
+      [/企業/g, 'business'],
+      [/軟體|軟件/g, 'software'],
+      [/導入|導入流程/g, 'implementation'],
+      [/流程/g, 'process'],
+      [/指南|教學/g, 'guide'],
+      [/如何/g, 'how-to'],
+      [/比較/g, 'comparison'],
+      [/選擇/g, 'selection'],
+      [/推薦/g, 'recommendation'],
+      [/價格|費用/g, 'pricing'],
+      [/網站/g, 'website'],
+      [/品牌/g, 'brand'],
+    ];
+    let value = title;
+    for (const [pattern, replacement] of phraseMap) value = value.replace(pattern, ` ${replacement} `);
+    const titlePart = value
       .toLowerCase()
-      .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
+      .normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, 70) || 'article';
-    return `${titlePart}-${siteId.slice(0, 8)}`;
+      .slice(0, 70)
+      .replace(/-+$/g, '');
+    return titlePart || 'official-guide';
   }
 
   private normalizeSlug(value: string): string {
@@ -762,8 +784,8 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       .replace(/-+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 100);
-    if (!slug || !/^[a-z0-9\u4e00-\u9fff][a-z0-9\u4e00-\u9fff-]*$/i.test(slug)) {
-      throw new BadRequestException('slug 只能包含英數字、中文與連字號');
+    if (!slug || !/^[a-z0-9][a-z0-9-]*$/i.test(slug)) {
+      throw new BadRequestException('slug 只能包含英文字母、數字與連字號');
     }
     return slug;
   }
@@ -807,7 +829,8 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
   private getSlugFromUrl(candidate: string): string {
     try {
       const segments = new URL(candidate).pathname.split('/').filter(Boolean);
-      return segments[segments.length - 1] || 'official-article';
+      const lastSegment = segments[segments.length - 1] || 'official-article';
+      return this.buildSuggestedSlug(decodeURIComponent(lastSegment));
     } catch {
       return 'official-article';
     }
