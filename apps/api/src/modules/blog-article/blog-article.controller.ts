@@ -506,7 +506,7 @@ export class BlogArticleController {
   @Get('client-daily/articles/:slug/publish-package')
   @ApiOperation({
     summary:
-      'Build a manual official-site publishing package for one client_daily article. Returns Markdown, portable HTML, JSON-LD, meta tags and crawler verification guidance without publishing anything automatically.',
+      'Reserved for a future official-site adaptation. Directly exporting a Geovault platform article is disabled to prevent cross-domain duplicate content.',
   })
   getClientDailyPublishPackage(
     @Param('slug') slug: string,

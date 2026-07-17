@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertSiteAccess } from '../../common/auth/site-access';
 import { BlogArticleService } from './blog-article.service';
@@ -10,6 +10,10 @@ type ClientDailyDayType =
   | 'thu_audience'
   | 'fri_comparison'
   | 'sat_data_pulse';
+
+// Deliberately disabled until the API generates a distinct official-site
+// adaptation instead of reusing the platform article body.
+const DIRECT_PLATFORM_EXPORT_ENABLED = false;
 
 interface PublishPackageArticle {
   slug: string;
@@ -519,6 +523,16 @@ export class ArticlePublishPackageService {
     userId?: string,
     role?: string,
   ) {
+    // A client_daily article is already a Geovault platform publication. It
+    // must never be exported verbatim to the customer's official site: that
+    // would create a cross-domain duplicate page. Keep this endpoint closed
+    // until a separate official-site adaptation is generated and persisted.
+    if (!DIRECT_PLATFORM_EXPORT_ENABLED) {
+      throw new GoneException(
+        'Direct export is disabled. This Geovault platform article must not be copied verbatim to the customer official site; an official-site adaptation is required first.',
+      );
+    }
+
     const review = await this.blogArticleService.getClientDailyArticleReview(
       slug,
       userId,

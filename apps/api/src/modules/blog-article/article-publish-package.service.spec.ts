@@ -1,5 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, GoneException } from '@nestjs/common';
 import {
+  ArticlePublishPackageService,
   buildManualPublishPackage,
   markdownToPortableHtml,
 } from './article-publish-package.service';
@@ -34,6 +35,14 @@ A: 請查看 Acme 官方網站。
 };
 
 describe('manual article publishing package', () => {
+  it('blocks direct export of a Geovault platform article', async () => {
+    const service = new ArticlePublishPackageService({} as any, {} as any);
+
+    await expect(
+      service.getClientDailyPackage(article.slug, 'https://www.acme.com/knowledge/acme-july', 'user-1'),
+    ).rejects.toBeInstanceOf(GoneException);
+  });
+
   it('escapes raw HTML while keeping a portable article structure', () => {
     const html = markdownToPortableHtml(article.content);
 

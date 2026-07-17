@@ -85,8 +85,8 @@ export default function PublishedContentPage() {
     <div className="space-y-6 w-full max-w-full overflow-hidden">
       <PageHeader
         icon={FileText}
-        title="每週內容與官網發布包"
-        description="Geovault 會依方案維持每週文章生成與公開記錄。文章通過品質檢查後，也可開啟內容頁，複製 Markdown、HTML 與 JSON-LD，自行貼到客戶官方網站。"
+        title="每週內容與平台發布記錄"
+        description="Geovault 會依方案維持每週文章生成與平台公開記錄。平台文章與客戶官網文章必須分開，不能直接複製同一篇全文。"
         actions={
           <Button
             variant="outline"
@@ -137,9 +137,9 @@ export default function PublishedContentPage() {
       {selectedSiteId && (
         <Card className="border-blue-400/20 bg-blue-500/5">
           <CardContent className="p-4 text-sm leading-6 text-blue-50/85">
-            <p className="font-medium text-blue-100">每週文章生成不受官網發布流程影響</p>
+            <p className="font-medium text-blue-100">平台文章與客戶官網內容必須分開</p>
             <p className="mt-1">
-              Geovault 仍會按原方案生成文章。客戶可在已公開文章的內容頁取得手動發布包；一般 CMS 不需修改後端程式，自建網站才需要加入內容檔並重新部署。
+              Geovault 仍會按原方案生成平台文章。請不要把平台全文貼到客戶官網，避免跨站重複內容；官網專用版本必須以客戶第一方資料重新生成。
             </p>
           </CardContent>
         </Card>
@@ -308,7 +308,11 @@ export default function PublishedContentPage() {
                                     <AlertTriangle className="h-3 w-3" />
                                     品質閘門隱藏
                                   </span>
-                                ) : null}
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded border border-blue-400/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-200">
+                                    Geovault 平台文章｜不可直接複製
+                                  </span>
+                                )}
                                 <span className="text-[10px] text-gray-400 flex items-center gap-1">
                                   <Calendar className="h-3 w-3" />
                                   {dateStr} {timeStr}
@@ -372,25 +376,15 @@ export default function PublishedContentPage() {
                                 </Link>
                               )}
                               {publicVisible && (
-                                <>
-                                  <Link
-                                    href={`/published-content/${article.slug}`}
-                                    className="inline-flex min-h-11 min-w-[132px] items-center justify-center rounded-md border border-blue-400/40 px-3 text-xs text-blue-100 transition-colors hover:bg-blue-500/10 hover:text-blue-50"
-                                    aria-label={`查看「${article.title}」的官網發布包`}
-                                  >
-                                    <FileText className="mr-1.5 h-4 w-4" />
-                                    查看發布包
-                                  </Link>
-                                  <a
-                                    href={article.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    aria-label={`開啟「${article.title}」的官網文章`}
-                                    className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-                                  >
-                                    <ExternalLink className="h-4 w-4" />
-                                  </a>
-                                </>
+                                <a
+                                  href={article.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  aria-label={`開啟「${article.title}」的 Geovault 平台文章`}
+                                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </a>
                               )}
                               {!publicVisible ? (
                                 <AlertTriangle className="h-4 w-4 text-amber-300" />

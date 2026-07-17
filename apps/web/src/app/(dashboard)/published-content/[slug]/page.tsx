@@ -45,6 +45,9 @@ export default function PublishedContentReviewPage() {
   const repairMutation = useRepairClientDailyArticleReview(slug);
   const publicationMutation = useSetClientDailyPublication();
   const publicVisible = Boolean(data?.publicVisible);
+  // Do not expose the Geovault platform article as a copy/paste package.
+  // This stays disabled until a separate official-site adaptation is stored.
+  const officialSitePackageEnabled = false;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -53,7 +56,11 @@ export default function PublishedContentReviewPage() {
   const [canonicalDraft, setCanonicalDraft] = useState('');
   const [publishFormat, setPublishFormat] = useState<PublishPackageFormat>('cmsHtml');
   const [completedVerificationIds, setCompletedVerificationIds] = useState<string[]>([]);
-  const publishPackageQuery = useClientDailyPublishPackage(slug, canonicalUrl, publicVisible);
+  const publishPackageQuery = useClientDailyPublishPackage(
+    slug,
+    canonicalUrl,
+    officialSitePackageEnabled && publicVisible,
+  );
   const publishPackage = publishPackageQuery.data;
 
   useEffect(() => {
@@ -290,7 +297,26 @@ export default function PublishedContentReviewPage() {
         </Card>
       )}
 
-      {publicVisible && (
+      {publicVisible && !officialSitePackageEnabled && (
+        <Card className="border-amber-400/30 bg-amber-500/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base text-amber-100">
+              <AlertTriangle className="h-4 w-4" />
+              平台文章不可直接複製到客戶官網
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm leading-6 text-amber-50/85">
+            <p>
+              這篇是 Geovault 平台公開文章。若把全文貼到客戶官網，會形成跨站重複內容，因此目前不提供原文 Markdown、HTML 或 JSON-LD 發布包。
+            </p>
+            <p>
+              客戶官網版本必須以客戶第一方資料重新生成，完成獨立內容與品質檢查後，才會提供官網專用結構化資料。
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {publicVisible && officialSitePackageEnabled && (
         <Card className="border-blue-400/25 bg-blue-500/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
