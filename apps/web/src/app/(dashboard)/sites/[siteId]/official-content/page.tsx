@@ -168,6 +168,82 @@ function getQualitySummary(report: OfficialQualityReport) {
   }
 }
 
+const QUALITY_FIXES: Record<string, { reason: string; recommendation: string }> = {
+  hasVisibleFaq: {
+    reason: 'FAQ 資料中的問題沒有以可見標題完整出現在正文，或只有格式上的問號／空白差異。',
+    recommendation: '在文章最後建立「常見問題 FAQ」段落，至少 3 題都用「### 完整問題？」作為標題，並在下一段放完整答案。',
+  },
+  hasAiReadableStructure: {
+    reason: '文章缺少清楚、可獨立閱讀的 FAQ 問答區塊。',
+    recommendation: '加入「## 常見問題 FAQ」標題，並以「### 問題」加上直接答案的方式整理至少 3 組問答。',
+  },
+  belowDuplicateThreshold: {
+    reason: '內容與既有平台或官網文章過於相似。',
+    recommendation: '換一個讀者問題或角度，加入這個品牌專屬的服務情境、限制與第一方事實後再生成。',
+  },
+  includesGroundedEntity: {
+    reason: '正文沒有使用可驗證的品牌或服務事實。',
+    recommendation: '先補齊品牌資料與知識庫，再讓系統引用已確認的服務、適用對象或限制。',
+  },
+  hasFactCoverage: {
+    reason: '正文引用的第一方品牌事實不足。',
+    recommendation: '補充至少兩項可驗證的服務、適用對象、限制或聯絡資訊，再重新生成。',
+  },
+  noUnsupportedPromises: {
+    reason: '內容出現無法由品牌資料支持的絕對承諾或效果宣稱。',
+    recommendation: '移除保證、第一名、一定會等說法，改為可由第一方資料佐證的描述。',
+  },
+  noUnsupportedSpecificClaims: {
+    reason: '內容出現第一方資料未支持的年限、數字或效果宣稱。',
+    recommendation: '補齊對應的品牌佐證資料，或移除無法驗證的數字、耐久度與效果描述。',
+  },
+}
+
+function getQualityFailureDetails(report: OfficialQualityReport) {
+  const summary = getQualitySummary(report)
+  const failedKeys = [...new Set([
+    ...summary.failedRequiredChecks,
+    ...summary.advisoryFailedChecks,
+    ...(report.failedReasons || []),
+  ])]
+
+  return failedKeys.map((key) => ({
+    key,
+    label: CHECK_LABELS[key] || key,
+    required: summary.requiredChecks.has(key),
+    reason: QUALITY_FIXES[key]?.reason || `「${CHECK_LABELS[key] || key}」未通過。`,
+    recommendation: QUALITY_FIXES[key]?.recommendation || '請依這個檢查項目調整內容後重新生成。',
+  }))
+}
+
+function getGenerationErrorMessage(error: unknown) {
+  const candidate = error as {
+    message?: string
+    response?: {
+      data?: {
+        message?: string | string[]
+        code?: string
+        confidenceScore?: number
+        minimumConfidenceScore?: number
+        missingFacts?: string[]
+      }
+    }
+  }
+  const data = candidate?.response?.data
+
+  if (data?.code === 'FIRST_PARTY_DATA_NOT_READY') {
+    const score = typeof data.confidenceScore === 'number' ? `${data.confidenceScore}/${data.minimumConfidenceScore ?? 70}` : '未達門檻'
+    const missingFacts = Array.isArray(data.missingFacts) && data.missingFacts.length > 0
+      ? `；請補齊：${data.missingFacts.join('、')}`
+      : ''
+    return `品牌第一方資料尚未準備完成（${score}）${missingFacts}`
+  }
+  if (typeof data?.message === 'string' && !/internal server error/i.test(data.message)) return data.message
+  if (Array.isArray(data?.message) && data.message.length > 0) return data.message.join('；')
+  if (candidate?.message && !/^request failed with status code/i.test(candidate.message)) return candidate.message
+  return '生成服務未回傳可用原因，請稍後再試；若持續發生，請聯絡我們並附上操作時間。'
+}
+
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   if (status === 'quality_failed') return 'destructive'
   if (status === 'export_ready') return 'default'
@@ -274,6 +350,12 @@ function ArticleListItem({
           <span>相似度：{typeof article.similarityScore === 'number' ? `${Math.round(article.similarityScore * 100)}%` : '未檢查'}</span>
           <span>更新：{formatDate(article.updatedAt)}</span>
         </div>
+        {article.status === 'quality_failed' && article.rejectionReason && (
+          <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-500/[0.08] px-3 py-2 text-xs leading-5 text-amber-100">
+            <span className="font-semibold">高品質檢查退回原因：</span>
+            {article.rejectionReason}
+          </div>
+        )}
       </button>
       {article.status === 'quality_failed' && (
         <div className="flex justify-end border-t border-white/10 px-3 py-2">
@@ -320,6 +402,10 @@ export default function OfficialSiteContentPage() {
   const selectedArticle = selectedArticleQuery.data
   const qualitySummary = useMemo(
     () => selectedArticle?.qualityReport ? getQualitySummary(selectedArticle.qualityReport) : null,
+    [selectedArticle?.qualityReport],
+  )
+  const qualityFailureDetails = useMemo(
+    () => selectedArticle?.qualityReport ? getQualityFailureDetails(selectedArticle.qualityReport) : [],
     [selectedArticle?.qualityReport],
   )
   const verificationReport = useMemo(() => {
@@ -379,10 +465,14 @@ export default function OfficialSiteContentPage() {
         onSuccess: (article) => {
           setSelectedId(article.id)
           setPackageRequested(false)
-          toast.success(article.status === 'draft' ? '官網專屬文章草稿已生成，請先審核' : '文章已生成，但未通過品質檢查')
+          if (article.status === 'quality_failed') {
+            toast.error(`文章已生成，但高品質檢查未通過：${article.rejectionReason || '請查看下方退回原因與修正方式'}`)
+            return
+          }
+          toast.success('官網專屬文章草稿已生成，請先審核')
         },
-        onError: (error: any) => {
-          toast.error(error?.response?.data?.message || error?.message || '生成失敗，請稍後再試')
+        onError: (error: unknown) => {
+          toast.error(getGenerationErrorMessage(error))
         },
       },
     )
@@ -716,6 +806,9 @@ export default function OfficialSiteContentPage() {
                         ? `總分已達標，但仍有 ${qualitySummary.failedRequiredChecks.length} 項必過條件未通過，因此不能交付。`
                         : `總分尚未達 ${selectedArticle.qualityReport.minimumScore ?? 82} 分，因此不能交付。`}
                     </p>
+                    {selectedArticle.rejectionReason && (
+                      <p className="mt-2 text-amber-50">本次退回原因：{selectedArticle.rejectionReason}</p>
+                    )}
                     {qualitySummary.failedRequiredChecks.length > 0 && (
                       <p className="mt-1">必須修正：{qualitySummary.failedRequiredChecks.map((key) => CHECK_LABELS[key] || key).join('、')}</p>
                     )}
@@ -724,6 +817,22 @@ export default function OfficialSiteContentPage() {
                     )}
                     {qualitySummary.advisoryFailedChecks.length > 0 && (
                       <p className="mt-1 text-amber-100/70">其他待優化：{qualitySummary.advisoryFailedChecks.map((key) => CHECK_LABELS[key] || key).join('、')}</p>
+                    )}
+                    {qualityFailureDetails.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {qualityFailureDetails.map((failure) => (
+                          <div key={failure.key} className="rounded-md border border-amber-300/15 bg-black/10 p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-amber-50">{failure.label}</span>
+                              <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${failure.required ? 'bg-red-400/15 text-red-100' : 'bg-white/10 text-amber-100/70'}`}>
+                                {failure.required ? '必過' : '建議優化'}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-amber-100/90">原因：{failure.reason}</p>
+                            <p className="mt-1 text-emerald-100">怎麼修：{failure.recommendation}</p>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}

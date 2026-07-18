@@ -77,7 +77,7 @@ const QUALITY_REASON_LABELS: Record<string, string> = {
   noPlaceholders: '正文仍有待補資料或佔位符',
   noPlatformReferences: '正文含有 Geovault 或平台內部字樣',
   hasFaq: 'FAQ 少於三組或答案不完整',
-  hasVisibleFaq: 'FAQ 問題沒有完整顯示於正文',
+  hasVisibleFaq: 'FAQ 問題未以可見標題完整列在正文',
   hasAudienceBoundary: '適用對象或不適用限制沒有說清楚',
   hasActionableAnswer: '缺少可執行的直接答案',
   hasAiReadableStructure: '缺少 AI 容易擷取的問答結構',
@@ -1037,7 +1037,7 @@ export class OfficialSiteContentService {
 2. 不要提及 Geovault、client_daily、平台文章、發布包、平台分數或第三方平台。
 3. 不要引用或重現任何平台文章正文；平台資料只用來決定主題方向。
 4. 文章要以客戶官網讀者的實際問題為中心，加入客戶自己的服務情境、適用對象與限制。
-5. 產出清理後至少 1200、目標 1200–1600 字的繁體中文正文，使用 Markdown 標題與段落，FAQ 至少 3 題。不要用重複句灌水；每一段都要提供新的判斷、條件、步驟或第一方事實。
+5. 產出清理後至少 1200、目標 1200–1600 字的繁體中文正文，使用 Markdown 標題與段落。正文最後必須有唯一一個「## 常見問題 FAQ」段落，至少 3 題都要用「### 完整問題？」作為可見標題，下一段放完整答案。faq JSON 欄位中的每一題問題與答案，必須和這個可見 FAQ 段落逐字相同；不能只把 FAQ 放在 JSON 裡。不要用重複句灌水；每一段都要提供新的判斷、條件、步驟或第一方事實。
 6. Markdown 只作為內容結構格式：第一行只能有一個 H1；H2/H3 必須各自獨立成行；粗體只用於短語；清單每項各自一行，確保轉成 CMS HTML 後是正常文章版面。
 7. 第一方資料中的服務、適用對象與不適用限制若有值，正文需各自至少逐字使用一個可驗證短語；不要只用意思相近但無法核對的改寫。
 
@@ -1132,8 +1132,11 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       normalizeText(plain).includes(normalizeText(value)),
     ).length;
     const requiredFactAnchors = Math.min(2, factAnchors.length);
+    // FAQ 題目可能因全形／半形問號、冒號或空白而有格式差異；只要實際
+    // 可見題目語意相同，就不應把完整文章錯誤退回。
+    const normalizedPlain = normalizeVerificationText(plain);
     const visibleFaqQuestions = (generated.faq || []).filter((faq) =>
-      normalizeText(plain).includes(normalizeText(faq.question)),
+      normalizedPlain.includes(normalizeVerificationText(faq.question)),
     ).length;
     const usefulFaq = Boolean(
       generated.faq
@@ -1144,6 +1147,9 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
     const metaDescription = generated.metaDescription?.trim() || '';
     const unsupportedPromiseClaims = extractUnsupportedPromiseClaims(content);
     const unsupportedSpecificClaims = extractUnsupportedSpecificClaims(content, graph);
+    const visibleQuestionHeadingCount = (content.match(
+      /^#{2,3}\s+.*(?:[？?]|什麼|哪些|如何|是否|哪個|多久|為何|原因)/gm,
+    ) || []).length;
     const hasScanAwareStructure = geoContext.indicators.length === 0
       || /(?:FAQ|常見問題|結構化|可讀|回答|步驟|描述|標題)/i.test(content);
     const checks: Record<string, boolean> = {
@@ -1166,7 +1172,8 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
         && (graph.notFor.length === 0
           || factSegments(graph.notFor).some((value) => normalizeText(plain).includes(normalizeText(value)))),
       hasActionableAnswer: /(?:結論|重點|步驟|建議|可以|應該|適合|不適合)/i.test(content),
-      hasAiReadableStructure: /(?:常見問題|FAQ|問：|Q[:：])/i.test(content),
+      hasAiReadableStructure: /(?:常見問題|FAQ|問：|Q[:：])/i.test(content)
+        || visibleQuestionHeadingCount >= 3,
       metaDescriptionReady: metaDescription.length >= 60
         && metaDescription.length <= 180
         && normalizeText(metaDescription).includes(normalizeText(siteName)),
@@ -1237,6 +1244,9 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
         const audience = factSegments(graph.targetAudiences).slice(0, 3).join('、');
         const notFor = factSegments(graph.notFor).slice(0, 3).join('、');
         return `${QUALITY_REASON_LABELS[reason]}${audience ? `；適用對象需包含「${audience}」` : ''}${notFor ? `；不適用限制需包含「${notFor}」` : ''}`;
+      }
+      if (reason === 'hasVisibleFaq' || reason === 'hasAiReadableStructure') {
+        return '請在正文最後建立「## 常見問題 FAQ」段落，至少 3 題都要以「### 完整問題？」作為可見標題，下一段直接放完整答案；這些問題必須與 faq JSON 欄位逐字相同，不能只放在結構化資料裡';
       }
       return QUALITY_REASON_LABELS[reason] || reason;
     });

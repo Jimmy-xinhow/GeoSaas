@@ -477,6 +477,24 @@ describe('OfficialSiteContentService', () => {
     expect(report.unsupportedSpecificClaims).toEqual(expect.arrayContaining(['數年', '防污', '抗刮']));
   });
 
+  it('accepts visible FAQ questions when only terminal punctuation differs', async () => {
+    const contentWithoutQuestionMarks = aiResponse.content
+      .replace('## 常見問題', '## 延伸問答')
+      .replace(/？/g, '');
+    const report = await (service as any).runQualityChecks(
+      siteId,
+      site.name,
+      contentWithoutQuestionMarks,
+      { ...aiResponse, content: contentWithoutQuestionMarks },
+      graph,
+      { latestScanScore: null, latestScanAt: null, indicators: [], latestReportSummary: null },
+    );
+
+    expect(report.checks.hasVisibleFaq).toBe(true);
+    expect(report.checks.hasAiReadableStructure).toBe(true);
+    expect(report.failedRequiredChecks).not.toContain('hasVisibleFaq');
+  });
+
   it('quotes the exact unsupported promise in the next repair instruction', async () => {
     const unsafeSentence = '專業服務將保證更好的效果和持久性';
     const unsafeContent = `${aiResponse.content}\n\n${unsafeSentence}。`;
