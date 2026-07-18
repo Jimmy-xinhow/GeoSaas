@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreditService } from '../billing/credit.service';
@@ -71,6 +71,17 @@ export class OfficialSiteContentController {
     @CurrentUser('role') role: string,
   ) {
     return this.service.findOne(id, siteId, userId, role);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete an official-site article that failed quality checks' })
+  remove(
+    @Param('siteId') siteId: string,
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.remove(id, siteId, userId, role);
   }
 
   @Post(':id/approve')

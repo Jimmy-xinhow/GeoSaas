@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle2, Copy, FileText, Globe2, Loader2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Copy, FileText, Globe2, Loader2, RefreshCw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useParams } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +16,7 @@ import { MarkdownArticlePreview } from '@/components/content/markdown-article-pr
 import { useSite } from '@/hooks/use-sites'
 import {
   useApproveOfficialSiteArticle,
+  useDeleteOfficialSiteArticle,
   useGenerateOfficialSiteArticle,
   useOfficialArticleRecommendation,
   useOfficialPublishPackage,
@@ -151,33 +152,54 @@ function ArticleListItem({
   article,
   active,
   onSelect,
+  onDelete,
+  deleting,
 }: {
   article: OfficialSiteArticle
   active: boolean
   onSelect: () => void
+  onDelete: () => void
+  deleting: boolean
 }) {
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`w-full rounded-xl border p-4 text-left transition-colors ${
+    <div
+      className={`overflow-hidden rounded-xl border transition-colors ${
         active
           ? 'border-blue-400/50 bg-blue-500/10'
           : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate font-medium text-white">{article.title}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">{article.description}</p>
+      <button type="button" onClick={onSelect} className="w-full p-4 text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate font-medium text-white">{article.title}</p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">{article.description}</p>
+          </div>
+          <Badge className="w-fit shrink-0 whitespace-nowrap px-3 py-1" variant={statusVariant(article.status)}>
+            {STATUS_LABELS[article.status] || article.status}
+          </Badge>
         </div>
-        <Badge variant={statusVariant(article.status)}>{STATUS_LABELS[article.status] || article.status}</Badge>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-500">
-        <span>相似度：{typeof article.similarityScore === 'number' ? `${Math.round(article.similarityScore * 100)}%` : '未檢查'}</span>
-        <span>更新：{formatDate(article.updatedAt)}</span>
-      </div>
-    </button>
+        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-500">
+          <span>相似度：{typeof article.similarityScore === 'number' ? `${Math.round(article.similarityScore * 100)}%` : '未檢查'}</span>
+          <span>更新：{formatDate(article.updatedAt)}</span>
+        </div>
+      </button>
+      {article.status === 'quality_failed' && (
+        <div className="flex justify-end border-t border-white/10 px-3 py-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-h-11 text-red-300 hover:bg-red-500/10 hover:text-red-200"
+            onClick={onDelete}
+            disabled={deleting}
+          >
+            {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+            刪除
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -189,6 +211,7 @@ export default function OfficialSiteContentPage() {
   const recommendationQuery = useOfficialArticleRecommendation(siteId)
   const generateMutation = useGenerateOfficialSiteArticle(siteId)
   const approveMutation = useApproveOfficialSiteArticle(siteId)
+  const deleteMutation = useDeleteOfficialSiteArticle(siteId)
   const verifyMutation = useVerifyOfficialSiteArticle(siteId)
 
   const [topic, setTopic] = useState('')
@@ -294,6 +317,21 @@ export default function OfficialSiteContentPage() {
         toast.success('文章已核准，可以取得官網內容包')
       },
       onError: (error: any) => toast.error(error?.response?.data?.message || '核准失敗，請先確認品質檢查結果'),
+    })
+  }
+
+  const handleDeleteFailedArticle = (article: OfficialSiteArticle) => {
+    if (article.status !== 'quality_failed') return
+    if (!window.confirm(`確定要刪除「${article.title}」嗎？刪除後無法復原。`)) return
+
+    deleteMutation.mutate(article.id, {
+      onSuccess: () => {
+        if (selectedId === article.id) setSelectedId(null)
+        setPackageRequested(false)
+        setShowFullPreview(false)
+        toast.success('品質未通過的文章已刪除')
+      },
+      onError: (error: any) => toast.error(error?.response?.data?.message || '刪除失敗，請稍後再試'),
     })
   }
 
@@ -483,6 +521,8 @@ export default function OfficialSiteContentPage() {
                   article={article}
                   active={article.id === selectedId}
                   onSelect={() => { setSelectedId(article.id); setPackageRequested(false) }}
+                  onDelete={() => handleDeleteFailedArticle(article)}
+                  deleting={deleteMutation.isPending && deleteMutation.variables === article.id}
                 />
               ))
             )}
@@ -502,7 +542,9 @@ export default function OfficialSiteContentPage() {
                 <CardTitle className="text-lg text-white">{selectedArticle.title}</CardTitle>
                 <p className="mt-1 text-sm leading-6 text-gray-400">{selectedArticle.description}</p>
               </div>
-              <Badge variant={statusVariant(selectedArticle.status)}>{STATUS_LABELS[selectedArticle.status] || selectedArticle.status}</Badge>
+              <Badge className="w-fit shrink-0 whitespace-nowrap px-3 py-1" variant={statusVariant(selectedArticle.status)}>
+                {STATUS_LABELS[selectedArticle.status] || selectedArticle.status}
+              </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -577,10 +619,20 @@ export default function OfficialSiteContentPage() {
             {selectedArticle.status === 'quality_failed' && (
               <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-50/90">
                 這篇文章已經過最多三次自動優化仍未達到 GEO 高品質門檻，目前不能核准，也不會提供給客戶貼到官網。建議換一個主題方向，或補充品牌第一方資料後再生成。
-                <div className="mt-3">
-                  <Button type="button" variant="outline" onClick={handleChangeTopic} disabled={recommendationQuery.isFetching}>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <Button className="w-full sm:w-auto" type="button" variant="outline" onClick={handleChangeTopic} disabled={recommendationQuery.isFetching}>
                     {recommendationQuery.isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                     換一個主題
+                  </Button>
+                  <Button
+                    className="w-full sm:w-auto"
+                    type="button"
+                    variant="destructive"
+                    onClick={() => handleDeleteFailedArticle(selectedArticle)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                    刪除未通過文章
                   </Button>
                 </div>
               </div>

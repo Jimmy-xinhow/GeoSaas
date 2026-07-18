@@ -509,6 +509,21 @@ export class OfficialSiteContentService {
     return article;
   }
 
+  async remove(id: string, siteId: string, userId: string, role?: string) {
+    await this.assertAccess(siteId, userId, role);
+    const article = await this.prisma.officialSiteArticle.findFirst({
+      where: { id, siteId },
+      select: { id: true, status: true },
+    });
+    if (!article) throw new NotFoundException('Official-site article not found');
+    if (article.status !== 'quality_failed') {
+      throw new BadRequestException('只有品質未通過的文章可以刪除');
+    }
+
+    await this.prisma.officialSiteArticle.delete({ where: { id: article.id } });
+    return { id: article.id, deleted: true };
+  }
+
   async listSources(siteId: string, userId: string, role?: string) {
     await this.assertAccess(siteId, userId, role);
     const sources = await this.prisma.blogArticle.findMany({

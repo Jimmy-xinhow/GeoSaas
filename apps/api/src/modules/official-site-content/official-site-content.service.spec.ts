@@ -52,6 +52,7 @@ describe('OfficialSiteContentService', () => {
         findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
       },
     };
     prisma.site.findUnique
@@ -479,5 +480,34 @@ describe('OfficialSiteContentService', () => {
 
     await expect(service.approve('official-1', siteId, userId, 'USER'))
       .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('deletes a quality_failed article', async () => {
+    prisma.officialSiteArticle.findFirst.mockResolvedValue({
+      id: 'official-1',
+      siteId,
+      status: 'quality_failed',
+    });
+    prisma.officialSiteArticle.delete.mockResolvedValue({ id: 'official-1' });
+
+    await expect(service.remove('official-1', siteId, userId, 'USER')).resolves.toEqual({
+      id: 'official-1',
+      deleted: true,
+    });
+    expect(prisma.officialSiteArticle.delete).toHaveBeenCalledWith({
+      where: { id: 'official-1' },
+    });
+  });
+
+  it('does not delete an article that passed the quality gate', async () => {
+    prisma.officialSiteArticle.findFirst.mockResolvedValue({
+      id: 'official-1',
+      siteId,
+      status: 'draft',
+    });
+
+    await expect(service.remove('official-1', siteId, userId, 'USER'))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.officialSiteArticle.delete).not.toHaveBeenCalled();
   });
 });

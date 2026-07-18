@@ -224,6 +224,24 @@ export function useApproveOfficialSiteArticle(siteId: string) {
   });
 }
 
+export function useDeleteOfficialSiteArticle(siteId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (articleId: string) => {
+      const { data } = await apiClient.delete<{ id: string; deleted: boolean }>(
+        `/sites/${siteId}/official-articles/${articleId}`,
+      );
+      return data;
+    },
+    onSuccess: (_, articleId) => {
+      queryClient.removeQueries({ queryKey: ['official-site-article', siteId, articleId] });
+      queryClient.invalidateQueries({ queryKey: ['official-site-articles', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['official-site-article-recommendation', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['geo-growth-plan', siteId] });
+    },
+  });
+}
+
 export function useOfficialPublishPackage(
   siteId: string,
   articleId: string | null,
