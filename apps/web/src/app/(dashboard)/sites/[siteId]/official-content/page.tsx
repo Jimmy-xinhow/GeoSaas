@@ -225,6 +225,9 @@ function ArticleListItem({
   onDelete: () => void
   deleting: boolean
 }) {
+  const verificationPassed = article.verificationReport?.passed === true
+  const verificationAttempted = Boolean(article.lastVerifiedAt)
+
   return (
     <div
       className={`overflow-hidden rounded-xl border transition-colors ${
@@ -234,16 +237,40 @@ function ArticleListItem({
       }`}
     >
       <button type="button" onClick={onSelect} className="w-full p-4 text-left">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="truncate font-medium text-white">{article.title}</p>
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">{article.description}</p>
           </div>
-          <Badge className="w-fit shrink-0 whitespace-nowrap px-3 py-1" variant={statusVariant(article.status)}>
-            {STATUS_LABELS[article.status] || article.status}
-          </Badge>
+          {verificationPassed ? (
+            <Badge className="w-fit shrink-0 whitespace-nowrap border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-emerald-100 hover:bg-emerald-500/20">
+              <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+              官網已驗證
+            </Badge>
+          ) : verificationAttempted ? (
+            <Badge className="w-fit shrink-0 whitespace-nowrap border border-amber-300/30 bg-amber-500/15 px-3 py-1 text-amber-100 hover:bg-amber-500/20">
+              <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+              驗證未完成
+            </Badge>
+          ) : (
+            <Badge className="w-fit shrink-0 whitespace-nowrap px-3 py-1" variant={statusVariant(article.status)}>
+              {STATUS_LABELS[article.status] || article.status}
+            </Badge>
+          )}
         </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-500">
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-gray-500">
+          {verificationPassed && (
+            <span className="inline-flex items-center gap-1.5 font-medium text-emerald-300">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              已於 {formatDate(article.lastVerifiedAt)} 完成正式網址驗證
+            </span>
+          )}
+          {verificationAttempted && !verificationPassed && (
+            <span className="inline-flex items-center gap-1.5 font-medium text-amber-300">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              請查看未通過原因後重新驗證
+            </span>
+          )}
           <span>相似度：{typeof article.similarityScore === 'number' ? `${Math.round(article.similarityScore * 100)}%` : '未檢查'}</span>
           <span>更新：{formatDate(article.updatedAt)}</span>
         </div>
@@ -621,9 +648,17 @@ export default function OfficialSiteContentPage() {
                 <CardTitle className="text-lg text-white">{selectedArticle.title}</CardTitle>
                 <p className="mt-1 text-sm leading-6 text-gray-400">{selectedArticle.description}</p>
               </div>
-              <Badge className="w-fit shrink-0 whitespace-nowrap px-3 py-1" variant={statusVariant(selectedArticle.status)}>
-                {STATUS_LABELS[selectedArticle.status] || selectedArticle.status}
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                {verificationReport?.passed && (
+                  <Badge className="w-fit shrink-0 whitespace-nowrap border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-emerald-100 hover:bg-emerald-500/20">
+                    <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                    官網已驗證
+                  </Badge>
+                )}
+                <Badge className="w-fit shrink-0 whitespace-nowrap px-3 py-1" variant={statusVariant(selectedArticle.status)}>
+                  {STATUS_LABELS[selectedArticle.status] || selectedArticle.status}
+                </Badge>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
