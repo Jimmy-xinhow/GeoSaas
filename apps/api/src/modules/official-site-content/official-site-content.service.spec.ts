@@ -214,6 +214,102 @@ describe('OfficialSiteContentService', () => {
     expect(result.formats.jsonLd).toContain('FAQPage');
   });
 
+  it('verifies visible article content when author and date metadata separate the heading from the body', async () => {
+    const canonicalUrl = 'https://acme.example/blog/acme-guide';
+    const firstBodyParagraph = aiResponse.content.split('\n\n')[1];
+    prisma.officialSiteArticle.findFirst.mockResolvedValue({
+      id: 'official-1',
+      siteId,
+      title: aiResponse.title,
+      content: aiResponse.content,
+      status: 'export_ready',
+      canonicalUrl,
+      faqSchema: { mainEntity: [] },
+      site,
+    });
+    prisma.officialSiteArticle.update.mockImplementation(async ({ data }: any) => ({
+      id: 'official-1',
+      status: 'export_ready',
+      publishedUrl: data.publishedUrl,
+      lastVerifiedAt: data.lastVerifiedAt,
+      verificationReport: data.verificationReport,
+    }));
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      url: `${canonicalUrl}/`,
+      text: async () => `<!doctype html><html><head>
+        <link rel="canonical" href="${canonicalUrl}/">
+        <meta property="og:title" content="${aiResponse.title}">
+        <script type="application/ld+json">{"@type":"Article"}</script>
+        <script type="application/ld+json">{"@type":"FAQPage"}</script>
+      </head><body>
+        <h1>${aiResponse.title}</h1>
+        <div class="article-meta">作者：Acme 官方品牌 · 2026-07-18</div>
+        <p>${firstBodyParagraph}</p>
+      </body></html>`,
+    } as Response);
+
+    const result = await service.verify('official-1', siteId, { url: canonicalUrl }, userId, 'USER');
+
+    expect(result.verificationReport).toMatchObject({
+      passed: true,
+      checks: expect.objectContaining({
+        reachable: true,
+        canonical: true,
+        articleSchema: true,
+        visibleContent: true,
+        indexable: true,
+      }),
+      failures: [],
+    });
+    expect(indexNow.submitUrl).toHaveBeenCalledWith(canonicalUrl);
+    fetchSpy.mockRestore();
+  });
+
+  it('returns actionable reasons and recommendations for every failed publication check', async () => {
+    const canonicalUrl = 'https://acme.example/blog/acme-guide';
+    prisma.officialSiteArticle.findFirst.mockResolvedValue({
+      id: 'official-1',
+      siteId,
+      title: aiResponse.title,
+      content: aiResponse.content,
+      status: 'export_ready',
+      canonicalUrl,
+      faqSchema: { mainEntity: [] },
+      site,
+    });
+    prisma.officialSiteArticle.update.mockImplementation(async ({ data }: any) => ({
+      id: 'official-1',
+      status: 'export_ready',
+      publishedUrl: data.publishedUrl,
+      lastVerifiedAt: data.lastVerifiedAt,
+      verificationReport: data.verificationReport,
+    }));
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      url: canonicalUrl,
+      text: async () => '<!doctype html><html><head><meta name="robots" content="noindex"></head><body><h1>其他文章</h1></body></html>',
+    } as Response);
+
+    const result = await service.verify('official-1', siteId, { url: canonicalUrl }, userId, 'USER');
+    const report = result.verificationReport as any;
+
+    expect(report.passed).toBe(false);
+    expect(report.summary).toContain('4 項必要檢查');
+    expect(report.failures).toEqual(expect.arrayContaining([
+      expect.objectContaining({ check: 'canonical', required: true, reason: expect.any(String), recommendation: expect.any(String) }),
+      expect.objectContaining({ check: 'articleSchema', required: true, reason: expect.any(String), recommendation: expect.any(String) }),
+      expect.objectContaining({ check: 'visibleContent', required: true, reason: expect.any(String), recommendation: expect.any(String) }),
+      expect.objectContaining({ check: 'indexable', required: true, reason: expect.any(String), recommendation: expect.any(String) }),
+      expect.objectContaining({ check: 'openGraph', required: false, reason: expect.any(String), recommendation: expect.any(String) }),
+      expect.objectContaining({ check: 'faqSchema', required: false, reason: expect.any(String), recommendation: expect.any(String) }),
+    ]));
+    expect(indexNow.submitUrl).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
   it('blocks official-site generation until first-party facts meet the high-quality threshold', async () => {
     brandFacts.buildForSite.mockResolvedValue({
       ...graph,

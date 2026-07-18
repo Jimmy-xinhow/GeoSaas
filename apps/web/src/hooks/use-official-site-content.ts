@@ -52,6 +52,7 @@ export interface OfficialSiteArticle {
   generatedAt?: string | null;
   approvedAt?: string | null;
   lastVerifiedAt?: string | null;
+  verificationReport?: OfficialVerificationReport | null;
   createdAt: string;
   updatedAt: string;
   sourceArticle?: {
@@ -61,6 +62,14 @@ export interface OfficialSiteArticle {
     description: string;
     createdAt: string;
   } | null;
+}
+
+export interface OfficialVerificationFailure {
+  check: string;
+  label: string;
+  required: boolean;
+  reason: string;
+  recommendation: string;
 }
 
 export interface OfficialArticleSource {
@@ -126,6 +135,8 @@ export interface OfficialVerificationReport {
   finalUrl: string | null;
   checks: Record<string, boolean>;
   error?: string | null;
+  failures?: OfficialVerificationFailure[];
+  summary?: string;
   checkedAt: string;
 }
 

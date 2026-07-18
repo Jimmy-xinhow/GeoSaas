@@ -28,6 +28,22 @@ const MAX_QUALITY_ATTEMPTS = 3;
 const MIN_GEO_QUALITY_SCORE = 82;
 const MIN_OFFICIAL_FACT_CONFIDENCE = 70;
 const OFFICIAL_ARTICLE_STATUSES = ['draft', 'approved', 'export_ready'] as const;
+const REQUIRED_VERIFICATION_CHECKS = new Set([
+  'reachable',
+  'canonical',
+  'articleSchema',
+  'visibleContent',
+  'indexable',
+]);
+const VERIFICATION_CHECK_LABELS: Record<string, string> = {
+  reachable: '正式網址可正常讀取',
+  canonical: 'Canonical 網址一致',
+  articleSchema: 'Article 結構化資料完整',
+  visibleContent: '官網可見正文與內容包一致',
+  indexable: '頁面允許搜尋引擎索引',
+  openGraph: 'Open Graph 分享資訊完整',
+  faqSchema: 'FAQ 結構化資料完整',
+};
 const REQUIRED_GEO_CHECKS = [
   'minimumLength',
   'maximumLength',
@@ -196,6 +212,37 @@ function normalizeText(value: string): string {
   return value.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+function normalizeVerificationText(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function verificationBodyExcerpt(content: string, title: string): string {
+  const normalizedTitle = normalizeVerificationText(title);
+  const paragraphs = content
+    .replace(/```[\s\S]*?```/g, ' ')
+    .split(/\n\s*\n/)
+    .map((block) => ({
+      markdown: block.trim(),
+      normalized: normalizeVerificationText(cleanMarkdown(block)),
+    }))
+    .filter((block) => block.normalized.length > 0);
+  const firstBodyParagraph = paragraphs.find((block) => (
+    !block.markdown.startsWith('#')
+    && block.normalized !== normalizedTitle
+    && block.normalized.length >= 24
+  ));
+  if (firstBodyParagraph) return firstBodyParagraph.normalized.slice(0, 64);
+
+  const normalizedContent = normalizeVerificationText(cleanMarkdown(content));
+  const body = normalizedContent.startsWith(normalizedTitle)
+    ? normalizedContent.slice(normalizedTitle.length)
+    : normalizedContent;
+  return body.slice(0, 64);
+}
+
 function factSegments(values: Array<string | null | undefined>): string[] {
   return [...new Set(values
     .filter((value): value is string => Boolean(value?.trim()))
@@ -344,6 +391,7 @@ export class OfficialSiteContentService {
         generatedAt: true,
         approvedAt: true,
         lastVerifiedAt: true,
+        verificationReport: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -819,6 +867,7 @@ export class OfficialSiteContentService {
     let statusCode: number | null = null;
     let finalUrl: string | null = null;
     let error: string | null = null;
+    let detectedCanonical: string | null = null;
 
     try {
       const response = await fetch(verifiedUrl, {
@@ -830,11 +879,13 @@ export class OfficialSiteContentService {
       const html = await response.text();
       const normalizedHtml = html.replace(/\s+/g, ' ');
       const text = this.stripHtml(html);
-      const expectedText = cleanMarkdown(article.content).slice(0, 80);
+      const expectedBodyExcerpt = verificationBodyExcerpt(article.content, article.title);
+      detectedCanonical = this.findCanonical(normalizedHtml);
       checks.reachable = response.ok;
-      checks.canonical = this.findCanonical(normalizedHtml) === verifiedUrl;
+      checks.canonical = this.canonicalUrlsMatch(detectedCanonical, verifiedUrl);
       checks.articleSchema = /application\/ld\+json[\s\S]*?"@type"\s*:\s*"Article"/i.test(html);
-      checks.visibleContent = expectedText.length >= 24 && normalizeText(text).includes(normalizeText(expectedText));
+      checks.visibleContent = expectedBodyExcerpt.length >= 24
+        && normalizeVerificationText(text).includes(expectedBodyExcerpt);
       checks.indexable = !/<meta[^>]+name=["']robots["'][^>]+content=["'][^"']*noindex/i.test(html);
       checks.openGraph = /<meta[^>]+property=["']og:title["']/i.test(html);
       checks.faqSchema = !article.faqSchema || /application\/ld\+json[\s\S]*?"@type"\s*:\s*"FAQPage"/i.test(html);
@@ -843,6 +894,14 @@ export class OfficialSiteContentService {
     }
 
     const requiredPassed = checks.reachable && checks.canonical && checks.articleSchema && checks.visibleContent && checks.indexable;
+    const failures = Object.entries(checks)
+      .filter(([, passed]) => !passed)
+      .map(([check]) => this.buildVerificationFailure(check, {
+        statusCode,
+        error,
+        verifiedUrl,
+        detectedCanonical,
+      }));
     const verificationReport = {
       passed: requiredPassed,
       checkedUrl: verifiedUrl,
@@ -850,6 +909,10 @@ export class OfficialSiteContentService {
       finalUrl,
       checks,
       error,
+      failures,
+      summary: requiredPassed
+        ? '正式網址已通過所有必要檢查。'
+        : `尚有 ${failures.filter((failure) => failure.required).length} 項必要檢查未通過，請依下方原因與修正方式處理。`,
       checkedAt: new Date().toISOString(),
     };
     const updated = await this.prisma.officialSiteArticle.update({
@@ -1400,5 +1463,72 @@ ${JSON.stringify(firstPartySnapshot, null, 2)}
       if (href) return href.replace(/#.*$/, '');
     }
     return null;
+  }
+
+  private canonicalUrlsMatch(actual: string | null, expected: string): boolean {
+    if (!actual) return false;
+    const normalize = (value: string) => {
+      const url = new URL(value);
+      url.hash = '';
+      if (url.pathname !== '/') url.pathname = url.pathname.replace(/\/+$/, '');
+      return url.toString();
+    };
+    try {
+      return normalize(actual) === normalize(expected);
+    } catch {
+      return actual.replace(/\/+$/, '') === expected.replace(/\/+$/, '');
+    }
+  }
+
+  private buildVerificationFailure(
+    check: string,
+    context: {
+      statusCode: number | null;
+      error: string | null;
+      verifiedUrl: string;
+      detectedCanonical: string | null;
+    },
+  ) {
+    const required = REQUIRED_VERIFICATION_CHECKS.has(check);
+    const label = VERIFICATION_CHECK_LABELS[check] || check;
+    const guidance: Record<string, { reason: string; recommendation: string }> = {
+      reachable: {
+        reason: context.error
+          ? `系統無法讀取正式網址：${context.error}`
+          : `正式網址回應 HTTP ${context.statusCode ?? '未知'}，不是可正常讀取的成功狀態。`,
+        recommendation: '確認網址已公開上線、不需要登入，並允許 Geovault 驗證器與一般搜尋爬蟲讀取。',
+      },
+      canonical: {
+        reason: context.detectedCanonical
+          ? `頁面 canonical 為 ${context.detectedCanonical}，與驗證網址 ${context.verifiedUrl} 不一致。`
+          : '頁面未偵測到 canonical，或 canonical 與驗證網址不一致。',
+        recommendation: `在頁面 <head> 加入 <link rel="canonical" href="${context.verifiedUrl}">；網址尾斜線差異可由系統自動容許。`,
+      },
+      articleSchema: {
+        reason: '頁面中找不到可辨識的 Article JSON-LD 結構化資料。',
+        recommendation: '將內容包提供的 Article JSON-LD 放入頁面 <head> 或正文結尾，並保留 application/ld+json 類型。',
+      },
+      visibleContent: {
+        reason: '頁面雖然可以開啟，但在讀者可見文字中找不到這篇官網內容包的正文片段。',
+        recommendation: '確認文章正文已實際發布在 HTML 中，不是只存在圖片、彈窗、登入後內容或僅由阻擋爬蟲的 JavaScript 載入。標題後可正常放作者、日期與摘要。',
+      },
+      indexable: {
+        reason: '頁面含有 noindex 指示，因此搜尋引擎與 AI 搜尋無法把它當成可索引文章。',
+        recommendation: '移除 meta robots 或 X-Robots-Tag 中的 noindex，並確認 robots.txt 沒有封鎖文章路徑。',
+      },
+      openGraph: {
+        reason: '頁面缺少 og:title 等 Open Graph 分享資訊。',
+        recommendation: '加入內容包提供的 Open Graph Meta 標籤，讓分享預覽與內容識別更完整。',
+      },
+      faqSchema: {
+        reason: '文章含有 FAQ，但頁面找不到 FAQPage JSON-LD。',
+        recommendation: '將內容包提供的 FAQ JSON-LD 一併放入頁面，並確保 FAQ 問答也出現在讀者可見正文中。',
+      },
+    };
+    const detail = guidance[check] || {
+      reason: '這個檢查項目未通過。',
+      recommendation: '請依內容包重新檢查頁面設定後再驗證。',
+    };
+    return { check, label, required, ...detail };
   }
 }

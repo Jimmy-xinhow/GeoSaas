@@ -25,6 +25,8 @@ import {
   useVerifyOfficialSiteArticle,
   type OfficialQualityReport,
   type OfficialSiteArticle,
+  type OfficialVerificationFailure,
+  type OfficialVerificationReport,
 } from '@/hooks/use-official-site-content'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -59,6 +61,68 @@ const CHECK_LABELS: Record<string, string> = {
   noUnsupportedSpecificClaims: '無第一方未支持的年限、數據或效果宣稱',
   isScanAware: '已參考網站檢測重點',
   belowDuplicateThreshold: '與既有內容相似度低於門檻',
+}
+
+const VERIFICATION_CHECK_LABELS: Record<string, string> = {
+  reachable: '正式網址可正常讀取',
+  canonical: 'Canonical 網址一致',
+  articleSchema: 'Article 結構化資料完整',
+  visibleContent: '官網可見正文與內容包一致',
+  indexable: '頁面允許搜尋引擎索引',
+  openGraph: 'Open Graph 分享資訊完整',
+  faqSchema: 'FAQ 結構化資料完整',
+}
+
+const REQUIRED_VERIFICATION_CHECKS = new Set([
+  'reachable',
+  'canonical',
+  'articleSchema',
+  'visibleContent',
+  'indexable',
+])
+
+const VERIFICATION_FIXES: Record<string, { reason: string; recommendation: string }> = {
+  reachable: {
+    reason: '系統無法正常讀取這個網址。',
+    recommendation: '確認網址已公開上線、不需要登入，且沒有阻擋搜尋爬蟲或 Geovault 驗證器。',
+  },
+  canonical: {
+    reason: '頁面缺少 canonical，或 canonical 與輸入的正式網址不同。',
+    recommendation: '把內容包提供的 canonical 標籤放進頁面 <head>，並確認網址與目前驗證網址一致。',
+  },
+  articleSchema: {
+    reason: '頁面找不到 Article JSON-LD。',
+    recommendation: '將內容包提供的 Article JSON-LD 放進頁面原始碼，並保留 application/ld+json 類型。',
+  },
+  visibleContent: {
+    reason: '頁面可開啟，但系統在讀者可見文字中找不到內容包的文章正文。',
+    recommendation: '確認完整正文已發布在 HTML 中，而不是只有圖片、登入後內容或被爬蟲阻擋的 JavaScript 內容。',
+  },
+  indexable: {
+    reason: '頁面設定了 noindex，因此搜尋引擎不能收錄。',
+    recommendation: '移除 meta robots 或 X-Robots-Tag 的 noindex，並確認 robots.txt 沒有封鎖文章。',
+  },
+  openGraph: {
+    reason: '頁面缺少 og:title 等分享資訊。',
+    recommendation: '加入內容包提供的 Open Graph Meta 標籤。',
+  },
+  faqSchema: {
+    reason: '文章有 FAQ，但頁面找不到 FAQPage JSON-LD。',
+    recommendation: '加入內容包提供的 FAQ JSON-LD，並保留正文中可見的 FAQ 問答。',
+  },
+}
+
+function getVerificationFailures(report: OfficialVerificationReport): OfficialVerificationFailure[] {
+  if (report.failures?.length) return report.failures
+  return Object.entries(report.checks)
+    .filter(([, passed]) => !passed)
+    .map(([check]) => ({
+      check,
+      label: VERIFICATION_CHECK_LABELS[check] || check,
+      required: REQUIRED_VERIFICATION_CHECKS.has(check),
+      reason: VERIFICATION_FIXES[check]?.reason || '這個檢查項目未通過。',
+      recommendation: VERIFICATION_FIXES[check]?.recommendation || '請依內容包重新檢查頁面後再驗證。',
+    }))
 }
 
 const DEFAULT_REQUIRED_GEO_CHECKS = [
@@ -231,6 +295,15 @@ export default function OfficialSiteContentPage() {
     () => selectedArticle?.qualityReport ? getQualitySummary(selectedArticle.qualityReport) : null,
     [selectedArticle?.qualityReport],
   )
+  const verificationReport = useMemo(() => {
+    const latestResult = verifyMutation.data
+    if (latestResult && latestResult.id === selectedArticle?.id) return latestResult.verificationReport
+    return selectedArticle?.verificationReport ?? null
+  }, [selectedArticle?.id, selectedArticle?.verificationReport, verifyMutation.data])
+  const verificationFailures = useMemo(
+    () => verificationReport ? getVerificationFailures(verificationReport) : [],
+    [verificationReport],
+  )
   const packageQuery = useOfficialPublishPackage(siteId, selectedId, packageRequested)
   const articles = articlesQuery.data ?? []
   const recommendation = recommendationQuery.data
@@ -344,9 +417,15 @@ export default function OfficialSiteContentPage() {
       { articleId: selectedArticle.id, url: verifyUrl.trim() },
       {
         onSuccess: (result) => {
-          toast[result.verificationReport?.passed ? 'success' : 'error'](
-            result.verificationReport?.passed ? '官網內容驗證通過' : '官網已讀取，但仍有必要項目未通過',
-          )
+          if (result.verificationReport?.passed) {
+            toast.success('官網內容驗證通過')
+            return
+          }
+          const failures = getVerificationFailures(result.verificationReport)
+          const requiredLabels = failures
+            .filter((failure) => failure.required)
+            .map((failure) => failure.label)
+          toast.error(`驗證未通過：${requiredLabels.join('、') || '請查看下方檢查結果'}`)
         },
         onError: (error: any) => toast.error(error?.response?.data?.message || '官網驗證失敗'),
       },
@@ -717,13 +796,82 @@ export default function OfficialSiteContentPage() {
                   <p className="mt-1 text-xs leading-5 text-gray-500">系統會讀取正式 HTML，檢查正文、canonical、Article JSON-LD、FAQ Schema、OG 與 noindex 狀態。</p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input value={verifyUrl} onChange={(event) => setVerifyUrl(event.target.value)} placeholder="https://your-domain.com/blog/your-article" />
-                  <Button type="button" variant="outline" onClick={handleVerify} disabled={verifyMutation.isPending} className="shrink-0">
+                  <Input className="min-h-11" value={verifyUrl} onChange={(event) => setVerifyUrl(event.target.value)} placeholder="https://your-domain.com/blog/your-article" />
+                  <Button type="button" variant="outline" onClick={handleVerify} disabled={verifyMutation.isPending} className="min-h-11 w-full shrink-0 sm:w-auto">
                     {verifyMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe2 className="mr-2 h-4 w-4" />}
                     驗證正式網址
                   </Button>
                 </div>
-                {selectedArticle.lastVerifiedAt && <p className="text-xs text-gray-500">上次驗證：{formatDate(selectedArticle.lastVerifiedAt)}；結果請查看文章狀態資料。</p>}
+                {verificationReport && (
+                  <div className={`rounded-xl border p-4 ${
+                    verificationReport.passed
+                      ? 'border-emerald-400/30 bg-emerald-500/[0.08]'
+                      : 'border-amber-400/30 bg-amber-500/[0.08]'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      {verificationReport.passed
+                        ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+                        : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />}
+                      <div className="min-w-0">
+                        <p className={`font-semibold ${verificationReport.passed ? 'text-emerald-100' : 'text-amber-100'}`}>
+                          {verificationReport.passed ? '官網內容驗證通過' : '官網內容尚未通過驗證'}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-gray-300">
+                          {verificationReport.summary || (verificationReport.passed
+                            ? '正式網址已通過所有必要檢查。'
+                            : `仍有 ${verificationFailures.filter((failure) => failure.required).length} 項必要檢查未通過，請依下方方式修正。`)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      {Object.entries(verificationReport.checks).map(([check, passed]) => (
+                        <div key={check} className="flex min-h-11 items-center gap-2 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-xs">
+                          {passed
+                            ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" />
+                            : <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />}
+                          <span className="min-w-0 flex-1 text-gray-200">{VERIFICATION_CHECK_LABELS[check] || check}</span>
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                            REQUIRED_VERIFICATION_CHECKS.has(check)
+                              ? 'bg-red-400/10 text-red-200'
+                              : 'bg-white/5 text-gray-400'
+                          }`}>
+                            {REQUIRED_VERIFICATION_CHECKS.has(check) ? '必要' : '建議'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {verificationFailures.length > 0 && (
+                      <div className="mt-4 space-y-3">
+                        <p className="text-sm font-semibold text-white">未通過原因與修正方式</p>
+                        {verificationFailures.map((failure) => (
+                          <div key={failure.check} className="rounded-lg border border-amber-400/20 bg-black/15 p-3 text-xs leading-5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold text-amber-100">{failure.label}</p>
+                              <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                failure.required ? 'bg-red-400/10 text-red-200' : 'bg-white/5 text-gray-400'
+                              }`}>
+                                {failure.required ? '必須修正' : '建議修正'}
+                              </span>
+                            </div>
+                            <p className="mt-2 break-words text-gray-300"><span className="font-semibold text-white">原因：</span>{failure.reason}</p>
+                            <p className="mt-1 break-words text-gray-300"><span className="font-semibold text-white">怎麼改：</span>{failure.recommendation}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-4 space-y-1 border-t border-white/10 pt-3 text-[11px] leading-5 text-gray-500">
+                      <p className="break-all">檢查網址：{verificationReport.checkedUrl}</p>
+                      {verificationReport.finalUrl && verificationReport.finalUrl !== verificationReport.checkedUrl && (
+                        <p className="break-all">最終網址：{verificationReport.finalUrl}</p>
+                      )}
+                      <p>HTTP 狀態：{verificationReport.statusCode ?? '無回應'} · 檢查時間：{formatDate(verificationReport.checkedAt)}</p>
+                      {verificationReport.error && <p className="break-words text-red-300">讀取錯誤：{verificationReport.error}</p>}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
