@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useIndustryAiRanking } from '@/hooks/use-industry-ai';
+import type { RankingResponse } from '@/hooks/use-industry-ai';
 import { INDUSTRIES } from '@geovault/shared';
 import { Trophy, TrendingUp, Bot, ArrowRight, BarChart3, Crown, Medal } from 'lucide-react';
 import PublicFooter from '@/components/layout/public-footer';
@@ -34,10 +35,16 @@ function RankIcon({ rank }: { rank: number }) {
   return <span className="text-sm font-mono text-gray-400 w-5 text-center">{rank}</span>;
 }
 
-export default function IndustryRankingClient({ params }: { params: { industry: string } }) {
+export default function IndustryRankingClient({
+  params,
+  initialData,
+}: {
+  params: { industry: string };
+  initialData?: RankingResponse;
+}) {
   const { industry } = params;
   const [platform, setPlatform] = useState<string | undefined>(undefined);
-  const { data, isLoading } = useIndustryAiRanking(industry, platform);
+  const { data, isLoading } = useIndustryAiRanking(industry, platform, initialData);
 
   const industryLabel = INDUSTRIES.find((i) => i.value === industry)?.label || industry;
 

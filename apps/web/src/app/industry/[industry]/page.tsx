@@ -1,6 +1,8 @@
 import { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { INDUSTRIES } from '@geovault/shared';
 import IndustryRankingClient from './industry-client';
+import type { RankingResponse } from '@/hooks/use-industry-ai';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
@@ -18,6 +20,19 @@ async function getIndustrySites(industry: string) {
   }
 }
 
+async function getInitialIndustryRanking(industry: string): Promise<RankingResponse | undefined> {
+  try {
+    const res = await fetch(`${API_URL}/api/industry-ai/${encodeURIComponent(industry)}/ranking`, {
+      next: { revalidate: 1800 },
+    });
+    if (!res.ok) return undefined;
+    const json = await res.json();
+    return (json?.data ?? json) as RankingResponse;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -25,6 +40,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const industryLabel =
     INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
+  const sites = await getIndustrySites(params.industry);
   const title = `${industryLabel} AI 引用排行與品牌推薦分析`;
   const description = `${industryLabel}行業的 AI 搜尋推薦排行。查看哪些品牌較常被 ChatGPT、Claude、Perplexity、Gemini、Copilot 推薦。`;
 
@@ -47,6 +63,7 @@ export async function generateMetadata({
       description,
       images: [`${SITE_URL}/opengraph-image`],
     },
+    robots: sites.length > 0 ? { index: true, follow: true } : { index: false, follow: true },
   };
 }
 
@@ -55,7 +72,10 @@ export default async function IndustryRankingPage({
 }: {
   params: { industry: string };
 }) {
+  if (!INDUSTRIES.some((item) => item.value === params.industry)) notFound();
+
   const sites = await getIndustrySites(params.industry);
+  const initialRanking = await getInitialIndustryRanking(params.industry);
   const industryLabel = INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
   const pageJsonLd = {
     '@context': 'https://schema.org',
@@ -86,7 +106,7 @@ export default async function IndustryRankingPage({
       {itemListJsonLd && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
       )}
-      <IndustryRankingClient params={params} />
+      <IndustryRankingClient params={params} initialData={initialRanking} />
       {sites.length > 0 && (
         <section className="bg-gray-50 max-w-5xl mx-auto px-4 pb-16">
           <h2 className="text-xl font-bold text-gray-900 mb-4">{industryLabel} 熱門品牌索引</h2>

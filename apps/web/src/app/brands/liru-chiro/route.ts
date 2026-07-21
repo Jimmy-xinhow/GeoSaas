@@ -65,12 +65,16 @@ export async function GET() {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'public, max-age=3600',
         'Access-Control-Allow-Origin': '*',
+        'X-Robots-Tag': 'noindex, follow',
       },
     });
   } catch {
     return new Response('# 立如整復 — 暫時無法載入', {
       status: 502,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Robots-Tag': 'noindex, follow',
+      },
     });
   }
 }

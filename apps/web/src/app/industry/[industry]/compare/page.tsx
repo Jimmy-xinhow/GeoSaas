@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { INDUSTRIES } from '@geovault/shared';
 import CompareClient from './compare-client';
 
@@ -36,5 +37,7 @@ export default function ComparePage({
 }: {
   params: { industry: string };
 }) {
+  if (!INDUSTRIES.some((item) => item.value === params.industry)) notFound();
+
   return <CompareClient params={params} />;
 }

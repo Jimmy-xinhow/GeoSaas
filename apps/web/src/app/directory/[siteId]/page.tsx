@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { notFound, permanentRedirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import SiteDetailClient from './site-detail-client';
 import type { DirectorySiteDetail } from '@/hooks/use-directory';
 
@@ -95,8 +95,10 @@ export default async function SiteDetailPage({
 }) {
   const { site, status } = await fetchSiteResult(params.siteId);
   if (!site) {
-    if (status === 404) permanentRedirect('/directory');
-    notFound();
+    if (status === 404) notFound();
+    throw new Error(
+      status ? `Directory API returned ${status}` : 'Unable to load directory site',
+    );
   }
 
   const canonical = `${SITE_URL}/directory/${params.siteId}`;

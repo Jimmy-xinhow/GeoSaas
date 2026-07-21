@@ -439,7 +439,7 @@ const steps = [
 const faqItems = [
   { q: '修復程式碼要貼在哪裡？', a: 'JSON-LD 和 FAQ Schema 要貼在你網站 HTML 的 <head> 標籤內。WordPress 到「外觀 > 小工具」或安裝 Insert Headers and Footers 外掛。Webflow 在 Custom Code 區域。Squarespace 到 Settings > Advanced > Code Injection。' },
   { q: 'llms.txt 要放在哪裡？', a: 'llms.txt 需要放在你網站的根目錄，讓 AI 爬蟲可以透過 yourdomain.com/llms.txt 存取。如果你使用 Geovault 的 llms.txt 託管功能，系統會自動幫你生成並託管，不需要自己設定。' },
-  { q: '優化後多久才能被 AI 推薦？', a: '通常完成基礎優化（JSON-LD + llms.txt + 知識庫）後，7-14 天內就能在部分 AI 平台看到改善。完整效果可能需要 1-2 個月，取決於你的行業競爭程度和內容豐富度。' },
+  { q: '優化後多久才能被 AI 推薦？', a: '沒有固定時程。完成基礎優化（JSON-LD + llms.txt + 知識庫）後，仍會受內容品質、平台抓取頻率、品牌資料完整度與行業競爭影響；請持續監測實際 AI 提及與引用變化。' },
   { q: '我有多個分店/品牌，怎麼管理？', a: 'Starter 和 Pro 方案支援最多 3 個網站。每個網站獨立掃描、獨立修復、獨立監控。' },
   { q: '掃描結果的指標是什麼意思？', a: '9 項指標：JSON-LD（結構化資料）、llms.txt（AI 可讀檔）、OG Tags（社群預覽）、Meta Description（頁面描述）、FAQ Schema（問答資料）、標題優化（H1 標籤）、聯絡資訊（地址/電話）、圖片 Alt（圖片說明）、robots.txt AI 政策（是否允許 AI 爬蟲）。' },
   { q: 'GEO 和 SEO 需要分開做嗎？', a: '不需要。GEO 和 SEO 很多工作重疊（結構化資料、Meta Description），做 GEO 優化的同時也會提升 SEO。兩者可以並行。' },

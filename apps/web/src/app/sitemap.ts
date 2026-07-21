@@ -59,8 +59,12 @@ async function fetchSitemapData(): Promise<SitemapData | null> {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [];
-  const now = new Date();
-
+  const emittedUrls = new Set<string>();
+  const addEntry = (entry: MetadataRoute.Sitemap[number]) => {
+    if (emittedUrls.has(entry.url)) return;
+    emittedUrls.add(entry.url);
+    entries.push(entry);
+  };
   // ─── Static pages ───
   const staticPages = [
     { url: '/', priority: 1.0, changeFrequency: 'daily' as const },
@@ -75,7 +79,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
   for (const page of staticPages) {
     const url = page.url === '/' ? BASE_URL : `${BASE_URL}${page.url}`;
-    entries.push({
+    addEntry({
       url,
       lastModified: STATIC_LAST_MODIFIED,
       changeFrequency: page.changeFrequency,
@@ -85,7 +89,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // ─── Static markdown blog posts ───
   for (const post of getAllPosts()) {
-    entries.push({
+    addEntry({
       url: `${BASE_URL}/blog/${post.slug}`,
       lastModified: new Date(post.date),
       changeFrequency: 'monthly',
@@ -113,21 +117,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return latest > 0 ? new Date(latest) : STATIC_LAST_MODIFIED;
   };
 
-  // ─── Industry directory index pages ───
+  if (!data) return entries;
+
+  // Only publish industry landing pages that currently have at least one
+  // indexable brand. Empty industry pages create thin URLs and can be
+  // mistaken for duplicate/soft-404 content by search engines.
   for (const ind of INDUSTRIES) {
-    if (ind.value === 'other') continue;
-    entries.push({
+    if (ind.value === 'other' || !(data.industrySites?.[ind.value]?.length)) continue;
+    addEntry({
       url: `${BASE_URL}/directory/industry/${ind.value}`,
       lastModified: industryLastModified(ind.value),
       changeFrequency: 'weekly',
       priority: 0.7,
     });
-  }
-
-  // ─── Industry AI index/compare pages (always emit, regardless of API) ───
-  for (const ind of INDUSTRIES) {
-    if (ind.value === 'other') continue;
-    entries.push({
+    addEntry({
       url: `${BASE_URL}/industry/${ind.value}`,
       lastModified: industryLastModified(ind.value),
       changeFrequency: 'weekly',
@@ -135,14 +138,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  if (!data) return entries;
-
   // Directory sites + per-brand feeds
   for (const s of data.sites) {
-    const lastModified = s.bestScoreAt ? new Date(s.bestScoreAt) : now;
-    entries.push({
+    addEntry({
       url: `${BASE_URL}/directory/${s.id}`,
-      lastModified,
+      lastModified: s.bestScoreAt ? new Date(s.bestScoreAt) : STATIC_LAST_MODIFIED,
       changeFrequency: 'weekly',
       priority: 0.6,
     });
@@ -150,7 +150,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // DB-backed blog articles
   for (const article of data.blogArticles) {
-    entries.push({
+    addEntry({
       url: `${BASE_URL}/blog/${article.slug}`,
       lastModified: new Date(article.createdAt),
       changeFrequency: 'weekly',
@@ -160,7 +160,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Approved success cases
   for (const c of data.cases) {
-    entries.push({
+    addEntry({
       url: `${BASE_URL}/cases/${c.id}`,
       lastModified: new Date(c.createdAt),
       changeFrequency: 'monthly',

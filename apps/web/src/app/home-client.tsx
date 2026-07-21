@@ -285,7 +285,7 @@ const faqItems = [
   },
   {
     q: '多久能看到效果？',
-    a: '根據我們的案例數據，完成基礎優化（JSON-LD + llms.txt + FAQ Schema）後，通常 7-14 天內就能在部分 AI 平台看到改善。有些品牌在優化後 3 天即被 ChatGPT 推薦。',
+    a: '完成基礎優化（JSON-LD + llms.txt + FAQ Schema）後，成效會受網站內容、平台抓取頻率與品牌資料完整度影響；應以持續監測的實際 AI 提及變化判斷，沒有固定天數保證。',
   },
   {
     q: '我不懂技術，能用 Geovault 嗎？',

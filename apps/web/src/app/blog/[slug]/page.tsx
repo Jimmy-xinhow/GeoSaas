@@ -133,12 +133,14 @@ export default async function BlogPostPage({ params }: Props) {
       res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(params.slug)}`, {
         next: { revalidate: 3600 },
       });
-    } catch {
-      // network / DNS failure
+    } catch (error) {
+      // A transient upstream failure must not be presented to crawlers as a
+      // permanent 404. Let Next render its error boundary instead.
+      throw new Error('Unable to load blog article', { cause: error });
     }
-    if (!res) notFound();
+    if (!res) throw new Error('Unable to load blog article');
     if (res.status === 404) notFound();
-    if (!res.ok) notFound();
+    if (!res.ok) throw new Error(`Blog article API returned ${res.status}`);
     const data = await res.json().catch(() => null);
     resolvedArticle = unwrapArticlePayload(data);
     if (!resolvedArticle) notFound();

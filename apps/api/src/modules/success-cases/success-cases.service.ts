@@ -195,7 +195,7 @@ export class SuccessCasesService {
       where: { id },
       include: {
         user: { select: { name: true } },
-        site: { select: { name: true, url: true, bestScore: true } },
+        site: { select: { name: true, url: true, bestScore: true, isPublic: true } },
         generatedArticle: { select: { slug: true, title: true, content: true } },
       },
     });

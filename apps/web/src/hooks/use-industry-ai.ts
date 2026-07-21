@@ -3,7 +3,7 @@ import apiClient from '@/lib/api-client';
 
 // ─── Types ───
 
-interface RankingSite {
+export interface RankingSite {
   id: string;
   name: string;
   url: string;
@@ -16,7 +16,7 @@ interface RankingSite {
   avgSentiment: number | null;
 }
 
-interface RankingResponse {
+export interface RankingResponse {
   industry: string;
   totalBrands: number;
   avgMentionRate: number;
@@ -91,7 +91,11 @@ interface IndustrySite {
 
 // ─── Hooks ───
 
-export function useIndustryAiRanking(industry: string, platform?: string) {
+export function useIndustryAiRanking(
+  industry: string,
+  platform?: string,
+  initialData?: RankingResponse,
+) {
   return useQuery({
     queryKey: ['industry-ai', 'ranking', industry, platform],
     queryFn: async () => {
@@ -103,6 +107,7 @@ export function useIndustryAiRanking(industry: string, platform?: string) {
       return data;
     },
     enabled: !!industry,
+    initialData: platform ? undefined : initialData,
   });
 }
 

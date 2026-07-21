@@ -319,7 +319,10 @@ export function publicSuccessCaseWhere(where: Record<string, unknown> = {}) {
           {
             site: {
               is: {
-                NOT: siteExclusions,
+                AND: [
+                  { isPublic: true },
+                  { NOT: siteExclusions },
+                ],
               },
             },
           },

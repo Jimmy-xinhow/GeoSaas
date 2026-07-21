@@ -15,6 +15,7 @@ import {
   useDirectory, useIndustryWiki,
   type DirectorySite,
 } from '@/hooks/use-directory';
+import type { IndustryWikiData } from '@/hooks/use-directory';
 import { INDUSTRIES } from '@geovault/shared';
 
 const TIER_CONFIG: Record<string, { label: string; color: string }> = {
@@ -24,13 +25,13 @@ const TIER_CONFIG: Record<string, { label: string; color: string }> = {
   platinum: { label: '白金', color: 'bg-purple-100 text-purple-700' },
 };
 
-export default function IndustryWikiClient() {
+export default function IndustryWikiClient({ initialWiki }: { initialWiki?: IndustryWikiData }) {
   const params = useParams();
   const industry = params.industry as string;
   const [page, setPage] = useState(1);
 
   const industryLabel = INDUSTRIES.find((i) => i.value === industry)?.label || industry;
-  const { data: wiki, isLoading: wikiLoading } = useIndustryWiki(industry);
+  const { data: wiki, isLoading: wikiLoading } = useIndustryWiki(industry, initialWiki);
   const { data: directory, isLoading: dirLoading } = useDirectory({ industry, page, limit: 12 });
 
   return (

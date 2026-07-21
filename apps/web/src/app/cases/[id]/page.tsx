@@ -13,19 +13,19 @@ const PLATFORM_LABELS: Record<string, string> = {
   copilot: 'Copilot',
 };
 
-async function getCaseData(id: string) {
+async function getCaseData(id: string): Promise<{ data: any | null; status: number | null }> {
   try {
     const res = await fetch(`${API_BASE}/api/success-cases/${id}`, {
       next: { revalidate: 3600 },
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { data: null, status: res.status };
     const payload = await res.json();
     if (Object.prototype.hasOwnProperty.call(payload || {}, 'data')) {
-      return payload.data || null;
+      return { data: payload.data || null, status: res.status };
     }
-    return payload;
+    return { data: payload, status: res.status };
   } catch {
-    return null;
+    return { data: null, status: null };
   }
 }
 
@@ -46,7 +46,7 @@ export async function generateMetadata({
 }: {
   params: { id: string };
 }): Promise<Metadata> {
-  const caseData = await getCaseData(params.id);
+  const { data: caseData } = await getCaseData(params.id);
   if (!caseData) return { title: 'GEO 成功案例 | Geovault' };
 
   const platformLabel = PLATFORM_LABELS[caseData.aiPlatform] || caseData.aiPlatform;
@@ -86,8 +86,11 @@ export default async function CaseDetailPage({
 }: {
   params: { id: string };
 }) {
-  const caseData = await getCaseData(params.id);
-  if (!caseData) notFound();
+  const { data: caseData, status } = await getCaseData(params.id);
+  if (!caseData) {
+    if (status === 404) notFound();
+    throw new Error(status ? `Success case API returned ${status}` : 'Unable to load success case');
+  }
 
   const platformLabel = PLATFORM_LABELS[caseData.aiPlatform] || caseData.aiPlatform;
   const canonical = `${SITE_URL}/cases/${params.id}`;

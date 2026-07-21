@@ -87,7 +87,7 @@ const workflow = [
   { step: 3, title: '設計問題集', desc: '按照 40/20/25/15 比例設計 100 題（見下方策略）' },
   { step: 4, title: '首次掃描 + 修復', desc: '掃描 → AI 修復（JSON-LD + llms.txt + FAQ Schema）→ 再掃確認分數提升' },
   { step: 5, title: '收錄目錄', desc: '加入 Geovault 目錄，設為公開，讓 llms-full.txt 包含客戶資料' },
-  { step: 6, title: '等待 7-14 天', desc: 'AI 爬蟲抓取需要時間，這段期間可以持續產出內容' },
+  { step: 6, title: '等待重新抓取並持續監測', desc: 'AI 平台抓取時間不固定，這段期間可以持續產出內容並觀察實際提及變化' },
   { step: 7, title: '首次驗收', desc: '跑驗收報告（100 題 × 5 平台），分析引用率' },
   { step: 8, title: '優化迭代', desc: '引用率低的問題 → 調整問法或補充知識庫 → 再測' },
 ];

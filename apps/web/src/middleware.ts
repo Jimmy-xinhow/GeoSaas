@@ -65,25 +65,6 @@ async function getMissingPublicBlogResponse(pathname: string): Promise<NextRespo
   return null;
 }
 
-async function getMissingPublicRecordRedirect(pathname: string): Promise<string | null> {
-  const directoryMatch = pathname.match(/^\/directory\/([^/]+)$/);
-  if (directoryMatch) {
-    const siteId = directoryMatch[1];
-    if (siteId === 'industries' || siteId === 'industry') return null;
-
-    try {
-      const res = await fetch(`${API_URL}/api/directory/${encodeURIComponent(siteId)}`, {
-        cache: 'no-store',
-      });
-      return res.status === 404 ? '/directory' : null;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
-
 export async function middleware(request: NextRequest, event: NextFetchEvent) {
   if (request.nextUrl.hostname === 'geovault.app') {
     const url = request.nextUrl.clone();
@@ -116,14 +97,6 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const missingBlogResponse = await getMissingPublicBlogResponse(pathname);
   if (missingBlogResponse) {
     return missingBlogResponse;
-  }
-
-  const missingRecordDestination = await getMissingPublicRecordRedirect(pathname);
-  if (missingRecordDestination) {
-    const url = request.nextUrl.clone();
-    url.pathname = missingRecordDestination;
-    url.search = '';
-    return NextResponse.redirect(url, 301);
   }
 
   // ─── Link headers for AI crawlers ───

@@ -192,7 +192,7 @@ export interface IndustryWikiData {
   topSites: { id: string; name: string; url: string; bestScore: number; tier: string | null }[];
 }
 
-export function useIndustryWiki(industry: string) {
+export function useIndustryWiki(industry: string, initialData?: IndustryWikiData) {
   return useQuery({
     queryKey: ['directory', 'industry', industry, 'wiki'],
     queryFn: async () => {
@@ -200,6 +200,7 @@ export function useIndustryWiki(industry: string) {
       return data;
     },
     enabled: !!industry,
+    initialData,
   });
 }
 

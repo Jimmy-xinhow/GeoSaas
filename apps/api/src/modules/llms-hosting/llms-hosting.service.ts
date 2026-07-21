@@ -6,6 +6,7 @@ import { IndexNowService } from '../indexnow/indexnow.service';
 import { emitLlmsFullInvalidated, llmsFullCacheEvents, REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY } from './llms-full-cache';
 import { publicIndexableBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
 import { assertSiteAccess } from '../../common/auth/site-access';
+import { INDUSTRIES } from '@geovault/shared';
 
 const REDIS_TTL_SEC = 21600; // 6 hours
 
@@ -424,7 +425,12 @@ ${faqSection}`;
       industryMap[s.industry] = (industryMap[s.industry] ?? 0) + 1;
     });
     const industryStats = Object.entries(industryMap)
-      .map(([name, count]) => ({ name, count }))
+      .map(([name, count]) => ({
+        name,
+        count,
+        slug: INDUSTRIES.find((industry) => industry.value === name || industry.label === name)?.value,
+      }))
+      .filter((industry) => industry.slug)
       .sort((a, b) => b.count - a.count)
       .slice(0, 15);
 
@@ -512,7 +518,7 @@ ${recentArticles.length > 0
 
 ## Industry Index
 ${industryStats.length > 0
-  ? industryStats.map((i) => `- ${i.name}: ${i.count} brands, directory ${webUrl}/directory/industry/${i.name}`).join('\n')
+  ? industryStats.map((i) => `- ${i.name}: ${i.count} brands, directory ${webUrl}/directory/industry/${encodeURIComponent(i.slug!)}`).join('\n')
   : '- No industry data available'}
 
 ---

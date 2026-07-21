@@ -1,6 +1,8 @@
 import { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { INDUSTRIES } from '@geovault/shared';
 import IndustryWikiClient from './industry-wiki-client';
+import type { IndustryWikiData } from '@/hooks/use-directory';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
@@ -19,6 +21,19 @@ async function getIndustryDirectorySnapshot(industry: string) {
   }
 }
 
+async function getInitialIndustryWiki(industry: string): Promise<IndustryWikiData | undefined> {
+  try {
+    const res = await fetch(`${API_URL}/api/directory/industry/${encodeURIComponent(industry)}/wiki`, {
+      next: { revalidate: 1800 },
+    });
+    if (!res.ok) return undefined;
+    const json = await res.json();
+    return (json?.data ?? json) as IndustryWikiData;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -26,6 +41,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const industryLabel =
     INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
+  const sites = await getIndustryDirectorySnapshot(params.industry);
   const title = `${industryLabel} GEO 與 AI 搜尋優化完整指南`;
   const description = `${industryLabel}行業的 AI 搜尋優化完整指南。查看行業平均 GEO 分數、品牌排行、指標通過率與 AI 可讀內容建議。`;
 
@@ -48,11 +64,15 @@ export async function generateMetadata({
       description,
       images: [OG_IMAGE],
     },
+    robots: sites.length > 0 ? { index: true, follow: true } : { index: false, follow: true },
   };
 }
 
 export default async function IndustryWikiPage({ params }: { params: { industry: string } }) {
+  if (!INDUSTRIES.some((item) => item.value === params.industry)) notFound();
+
   const sites = await getIndustryDirectorySnapshot(params.industry);
+  const initialWiki = await getInitialIndustryWiki(params.industry);
   const industryLabel = INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
   const pageJsonLd = {
     '@context': 'https://schema.org',
@@ -83,7 +103,7 @@ export default async function IndustryWikiPage({ params }: { params: { industry:
       {itemListJsonLd && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
       )}
-      <IndustryWikiClient />
+      <IndustryWikiClient initialWiki={initialWiki} />
       {sites.length > 0 && (
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
           <h2 className="text-xl font-bold text-gray-900 mb-4">{industryLabel} 品牌索引快照</h2>

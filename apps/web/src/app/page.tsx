@@ -25,11 +25,6 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: HOME_URL,
-    languages: {
-      'zh-TW': HOME_URL,
-      en: `${SITE_URL}/en`,
-      ja: `${SITE_URL}/ja`,
-    },
   },
   openGraph: {
     title: 'Geovault — AI 搜尋優化平台與代營運服務',
@@ -105,7 +100,7 @@ const jsonLdFaq = {
       name: '多久能看到 GEO 優化效果？',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: '根據我們的案例數據，完成基礎優化（JSON-LD + llms.txt + FAQ Schema）後，通常 7-14 天內就能在 AI 搜尋中看到改善。部分品牌在優化後 3 天即被 ChatGPT 推薦。',
+        text: '完成基礎優化（JSON-LD + llms.txt + FAQ Schema）後，成效會受網站內容、平台抓取頻率與品牌資料完整度影響；應以持續監測的實際 AI 提及變化判斷，沒有固定天數保證。',
       },
     },
     {
@@ -227,7 +222,7 @@ const jsonLdDataset = {
   '@type': 'Dataset',
   name: 'Geovault AI Brand Directory',
   description:
-    'A comprehensive dataset of 600+ brand AI readability scores across 22 industries in Taiwan/APAC. Each brand is scored on 9 AI-friendliness indicators.',
+    'A public directory of brand AI readability scores across Taiwan/APAC. Each brand is scored on 9 AI-friendliness indicators.',
   url: `${SITE_URL}/directory`,
   license: `${SITE_URL}/guide`,
   creator: { '@type': 'Organization', name: 'Geovault', url: SITE_URL },
