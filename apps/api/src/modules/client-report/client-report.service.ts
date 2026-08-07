@@ -15,6 +15,13 @@ interface QueryItem {
   question: string;
 }
 
+interface SiteProfileForQuerySet {
+  services?: unknown;
+  location?: unknown;
+  targetAudience?: unknown;
+  targetAudiences?: unknown;
+}
+
 interface ReportResult {
   question: string;
   category: string;
@@ -131,10 +138,107 @@ export class ClientReportService implements OnModuleInit {
 
   /** Get all query sets for a site */
   async getQuerySets(siteId: string) {
+    await this.ensureClientQuerySet(siteId);
+
     return this.prisma.clientQuerySet.findMany({
       where: { siteId },
       include: { reports: { orderBy: { createdAt: 'desc' }, take: 1 } },
     });
+  }
+
+  /**
+   * Client sites need a baseline acceptance set before the first report can
+   * run. Older client records were created before ClientQuerySet became the
+   * acceptance-report source, so create it lazily from persisted brand facts
+   * and FAQ questions when the report page is first opened.
+   */
+  private async ensureClientQuerySet(siteId: string): Promise<void> {
+    const existing = await this.prisma.clientQuerySet.findFirst({
+      where: { siteId },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        isClient: true,
+        profile: true,
+        qas: {
+          select: { question: true, category: true },
+          orderBy: { sortOrder: 'asc' },
+          take: 20,
+        },
+      },
+    });
+
+    // Staff can inspect any site, but only paid/client sites receive an
+    // automatically generated acceptance set.
+    if (!site?.isClient) return;
+
+    const profile = (site.profile && typeof site.profile === 'object' && !Array.isArray(site.profile))
+      ? site.profile as SiteProfileForQuerySet
+      : {};
+    const services = this.firstProfileValue(profile.services);
+    const location = this.firstProfileValue(profile.location);
+    const audience = this.firstProfileValue(profile.targetAudience ?? profile.targetAudiences);
+    const querySetName = `${site.name} AI 驗收問題集`;
+
+    const baseline: QueryItem[] = [
+      { category: 'brand', question: `${site.name} 是什麼品牌，主要提供哪些服務？` },
+      { category: 'service', question: `${site.name} 最具代表性的服務或專長是什麼？` },
+      { category: 'local', question: `${site.name} 主要服務哪些地區${location ? `，例如${location}` : ''}？` },
+      { category: 'audience', question: `${site.name} 適合哪些有需求的客群${audience ? `，例如${audience}` : ''}？` },
+      { category: 'comparison', question: `如果要比較同類品牌，${site.name} 的特色與差異是什麼？` },
+      { category: 'decision', question: `什麼情況下可以考慮選擇${site.name}？` },
+      { category: 'contact', question: `如何透過官方網站或公開資訊聯繫${site.name}？` },
+      { category: 'service', question: `${site.name} 提供的${services || '主要'}服務，消費者通常會關心哪些事項？` },
+    ];
+
+    const faqQuestions = site.qas
+      .map((qa) => ({
+        category: qa.category || 'faq',
+        question: qa.question.trim(),
+      }))
+      .filter((qa) => qa.question.length >= 5);
+
+    const queries = Array.from(
+      new Map([...baseline, ...faqQuestions].map((query) => [query.question, query])).values(),
+    ).slice(0, 20);
+
+    if (queries.length === 0) return;
+
+    // Re-check immediately before create so a second request that arrived
+    // while the site/FAQ query was running does not create a duplicate set.
+    const created = await this.prisma.clientQuerySet.findFirst({
+      where: { siteId },
+      select: { id: true },
+    });
+    if (created) return;
+
+    await this.prisma.clientQuerySet.create({
+      data: {
+        siteId: site.id,
+        name: querySetName,
+        queries: queries as any,
+      },
+    });
+    this.logger.log(`Created baseline acceptance query set for client site ${site.id} (${queries.length} questions)`);
+  }
+
+  private firstProfileValue(value: unknown): string | undefined {
+    if (typeof value === 'string') {
+      const first = value.split(',').map((part) => part.trim()).find(Boolean);
+      return first?.slice(0, 80);
+    }
+    if (Array.isArray(value)) {
+      const first = value.map((part) => String(part).trim()).find(Boolean);
+      return first?.slice(0, 80);
+    }
+    return undefined;
   }
 
   /** Run a full report: test all questions against all 5 platforms
