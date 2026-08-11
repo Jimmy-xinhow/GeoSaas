@@ -213,4 +213,48 @@ describe('ClientReportService acceptance query sets', () => {
     expect(result).toBe(existing);
     expect(prisma.clientQuerySet.update).not.toHaveBeenCalled();
   });
+
+  it('resumes a recent durable partial report from persisted checks on startup', async () => {
+    const persisted = [{
+      question: qaItems[0].question,
+      category: qaItems[0].category,
+      platform: 'CHATGPT',
+      mentioned: false,
+      position: null,
+      response: 'persisted',
+    }];
+    const update = jest.fn().mockResolvedValue({});
+    const prisma = {
+      monitorReport: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: 'partial-report',
+          status: 'failed',
+          expectedChecks: 500,
+          querySetVersion: 2,
+          querySnapshot: qaItems,
+          results: persisted,
+          summary: null,
+          completedAt: null,
+          site: { id: 'site-1', name: 'Client', url: 'https://example.com' },
+          querySet: { version: 2, queries: qaItems },
+        }]),
+        update,
+      },
+    };
+    const reportService = createService(prisma);
+    (reportService as any).executeReport = jest.fn().mockResolvedValue(undefined);
+
+    await reportService.onModuleInit();
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'partial-report' },
+      data: { status: 'running' },
+    });
+    expect((reportService as any).executeReport).toHaveBeenCalledWith(
+      'partial-report',
+      { id: 'site-1', name: 'Client', url: 'https://example.com' },
+      qaItems,
+      persisted,
+    );
+  });
 });
