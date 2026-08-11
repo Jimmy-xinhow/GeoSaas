@@ -58,14 +58,14 @@ jobs:
 
       # ── Typecheck ────────────────────────────────────────────
       - name: Typecheck (apps/api)
-        run: pnpm --filter @geo-saas/api exec tsc --noEmit
+        run: pnpm --filter @geovault/api --fail-if-no-match exec tsc --noEmit
 
       - name: Typecheck (apps/web)
-        run: pnpm --filter @geo-saas/web exec tsc --noEmit
+        run: pnpm --filter @geovault/web --fail-if-no-match exec tsc --noEmit
 
       # ── Test ─────────────────────────────────────────────────
       - name: Test (apps/api)
-        run: pnpm --filter @geo-saas/api test -- --passWithNoTests --ci
+        run: pnpm --filter @geovault/api --fail-if-no-match test --runInBand --ci
 
       # ── Build ────────────────────────────────────────────────
       - name: Build
@@ -101,13 +101,19 @@ jobs:
         run: pnpm db:generate
 
       - name: Install Playwright browsers
-        run: pnpm --filter @geo-saas/web exec playwright install --with-deps chromium
+        run: pnpm --filter @geovault/web --fail-if-no-match exec playwright install --with-deps chromium
 
       - name: Build API
-        run: pnpm --filter @geo-saas/api build
+        run: pnpm --filter @geovault/api --fail-if-no-match build
+
+      - name: Build web
+        run: pnpm --filter @geovault/web --fail-if-no-match build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_PUBLIC_SITE_URL: http://localhost:3001
 
       - name: Start API server
-        run: pnpm --filter @geo-saas/api start:prod &
+        run: pnpm --filter @geovault/api --fail-if-no-match start:prod > /tmp/geovault-api.log 2>&1 &
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           REDIS_HOST: ${{ secrets.REDIS_HOST }}
@@ -118,8 +124,28 @@ jobs:
           PORT: 4000
           NODE_ENV: test
 
+      - name: Start web server
+        run: pnpm --filter @geovault/web --fail-if-no-match start -p 3001 > /tmp/geovault-web.log 2>&1 &
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_PUBLIC_SITE_URL: http://localhost:3001
+
+      - name: Wait for E2E servers
+        shell: bash
+        run: |
+          for attempt in {1..45}; do
+            if curl --fail --silent http://localhost:4000/api/health >/dev/null \
+              && curl --fail --silent http://localhost:3001 >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/geovault-api.log || true
+          cat /tmp/geovault-web.log || true
+          exit 1
+
       - name: Run E2E tests
-        run: pnpm --filter @geo-saas/web test:e2e
+        run: pnpm --filter @geovault/web --fail-if-no-match test:e2e
         env:
           E2E_BASE_URL: http://localhost:3001
           NEXT_PUBLIC_API_URL: http://localhost:4000

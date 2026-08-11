@@ -7,6 +7,7 @@ import RelatedArticles from './article-client';
 import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 import { extractHeadings, markdownToHtml } from './markdown';
+import { decodeUrlPathSegmentOnce, encodeUrlPathSegmentOnce } from '@geovault/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
@@ -45,7 +46,11 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const staticPost = getPost(params.slug);
+  const normalizedSlug = decodeUrlPathSegmentOnce(params.slug);
+  const encodedSlug = encodeUrlPathSegmentOnce(params.slug);
+  if (!normalizedSlug || !encodedSlug) notFound();
+
+  const staticPost = getPost(normalizedSlug);
   if (staticPost) {
     return {
       title: staticPost.title,
@@ -57,16 +62,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         publishedTime: staticPost.date,
         authors: ['Geovault'],
         siteName: 'Geovault',
-        url: `${SITE_URL}/blog/${params.slug}`,
+        url: `${SITE_URL}/blog/${encodedSlug}`,
         images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
       },
       twitter: { card: 'summary_large_image', title: staticPost.title, description: staticPost.description, images: [`${SITE_URL}/opengraph-image`] },
-      alternates: { canonical: `${SITE_URL}/blog/${params.slug}` },
+      alternates: { canonical: `${SITE_URL}/blog/${encodedSlug}` },
     };
   }
 
   try {
-    const res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(params.slug)}`, { next: { revalidate: 3600 } });
+    const res = await fetch(`${API_URL}/api/blog/articles/${encodedSlug}`, { next: { revalidate: 3600 } });
+    if (res.status === 404) notFound();
     if (res.ok) {
       const data = await res.json();
       const article = unwrapArticlePayload(data);
@@ -81,15 +87,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             publishedTime: article.createdAt,
             authors: ['Geovault'],
             siteName: 'Geovault',
-            url: `${SITE_URL}/blog/${params.slug}`,
+            url: `${SITE_URL}/blog/${encodeURIComponent(article.slug)}`,
             images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
           },
           twitter: { card: 'summary_large_image', title: article.title, description: article.description?.slice(0, 160), images: [`${SITE_URL}/opengraph-image`] },
-          alternates: { canonical: `${SITE_URL}/blog/${params.slug}` },
+          alternates: { canonical: `${SITE_URL}/blog/${encodeURIComponent(article.slug)}` },
         };
       }
     }
-  } catch {}
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'digest' in error &&
+      error.digest === 'NEXT_NOT_FOUND'
+    ) {
+      throw error;
+    }
+  }
 
   return { title: 'Blog — Geovault' };
 }
@@ -120,7 +135,11 @@ function extractFaqJsonLd(content: string) {
 export const dynamic = 'force-dynamic';
 
 export default async function BlogPostPage({ params }: Props) {
-  const staticPost = getPost(params.slug);
+  const normalizedSlug = decodeUrlPathSegmentOnce(params.slug);
+  const encodedSlug = encodeUrlPathSegmentOnce(params.slug);
+  if (!normalizedSlug || !encodedSlug) notFound();
+
+  const staticPost = getPost(normalizedSlug);
 
   let resolvedArticle: any = null;
   if (!staticPost) {
@@ -130,7 +149,7 @@ export default async function BlogPostPage({ params }: Props) {
     // → user sees the 404 page instead of the redirect.
     let res: Response | null = null;
     try {
-      res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(params.slug)}`, {
+      res = await fetch(`${API_URL}/api/blog/articles/${encodedSlug}`, {
         next: { revalidate: 3600 },
       });
     } catch (error) {
@@ -148,13 +167,13 @@ export default async function BlogPostPage({ params }: Props) {
 
   // Permanent legacy-slug redirect. permanentRedirect() throws NEXT_REDIRECT — placed
   // OUTSIDE any try/catch so the exception bubbles to Next's router.
-  if (resolvedArticle && resolvedArticle.slug && resolvedArticle.slug !== params.slug) {
-    permanentRedirect(`/blog/${resolvedArticle.slug}`);
+  if (resolvedArticle && resolvedArticle.slug && resolvedArticle.slug !== normalizedSlug) {
+    permanentRedirect(`/blog/${encodeURIComponent(resolvedArticle.slug)}`);
   }
 
   const post: ResolvedPost = staticPost
     ? {
-        slug: params.slug,
+        slug: normalizedSlug,
         title: staticPost.title,
         description: staticPost.description,
         category: staticPost.category,

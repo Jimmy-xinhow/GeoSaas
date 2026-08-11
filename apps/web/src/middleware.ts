@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextFetchEvent, NextRequest } from 'next/server';
-import { AI_BOTS } from '@geovault/shared';
+import { AI_BOTS, decodeUrlPathSegmentOnce, encodeUrlPathSegmentOnce } from '@geovault/shared';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
@@ -42,18 +42,15 @@ async function getMissingPublicBlogResponse(pathname: string): Promise<NextRespo
   const blogMatch = pathname.match(/^\/blog\/([^/]+)$/);
   if (blogMatch) {
     const slug = blogMatch[1];
-    let decodedSlug: string;
-    try {
-      decodedSlug = decodeURIComponent(slug);
-    } catch {
-      return publicNotFoundResponse();
-    }
+    const decodedSlug = decodeUrlPathSegmentOnce(slug);
+    const encodedSlug = encodeUrlPathSegmentOnce(slug);
+    if (!decodedSlug || !encodedSlug) return publicNotFoundResponse();
     if (STATIC_BLOG_SLUGS.has(decodedSlug)) {
       return null;
     }
 
     try {
-      const res = await fetch(`${API_URL}/api/blog/articles/${encodeURIComponent(decodedSlug)}`, {
+      const res = await fetch(`${API_URL}/api/blog/articles/${encodedSlug}`, {
         cache: 'no-store',
       });
       return res.status === 404 ? publicNotFoundResponse() : null;
