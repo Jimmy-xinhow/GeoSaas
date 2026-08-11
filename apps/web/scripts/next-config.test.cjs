@@ -1,0 +1,52 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+
+const nextConfig = require('../next.config.js');
+
+test('active industry intelligence routes are not shadowed by redirects', async () => {
+  const redirects = await nextConfig.redirects();
+
+  assert.equal(
+    redirects.some((rule) => rule.source === '/industry/:industry/:siteId'),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(path.join(__dirname, '../src/app/industry/[industry]/compare/page.tsx')),
+    true,
+  );
+  assert.equal(
+    fs.existsSync(path.join(__dirname, '../src/app/industry/[industry]/[siteId]/page.tsx')),
+    true,
+  );
+});
+
+test('known legacy machine-readable URLs retain their canonical redirects', async () => {
+  const redirects = await nextConfig.redirects();
+  const bySource = new Map(redirects.map((rule) => [rule.source, rule]));
+
+  assert.deepEqual(bySource.get('/api/llms.txt'), {
+    source: '/api/llms.txt',
+    destination: '/llms.txt',
+    permanent: true,
+  });
+  assert.deepEqual(bySource.get('/api/llms-full.txt'), {
+    source: '/api/llms-full.txt',
+    destination: '/llms-full.txt',
+    permanent: true,
+  });
+});
+
+test('crawler-facing metadata only references the implemented Open Graph image route', () => {
+  const metadataFiles = [
+    '../src/app/guide/page.tsx',
+    '../src/app/directory/industry/[industry]/page.tsx',
+  ];
+
+  for (const relativeFile of metadataFiles) {
+    const source = fs.readFileSync(path.join(__dirname, relativeFile), 'utf8');
+    assert.equal(source.includes('/og-image.png'), false, relativeFile);
+    assert.equal(source.includes('/opengraph-image'), true, relativeFile);
+  }
+});

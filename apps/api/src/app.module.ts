@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { CustomThrottlerGuard } from './common/guards/throttler.guard';
 import { PlanUsageService } from './common/guards/plan.guard';
 import { HealthController } from './health.controller';
+import { HealthService } from './health.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { SitesModule } from './modules/sites/sites.module';
 import { ScanModule } from './modules/scan/scan.module';
@@ -111,6 +112,7 @@ import { AnalyticsSyncModule } from './modules/analytics-sync/analytics-sync.mod
       useClass: CustomThrottlerGuard,
     },
     PlanUsageService,
+    HealthService,
   ],
 })
 export class AppModule {}

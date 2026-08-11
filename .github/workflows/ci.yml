@@ -70,6 +70,9 @@ jobs:
       - name: Test (apps/api)
         run: pnpm --filter @geovault/api --fail-if-no-match run test --runInBand --ci
 
+      - name: Test (apps/web)
+        run: pnpm --filter @geovault/web --fail-if-no-match test
+
       # ── Build ────────────────────────────────────────────────
       - name: Build
         run: pnpm build
@@ -146,6 +149,7 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000
           NEXT_PUBLIC_SITE_URL: http://localhost:3001
+          NEXT_PUBLIC_GA_MEASUREMENT_ID: G-E2ETEST123
 
       - name: Start API server
         run: pnpm --filter @geovault/api --fail-if-no-match start:prod > /tmp/geovault-api.log 2>&1 &

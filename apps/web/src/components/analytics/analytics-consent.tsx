@@ -3,6 +3,7 @@
 import Script from 'next/script';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { ensureAnalyticsStub, initializeAnalytics } from '@/lib/analytics';
 
 const STORAGE_KEY = 'geovault_analytics_consent';
 const MEASUREMENT_ID =
@@ -11,9 +12,8 @@ const MEASUREMENT_ID =
 type Consent = 'pending' | 'granted' | 'denied';
 
 function applyConsent(value: Exclude<Consent, 'pending'>) {
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = window.gtag || ((...args: unknown[]) => window.dataLayer?.push(args));
-  window.gtag('consent', 'update', {
+  ensureAnalyticsStub();
+  window.gtag?.('consent', 'update', {
     analytics_storage: value,
     ad_storage: 'denied',
     ad_user_data: 'denied',
@@ -25,12 +25,12 @@ export default function AnalyticsConsent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [consent, setConsent] = useState<Consent>('pending');
+  const [analyticsReady, setAnalyticsReady] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
-    window.dataLayer = window.dataLayer || [];
-    window.gtag = window.gtag || ((...args: unknown[]) => window.dataLayer?.push(args));
-    window.gtag('consent', 'default', {
+    ensureAnalyticsStub();
+    window.gtag?.('consent', 'default', {
       analytics_storage: 'denied',
       ad_storage: 'denied',
       ad_user_data: 'denied',
@@ -46,9 +46,20 @@ export default function AnalyticsConsent() {
   }, []);
 
   useEffect(() => {
-    if (consent !== 'granted' || !MEASUREMENT_ID || !window.gtag) return;
+    if (consent !== 'granted' || !MEASUREMENT_ID) {
+      setAnalyticsReady(false);
+      return;
+    }
+    setAnalyticsReady(initializeAnalytics(MEASUREMENT_ID));
+  }, [consent]);
+
+  useEffect(() => {
+    if (!analyticsReady || consent !== 'granted' || !window.gtag) return;
     const query = searchParams.toString();
     const pagePath = query ? `${pathname}?${query}` : pathname;
+    if (window.__geovaultLastTrackedPage === pagePath) return;
+    window.__geovaultLastTrackedPage = pagePath;
+
     window.gtag('event', 'page_view', {
       page_title: document.title,
       page_location: window.location.href,
@@ -74,11 +85,14 @@ export default function AnalyticsConsent() {
     ) {
       window.gtag('event', 'report_view', { report_path: pathname });
     }
-  }, [consent, pathname, searchParams]);
+  }, [analyticsReady, consent, pathname, searchParams]);
 
   const choose = (value: Exclude<Consent, 'pending'>) => {
     window.localStorage.setItem(STORAGE_KEY, value);
     applyConsent(value);
+    if (value === 'denied') {
+      window.__geovaultLastTrackedPage = undefined;
+    }
     setConsent(value);
     setSettingsOpen(false);
   };
@@ -88,16 +102,11 @@ export default function AnalyticsConsent() {
   return (
     <>
       {consent === 'granted' && MEASUREMENT_ID ? (
-        <>
-          <Script
-            id="geovault-gtag"
-            src={`https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}`}
-            strategy="afterInteractive"
-          />
-          <Script id="geovault-ga4-config" strategy="afterInteractive">
-            {`window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){dataLayer.push(arguments)};window.gtag('js',new Date());window.gtag('config','${MEASUREMENT_ID}',{send_page_view:false,anonymize_ip:true});`}
-          </Script>
-        </>
+        <Script
+          id="geovault-gtag"
+          src={`https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
       ) : null}
 
       {showPanel ? (

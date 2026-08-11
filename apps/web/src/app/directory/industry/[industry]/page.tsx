@@ -6,7 +6,7 @@ import type { IndustryWikiData } from '@/hooks/use-directory';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
-const OG_IMAGE = `${SITE_URL}/og-image.png`;
+const OG_IMAGE = `${SITE_URL}/opengraph-image`;
 
 async function getIndustryDirectorySnapshot(industry: string) {
   try {

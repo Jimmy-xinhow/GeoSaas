@@ -9,6 +9,7 @@
     "build:cf": "npx @cloudflare/next-on-pages",
     "start": "next start",
     "lint": "next lint",
+    "test": "node --test scripts/*.test.cjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

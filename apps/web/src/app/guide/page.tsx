@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import GuideClient from './guide-client';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
-const OG_IMAGE = `${SITE_URL}/og-image.png`;
+const OG_IMAGE = `${SITE_URL}/opengraph-image`;
 
 export const metadata: Metadata = {
   title: 'GEO 優化教學指南 — 8 步驟讓 AI 推薦你的品牌',

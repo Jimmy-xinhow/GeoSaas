@@ -17,6 +17,23 @@ async function registerViaApi(request: APIRequestContext) {
 }
 
 test.describe('API smoke — public files, badge, success cases', () => {
+  test('liveness and dependency readiness endpoints report the actual API state', async ({ request }) => {
+    const live = await request.get(`${API}/api/health/live`);
+    expect(live.status()).toBe(200);
+    const livePayload = await live.json();
+    const liveData = livePayload.data ?? livePayload;
+    expect(liveData.status).toBe('ok');
+
+    const ready = await request.get(`${API}/api/health/ready`);
+    expect(ready.status()).toBe(200);
+    const readyPayload = await ready.json();
+    const readyData = readyPayload.data ?? readyPayload;
+    expect(readyData).toMatchObject({
+      status: 'ok',
+      checks: { database: 'ok', redis: 'ok' },
+    });
+  });
+
   test('LLMS public endpoints return plain text with crawler-friendly headers', async ({ request }) => {
     const direct = await request.get(`${API}/api/llms-full.txt`);
     expect(direct.status()).toBe(200);

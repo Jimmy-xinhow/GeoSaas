@@ -7,6 +7,7 @@ const apiCommand = `${pnpm} --dir "${repoRoot}" --filter @geovault/api start`;
 const webCommand = `${pnpm} --dir "${repoRoot}" --filter @geovault/web dev`;
 const e2eAdminEmail = 'e2e-admin@test.local';
 const e2eAdminPassword = 'E2eAdmin123!@';
+const browserChannel = process.env.E2E_BROWSER_CHANNEL === 'chrome' ? 'chrome' : undefined;
 
 export default defineConfig({
   testDir: './e2e',
@@ -26,11 +27,11 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], ...(browserChannel ? { channel: browserChannel } : {}) },
     },
   ],
 
-  webServer: process.env.CI
+  webServer: process.env.CI || process.env.E2E_EXTERNAL_SERVERS === '1'
     ? undefined
     : [
         {
@@ -56,6 +57,9 @@ export default defineConfig({
           port: 3001,
           reuseExistingServer: true,
           timeout: 90_000,
+          env: {
+            NEXT_PUBLIC_GA_MEASUREMENT_ID: 'G-E2ETEST123',
+          },
         },
       ],
 });
