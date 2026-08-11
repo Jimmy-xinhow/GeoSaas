@@ -56,6 +56,12 @@ test.describe('API smoke - account boundaries and commerce edges', () => {
     });
     expect(blockedUpdate.status()).toBeGreaterThanOrEqual(400);
 
+    const publish = await request.patch(`${API}/api/sites/${site.id}/directory`, {
+      headers: { Authorization: `Bearer ${owner.token}` },
+      data: { isPublic: true, industry: 'Technology' },
+    });
+    expect(publish.status()).toBe(200);
+
     const publicText = await request.get(`${API}/api/llms/${site.id}/llms.txt`);
     expect(publicText.status()).toBe(200);
     expect(await publicText.text()).toContain('Powered by Geovault');

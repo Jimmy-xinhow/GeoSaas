@@ -7,6 +7,7 @@ test.describe('Scan — 網站新增與掃描流程', () => {
   });
 
   test('Dashboard 顯示統計卡片', async ({ page }) => {
+    await page.getByText('進階數據與例行工作').click();
     await expect(page.getByText('監控品牌', { exact: true })).toBeVisible();
     await expect(page.getByText('平均 GEO 分數', { exact: true })).toBeVisible();
     await expect(page.getByText('AI 引用命中', { exact: true })).toBeVisible();
