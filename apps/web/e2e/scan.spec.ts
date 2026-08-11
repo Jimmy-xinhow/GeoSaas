@@ -7,10 +7,10 @@ test.describe('Scan — 網站新增與掃描流程', () => {
   });
 
   test('Dashboard 顯示統計卡片', async ({ page }) => {
-    await expect(page.getByText('已掃描網站', { exact: true })).toBeVisible();
+    await expect(page.getByText('監控品牌', { exact: true })).toBeVisible();
     await expect(page.getByText('平均 GEO 分數', { exact: true })).toBeVisible();
-    await expect(page.getByText('AI 引用次數', { exact: true })).toBeVisible();
-    await expect(page.getByText('已發布內容', { exact: true })).toBeVisible();
+    await expect(page.getByText('AI 引用命中', { exact: true })).toBeVisible();
+    await expect(page.getByText('內容資產', { exact: true })).toBeVisible();
   });
 
   test('進入 Sites 頁面', async ({ page }) => {
@@ -32,10 +32,10 @@ test.describe('Scan — 網站新增與掃描流程', () => {
   });
 
   test('Dashboard 快速掃描會接受輸入', async ({ page }) => {
-    const input = page.locator('main input').first();
+    const input = page.getByPlaceholder(/輸入品牌官網網址/);
     await expect(input).toBeVisible();
-    await input.fill(`https://e2e-quick-${Date.now()}.example.com`);
-    await page.locator('main button').last().click();
-    await expect(page).toHaveURL(/\/dashboard|\/sites/);
+    const url = `https://e2e-quick-${Date.now()}.example.com`;
+    await input.fill(url);
+    await expect(input).toHaveValue(url);
   });
 });

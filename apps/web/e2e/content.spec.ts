@@ -16,23 +16,14 @@ test.describe('Content — AI 內容生成流程', () => {
     await page.goto('/content/new');
     await expect(page.getByRole('heading', { name: 'AI 內容生成' }).first()).toBeVisible();
     await expect(page.getByText('步驟 1：選擇內容類型')).toBeVisible();
-    await expect(page.getByText('步驟 2：填寫品牌資訊')).toBeVisible();
+    await expect(page.getByText('步驟 2：綁定品牌知識庫')).toBeVisible();
+    await expect(page.getByText('品牌資料來源')).toBeVisible();
   });
 
-  test('表單驗證 — 未填品牌名稱', async ({ page }) => {
+  test('沒有網站時阻止生成並顯示下一步', async ({ page }) => {
     await page.goto('/content/new');
-    await page.locator('main button').last().click();
-    await expect(page).toHaveURL(/\/content\/new/);
-  });
-
-  test('免費帳號點數不足時顯示限制訊息', async ({ page }) => {
-    await page.goto('/content/new');
-    await page.locator('#brand').fill('E2E 測試品牌');
-    await page.locator('#industry').fill('測試產業');
-    await page.locator('#keywords').fill('GEO, AI 搜尋');
-    await page.locator('main button').last().click();
-
-    await expect(page.getByText('點數不足')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/目前沒有可用網站/)).toBeVisible();
+    await expect(page.getByRole('button', { name: '產生內容' })).toBeDisabled();
   });
 
   test('內容列表可導航到生成頁', async ({ page }) => {

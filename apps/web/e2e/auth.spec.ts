@@ -6,7 +6,7 @@ const password = 'Test1234!@';
 test.describe('Auth — 註冊 & 登入流程', () => {
   test('顯示登入頁面', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByText('歡迎回來')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '登入工作台' })).toBeVisible();
     await expect(page.locator('#email')).toBeVisible();
     await expect(page.locator('#password')).toBeVisible();
     await expect(page.getByRole('button', { name: '登入', exact: true })).toBeVisible();
@@ -46,7 +46,7 @@ test.describe('Auth — 註冊 & 登入流程', () => {
     await page.locator('#confirmPassword').fill(password);
     await page.getByRole('button', { name: '建立帳號' }).click();
     await page.waitForURL('**/dashboard', { timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: '總覽' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: '工作台' }).first()).toBeVisible();
   });
 
   test('完整流程 — 登入 → 導向 Dashboard', async ({ page }) => {
@@ -55,7 +55,7 @@ test.describe('Auth — 註冊 & 登入流程', () => {
     await page.locator('#password').fill(password);
     await page.getByRole('button', { name: '登入', exact: true }).click();
     await page.waitForURL('**/dashboard', { timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: '總覽' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: '工作台' }).first()).toBeVisible();
   });
 
   test('登入失敗 — 錯誤密碼', async ({ page }) => {

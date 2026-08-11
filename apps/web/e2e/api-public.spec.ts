@@ -261,7 +261,7 @@ test.describe('API smoke — public files, badge, success cases', () => {
     expect(mixedHostBatch.status()).toBe(400);
   });
 
-  test('Guest scan rejects private and local URLs before crawling', async ({ request }) => {
+  test('Retired guest scan rejects every new scan before crawling', async ({ request }) => {
     for (const url of [
       'http://localhost:4000',
       'http://127.0.0.1:4000',
@@ -273,24 +273,12 @@ test.describe('API smoke — public files, badge, success cases', () => {
       const response = await request.post(`${API}/api/guest-scan`, {
         data: { url },
       });
-      expect(response.status(), `${url} should be rejected`).toBe(400);
+      expect(response.status(), `${url} should be retired`).toBe(410);
     }
   });
 
-  test('Guest scan status exposes only public-safe fields', async ({ request }) => {
-    const create = await request.post(`${API}/api/guest-scan`, {
-      data: { url: `https://guest-status-${Date.now()}.example.com` },
-    });
-    expect(create.status()).toBe(201);
-    const createPayload = await create.json();
-    const created = createPayload.data ?? createPayload;
-
-    const status = await request.get(`${API}/api/guest-scan/${created.id}`);
-    expect(status.status()).toBe(200);
-    const statusPayload = await status.json();
-    const data = statusPayload.data ?? statusPayload;
-    expect(data.id).toBe(created.id);
-    expect(data.url).toContain('guest-status-');
-    expect(data.ipHash).toBeUndefined();
+  test('Guest scan status does not expose unknown records', async ({ request }) => {
+    const status = await request.get(`${API}/api/guest-scan/not-a-real-guest-scan`);
+    expect(status.status()).toBe(404);
   });
 });

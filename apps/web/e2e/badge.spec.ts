@@ -13,11 +13,8 @@ test.describe('Badge — 網站詳情嵌入碼流程', () => {
     await page.locator('#name').fill(siteName);
     await page.getByRole('button', { name: '新增並掃描', exact: true }).click();
 
-    await page.waitForURL(/\/sites(\/)?$/, { timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: siteName })).toBeVisible();
-
-    await page.getByRole('link', { name: /查看詳情/ }).first().click();
     await page.waitForURL('**/sites/**', { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: siteName })).toBeVisible();
 
     await expect(page.getByRole('heading', { name: '取得 Badge' })).toBeVisible();
     await expect(

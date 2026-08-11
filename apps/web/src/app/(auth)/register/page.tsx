@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -40,6 +40,7 @@ const registerSchema = z
 type RegisterForm = z.infer<typeof registerSchema>
 
 export default function RegisterPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const registerMutation = useRegister()
   const [verificationNotice, setVerificationNotice] = useState<{
@@ -77,6 +78,10 @@ export default function RegisterPage() {
         trackEvent('sign_up', { method: 'email' })
         toast.success('註冊成功，歡迎加入！')
         clearStoredAffiliateRef()
+        if (!result.requiresEmailVerification && result.token) {
+          router.replace('/dashboard')
+          return
+        }
         setVerificationNotice({
           email: result.user.email,
           devVerificationUrl: result.devVerificationUrl,

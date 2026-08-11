@@ -5,7 +5,7 @@ test.describe('Cases — 成功案例流程', () => {
   test('公開案例頁可瀏覽，未登入 CTA 導向登入頁', async ({ page }) => {
     await page.goto('/cases');
 
-    await expect(page.getByRole('heading', { name: 'GEO 成功案例' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'GEO 成功案例', exact: true })).toBeVisible();
     await page.getByRole('link', { name: /免費註冊並提交案例/ }).first().click();
     await page.waitForURL('**/login?redirect=/dashboard/submit-case', { timeout: 10_000 });
   });
@@ -38,6 +38,6 @@ test.describe('Cases — 成功案例流程', () => {
     await page.getByRole('button', { name: '確認送出審核' }).click();
 
     await page.waitForURL('**/dashboard?caseSubmitted=1', { timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: '總覽' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: '工作台' }).first()).toBeVisible();
   });
 });

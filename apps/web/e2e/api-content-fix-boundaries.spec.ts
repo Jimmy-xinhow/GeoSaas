@@ -47,7 +47,7 @@ test.describe('API smoke - content citation and fix boundaries', () => {
       { body: '' },
       { body: '   ' },
       { body: 'x'.repeat(20001) },
-      { title: 'Valid title', status: 'PUBLISHED' },
+      { title: 'Valid title', status: 'NOT_A_STATUS' },
     ];
 
     for (const body of malformedBodies) {

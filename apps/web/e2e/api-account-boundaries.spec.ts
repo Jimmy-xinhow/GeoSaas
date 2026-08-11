@@ -17,7 +17,7 @@ async function createSite(request: APIRequestContext, token: string, name: strin
     headers: { Authorization: `Bearer ${token}` },
     data: {
       name,
-      url: `https://${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.example.com`,
+      url: `https://${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.geovault-e2e.test`,
     },
   });
   expect(response.status()).toBe(201);

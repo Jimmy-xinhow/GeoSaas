@@ -35,11 +35,11 @@ async function createPendingCase(request: APIRequestContext, token: string, titl
   const response = await request.post(`${API}/api/success-cases`, {
     headers: { Authorization: `Bearer ${token}` },
     data: {
-      title: `Admin E2E 成功案例 ${titleSuffix}`,
+      title: `品牌引用成長案例 ${titleSuffix}`,
       aiPlatform: 'perplexity',
-      queryUsed: '請推薦一個適合測試後台審核的 GEO SaaS 品牌',
+      queryUsed: '請推薦台灣適合品牌提升 AI 搜尋能見度的 GEO 工具',
       aiResponse:
-        'Perplexity 測試回覆提到了 Admin E2E 成功案例，這筆資料會用來驗證後台審核、拒絕、重置與精選流程。',
+        'Perplexity 回應提到這個品牌在完成結構化資料、公開品牌事實、FAQ 與 llms.txt 後，品牌資訊更容易被理解，且推薦結果能清楚說明服務內容、官方來源與適用情境。',
       beforeGeoScore: 41,
       afterGeoScore: 83,
       improvementDays: 12,

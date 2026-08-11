@@ -42,6 +42,8 @@ interface RegisterResponse {
     emailVerified?: boolean;
   };
   requiresEmailVerification: boolean;
+  token?: string;
+  refreshToken?: string;
   message?: string;
   devVerificationUrl?: string;
 }
@@ -87,6 +89,7 @@ export function useGoogleLogin() {
 }
 
 export function useRegister() {
+  const { login } = useAuthStore();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -98,6 +101,9 @@ export function useRegister() {
       return data;
     },
     onSuccess: (data, variables) => {
+      if (!data.requiresEmailVerification && data.token) {
+        login(data.user, data.token, data.refreshToken);
+      }
       if (variables.affiliateCode) {
         clearStoredAffiliateRef();
       }
