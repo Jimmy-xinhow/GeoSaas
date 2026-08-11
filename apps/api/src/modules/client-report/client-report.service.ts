@@ -429,10 +429,14 @@ export class ClientReportService implements OnModuleInit {
       const cachedResults = (recentReport.results as any[]) || [];
       const expectedTotal = (querySet.queries as any[]).length * 5;
       const cachedExpected = recentReport.expectedChecks || cachedResults.length;
+      const cachedErrorCount = cachedResults.filter((result) =>
+        typeof result?.response === 'string' && result.response.startsWith('[Error]'),
+      ).length;
       if (
         cachedResults.length >= expectedTotal
         && cachedExpected === expectedTotal
         && (recentReport.querySetVersion || 1) === (querySet.version || 1)
+        && cachedErrorCount === 0
       ) {
         this.logger.log(`Report cache hit: ${recentReport.id} (${recentReport.createdAt.toISOString().slice(0, 10)})`);
         return { reportId: recentReport.id, cached: true };

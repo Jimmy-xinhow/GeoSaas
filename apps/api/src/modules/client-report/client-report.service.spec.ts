@@ -152,6 +152,45 @@ describe('ClientReportService acceptance query sets', () => {
     expect(prisma.monitorReport.create).toHaveBeenCalled();
   });
 
+  it('does not cache a full-size report that contains provider errors', async () => {
+    const erroredReport = {
+      id: 'errored-report',
+      status: 'completed',
+      createdAt: new Date(),
+      expectedChecks: 500,
+      querySetVersion: 1,
+      results: [
+        ...Array.from({ length: 499 }, () => ({ response: 'valid response' })),
+        { response: '[Error] provider quota exhausted' },
+      ],
+    };
+    const prisma = {
+      clientQuerySet: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'set-1',
+          siteId: 'site-1',
+          version: 1,
+          queries: qaItems,
+          site: { id: 'site-1', name: 'Client', url: 'https://example.com', userId: 'admin-1' },
+        }),
+      },
+      monitorReport: {
+        findFirst: jest.fn().mockResolvedValueOnce(erroredReport).mockResolvedValueOnce(null),
+        create: jest.fn().mockResolvedValue({ id: 'retry-report' }),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'admin-1', plan: 'PRO', role: 'ADMIN' }),
+      },
+    };
+    const service = createService(prisma);
+    (service as any).executeReport = jest.fn().mockResolvedValue(undefined);
+
+    const result = await service.runReport('set-1', 'ADMIN', 'admin-1');
+
+    expect(result).toEqual({ reportId: 'retry-report' });
+    expect(prisma.monitorReport.create).toHaveBeenCalled();
+  });
+
   it('marks a historical 20-question report stale against the current 100-question set', async () => {
     const oldResults = Array.from({ length: 100 }, (_, index) => ({
       question: `Old question ${Math.floor(index / 5) + 1}`,
