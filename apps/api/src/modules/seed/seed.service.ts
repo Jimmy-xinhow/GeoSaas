@@ -6,6 +6,8 @@ import * as path from 'path';
 import * as readline from 'readline';
 import pLimit from '@/common/utils/p-limit';
 import { isScanRetryBackoffActive } from '../scan/scan-retry-policy';
+import { BadgeService } from '../badge/badge.service';
+import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
 
 interface CsvRow {
   url: string;
@@ -24,6 +26,8 @@ export class SeedService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scanPipeline: ScanPipelineService,
+    private readonly badgeService: BadgeService,
+    private readonly llmsHosting: LlmsHostingService,
   ) {}
 
   /** Get seeding status overview */
@@ -426,6 +430,13 @@ export class SeedService {
       where: { id: { in: candidates.map((site) => site.id) }, isPublic: true },
       data: { isPublic: false },
     });
+    if (result.count > 0) {
+      const cacheLimit = pLimit(10);
+      await Promise.all(
+        candidates.map((site) => cacheLimit(() => this.badgeService.invalidateSvgBadge(site.id))),
+      );
+      await this.llmsHosting.invalidatePlatformLlmsFull();
+    }
     this.logger.log(
       `Quarantined ${result.count}/${candidates.length} low-quality public auto-discovery sites below ${this.publicSeedScoreThreshold}/100`,
     );

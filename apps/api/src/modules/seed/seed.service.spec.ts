@@ -7,12 +7,21 @@ describe('SeedService quarantine', () => {
       updateMany: jest.fn(),
     },
   };
+  const badgeService = { invalidateSvgBadge: jest.fn() };
+  const llmsHosting = { invalidatePlatformLlmsFull: jest.fn() };
 
   let service: SeedService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new SeedService(prisma as never, {} as never);
+    badgeService.invalidateSvgBadge.mockResolvedValue(undefined);
+    llmsHosting.invalidatePlatformLlmsFull.mockResolvedValue(undefined);
+    service = new SeedService(
+      prisma as never,
+      {} as never,
+      badgeService as never,
+      llmsHosting as never,
+    );
   });
 
   it('previews only low-score system-owned auto-discovery sites', async () => {
@@ -31,6 +40,8 @@ describe('SeedService quarantine', () => {
       select: { id: true },
     });
     expect(prisma.site.updateMany).not.toHaveBeenCalled();
+    expect(badgeService.invalidateSvgBadge).not.toHaveBeenCalled();
+    expect(llmsHosting.invalidatePlatformLlmsFull).not.toHaveBeenCalled();
     expect(result).toMatchObject({ matched: 2, quarantined: 0, dryRun: true });
   });
 
@@ -44,6 +55,10 @@ describe('SeedService quarantine', () => {
       where: { id: { in: ['site-1', 'site-2'] }, isPublic: true },
       data: { isPublic: false },
     });
+    expect(badgeService.invalidateSvgBadge).toHaveBeenCalledTimes(2);
+    expect(badgeService.invalidateSvgBadge).toHaveBeenCalledWith('site-1');
+    expect(badgeService.invalidateSvgBadge).toHaveBeenCalledWith('site-2');
+    expect(llmsHosting.invalidatePlatformLlmsFull).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ matched: 2, quarantined: 2, dryRun: false });
   });
 });
