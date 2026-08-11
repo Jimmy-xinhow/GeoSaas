@@ -12,6 +12,7 @@ describe('SitesService', () => {
       create: jest.Mock;
       findMany: jest.Mock;
       findFirst: jest.Mock;
+      findUnique: jest.Mock;
       update: jest.Mock;
       delete: jest.Mock;
     };
@@ -36,6 +37,7 @@ describe('SitesService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
       },
@@ -216,6 +218,32 @@ describe('SitesService', () => {
       await expect(service.remove('nonexistent', userId)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('toggleClient', () => {
+    it('requires an industry before promoting a site to client', async () => {
+      prisma.site.findUnique.mockResolvedValue({ crawlerToken: null, industry: null });
+
+      await expect(service.toggleClient(siteId, true)).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'CLIENT_INDUSTRY_REQUIRED' }),
+      });
+      expect(prisma.site.update).not.toHaveBeenCalled();
+    });
+
+    it('promotes an industry-classified site without replacing its crawler token', async () => {
+      prisma.site.findUnique.mockResolvedValue({
+        crawlerToken: 'existing-token',
+        industry: 'healthcare',
+      });
+      prisma.site.update.mockResolvedValue({ id: siteId, isClient: true });
+
+      await service.toggleClient(siteId, true);
+
+      expect(prisma.site.update).toHaveBeenCalledWith({
+        where: { id: siteId },
+        data: { isClient: true },
+      });
     });
   });
 });

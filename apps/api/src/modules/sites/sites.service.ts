@@ -321,9 +321,16 @@ export class SitesService {
     if (isClient) {
       const existing = await this.prisma.site.findUnique({
         where: { id: siteId },
-        select: { crawlerToken: true },
+        select: { crawlerToken: true, industry: true },
       });
-      if (!existing?.crawlerToken) {
+      if (!existing) throw new NotFoundException('Site not found');
+      if (!existing.industry) {
+        throw new BadRequestException({
+          message: 'Set the site industry before promoting it to a client.',
+          code: 'CLIENT_INDUSTRY_REQUIRED',
+        });
+      }
+      if (!existing.crawlerToken) {
         const { randomBytes } = await import('crypto');
         data.crawlerToken = randomBytes(24).toString('hex');
       }
