@@ -63,4 +63,50 @@ describe('AnalyticsSyncService opportunity queue', () => {
       })],
     })]);
   });
+
+  it('combines GA4 query-string variants before evaluating engagement', async () => {
+    const queryRaw = jest.fn()
+      .mockResolvedValueOnce([{
+        page: 'https://www.geovault.app/cases',
+        clicks: 2,
+        impressions: 20,
+        position: 7,
+      }])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      ga4LandingPageDaily: {
+        groupBy: jest.fn().mockResolvedValue([
+          {
+            landingPage: '/cases?utm_source=one',
+            _sum: { sessions: 8, engagedSessions: 1, keyEvents: 0 },
+          },
+          {
+            landingPage: '/cases?utm_source=two',
+            _sum: { sessions: 7, engagedSessions: 2, keyEvents: 1 },
+          },
+        ]),
+      },
+    };
+
+    const result = await new AnalyticsSyncService(prisma as any).opportunities(28);
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      reasonCodes: ['low_engagement'],
+      ga4: { sessions: 15, engagedSessions: 3, keyEvents: 1 },
+    }));
+  });
+
+  it('records an empty upstream result distinctly from a healthy sync', async () => {
+    const update = jest.fn().mockResolvedValue(undefined);
+    const service = new AnalyticsSyncService({
+      analyticsSyncState: { update },
+    } as any);
+
+    await (service as any).markSuccess('ga4', 0);
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'empty', lastRowCount: 0 }),
+    }));
+  });
 });

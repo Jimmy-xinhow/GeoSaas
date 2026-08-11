@@ -127,7 +127,10 @@ export class AnalyticsSyncService {
     await this.prisma.analyticsSyncState.update({
       where: { provider },
       data: {
-        status: 'success',
+        // A successful HTTP response with zero facts is not healthy analytics.
+        // Keep it observable so a wrong GA4 property/stream cannot masquerade
+        // as a completed measurement pipeline.
+        status: rowCount > 0 ? 'success' : 'empty',
         lastSuccessAt: new Date(),
         lastRowCount: rowCount,
         lastError: null,
@@ -332,8 +335,16 @@ export class AnalyticsSyncService {
   async status() {
     const [states, gscRows, ga4Rows] = await Promise.all([
       this.prisma.analyticsSyncState.findMany({ orderBy: { provider: 'asc' } }),
-      this.prisma.searchPerformanceDaily.count(),
-      this.prisma.ga4LandingPageDaily.count(),
+      this.prisma.searchPerformanceDaily.aggregate({
+        _count: true,
+        _min: { date: true },
+        _max: { date: true },
+      }),
+      this.prisma.ga4LandingPageDaily.aggregate({
+        _count: true,
+        _min: { date: true },
+        _max: { date: true },
+      }),
     ]);
     return {
       configured: {
@@ -344,7 +355,11 @@ export class AnalyticsSyncService {
         gscSiteUrl: process.env.GSC_SITE_URL || null,
         ga4PropertyId: process.env.GA4_PROPERTY_ID || null,
       },
-      rowCounts: { gsc: gscRows, ga4: ga4Rows },
+      rowCounts: { gsc: gscRows._count, ga4: ga4Rows._count },
+      coverage: {
+        gsc: { from: gscRows._min.date, to: gscRows._max.date },
+        ga4: { from: ga4Rows._min.date, to: ga4Rows._max.date },
+      },
       states,
     };
   }
@@ -353,7 +368,9 @@ export class AnalyticsSyncService {
     const safeDays = Number.isFinite(days)
       ? Math.max(1, Math.min(Math.trunc(days), 93))
       : 28;
-    const since = new Date(Date.now() - safeDays * DAY_MS);
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const since = new Date(today.getTime() - (safeDays - 1) * DAY_MS);
     const [searchPages, searchQueries, gaPages] = await Promise.all([
       this.prisma.$queryRaw<SearchPageAggregate[]>(Prisma.sql`
         SELECT
@@ -394,9 +411,23 @@ export class AnalyticsSyncService {
         _sum: { sessions: true, engagedSessions: true, keyEvents: true },
       }),
     ]);
-    const gaByPath = new Map(
-      gaPages.map((row) => [row.landingPage.split('?')[0], row._sum]),
-    );
+    const gaByPath = new Map<string, {
+      sessions: number;
+      engagedSessions: number;
+      keyEvents: number;
+    }>();
+    for (const row of gaPages) {
+      const path = normalizeLandingPage(row.landingPage).split('?')[0];
+      const aggregate = gaByPath.get(path) || {
+        sessions: 0,
+        engagedSessions: 0,
+        keyEvents: 0,
+      };
+      aggregate.sessions += Number(row._sum.sessions || 0);
+      aggregate.engagedSessions += Number(row._sum.engagedSessions || 0);
+      aggregate.keyEvents += Number(row._sum.keyEvents || 0);
+      gaByPath.set(path, aggregate);
+    }
     const queriesByPage = new Map<string, SearchQueryPageAggregate[]>();
     for (const row of searchQueries) {
       const rows = queriesByPage.get(row.page) || [];

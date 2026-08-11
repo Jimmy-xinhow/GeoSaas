@@ -998,7 +998,7 @@ model Ga4LandingPageDaily {
 model AnalyticsSyncState {
   id            String    @id @default(cuid())
   provider      String    @unique
-  status        String    @default("never")
+  status        String    @default("never") // never | running | success | empty | failed
   lastStartedAt DateTime?
   lastSuccessAt DateTime?
   lastDateFrom  DateTime? @db.Date

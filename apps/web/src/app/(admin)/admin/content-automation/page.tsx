@@ -135,6 +135,29 @@ interface SeoOpportunity {
   }>;
 }
 
+interface AnalyticsSyncState {
+  provider: 'gsc' | 'ga4';
+  status: 'never' | 'running' | 'success' | 'empty' | 'failed';
+  lastStartedAt: string | null;
+  lastSuccessAt: string | null;
+  lastRowCount: number;
+  lastError: string | null;
+}
+
+interface AnalyticsStatus {
+  configured: {
+    serviceAccount: boolean;
+    gscSiteUrl: string | null;
+    ga4PropertyId: string | null;
+  };
+  rowCounts: { gsc: number; ga4: number };
+  coverage: {
+    gsc: { from: string | null; to: string | null };
+    ga4: { from: string | null; to: string | null };
+  };
+  states: AnalyticsSyncState[];
+}
+
 const STATUS_META: Record<AutomationStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
   healthy: {
     label: '正常',
@@ -191,6 +214,14 @@ export default function AdminContentAutomationPage() {
     queryKey: ['admin', 'seo-opportunities', 28],
     queryFn: async () => {
       const res = await apiClient.get<SeoOpportunity[]>('/admin/analytics/opportunities?days=28');
+      return res.data;
+    },
+    refetchInterval: 300000,
+  });
+  const { data: analyticsStatus, isFetching: isFetchingAnalytics } = useQuery({
+    queryKey: ['admin', 'analytics-status'],
+    queryFn: async () => {
+      const res = await apiClient.get<AnalyticsStatus>('/admin/analytics/status');
       return res.data;
     },
     refetchInterval: 300000,
@@ -260,6 +291,65 @@ export default function AdminContentAutomationPage() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between gap-3 text-base">
+            <span className="flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              GSC / GA4 每日資料倉庫
+            </span>
+            {isFetchingAnalytics && <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!analyticsStatus ? (
+            <p className="text-sm text-gray-400">同步狀態尚未載入。</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {(['gsc', 'ga4'] as const).map((provider) => {
+                const state = analyticsStatus.states.find((item) => item.provider === provider);
+                const status = state?.status || 'never';
+                const healthy = status === 'success' && (state?.lastRowCount || 0) > 0;
+                const failed = status === 'failed';
+                const coverage = analyticsStatus.coverage[provider];
+                return (
+                  <div key={provider} className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium text-white">{provider === 'gsc' ? 'Google Search Console' : 'Google Analytics 4'}</p>
+                      <Badge
+                        variant="outline"
+                        className={healthy
+                          ? 'border-emerald-400/40 text-emerald-300'
+                          : failed
+                            ? 'border-red-400/40 text-red-300'
+                            : 'border-amber-400/40 text-amber-300'}
+                      >
+                        {healthy ? '有資料' : failed ? '同步失敗' : status === 'running' ? '同步中' : '無資料'}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                      <div><p className="text-gray-500">倉庫總筆數</p><p className="mt-1 text-white">{analyticsStatus.rowCounts[provider]}</p></div>
+                      <div><p className="text-gray-500">本次同步筆數</p><p className="mt-1 text-white">{state?.lastRowCount || 0}</p></div>
+                      <div><p className="text-gray-500">資料起日</p><p className="mt-1 text-white">{coverage.from ? coverage.from.slice(0, 10) : '尚無'}</p></div>
+                      <div><p className="text-gray-500">資料迄日</p><p className="mt-1 text-white">{coverage.to ? coverage.to.slice(0, 10) : '尚無'}</p></div>
+                    </div>
+                    <p className="mt-3 text-xs text-gray-400">最後成功：{formatDate(state?.lastSuccessAt || null)}</p>
+                    {!healthy && !failed && (
+                      <p className="mt-2 text-xs text-amber-200">
+                        {provider === 'ga4'
+                          ? 'API 可呼叫但沒有事件資料；需核對 GA4 property 與網站 Measurement ID 是否為同一個資料串流。'
+                          : '目前沒有可用的 Search Console 事實資料。'}
+                      </p>
+                    )}
+                    {state?.lastError && <p className="mt-2 break-words text-xs text-red-300">{state.lastError}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
