@@ -18,6 +18,7 @@ import { IndexNowService } from '../indexnow/indexnow.service';
 import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notification-types';
+import { classifyScanFailure } from './scan-failure';
 
 @Injectable()
 export class ScanPipelineService {
@@ -66,7 +67,12 @@ export class ScanPipelineService {
     // Update status to RUNNING
     await this.prisma.scan.update({
       where: { id: scanId },
-      data: { status: 'RUNNING' },
+      data: {
+        status: 'RUNNING',
+        failureCode: null,
+        failureReason: null,
+        completedAt: null,
+      },
     });
 
     try {
@@ -156,6 +162,8 @@ export class ScanPipelineService {
           data: {
             totalScore,
             status: 'COMPLETED',
+            failureCode: null,
+            failureReason: null,
             completedAt: new Date(),
           },
         }),
@@ -204,22 +212,27 @@ export class ScanPipelineService {
           }
         }
 
-        // 1. Badge evaluation
-        this.badgeService.evaluateBadges(siteId).catch((err) => {
-          this.logger.warn(`Badge evaluation failed for site ${siteId}: ${err}`);
-        });
-        this.badgeService.invalidateSvgBadge(siteId).catch((err) => {
-          this.logger.warn(`Badge SVG cache invalidation failed for site ${siteId}: ${err}`);
-        });
-        this.llmsHostingService.invalidatePlatformLlmsFull(siteId);
+        // 1. Badge evaluation + shared cache invalidation must complete before
+        // synchronous/admin callers read the freshly updated score.
+        await Promise.all([
+          this.badgeService.evaluateBadges(siteId).catch((err) => {
+            this.logger.warn(`Badge evaluation failed for site ${siteId}: ${err}`);
+            return [];
+          }),
+          this.badgeService.invalidateSvgBadge(siteId).catch((err) => {
+            this.logger.warn(`Badge SVG cache invalidation failed for site ${siteId}: ${err}`);
+          }),
+          this.llmsHostingService.invalidatePlatformLlmsFull(siteId),
+        ]);
 
         // 2. Auto-submit to IndexNow (if public site)
         const siteForIndexNow = await this.prisma.site.findUnique({
           where: { id: siteId },
-          select: { isPublic: true, url: true },
+          select: { isPublic: true },
         });
-        if (siteForIndexNow?.isPublic && siteForIndexNow.url) {
-          this.indexNowService.submitUrl(siteForIndexNow.url).catch((err) => {
+        if (siteForIndexNow?.isPublic) {
+          const webUrl = process.env.FRONTEND_URL || 'https://www.geovault.app';
+          this.indexNowService.submitUrl(`${webUrl}/directory/${siteId}`).catch((err) => {
             this.logger.warn(`IndexNow submit failed: ${err}`);
           });
         }
@@ -227,10 +240,16 @@ export class ScanPipelineService {
 
       this.logger.log(`Scan ${scanId} completed with score ${totalScore}`);
     } catch (error) {
-      this.logger.error(`Scan ${scanId} failed: ${error}`);
+      const failure = classifyScanFailure(error);
+      this.logger.error(`Scan ${scanId} failed [${failure.code}]: ${failure.reason}`);
       await this.prisma.scan.update({
         where: { id: scanId },
-        data: { status: 'FAILED' },
+        data: {
+          status: 'FAILED',
+          failureCode: failure.code,
+          failureReason: failure.reason,
+          completedAt: new Date(),
+        },
       });
       throw error;
     }

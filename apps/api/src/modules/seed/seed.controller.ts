@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SeedService } from './seed.service';
 import { RolesGuard, Roles } from '../../common/guards/roles.guard';
@@ -53,8 +53,8 @@ export class SeedController {
 
   @Post('quarantine-low-quality')
   @ApiOperation({ summary: 'Hide low-score public seed sites from the public directory and llms-full pool' })
-  async quarantineLowQuality() {
-    return this.service.quarantineLowQualityPublicSeeds();
+  async quarantineLowQuality(@Query('dryRun') dryRun?: string) {
+    return this.service.quarantineLowQualityPublicSeeds(dryRun === 'true');
   }
 
   @Post('geovault-self')

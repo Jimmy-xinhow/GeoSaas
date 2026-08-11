@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import pLimit from '@/common/utils/p-limit';
+import { isScanRetryBackoffActive } from '../scan/scan-retry-policy';
 
 interface CsvRow {
   url: string;
@@ -251,6 +252,7 @@ export class SeedService {
       await Promise.all(
         pendingSeeds.map((seed: any) =>
           limit(async () => {
+            let attemptedSiteId: string | null = null;
             try {
               // Find or create site
               let site = await this.prisma.site.findFirst({
@@ -268,6 +270,7 @@ export class SeedService {
                   },
                 });
               }
+              attemptedSiteId = site.id;
 
               // Create scan and execute
               const scan = await this.prisma.scan.create({
@@ -311,6 +314,7 @@ export class SeedService {
                 data: {
                   status: 'failed',
                   failReason: err instanceof Error ? err.message : String(err),
+                  siteId: attemptedSiteId ?? undefined,
                 },
               });
               this.logger.warn(`✗ ${seed.brandName}: ${err instanceof Error ? err.message : err}`);
@@ -389,32 +393,100 @@ export class SeedService {
     };
   }
 
-  async quarantineLowQualityPublicSeeds(): Promise<{ threshold: number; quarantined: number }> {
+  async quarantineLowQualityPublicSeeds(dryRun = false): Promise<{
+    threshold: number;
+    matched: number;
+    quarantined: number;
+    dryRun: boolean;
+    sampleSiteIds: string[];
+  }> {
     this.statusCache = null;
-    const result = await this.prisma.site.updateMany({
+    const candidates = await this.prisma.site.findMany({
       where: {
         isPublic: true,
         isClient: false,
         bestScore: { lt: this.publicSeedScoreThreshold },
         user: { is: { email: 'system@geovault.local' } },
-        seedSource: { is: { status: 'scanned' } },
+        seedSource: { is: { status: 'scanned', source: 'auto_discovery' } },
       },
+      select: { id: true },
+    });
+    const sampleSiteIds = candidates.slice(0, 20).map((site) => site.id);
+    if (dryRun || candidates.length === 0) {
+      return {
+        threshold: this.publicSeedScoreThreshold,
+        matched: candidates.length,
+        quarantined: 0,
+        dryRun,
+        sampleSiteIds,
+      };
+    }
+
+    const result = await this.prisma.site.updateMany({
+      where: { id: { in: candidates.map((site) => site.id) }, isPublic: true },
       data: { isPublic: false },
     });
     this.logger.log(
-      `Quarantined ${result.count} low-quality public seed sites below ${this.publicSeedScoreThreshold}/100`,
+      `Quarantined ${result.count}/${candidates.length} low-quality public auto-discovery sites below ${this.publicSeedScoreThreshold}/100`,
     );
-    return { threshold: this.publicSeedScoreThreshold, quarantined: result.count };
+    return {
+      threshold: this.publicSeedScoreThreshold,
+      matched: candidates.length,
+      quarantined: result.count,
+      dryRun: false,
+      sampleSiteIds,
+    };
   }
 
   /** Retry all failed seeds */
-  async retryFailed(): Promise<{ reset: number }> {
+  async retryFailed(): Promise<{ reset: number; skippedBackoff: number }> {
     this.statusCache = null;
-    const result = await this.prisma.seedSource.updateMany({
+    const failedSeeds = await this.prisma.seedSource.findMany({
       where: { status: 'failed' },
-      data: { status: 'pending', failReason: null },
+      select: { id: true, url: true, siteId: true, updatedAt: true },
     });
-    return { reset: result.count };
+    if (failedSeeds.length === 0) return { reset: 0, skippedBackoff: 0 };
+
+    const siteIds = failedSeeds.flatMap((seed) => (seed.siteId ? [seed.siteId] : []));
+    const urls = failedSeeds.map((seed) => seed.url);
+    const sites = await this.prisma.site.findMany({
+      where: {
+        OR: [
+          ...(siteIds.length > 0 ? [{ id: { in: siteIds } }] : []),
+          { url: { in: urls } },
+        ],
+      },
+      select: {
+        id: true,
+        url: true,
+        scans: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: { status: true, createdAt: true },
+        },
+      },
+    });
+    const byId = new Map(sites.map((site) => [site.id, site]));
+    const byUrl = new Map(sites.map((site) => [site.url, site]));
+    const now = new Date();
+    const retryIds = failedSeeds
+      .filter((seed) => {
+        const site = (seed.siteId ? byId.get(seed.siteId) : undefined) ?? byUrl.get(seed.url);
+        if (site) return !isScanRetryBackoffActive(site.scans, now);
+        return seed.updatedAt.getTime() + 7 * 86400000 <= now.getTime();
+      })
+      .map((seed) => seed.id);
+
+    const result = retryIds.length > 0
+      ? await this.prisma.seedSource.updateMany({
+          where: { id: { in: retryIds } },
+          data: { status: 'pending', failReason: null },
+        })
+      : { count: 0 };
+    return {
+      reset: result.count,
+      skippedBackoff: failedSeeds.length - result.count,
+    };
   }
 
   private async parseCsv(filePath: string): Promise<CsvRow[]> {

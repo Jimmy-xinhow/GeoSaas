@@ -13,6 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
 import { assertSiteAccess, canAccessSite, workspaceSiteWhere } from '../../common/auth/site-access';
 import { ScanPipelineService } from './scan-pipeline.service';
+import { isScanRetryBackoffActive } from './scan-retry-policy';
 
 @Injectable()
 export class ScanService {
@@ -182,6 +183,7 @@ export class ScanService {
     attempted: number;
     succeeded: number;
     failed: number;
+    skippedBackoff: number;
   }> {
     const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000);
 
@@ -207,25 +209,30 @@ export class ScanService {
         url: true,
         name: true,
         scans: {
-          where: { status: 'COMPLETED' },
-          orderBy: { completedAt: 'desc' },
-          take: 1,
-          select: { completedAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: { status: true, createdAt: true, completedAt: true },
         },
       },
     });
 
+    const now = new Date();
+    const eligible = sites.filter(
+      (site) => !isScanRetryBackoffActive(site.scans, now),
+    );
+    const skippedBackoff = sites.length - eligible.length;
+
     // Oldest-scanned first (null = never scanned = infinitely old)
-    const ordered = sites.sort((a, b) => {
-      const aT = a.scans[0]?.completedAt?.getTime() ?? 0;
-      const bT = b.scans[0]?.completedAt?.getTime() ?? 0;
+    const ordered = eligible.sort((a, b) => {
+      const aT = a.scans.find((scan) => scan.status === 'COMPLETED')?.completedAt?.getTime() ?? 0;
+      const bT = b.scans.find((scan) => scan.status === 'COMPLETED')?.completedAt?.getTime() ?? 0;
       return aT - bT;
     });
     const batch = ordered.slice(0, limit);
 
     if (batch.length === 0) {
-      this.logger.log('weekly-refresh: no stale sites');
-      return { attempted: 0, succeeded: 0, failed: 0 };
+      this.logger.log(`weekly-refresh: no eligible stale sites (${skippedBackoff} in retry backoff)`);
+      return { attempted: 0, succeeded: 0, failed: 0, skippedBackoff };
     }
 
     this.logger.log(`weekly-refresh start: ${batch.length} sites`);
@@ -253,7 +260,9 @@ export class ScanService {
       ),
     );
 
-    this.logger.log(`weekly-refresh done: ${succeeded} ok, ${failed} failed`);
-    return { attempted: batch.length, succeeded, failed };
+    this.logger.log(
+      `weekly-refresh done: ${succeeded} ok, ${failed} failed, ${skippedBackoff} in retry backoff`,
+    );
+    return { attempted: batch.length, succeeded, failed, skippedBackoff };
   }
 }

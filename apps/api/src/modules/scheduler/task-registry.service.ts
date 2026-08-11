@@ -160,7 +160,9 @@ export class TaskRegistryService implements OnModuleInit {
 
     this.cronManager.registerHandler('retry_failed_seeds', async () => {
       const result = await this.seedService.retryFailed();
-      this.logger.log(`Retry failed seeds: reset ${result.reset} to pending`);
+      this.logger.log(
+        `Retry failed seeds: reset ${result.reset} to pending, ${result.skippedBackoff} in backoff`,
+      );
       if (result.reset > 0) {
         await this.seedService.runScanning();
       }

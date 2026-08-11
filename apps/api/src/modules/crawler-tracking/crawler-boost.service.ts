@@ -14,7 +14,6 @@ import { IndexNowService } from '../indexnow/indexnow.service';
  *   1. Every day at 04:00 UTC, find isClient=true sites whose CrawlerVisit
  *      log has been silent for >=14 days (or is empty outright).
  *   2. For each cold site, fire:
- *        - IndexNow submitUrl(siteUrl)                       [Bing/Yandex]
  *        - IndexNow submitUrl(/directory/{siteId})           [Geovault page]
  *        - IndexNow submitUrl(/blog/{brand_showcase slug})   [if exists]
  *        - WebSub publish on the per-brand /feed + /feed.json
@@ -113,7 +112,6 @@ export class CrawlerBoostService {
       cold.map((site) =>
         queue(async () => {
           const urls: string[] = [
-            site.url, // the client's own homepage
             `${this.webUrl}/directory/${site.id}`, // Geovault directory page
           ];
           const showcaseSlug = site.blogArticles[0]?.slug;

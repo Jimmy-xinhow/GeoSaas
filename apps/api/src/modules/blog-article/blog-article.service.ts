@@ -1571,7 +1571,7 @@ ${args.currentDraft || '(empty draft)'}`;
       );
     }
 
-    this.llmsHostingService.invalidatePlatformLlmsFull(article.siteId);
+    await this.llmsHostingService.invalidatePlatformLlmsFull(article.siteId);
     return {
       ...this.buildClientDailyReviewResponse(updated),
       repairAudit: {
@@ -2290,7 +2290,7 @@ ${args.currentDraft || '(empty draft)'}`;
     }
 
     if (unpublished > 0) {
-      this.llmsHostingService.invalidatePlatformLlmsFull();
+      await this.llmsHostingService.invalidatePlatformLlmsFull();
     }
 
     this.logger.log(
@@ -2354,7 +2354,7 @@ ${args.currentDraft || '(empty draft)'}`;
       data: { published: false, lastRegeneratedAt: new Date() },
     });
     if (result.count > 0) {
-      this.llmsHostingService.invalidatePlatformLlmsFull();
+      await this.llmsHostingService.invalidatePlatformLlmsFull();
     }
     this.logger.log(
       `demote-legacy-geo: unpublished ${result.count}/${totalMatched} legacy GEO-template articles`,
@@ -2446,7 +2446,7 @@ ${args.currentDraft || '(empty draft)'}`;
     }
 
     if (refreshedSiteIds.size > 0) {
-      this.llmsHostingService.invalidatePlatformLlmsFull();
+      await this.llmsHostingService.invalidatePlatformLlmsFull();
     }
 
     // Regenerate for affected sites (deduped)
@@ -4450,7 +4450,7 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     // Drafts (fallback path) are not public — no llms-full invalidation and
     // no IndexNow ping until a human reviews and publishes them.
     if (!usedFallback) {
-      this.llmsHostingService.invalidatePlatformLlmsFull(site.id);
+      await this.llmsHostingService.invalidatePlatformLlmsFull(site.id);
       this.pingIndexNow(slug);
     }
     return {
@@ -4933,7 +4933,7 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
       },
     });
 
-    this.llmsHostingService.invalidatePlatformLlmsFull(existing.siteId);
+    await this.llmsHostingService.invalidatePlatformLlmsFull(existing.siteId);
     return this.buildClientDailyReviewResponse(updated);
   }
 
@@ -5000,7 +5000,7 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
       select: { slug: true, title: true, published: true },
     });
 
-    this.llmsHostingService.invalidatePlatformLlmsFull(articleSiteId);
+    await this.llmsHostingService.invalidatePlatformLlmsFull(articleSiteId);
     if (published) this.pingIndexNow(article.slug);
 
     return {
@@ -5040,7 +5040,7 @@ ${contentStrategy.extractedFacts.map((fact) => `- ${fact}`).join('\n')}`;
     }
 
     if (unpublished > 0) {
-      this.llmsHostingService.invalidatePlatformLlmsFull();
+      await this.llmsHostingService.invalidatePlatformLlmsFull();
     }
 
     this.logger.log(

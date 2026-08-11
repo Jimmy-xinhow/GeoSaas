@@ -249,7 +249,7 @@ export class LongTailArticleQaService {
         where: { id: article.id },
         data: { published: true, lastRegeneratedAt: new Date() },
       });
-      this.llmsHosting.invalidatePlatformLlmsFull(article.siteId ?? undefined);
+      await this.llmsHosting.invalidatePlatformLlmsFull(article.siteId ?? undefined);
       published++;
       issues.push(this.issue(article, 'auto_published', review));
       this.logger.log(`Long-tail QA auto-published draft ${article.slug} (${article.templateType})`);
@@ -590,7 +590,7 @@ ${article.content.slice(0, 9000)}
       where: { id: article.id },
       data: { published: false, lastRegeneratedAt: new Date() },
     });
-    this.llmsHosting.invalidatePlatformLlmsFull(article.siteId ?? undefined);
+    await this.llmsHosting.invalidatePlatformLlmsFull(article.siteId ?? undefined);
     this.logger.warn(
       `Long-tail QA unpublished ${article.slug}: ${failedRules.join(', ') || 'quality_failed'}`,
     );

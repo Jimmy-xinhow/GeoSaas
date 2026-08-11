@@ -303,6 +303,7 @@ export class DiscoveryService {
           await Promise.all(
             pendingSeeds.map((seed: any) =>
               limit(async () => {
+                let attemptedSiteId: string | null = null;
                 try {
                   let site = await this.prisma.site.findFirst({
                     where: { url: seed.url },
@@ -314,18 +315,39 @@ export class DiscoveryService {
                         name: seed.brandName,
                         userId: systemUser.id,
                         industry: seed.industry,
-                        isPublic: true,
+                        isPublic: false,
                       },
                     });
                   }
                   if (site) {
+                    attemptedSiteId = site.id;
                     const scan = await this.prisma.scan.create({
                       data: { siteId: site.id, status: 'PENDING' },
                     });
                     await this.scanPipeline.executeScan(scan.id, seed.url);
+                    const scoredSite = await this.prisma.site.findUnique({
+                      where: { id: site.id },
+                      select: { bestScore: true, userId: true, isClient: true },
+                    });
+                    const score = scoredSite?.bestScore ?? 0;
+                    const seedManagedSite =
+                      scoredSite?.userId === systemUser?.id && scoredSite?.isClient !== true;
+                    const shouldPublish = score >= 60;
+                    if (seedManagedSite) {
+                      await this.prisma.site.update({
+                        where: { id: site.id },
+                        data: { isPublic: shouldPublish },
+                      });
+                    }
                     await this.prisma.seedSource.update({
                       where: { id: seed.id },
-                      data: { status: 'scanned', siteId: site.id },
+                      data: {
+                        status: 'scanned',
+                        siteId: site.id,
+                        failReason: shouldPublish
+                          ? null
+                          : `Scanned but kept private: GEO score ${score}/100 is below public threshold 60/100`,
+                      },
                     });
                     totalScanned++;
                   }
@@ -335,6 +357,7 @@ export class DiscoveryService {
                     data: {
                       status: 'failed',
                       failReason: err instanceof Error ? err.message : String(err),
+                      siteId: attemptedSiteId ?? undefined,
                     },
                   });
                 }

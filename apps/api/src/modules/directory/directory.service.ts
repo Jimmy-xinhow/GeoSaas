@@ -63,7 +63,7 @@ export class DirectoryService {
 
   private invalidatePublicDirectoryCaches(siteId?: string): void {
     this.cache.clear();
-    this.llmsHostingService?.invalidatePlatformLlmsFull(siteId);
+    void this.llmsHostingService?.invalidatePlatformLlmsFull(siteId);
   }
 
   private getProfileDescription(profile: unknown): string {

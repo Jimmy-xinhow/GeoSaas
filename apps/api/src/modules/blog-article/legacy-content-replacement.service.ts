@@ -153,7 +153,7 @@ export class LegacyContentReplacementService {
 
     let indexNowSubmitted = false;
     if (updatedSites > 0) {
-      this.llmsHosting.invalidatePlatformLlmsFull();
+      await this.llmsHosting.invalidatePlatformLlmsFull();
       try {
         const webUrl = this.webUrl();
         await this.indexNow.submitBatch(canonicalUrls, new URL(webUrl).host);
@@ -193,7 +193,7 @@ export class LegacyContentReplacementService {
     }
     const result = await this.applyCandidate(candidate);
     if (result.status === 'replaced') {
-      this.llmsHosting.invalidatePlatformLlmsFull(siteId);
+      await this.llmsHosting.invalidatePlatformLlmsFull(siteId);
       this.indexNow.submitUrl(this.articleUrl(result.replacementSlug)).catch(() => {});
     }
     return result;

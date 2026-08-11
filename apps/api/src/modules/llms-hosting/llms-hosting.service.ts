@@ -19,7 +19,6 @@ export class LlmsHostingService implements OnModuleDestroy {
   private readonly logger = new Logger(LlmsHostingService.name);
   private readonly webUrl = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
   private readonly redis: Redis | null;
-  private redisAvailable = true;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -42,8 +41,6 @@ export class LlmsHostingService implements OnModuleDestroy {
       });
       this.redis.on('error', (err) => {
         this.logger.warn(`Redis llms-full cache unavailable: ${err.message}`);
-        this.redisAvailable = false;
-        this.redis?.disconnect();
       });
     } catch (err) {
       this.logger.warn(`Redis init failed, in-memory fallback only: ${err}`);
@@ -97,9 +94,11 @@ export class LlmsHostingService implements OnModuleDestroy {
   }
 
   private async readRedisCache(key = REDIS_KEY_LLMS_FULL): Promise<{ data: string; etag: string; lastModified: Date } | null> {
-    if (!this.redis || !this.redisAvailable) return null;
+    if (!(await this.ensureRedisConnected())) return null;
+    const redis = this.redis;
+    if (!redis) return null;
     try {
-      const raw = await this.redis.get(key);
+      const raw = await redis.get(key);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as { data: string; etag: string; lastModified: string };
       return { data: parsed.data, etag: parsed.etag, lastModified: new Date(parsed.lastModified) };
@@ -110,9 +109,11 @@ export class LlmsHostingService implements OnModuleDestroy {
   }
 
   private async writeRedisCache(data: string, etag: string, lastModified: Date, key = REDIS_KEY_LLMS_FULL): Promise<void> {
-    if (!this.redis || !this.redisAvailable) return;
+    if (!(await this.ensureRedisConnected())) return;
+    const redis = this.redis;
+    if (!redis) return;
     try {
-      await this.redis.set(
+      await redis.set(
         key,
         JSON.stringify({ data, etag, lastModified: lastModified.toISOString() }),
         'EX',
@@ -124,17 +125,19 @@ export class LlmsHostingService implements OnModuleDestroy {
   }
 
   private async invalidateRedisCache(): Promise<void> {
-    if (!this.redis || !this.redisAvailable) return;
+    if (!(await this.ensureRedisConnected())) return;
+    const redis = this.redis;
+    if (!redis) return;
     try {
-      await this.redis.del(REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY);
+      await redis.del(REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY);
     } catch (err) {
       this.logger.warn(`Redis delete failed: ${err}`);
     }
   }
 
-  invalidatePlatformLlmsFull(siteId?: string): void {
+  async invalidatePlatformLlmsFull(siteId?: string): Promise<void> {
     emitLlmsFullInvalidated();
-    this.invalidateRedisCache().catch(() => {});
+    await this.invalidateRedisCache();
     this.pingIndexNow('/llms-full.txt');
     if (siteId) this.pingIndexNow(`/directory/${siteId}`);
   }
@@ -144,6 +147,19 @@ export class LlmsHostingService implements OnModuleDestroy {
     this.llmsFullCache = null;
     await this.invalidateRedisCache();
     return this.getPlatformLlmsFullTxt();
+  }
+
+  private async ensureRedisConnected(): Promise<boolean> {
+    if (!this.redis) return false;
+    try {
+      if (this.redis.status === 'wait' || this.redis.status === 'end') {
+        await this.redis.connect();
+      }
+      return this.redis.status === 'ready';
+    } catch (err) {
+      this.logger.warn(`Redis llms-full cache connection failed: ${err}`);
+      return false;
+    }
   }
 
   async getLlmsTxt(siteId: string): Promise<string | null> {
@@ -299,7 +315,7 @@ ${faqSection}`;
     // A site's llms.txt content changed — invalidate the platform-wide
     // cache and signal Bing/Yandex that /llms-full.txt plus this site's
     // directory page are stale.
-    this.invalidatePlatformLlmsFull(siteId);
+    await this.invalidatePlatformLlmsFull(siteId);
 
     return updated;
   }
@@ -576,7 +592,7 @@ Source: ${webUrl}/llms-full.txt
         where: { id: siteId },
         data: { llmsTxt: result.code, llmsTxtUpdatedAt: new Date() },
       });
-      this.invalidatePlatformLlmsFull(siteId);
+      await this.invalidatePlatformLlmsFull(siteId);
       return { content: result.code };
     }
 
@@ -586,7 +602,7 @@ Source: ${webUrl}/llms-full.txt
       where: { id: siteId },
       data: { llmsTxt: content, llmsTxtUpdatedAt: new Date() },
     });
-    this.invalidatePlatformLlmsFull(siteId);
+    await this.invalidatePlatformLlmsFull(siteId);
     return { content };
   }
 }

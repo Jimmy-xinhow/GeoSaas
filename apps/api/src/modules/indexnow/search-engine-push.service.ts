@@ -6,10 +6,8 @@ import { IndexNowService } from './indexnow.service';
 import { publicIndexableBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
 
 /**
- * Proactively push URLs to Google Indexing API and Bing URL Submission API
- * to trigger faster crawling by Gemini (Google-Extended) and Copilot (Bingbot).
+ * Proactively push eligible Geovault URLs to IndexNow and Bing URL Submission.
  *
- * - Google Indexing API: notifications when content is updated/created
  * - Bing URL Submission API: batch submit up to 10,000 URLs/day
  * - Runs daily at 05:00 UTC (13:00 TW) — pushes recently updated content
  */
@@ -75,46 +73,13 @@ export class SearchEnginePushService {
 
   /**
    * Google Indexing API — notify Google about updated URLs.
-   * Requires GOOGLE_INDEXING_API_KEY (API key with Indexing API enabled).
-   * Falls back to IndexNow if no Google key configured.
+   * General directory/blog URLs are not eligible for Google's Indexing API.
+   * They are discovered through sitemap.xml and Search Console instead.
    */
-  private async pushToGoogle(urls: string[]): Promise<{ submitted: number; errors: number }> {
-    const apiKey = this.config.get('GOOGLE_INDEXING_API_KEY');
-    let submitted = 0;
-    let errors = 0;
-
-    if (!apiKey) {
-      this.logger.log('GOOGLE_INDEXING_API_KEY not set, skipping Google Indexing API push');
-      return { submitted: 0, errors: 0 };
-    }
-
-    // Google Indexing API: POST https://indexing.googleapis.com/v3/urlNotifications:publish
-    for (const url of urls.slice(0, 200)) {
-      try {
-        const res = await fetch(
-          `https://indexing.googleapis.com/v3/urlNotifications:publish?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, type: 'URL_UPDATED' }),
-          },
-        );
-        if (res.ok) {
-          submitted++;
-        } else {
-          errors++;
-          if (submitted === 0 && errors === 1) {
-            const body = await res.text();
-            this.logger.warn(`Google Indexing API error: ${res.status} ${body.slice(0, 200)}`);
-          }
-        }
-      } catch {
-        errors++;
-      }
-    }
-
-    this.logger.log(`Google Indexing API: ${submitted} submitted, ${errors} errors`);
-    return { submitted, errors };
+  private async pushToGoogle(): Promise<{ submitted: 0; skipped: string }> {
+    const skipped = 'unsupported_for_general_pages';
+    this.logger.log(`Google Indexing API skipped: ${skipped}`);
+    return { submitted: 0, skipped };
   }
 
   /**
@@ -170,8 +135,9 @@ export class SearchEnginePushService {
       this.logger.warn(`IndexNow batch failed: ${err.message}`);
     }
 
-    // 2. Google Indexing API
-    await this.pushToGoogle(urls);
+    // 2. Record that general pages are intentionally excluded from Google's
+    // restricted Indexing API.
+    await this.pushToGoogle();
 
     // 3. Bing URL Submission API
     await this.pushToBing(urls);
@@ -184,7 +150,7 @@ export class SearchEnginePushService {
     const urls = await this.getRecentUrls();
 
     const indexNowResult = await this.indexNow.submitBatch(urls.slice(0, 50), new URL(this.webUrl).host);
-    const googleResult = await this.pushToGoogle(urls.slice(0, 20));
+    const googleResult = await this.pushToGoogle();
     const bingResult = await this.pushToBing(urls.slice(0, 50));
 
     return { urls: urls.length, indexNow: indexNowResult, google: googleResult, bing: bingResult };

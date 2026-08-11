@@ -239,13 +239,15 @@ model Site {
 }
 
 model Scan {
-  id          String     @id @default(cuid())
-  siteId      String
-  site        Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  totalScore  Int        @default(0)
-  status      ScanStatus @default(PENDING)
-  createdAt   DateTime   @default(now())
-  completedAt DateTime?
+  id            String     @id @default(cuid())
+  siteId        String
+  site          Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  totalScore    Int        @default(0)
+  status        ScanStatus @default(PENDING)
+  failureCode   String?
+  failureReason String?    @db.Text
+  createdAt     DateTime   @default(now())
+  completedAt   DateTime?
 
   results ScanResult[]
 
