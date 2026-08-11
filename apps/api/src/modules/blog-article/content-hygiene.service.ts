@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
+import pLimit from '../../common/utils/p-limit';
 import {
   buildBlogArticleContentKey,
   normalizeBlogArticleDescription,
@@ -99,69 +100,83 @@ export class ContentHygieneService {
       };
     }
 
-    let normalizedDescriptions = 0;
-    let demotedDuplicates = 0;
-    let aliasesAdded = 0;
-    let identityBackfills = 0;
-    const canonicalUrls: string[] = [];
+    const writeLimit = pLimit(10);
+    const descriptionUpdates = await Promise.all(descriptions.map((article) =>
+      writeLimit(async () => {
+        const description = normalizeBlogArticleDescription(article.description);
+        if (!description || description === article.description) return 0;
+        await this.prisma.blogArticle.update({ where: { id: article.id }, data: { description } });
+        return 1;
+      }),
+    ));
+    const normalizedDescriptions = descriptionUpdates.reduce<number>((sum, count) => sum + count, 0);
 
-    for (const article of descriptions) {
-      const description = normalizeBlogArticleDescription(article.description);
-      if (!description || description === article.description) continue;
-      await this.prisma.blogArticle.update({ where: { id: article.id }, data: { description } });
-      normalizedDescriptions++;
-    }
+    const duplicateUpdates = await Promise.all(duplicateGroups.map((group) =>
+      writeLimit(async () => {
+        const [canonical, ...duplicates] = this.sortCanonicalFirst(group);
+        const duplicateSlugs = duplicates.map((article) => article.slug);
+        const mergedAliases = [...new Set([
+          ...canonical.aliasSlugs,
+          ...duplicateSlugs,
+          ...duplicates.flatMap((article) => article.aliasSlugs),
+        ])].filter((slug) => slug && slug !== canonical.slug);
+        const aliasesBefore = new Set(canonical.aliasSlugs);
+        const contentIntent = resolveBlogArticleIntent(canonical);
+        const normalizedTitle = normalizeBlogArticleTitle(canonical.title);
+        const contentKey = buildBlogArticleContentKey(canonical);
 
-    for (const group of duplicateGroups) {
-      const [canonical, ...duplicates] = this.sortCanonicalFirst(group);
-      const duplicateSlugs = duplicates.map((article) => article.slug);
-      const mergedAliases = [...new Set([
-        ...canonical.aliasSlugs,
-        ...duplicateSlugs,
-        ...duplicates.flatMap((article) => article.aliasSlugs),
-      ])].filter((slug) => slug && slug !== canonical.slug);
-      const aliasesBefore = new Set(canonical.aliasSlugs);
-      const contentIntent = resolveBlogArticleIntent(canonical);
-      const normalizedTitle = normalizeBlogArticleTitle(canonical.title);
-      const contentKey = buildBlogArticleContentKey(canonical);
+        await this.prisma.$transaction([
+          this.prisma.blogArticle.updateMany({
+            where: { id: { in: duplicates.map((article) => article.id) }, published: true },
+            data: {
+              published: false,
+              retiredAt: new Date(),
+              retirementReason: 'duplicate_title_intent',
+              contentKey: null,
+            },
+          }),
+          this.prisma.blogArticle.update({
+            where: { id: canonical.id },
+            data: {
+              aliasSlugs: { set: mergedAliases },
+              normalizedTitle,
+              contentIntent,
+              contentKey,
+            },
+          }),
+        ]);
 
-      await this.prisma.$transaction([
-        this.prisma.blogArticle.updateMany({
-          where: { id: { in: duplicates.map((article) => article.id) }, published: true },
+        return {
+          demotedDuplicates: duplicates.length,
+          aliasesAdded: mergedAliases.filter((slug) => !aliasesBefore.has(slug)).length,
+          canonicalUrl: this.articleUrl(canonical.slug),
+        };
+      }),
+    ));
+    const demotedDuplicates = duplicateUpdates.reduce(
+      (sum, update) => sum + update.demotedDuplicates,
+      0,
+    );
+    const aliasesAdded = duplicateUpdates.reduce(
+      (sum, update) => sum + update.aliasesAdded,
+      0,
+    );
+    const canonicalUrls = duplicateUpdates.map((update) => update.canonicalUrl);
+
+    const identityUpdates = await Promise.all(identities.map((article) =>
+      writeLimit(async () => {
+        await this.prisma.blogArticle.update({
+          where: { id: article.id },
           data: {
-            published: false,
-            retiredAt: new Date(),
-            retirementReason: 'duplicate_title_intent',
-            contentKey: null,
+            normalizedTitle: normalizeBlogArticleTitle(article.title),
+            contentIntent: resolveBlogArticleIntent(article),
+            contentKey: buildBlogArticleContentKey(article),
           },
-        }),
-        this.prisma.blogArticle.update({
-          where: { id: canonical.id },
-          data: {
-            aliasSlugs: { set: mergedAliases },
-            normalizedTitle,
-            contentIntent,
-            contentKey,
-          },
-        }),
-      ]);
-
-      demotedDuplicates += duplicates.length;
-      aliasesAdded += mergedAliases.filter((slug) => !aliasesBefore.has(slug)).length;
-      canonicalUrls.push(this.articleUrl(canonical.slug));
-    }
-
-    for (const article of identities) {
-      await this.prisma.blogArticle.update({
-        where: { id: article.id },
-        data: {
-          normalizedTitle: normalizeBlogArticleTitle(article.title),
-          contentIntent: resolveBlogArticleIntent(article),
-          contentKey: buildBlogArticleContentKey(article),
-        },
-      });
-      identityBackfills++;
-    }
+        });
+        return 1;
+      }),
+    ));
+    const identityBackfills = identityUpdates.reduce<number>((sum, count) => sum + count, 0);
 
     if (normalizedDescriptions > 0 || demotedDuplicates > 0 || identityBackfills > 0) {
       await this.llmsHosting.invalidatePlatformLlmsFull();
