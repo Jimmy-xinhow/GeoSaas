@@ -9,6 +9,19 @@ export interface BlogArticleIdentityInput {
   contentIntent?: string | null;
 }
 
+const BLOG_ARTICLE_IDENTITY_FIELDS = [
+  'title',
+  'siteId',
+  'templateType',
+  'category',
+  'contentIntent',
+] as const;
+
+export function hasBlogArticleIdentityChange(data: Record<string, unknown>): boolean {
+  return BLOG_ARTICLE_IDENTITY_FIELDS.some((field) =>
+    Object.prototype.hasOwnProperty.call(data, field));
+}
+
 export function normalizeBlogArticleTitle(value: string | null | undefined): string {
   return (value || '')
     .normalize('NFKC')

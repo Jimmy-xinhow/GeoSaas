@@ -1,5 +1,6 @@
 import {
   buildBlogArticleContentKey,
+  hasBlogArticleIdentityChange,
   normalizeBlogArticleDescription,
   normalizeBlogArticleTitle,
 } from './blog-article-normalization';
@@ -33,5 +34,12 @@ describe('blog article write normalization', () => {
     const description = normalizeBlogArticleDescription(`## 摘要\n**${'公開資料'.repeat(60)}**`);
     expect(description).not.toMatch(/[#*]/);
     expect(description.length).toBeLessThanOrEqual(160);
+  });
+
+  it('does not treat description-only updates as identity changes', () => {
+    expect(hasBlogArticleIdentityChange({ description: 'normalized excerpt' })).toBe(false);
+    expect(hasBlogArticleIdentityChange({ published: false, retiredAt: new Date() })).toBe(false);
+    expect(hasBlogArticleIdentityChange({ title: 'Updated title' })).toBe(true);
+    expect(hasBlogArticleIdentityChange({ contentIntent: 'brand_profile' })).toBe(true);
   });
 });

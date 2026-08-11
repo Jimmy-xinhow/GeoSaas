@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import {
   buildBlogArticleContentKey,
+  hasBlogArticleIdentityChange,
   normalizeBlogArticleDescription,
   normalizeBlogArticleTitle,
   resolveBlogArticleIntent,
@@ -28,9 +29,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         if (typeof data.description === 'string') {
           data.description = normalizeBlogArticleDescription(data.description);
         }
-        const identityChanged = ['title', 'siteId', 'templateType', 'category', 'contentIntent']
-          .some((field) => Object.prototype.hasOwnProperty.call(data, field));
-        if (!identityChanged && Object.keys(base).length === 0) return;
+        const identityChanged = hasBlogArticleIdentityChange(data);
+        // Description, publication state, and retirement updates must not
+        // opportunistically assign a contentKey. Historical duplicates are
+        // consolidated explicitly before their canonical identity is stored.
+        if (!identityChanged) return;
         const identity = { ...base, ...data };
         data.normalizedTitle = normalizeBlogArticleTitle(identity.title);
         data.contentIntent = resolveBlogArticleIntent(identity);
