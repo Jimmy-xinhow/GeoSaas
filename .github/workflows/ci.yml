@@ -48,6 +48,9 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm db:generate
 
+      - name: Build shared package
+        run: pnpm --filter @geovault/shared --fail-if-no-match build
+
       # ── Dependency Audit ─────────────────────────────────────
       - name: Security audit
         run: pnpm audit --audit-level=high || true
@@ -99,6 +102,9 @@ jobs:
 
       - name: Generate Prisma Client
         run: pnpm db:generate
+
+      - name: Build shared package
+        run: pnpm --filter @geovault/shared --fail-if-no-match build
 
       - name: Install Playwright browsers
         run: pnpm --filter @geovault/web --fail-if-no-match exec playwright install --with-deps chromium

@@ -1,5 +1,4 @@
-import { Metadata } from 'next';
-import Link from 'next/link';
+import type { Metadata } from 'next';
 import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 import EmailLink from '@/components/shared/email-link';
@@ -7,254 +6,72 @@ import EmailLink from '@/components/shared/email-link';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 
 export const metadata: Metadata = {
-  title: 'Geovault 隱私權政策與資料保護說明',
-  description: '了解 Geovault 如何蒐集、使用、保存與保護帳號資料、網站掃描資料、AI 引用監測資料、付款資料與公開 GEO 目錄資料。',
+  title: '隱私權政策',
+  description: 'GeoVault 隱私權政策：說明我們蒐集的資料、使用目的、第三方服務、保存期限與您的權利。',
   alternates: { canonical: `${SITE_URL}/privacy` },
   robots: { index: true, follow: true },
 };
 
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'WebPage',
-  name: 'Geovault 隱私權政策與資料保護說明',
-  description: metadata.description,
-  url: `${SITE_URL}/privacy`,
-  inLanguage: 'zh-TW',
-  isPartOf: {
-    '@type': 'WebSite',
-    name: 'Geovault',
-    url: SITE_URL,
+const sections = [
+  {
+    title: '我們蒐集哪些資料',
+    body: '當您註冊、建立網站、執行 GEO 掃描或聯絡客服時，我們可能處理帳號資料、網站 URL、掃描結果、您主動提供的內容、訂閱與交易紀錄，以及維持服務安全所需的技術日誌。密碼只保存不可逆的雜湊值。',
   },
-  publisher: {
-    '@type': 'Organization',
-    name: 'Geovault',
-    url: SITE_URL,
+  {
+    title: '分析 Cookie 與同意',
+    body: 'Google Analytics 4 只有在您點選「同意分析」後才會載入。我們用它了解頁面瀏覽、內容互動與服務流程是否順暢；廣告儲存、廣告個人化與跨站行銷追蹤預設且持續停用。您拒絕分析不會影響功能，並可透過頁面左下角的「隱私設定」隨時撤回或變更。您的選擇會保存在瀏覽器 localStorage。',
   },
-};
-
-function SectionHeader({ num, title }: { num: string; title: string }) {
-  return (
-    <div className="flex items-center gap-3 mb-5">
-      <span className="w-7 h-7 rounded flex items-center justify-center text-xs font-mono text-blue-400 bg-blue-500/10 border border-blue-500/20 shrink-0">
-        {num}
-      </span>
-      <h2 className="text-lg font-semibold text-white">{title}</h2>
-    </div>
-  );
-}
-
-function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
-  return (
-    <div className="border border-white/10 rounded-lg overflow-hidden mt-4">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-white/5 border-b border-blue-500/20">
-              {headers.map((h) => (
-                <th key={h} className="text-left px-4 py-2.5 text-xs font-mono text-blue-400 uppercase tracking-wider whitespace-nowrap">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {rows.map((row, i) => (
-              <tr key={i} className="hover:bg-blue-500/5 transition-colors">
-                {row.map((cell, j) => (
-                  <td key={j} className="px-4 py-2.5 text-gray-400 leading-relaxed">
-                    {j === 0 ? (
-                      <span className="inline-block text-xs font-mono text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
-                        {cell}
-                      </span>
-                    ) : (
-                      cell
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+  {
+    title: '資料用途',
+    body: '資料用於提供帳號與掃描服務、產生您要求的內容、改善產品品質、偵測濫用與安全事件、處理付款、回覆客服，以及在取得同意後分析整體使用成效。我們不出售個人資料。',
+  },
+  {
+    title: '第三方服務',
+    body: '為了提供服務，我們可能使用雲端主機與資料庫、郵件寄送、付款、AI 模型供應商、Google 登入與 Google Analytics 4。只會傳送完成特定功能所必要的資料，並依各服務供應商的條款與安全措施處理。',
+  },
+  {
+    title: '保存與安全',
+    body: '資料只在提供服務、履行法定義務與處理爭議所需期間保存。我們採用 HTTPS、權限控管、短效存取權杖與資料庫存取限制。沒有任何系統能保證絕對安全；若發生依法應通知的事件，我們會依適用規定處理。',
+  },
+  {
+    title: '您的權利',
+    body: '您可要求查詢、更正、刪除或限制處理與您相關的資料，也可撤回分析同意。部分紀錄可能因法令、付款或防詐需求而需保留一段時間。',
+  },
+];
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-300">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+    <div className="min-h-screen bg-gray-950 text-gray-300">
       <PublicNavbar />
-
-      {/* Hero */}
-      <div className="max-w-3xl mx-auto px-6 pt-16 pb-10 border-b border-white/10">
-        <p className="text-xs font-mono text-blue-400 tracking-widest uppercase mb-4 flex items-center gap-2">
-          <span className="w-6 h-px bg-blue-400" />
-          Legal Document
-        </p>
-        <h1 className="text-3xl sm:text-4xl font-semibold text-white tracking-tight mb-4">
-          隱私權政策
-        </h1>
-        <div className="flex gap-6 flex-wrap text-xs font-mono text-gray-500">
-          <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_6px] shadow-green-400" />
-            現行版本
-          </span>
-          <span>最後更新：2026 年 4 月</span>
-          <span>適用範圍：geovault.app</span>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-3xl mx-auto px-6 py-12 space-y-14">
-
-        <p className="text-gray-400 leading-relaxed">
-          歡迎使用 Geovault。本隱私權政策說明我們如何在您使用 <strong className="text-white">geovault.app</strong> 服務時蒐集、使用及保護您的個人資料。使用本服務即表示您同意本政策所述之資料處理方式。
+      <main className="mx-auto max-w-3xl px-6 py-16">
+        <p className="text-xs font-mono uppercase tracking-[0.2em] text-blue-400">Legal document</p>
+        <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white">隱私權政策</h1>
+        <p className="mt-4 text-sm text-gray-500">最後更新：2026 年 8 月 11 日</p>
+        <p className="mt-8 leading-7 text-gray-400">
+          本政策適用於 GeoVault（www.geovault.app）及其相關服務，說明我們如何處理資料與尊重您的選擇。
         </p>
 
-        {/* 01 */}
-        <section>
-          <SectionHeader num="01" title="服務營運者" />
-          <div className="bg-white/5 border border-white/10 border-l-2 border-l-blue-500 rounded-r-lg p-5 space-y-1 text-sm">
-            <p><strong className="text-white">服務名稱：</strong>Geovault</p>
-            <p><strong className="text-white">網站：</strong><a href="https://www.geovault.app" className="text-blue-400 hover:underline">www.geovault.app</a></p>
-            <p><strong className="text-white">聯絡信箱：</strong><EmailLink className="text-blue-400 hover:underline" /></p>
-          </div>
-        </section>
-
-        {/* 02 */}
-        <section>
-          <SectionHeader num="02" title="蒐集的個人資料" />
-          <p className="text-gray-400 text-sm mb-2">我們僅蒐集提供服務所必要的資料，依類型及蒐集時機分類如下：</p>
-          <Table
-            headers={['資料類別', '蒐集項目', '蒐集時機']}
-            rows={[
-              ['帳號資料', 'Email、姓名、密碼（bcrypt 雜湊儲存）', '註冊時'],
-              ['付款資料', '訂單編號、方案、金額、交易狀態、付款時間', '付款時（信用卡資料由藍新金流處理，Geovault 不儲存卡號）'],
-              ['網站資料', '網址、名稱、行業、品牌描述', '用戶新增網站時'],
-              ['掃描資料', 'GEO 分數、9 項指標結果、修復建議', '執行掃描時'],
-              ['爬蟲追蹤', 'AI 爬蟲名稱、造訪 URL、User-Agent、HTTP 狀態碼', '用戶安裝追蹤碼後'],
-              ['註冊前掃描意向', '網址', '使用者在首頁輸入網址並前往註冊時（不啟動公開訪客掃描）'],
-            ]}
-          />
-        </section>
-
-        {/* 03 */}
-        <section>
-          <SectionHeader num="03" title="Cookie 政策" />
-          <div className="bg-white/5 border border-white/10 border-l-2 border-l-green-500 rounded-r-lg p-5 text-sm space-y-2">
-            <p><strong className="text-white">本服務不使用 Cookie。</strong></p>
-            <p>我們採用 JWT Token 進行身份驗證，透過 HTTP Authorization Header 傳遞，不在瀏覽器儲存任何追蹤 Cookie，亦不部署 Google Analytics、Meta Pixel 或任何第三方分析追蹤工具。</p>
-          </div>
-        </section>
-
-        {/* 04 */}
-        <section>
-          <SectionHeader num="04" title="第三方服務" />
-          <p className="text-gray-400 text-sm mb-2">為提供完整服務功能，我們與下列第三方服務提供商合作：</p>
-          <Table
-            headers={['服務', '提供者', '用途', '傳送的資料']}
-            rows={[
-              ['AI 內容生成', 'OpenAI (GPT-4o)', '生成 FAQ、文章、品牌分析', '品牌名稱、行業、關鍵字'],
-              ['AI 引用監控', 'OpenAI、Anthropic、Perplexity、Google、Microsoft', '檢查品牌是否被 AI 引用', '搜尋問題、品牌名稱＋網址'],
-              ['金流處理', '藍新金流（NewebPay）', '信用卡付款', '訂單金額、Email'],
-              ['電子郵件', 'Resend', '寄送通知信', 'Email、姓名'],
-              ['搜尋引擎通知', 'IndexNow（Bing、Yandex）', '通知搜尋引擎更新', '頁面 URL'],
-              ['資料庫', 'Neon PostgreSQL', '資料儲存', '所有用戶資料（加密傳輸）'],
-              ['快取', 'Upstash Redis（TLS）', '暫存資料', '非個人識別資料'],
-              ['主機', 'Railway', '應用程式託管', '—'],
-            ]}
-          />
-        </section>
-
-        {/* 05 */}
-        <section>
-          <SectionHeader num="05" title="資料保留期間" />
-          <Table
-            headers={['資料類型', '保留期間']}
-            rows={[
-              ['用戶帳號', '帳號存續期間；刪除帳號時一併刪除所有關聯資料'],
-              ['爬蟲造訪記錄', '90 天後自動刪除'],
-              ['註冊前掃描意向', '僅保留於使用者瀏覽器本機，登入後建立正式網站掃描資料'],
-              ['付款記錄', '依相關法規保留'],
-            ]}
-          />
-        </section>
-
-        {/* 06 */}
-        <section>
-          <SectionHeader num="06" title="您的資料權利" />
-          <ul className="space-y-3 text-sm">
-            <li className="flex gap-2.5"><span className="text-blue-400 font-semibold shrink-0">›</span><span><strong className="text-white">查閱：</strong>您可在帳號設定頁面隨時查看所有個人資料。</span></li>
-            <li className="flex gap-2.5"><span className="text-blue-400 font-semibold shrink-0">›</span><span><strong className="text-white">刪除：</strong>刪除帳號時，所有網站、掃描記錄、內容、訂單及通知均透過 Cascade Delete 機制一併永久刪除。</span></li>
-            <li className="flex gap-2.5"><span className="text-blue-400 font-semibold shrink-0">›</span><span><strong className="text-white">匯出：</strong>您可透過 API 匯出網站資料與掃描結果。</span></li>
-          </ul>
-          <div className="bg-white/5 border border-white/10 border-l-2 border-l-blue-500 rounded-r-lg p-4 mt-4 text-sm">
-            如需行使上述權利或有任何疑問，請聯絡 <EmailLink className="text-blue-400 hover:underline" />。
-          </div>
-        </section>
-
-        {/* 07 */}
-        <section>
-          <SectionHeader num="07" title="安全措施" />
-          <p className="text-gray-400 text-sm mb-4">我們採用多層安全架構保護您的資料：</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {[
-              { title: '密碼保護', desc: 'bcrypt（10 rounds）雜湊儲存，不以明文保留密碼。' },
-              { title: '付款加密', desc: 'AES-256-CBC 加密傳輸，SHA256 簽章驗證。' },
-              { title: 'Token 機制', desc: 'JWT 存取令牌 15 分鐘過期，搭配 7 天 Refresh Token 輪替。' },
-              { title: '全站 HTTPS', desc: '所有傳輸均透過 TLS 加密，防止中間人攻擊。' },
-            ].map((item) => (
-              <div key={item.title} className="bg-white/5 border border-white/10 rounded-lg p-4">
-                <p className="text-xs font-mono text-blue-400 mb-1.5">{item.title}</p>
-                <p className="text-xs text-gray-400">{item.desc}</p>
+        <div className="mt-12 space-y-10">
+          {sections.map((section, index) => (
+            <section key={section.title}>
+              <div className="flex items-center gap-3">
+                <span className="rounded border border-blue-500/25 bg-blue-500/10 px-2 py-1 font-mono text-xs text-blue-300">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h2 className="text-xl font-semibold text-white">{section.title}</h2>
               </div>
-            ))}
-            <div className="sm:col-span-2 bg-white/5 border border-white/10 rounded-lg p-4">
-              <p className="text-xs font-mono text-blue-400 mb-1.5">安全標頭（Middleware）</p>
-              <p className="text-xs text-gray-400">部署 X-Frame-Options、X-Content-Type-Options、Referrer-Policy、Permissions-Policy 等標頭，防範常見 Web 攻擊。</p>
-            </div>
-          </div>
-        </section>
+              <p className="mt-4 leading-7 text-gray-400">{section.body}</p>
+            </section>
+          ))}
 
-        {/* 08 */}
-        <section>
-          <SectionHeader num="08" title="自動化通知信件" />
-          <p className="text-gray-400 text-sm mb-2">以下為服務運作所必要的系統通知，不涉及行銷目的：</p>
-          <Table
-            headers={['信件類型', '觸發時機']}
-            rows={[
-              ['歡迎信', '完成帳號註冊時'],
-              ['掃描完成通知', 'GEO 掃描完成時'],
-              ['徽章獲得通知', '達成成就里程碑時'],
-              ['AI 引用變動警報', '品牌引用狀態發生變更時'],
-            ]}
-          />
-        </section>
-
-        {/* 09 */}
-        <section id="contact">
-          <SectionHeader num="09" title="聯絡我們" />
-          <p className="text-gray-400 text-sm mb-4">如對本隱私權政策有任何疑問，歡迎透過以下方式聯繫我們：</p>
-          <div className="bg-white/5 border border-blue-500/20 rounded-lg p-6 flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <p className="text-white font-semibold mb-1">Geovault 隱私事務</p>
-              <EmailLink className="text-sm font-mono text-blue-400 hover:underline" />
-            </div>
-            <a
-              href="/privacy#contact"
-              className="inline-block text-xs font-mono bg-blue-500 text-black px-5 py-2.5 rounded font-medium hover:opacity-85 transition-opacity"
-            >
-              發送信件 →
-            </a>
-          </div>
-          <div className="bg-white/5 border border-white/10 border-l-2 border-l-blue-500 rounded-r-lg p-4 mt-4 text-sm">
-            本政策如有重大變更，我們將透過電子郵件或服務內通知提前告知。繼續使用服務即表示您接受更新後之政策。
-          </div>
-        </section>
-
-      </div>
-
+          <section className="rounded-xl border border-white/10 bg-white/5 p-6">
+            <h2 className="text-xl font-semibold text-white">聯絡我們</h2>
+            <p className="mt-3 leading-7 text-gray-400">
+              若要行使資料權利或詢問本政策，請寄信至 <EmailLink className="text-blue-300 hover:text-blue-200" />。
+            </p>
+          </section>
+        </div>
+      </main>
       <PublicFooter />
     </div>
   );

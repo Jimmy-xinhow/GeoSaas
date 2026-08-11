@@ -23,6 +23,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { savePendingGuestScan } from '@/lib/pending-guest-scan'
+import { trackEvent } from '@/lib/analytics'
 
 const registerSchema = z
   .object({
@@ -73,6 +74,7 @@ export default function RegisterPage() {
       : payload
     registerMutation.mutate(registerPayload, {
       onSuccess: (result) => {
+        trackEvent('sign_up', { method: 'email' })
         toast.success('註冊成功，歡迎加入！')
         clearStoredAffiliateRef()
         setVerificationNotice({

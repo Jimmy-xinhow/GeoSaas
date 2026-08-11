@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
+import { trackEvent } from '@/lib/analytics';
 
 export interface ScanResultItem {
   id: string;
@@ -60,6 +61,7 @@ export function useTriggerScan() {
 
   return useMutation({
     mutationFn: async (siteId: string) => {
+      trackEvent('scan_start', { scan_type: 'authenticated', site_id: siteId });
       const { data } = await apiClient.post<Scan>(
         `/sites/${siteId}/scans`
       );

@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import { createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
+import { classifyCrawlerAuditStatus } from './crawler-audit-lifecycle';
 import {
   getPublicBlogArticleSeoIssues,
   publicIndexableBlogArticleWhere,
@@ -291,7 +292,7 @@ export class AiPlatformIntelligenceService {
 
       if (apply && (issues.includes('no-crawler-7d') || issues.includes('no-crawler-30d'))) {
         urlsToSubmit.push(`${webUrl}/blog/${encodeURIComponent(article.slug)}`);
-        fixes.push('indexnow-resubmitted');
+        fixes.push('indexnow-queued');
       }
 
       if (issues.length > 0 || fixes.length > 0) {
@@ -313,7 +314,7 @@ export class AiPlatformIntelligenceService {
             last7d: row.last7d,
             last30d: row.last30d,
             lastVisitAt: row.lastVisitAt,
-            status: fixes.length > 0 ? 'fixed' : 'needs_review',
+            status: classifyCrawlerAuditStatus(issues, fixes),
             issues,
             fixes,
           },

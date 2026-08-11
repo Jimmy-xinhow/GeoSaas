@@ -7,6 +7,8 @@ import './globals.css';
 import QueryProvider from '@/providers/query-provider';
 import GoogleAuthProvider from '@/providers/google-oauth-provider';
 import AffiliateTracker from '@/components/affiliate/affiliate-tracker';
+import AnalyticsConsent from '@/components/analytics/analytics-consent';
+import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -71,6 +73,9 @@ export default async function RootLayout({
             <GoogleAuthProvider>
               <AffiliateTracker />
               {children}
+              <Suspense fallback={null}>
+                <AnalyticsConsent />
+              </Suspense>
             </GoogleAuthProvider>
           </QueryProvider>
         </NextIntlClientProvider>

@@ -3,14 +3,21 @@ import { notFound, permanentRedirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ChevronRight, Clock, List } from 'lucide-react';
 import { getPost, getAllPosts } from '@/content/blog/posts';
-import RelatedArticles from './article-client';
 import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
-import { extractHeadings, markdownToHtml } from './markdown';
+import { buildSeoDescription, extractHeadings, markdownToHtml, markdownToPlainText } from './markdown';
 import { decodeUrlPathSegmentOnce, encodeUrlPathSegmentOnce } from '@geovault/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
+const LEGACY_NOINDEX_TEMPLATE_TYPES = new Set([
+  'geo_overview',
+  'score_breakdown',
+  'competitor_comparison',
+  'improvement_tips',
+  'industry_benchmark',
+  'brand_reputation',
+]);
 
 interface Props {
   params: { slug: string };
@@ -33,6 +40,13 @@ interface ResolvedPost {
   targetKeywords?: string[];
 }
 
+interface RelatedArticle {
+  slug: string;
+  title: string;
+  description?: string;
+  createdAt: string;
+}
+
 function unwrapArticlePayload(payload: any) {
   if (!payload) return null;
   if (Object.prototype.hasOwnProperty.call(payload, 'data')) {
@@ -52,12 +66,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const staticPost = getPost(normalizedSlug);
   if (staticPost) {
+    const seoDescription = buildSeoDescription(staticPost.description, staticPost.content);
     return {
       title: staticPost.title,
-      description: staticPost.description,
+      description: seoDescription,
       openGraph: {
         title: staticPost.title,
-        description: staticPost.description,
+        description: seoDescription,
         type: 'article',
         publishedTime: staticPost.date,
         authors: ['Geovault'],
@@ -65,7 +80,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         url: `${SITE_URL}/blog/${encodedSlug}`,
         images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
       },
-      twitter: { card: 'summary_large_image', title: staticPost.title, description: staticPost.description, images: [`${SITE_URL}/opengraph-image`] },
+      twitter: { card: 'summary_large_image', title: staticPost.title, description: seoDescription, images: [`${SITE_URL}/opengraph-image`] },
       alternates: { canonical: `${SITE_URL}/blog/${encodedSlug}` },
     };
   }
@@ -77,12 +92,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       const data = await res.json();
       const article = unwrapArticlePayload(data);
       if (article) {
+        const seoTitle = markdownToPlainText(article.title || '');
+        const seoDescription = buildSeoDescription(article.description, article.content || '');
         return {
-          title: article.title,
-          description: article.description?.slice(0, 160),
+          title: seoTitle,
+          description: seoDescription,
           openGraph: {
-            title: article.title,
-            description: article.description?.slice(0, 160),
+            title: seoTitle,
+            description: seoDescription,
             type: 'article',
             publishedTime: article.createdAt,
             authors: ['Geovault'],
@@ -90,8 +107,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             url: `${SITE_URL}/blog/${encodeURIComponent(article.slug)}`,
             images: [{ url: `${SITE_URL}/opengraph-image`, width: 1200, height: 630 }],
           },
-          twitter: { card: 'summary_large_image', title: article.title, description: article.description?.slice(0, 160), images: [`${SITE_URL}/opengraph-image`] },
+          twitter: { card: 'summary_large_image', title: seoTitle, description: seoDescription, images: [`${SITE_URL}/opengraph-image`] },
           alternates: { canonical: `${SITE_URL}/blog/${encodeURIComponent(article.slug)}` },
+          robots: LEGACY_NOINDEX_TEMPLATE_TYPES.has(article.templateType)
+            ? { index: false, follow: true }
+            : { index: true, follow: true },
         };
       }
     }
@@ -107,6 +127,43 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   return { title: 'Blog — Geovault' };
+}
+
+async function fetchRelatedArticles(
+  currentSlug: string,
+  article: any,
+): Promise<RelatedArticle[]> {
+  const candidates: RelatedArticle[] = [];
+  const seen = new Set([currentSlug]);
+  const collect = (payload: any) => {
+    const list = unwrapArticlePayload(payload)?.items;
+    if (!Array.isArray(list)) return;
+    for (const item of list) {
+      if (!item?.slug || seen.has(item.slug)) continue;
+      seen.add(item.slug);
+      candidates.push(item as RelatedArticle);
+    }
+  };
+  const fetchList = async (url: string) => {
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (response.ok) collect(await response.json());
+  };
+
+  try {
+    if (article?.siteId) {
+      await fetchList(`${API_URL}/api/blog/articles/site/${encodeURIComponent(article.siteId)}?page=1&limit=8`);
+    }
+    if (candidates.length < 3 && article?.industrySlug) {
+      await fetchList(`${API_URL}/api/blog/articles?page=1&limit=8&industry=${encodeURIComponent(article.industrySlug)}`);
+    }
+    if (candidates.length < 3) {
+      await fetchList(`${API_URL}/api/blog/articles?page=1&limit=8`);
+    }
+  } catch {
+    // Related links are supplementary; the article itself stays available if
+    // the list request fails.
+  }
+  return candidates.slice(0, 3);
 }
 
 function extractFaqJsonLd(content: string) {
@@ -199,7 +256,7 @@ export default async function BlogPostPage({ params }: Props) {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: post.title,
-    description: post.description || post.content.slice(0, 200),
+    description: buildSeoDescription(post.description, post.content),
     datePublished: post.date,
     dateModified: resolvedArticle?.updatedAt || post.date,
     author: { '@type': 'Organization', name: 'Geovault', url: SITE_URL },
@@ -210,7 +267,7 @@ export default async function BlogPostPage({ params }: Props) {
       logo: { '@type': 'ImageObject', url: `${SITE_URL}/logo.png` },
     },
     isPartOf: { '@type': 'WebSite', name: 'Geovault', url: SITE_URL },
-    mainEntityOfPage: `${SITE_URL}/blog/${post.slug}`,
+    mainEntityOfPage: `${SITE_URL}/blog/${encodeUrlPathSegmentOnce(post.slug)}`,
     about: post.site ? [{ '@type': 'Thing', name: post.site.name, url: post.site.url }] : undefined,
     mentions: post.targetKeywords?.map((name) => ({ '@type': 'Thing', name })),
     keywords: post.targetKeywords?.join(', '),
@@ -223,12 +280,18 @@ export default async function BlogPostPage({ params }: Props) {
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: '首頁', item: SITE_URL },
       { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
-      { '@type': 'ListItem', position: 3, name: post.title, item: `${SITE_URL}/blog/${post.slug}` },
+      { '@type': 'ListItem', position: 3, name: post.title, item: `${SITE_URL}/blog/${encodeUrlPathSegmentOnce(post.slug)}` },
     ],
   };
 
   const headings = extractHeadings(post.content);
   const html = markdownToHtml(post.content);
+  const relatedArticles = staticPost
+    ? getAllPosts()
+        .filter((item) => item.slug !== post.slug)
+        .slice(0, 3)
+        .map((item) => ({ slug: item.slug, title: item.title, description: item.description, createdAt: item.date }))
+    : await fetchRelatedArticles(post.slug, resolvedArticle);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -302,7 +365,11 @@ export default async function BlogPostPage({ params }: Props) {
         {post.site && (
           <div className="mt-8 p-5 bg-blue-500/10 rounded-xl border border-blue-500/20">
             <p className="text-sm text-blue-300">
-              本文分析的網站：<strong>{post.site.name}</strong>（{post.site.url}）
+              本文分析對象為 <strong>{post.site.name}</strong>（
+              <a href={post.site.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-200">
+                官方網站
+              </a>
+              ）。
               {post.site.bestScore != null && `— GEO 分數 ${post.site.bestScore}/100`}
             </p>
           </div>
@@ -316,7 +383,27 @@ export default async function BlogPostPage({ params }: Props) {
           </Link>
         </div>
 
-        <RelatedArticles slug={post.slug} />
+        {relatedArticles.length > 0 ? (
+          <section className="mt-12" aria-labelledby="related-articles-heading">
+            <h2 id="related-articles-heading" className="mb-4 text-lg font-bold text-white">延伸閱讀</h2>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {relatedArticles.map((article) => (
+                <Link
+                  key={article.slug}
+                  href={`/blog/${encodeUrlPathSegmentOnce(article.slug)}`}
+                  className="h-full rounded-lg border border-white/10 bg-white/5 p-4 transition-colors hover:bg-white/10"
+                >
+                  <time className="text-xs text-gray-400" dateTime={article.createdAt}>
+                    {new Date(article.createdAt).toLocaleDateString('zh-TW')}
+                  </time>
+                  <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-white">
+                    {markdownToPlainText(article.title)}
+                  </h3>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </article>
       <PublicFooter />
     </div>

@@ -5,6 +5,10 @@ import { FixService } from '../fix/fix.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { emitLlmsFullInvalidated, llmsFullCacheEvents, REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY } from './llms-full-cache';
 import { publicIndexableBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
+import {
+  isSafePublicLlmsDocument,
+  sanitizePublicLlmsFact,
+} from './llms-public-safety';
 import { assertSiteAccess } from '../../common/auth/site-access';
 import { INDUSTRIES } from '@geovault/shared';
 
@@ -176,7 +180,10 @@ export class LlmsHostingService implements OnModuleDestroy {
     });
 
     if (!site) return null;
-    return site.llmsTxt?.trim() || this.buildPublicFallbackLlmsTxt(site);
+    const stored = site.llmsTxt?.trim() || '';
+    return stored && isSafePublicLlmsDocument(stored)
+      ? stored
+      : this.buildPublicFallbackLlmsTxt(site);
   }
 
   /**
@@ -194,8 +201,7 @@ export class LlmsHostingService implements OnModuleDestroy {
       value && typeof value === 'object' && !Array.isArray(value)
         ? (value as Record<string, unknown>)
         : {};
-    const text = (value: unknown): string =>
-      typeof value === 'string' ? value.trim() : '';
+    const text = (value: unknown): string => sanitizePublicLlmsFact(value);
 
     const data = toRecord(profile);
     const enriched = toRecord(data._enriched);
@@ -218,8 +224,11 @@ export class LlmsHostingService implements OnModuleDestroy {
   }
 
   /** SiteQa rows tagged category='enrichment' are unverified — never publish them. */
-  private verifiedQas<T extends { category?: string | null }>(qas: T[], limit: number): T[] {
-    return qas.filter((qa) => qa.category !== 'enrichment').slice(0, limit);
+  private verifiedQas<T extends { category?: string | null; question: string; answer: string }>(qas: T[], limit: number): T[] {
+    return qas
+      .filter((qa) => qa.category !== 'enrichment')
+      .filter((qa) => sanitizePublicLlmsFact(qa.question, 500) && sanitizePublicLlmsFact(qa.answer, 2_000))
+      .slice(0, limit);
   }
 
   private buildPublicFallbackLlmsTxt(site: {
@@ -462,10 +471,10 @@ ${faqSection}`;
         3,
       );
       const faqBlock = qas.length > 0
-        ? qas.map((qa) => `  Q: ${qa.question}\n  A: ${qa.answer}`).join('\n')
+        ? qas.map((qa) => `  Q: ${sanitizePublicLlmsFact(qa.question, 500)}\n  A: ${sanitizePublicLlmsFact(qa.answer, 2_000)}`).join('\n')
         : '';
       return [
-        `### ${site.name}`,
+        `### ${sanitizePublicLlmsFact(site.name, 200)}`,
         facts.description || '',
         site.industry ? `- Industry: ${site.industry}` : '',
         facts.location ? `- Location: ${facts.location}` : '',

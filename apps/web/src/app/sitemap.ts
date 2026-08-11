@@ -1,6 +1,6 @@
 import { MetadataRoute } from 'next';
 import { getAllPosts } from '@/content/blog/posts';
-import { INDUSTRIES } from '@geovault/shared';
+import { encodeUrlPathSegmentOnce, INDUSTRIES } from '@geovault/shared';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
@@ -27,7 +27,7 @@ const STATIC_LAST_MODIFIED = new Date('2026-07-01');
 
 interface SitemapData {
   sites: Array<{ id: string; bestScoreAt: string | null }>;
-  blogArticles: Array<{ slug: string; createdAt: string }>;
+  blogArticles: Array<{ slug: string; updatedAt: string }>;
   cases: Array<{ id: string; createdAt: string }>;
   industrySites: Record<string, string[]>;
 }
@@ -117,7 +117,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return latest > 0 ? new Date(latest) : STATIC_LAST_MODIFIED;
   };
 
-  if (!data) return entries;
+  // A partial sitemap with HTTP 200 hides upstream failures and silently drops
+  // thousands of URLs. Fail visibly when there is no last-known-good payload.
+  if (!data) throw new Error('Sitemap data is unavailable and no cached snapshot exists');
 
   // Only publish industry landing pages that currently have at least one
   // indexable brand. Empty industry pages create thin URLs and can be
@@ -150,9 +152,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // DB-backed blog articles
   for (const article of data.blogArticles) {
+    const encodedSlug = encodeUrlPathSegmentOnce(article.slug);
+    if (!encodedSlug) continue;
     addEntry({
-      url: `${BASE_URL}/blog/${article.slug}`,
-      lastModified: new Date(article.createdAt),
+      url: `${BASE_URL}/blog/${encodedSlug}`,
+      lastModified: new Date(article.updatedAt),
       changeFrequency: 'weekly',
       priority: 0.6,
     });

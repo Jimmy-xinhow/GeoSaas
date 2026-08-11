@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
+import { trackEvent } from '@/lib/analytics';
 
 export interface GuestScanResult {
   id: string;
@@ -26,6 +27,7 @@ export interface GuestScanResult {
 export function useGuestScan() {
   return useMutation({
     mutationFn: async (url: string) => {
+      trackEvent('scan_start', { scan_type: 'guest' });
       const { data } = await apiClient.post<{
         id: string;
         url: string;
@@ -44,6 +46,16 @@ export function useGuestScanStatus(scanId: string | null) {
       const { data } = await apiClient.get<GuestScanResult>(
         `/guest-scan/${scanId}`,
       );
+      if (data.status === 'COMPLETED' && typeof window !== 'undefined') {
+        const key = `geovault_scan_complete_${data.id}`;
+        if (!window.sessionStorage.getItem(key)) {
+          window.sessionStorage.setItem(key, '1');
+          trackEvent('scan_complete', {
+            scan_type: 'guest',
+            score: data.totalScore,
+          });
+        }
+      }
       return data;
     },
     enabled: !!scanId,

@@ -14,8 +14,9 @@ const articleExclusions = [
 ];
 
 const indexableBlogTemplateTypes = [
-  // Citation-first replacements. These must stay indexable or the safe legacy
-  // migration would redirect old URLs into pages omitted from sitemap/listing.
+  // Citation-first and quality-gated content only. The six historical
+  // self-rating templates are deliberately absent: production evidence shows
+  // they create duplicate titles and Markdown-filled descriptions at scale.
   'brand_profile',
   'faq_deepdive',
   'brand_showcase',
@@ -23,15 +24,6 @@ const indexableBlogTemplateTypes = [
   'industry_top10',
   'buyer_guide',
   'industry_current_state',
-  // Conservative GEO analysis templates: these are brand/site-specific pages
-  // with durable crawl value. Keep experimental or thin operational templates
-  // out of sitemap/blog indexes so SEO crawl budget is not flooded.
-  'geo_overview',
-  'score_breakdown',
-  'competitor_comparison',
-  'improvement_tips',
-  'industry_benchmark',
-  'brand_reputation',
 ];
 
 type DirectorySeoSite = {

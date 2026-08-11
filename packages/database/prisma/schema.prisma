@@ -930,6 +930,75 @@ model SystemConfig {
   @@map("system_configs")
 }
 
+// Daily Search Console facts. Dimensions are stored explicitly so reports can
+// be reproduced without relying on the short retention window of the API.
+model SearchPerformanceDaily {
+  id          String   @id @default(cuid())
+  date        DateTime @db.Date
+  siteUrl     String
+  page        String
+  query       String
+  country     String
+  device      String
+  searchType  String   @default("web")
+  clicks      Float    @default(0)
+  impressions Float    @default(0)
+  ctr         Float    @default(0)
+  position    Float    @default(0)
+  dataState   String   @default("final")
+  syncedAt    DateTime @default(now())
+
+  @@unique([date, siteUrl, page, query, country, device, searchType])
+  @@index([date, siteUrl])
+  @@index([page, date])
+  @@index([query, date])
+  @@map("search_performance_daily")
+}
+
+// Daily GA4 landing-page facts used to join acquisition and engagement back
+// to the Search Console page dimension.
+model Ga4LandingPageDaily {
+  id                 String   @id @default(cuid())
+  date               DateTime @db.Date
+  propertyId         String
+  landingPage        String
+  source             String
+  medium             String
+  sessions           Int      @default(0)
+  activeUsers        Int      @default(0)
+  newUsers           Int      @default(0)
+  engagedSessions    Int      @default(0)
+  engagementRate     Float    @default(0)
+  avgSessionDuration Float    @default(0)
+  screenPageViews    Int      @default(0)
+  eventCount         Int      @default(0)
+  keyEvents          Float    @default(0)
+  syncedAt           DateTime @default(now())
+
+  @@unique([date, propertyId, landingPage, source, medium])
+  @@index([date, propertyId])
+  @@index([landingPage, date])
+  @@map("ga4_landing_page_daily")
+}
+
+// One observable checkpoint per upstream provider. Failed syncs remain visible
+// instead of silently presenting stale analytics as current.
+model AnalyticsSyncState {
+  id            String    @id @default(cuid())
+  provider      String    @unique
+  status        String    @default("never")
+  lastStartedAt DateTime?
+  lastSuccessAt DateTime?
+  lastDateFrom  DateTime? @db.Date
+  lastDateTo    DateTime? @db.Date
+  lastRowCount  Int       @default(0)
+  lastError     String?   @db.Text
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status, updatedAt])
+  @@map("analytics_sync_states")
+}
+
 model ScheduledTask {
   id          String    @id @default(cuid())
   taskKey     String    @unique

@@ -206,7 +206,6 @@ export class DirectoryService {
           },
         },
         orderBy: { bestScore: 'desc' },
-        take: 2000,
       }),
       this.prisma.blogArticle.findMany({
         where: publicIndexableBlogArticleWhere({ published: true }),
@@ -215,10 +214,10 @@ export class DirectoryService {
           title: true,
           description: true,
           createdAt: true,
+          updatedAt: true,
           site: { select: { name: true, url: true } },
         },
         orderBy: { createdAt: 'desc' },
-        take: 2000,
       }),
       this.prisma.geoSuccessCase.findMany({
         where: publicSuccessCaseWhere({ status: 'approved' }),
@@ -231,7 +230,6 @@ export class DirectoryService {
           site: { select: { name: true, url: true, isPublic: true } },
         },
         orderBy: { createdAt: 'desc' },
-        take: 500,
       }),
     ]);
 
@@ -254,11 +252,18 @@ export class DirectoryService {
       sites: indexableSites.map((s) => ({ id: s.id, bestScoreAt: s.bestScoreAt })),
       blogArticles: blogArticles
         .filter((article) => isIndexablePublicBlogArticle(article))
-        .map(({ slug, createdAt }) => ({ slug, createdAt })),
+        .map(({ slug, updatedAt }) => ({ slug, updatedAt })),
       cases: cases
         .filter((item) => isIndexablePublicSuccessCase(item))
         .map(({ id, createdAt }) => ({ id, createdAt })),
       industrySites,
+      diagnostics: {
+        candidateSites: sites.length,
+        emittedSites: indexableSites.length,
+        candidateBlogArticles: blogArticles.length,
+        emittedBlogArticles: blogArticles.filter((article) => isIndexablePublicBlogArticle(article)).length,
+        candidateCases: cases.length,
+      },
     };
   }
 
