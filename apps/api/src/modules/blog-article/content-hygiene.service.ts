@@ -226,7 +226,6 @@ export class ContentHygieneService {
   private duplicateGroups(articles: ArticleRow[]): ArticleRow[][] {
     const groups = new Map<string, ArticleRow[]>();
     for (const article of articles) {
-      if (!article.siteId) continue;
       const contentKey = buildBlogArticleContentKey(article);
       if (!contentKey) continue;
       const group = groups.get(contentKey) || [];

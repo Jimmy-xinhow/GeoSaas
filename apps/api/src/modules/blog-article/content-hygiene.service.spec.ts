@@ -40,6 +40,25 @@ describe('ContentHygieneService', () => {
     expect(status.descriptionsNeedingNormalization).toBeGreaterThan(0);
   });
 
+  it('groups platform-level articles under the shared platform identity scope', async () => {
+    const platformRows = rows.slice(0, 2).map((row) => ({ ...row, siteId: null }));
+    const prisma = {
+      blogArticle: { findMany: jest.fn().mockResolvedValue(platformRows) },
+    };
+
+    const status = await new ContentHygieneService(
+      prisma as any,
+      {} as any,
+      {} as any,
+    ).getStatus();
+
+    expect(status).toEqual(expect.objectContaining({
+      duplicateGroups: 1,
+      duplicateArticles: 2,
+      contentIdentityMissing: 2,
+    }));
+  });
+
   it('defaults to a no-write preview', async () => {
     const result = await service().runBatch();
     expect(result).toEqual(expect.objectContaining({
