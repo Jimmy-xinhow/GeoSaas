@@ -1,9 +1,10 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException, OnModuleInit } from '@nestjs/common';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MonitorService } from '../monitor/monitor.service';
 import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
 import pLimit from '@/common/utils/p-limit';
+import { Cron } from '@nestjs/schedule';
 
 // 4-hour cooldown between runs of the SAME query set. Even with plan-level
 // monthly quota, a client that hits the button accidentally shouldn't burn
@@ -11,6 +12,7 @@ import pLimit from '@/common/utils/p-limit';
 // so cache-hit path (free re-view) still works normally.
 const QUERY_SET_COOLDOWN_MS = 4 * 60 * 60 * 1000;
 const ACCEPTANCE_QUERY_LIMIT = 100;
+const REPORT_LEASE_MS = 2 * 60 * 1000;
 
 interface QueryItem {
   category: string;
@@ -36,6 +38,8 @@ interface ReportResult {
 @Injectable()
 export class ClientReportService implements OnModuleInit {
   private readonly logger = new Logger(ClientReportService.name);
+  private readonly activeReportIds = new Set<string>();
+  private recoveryRunning = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -50,69 +54,125 @@ export class ClientReportService implements OnModuleInit {
       return;
     }
 
-    const resumeCutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
-    const orphaned = await this.prisma.monitorReport.findMany({
-      where: {
-        OR: [
-          { status: 'running' },
-          { status: 'failed', expectedChecks: { gt: 0 }, createdAt: { gte: resumeCutoff } },
-        ],
-      },
-      include: {
-        site: { select: { id: true, name: true, url: true } },
-        querySet: { select: { queries: true, version: true } },
-      },
-    });
+    await this.recoverDurableReports();
+  }
 
-    let recovered = 0;
-    let marked = 0;
-    let resumed = 0;
-    for (const report of orphaned) {
-      const results = Array.isArray(report.results)
-        ? report.results as unknown as ReportResult[]
-        : [];
-      const snapshot = Array.isArray(report.querySnapshot)
-        ? report.querySnapshot as unknown as QueryItem[]
-        : [];
-      const currentQueries = Array.isArray(report.querySet?.queries)
-        ? report.querySet.queries as unknown as QueryItem[]
-        : [];
-      const queries = snapshot.length > 0 ? snapshot : currentQueries;
-      const expectedTotal = report.expectedChecks || queries.length * 5;
-      const isComplete = expectedTotal > 0 && results.length >= expectedTotal;
+  @Cron('* * * * *')
+  async scheduledDurableReportRecovery() {
+    if (process.env.LOCAL_OFFLINE_MODE === '1') return;
+    await this.recoverDurableReports();
+  }
 
-      if (isComplete) {
-        const summary = report.summary || this.computeSummary(results);
-        await this.prisma.monitorReport.update({
-          where: { id: report.id },
-          data: { status: 'completed', completedAt: report.completedAt || new Date(), summary: summary as any },
+  private async recoverDurableReports() {
+    if (this.recoveryRunning) return;
+    this.recoveryRunning = true;
+    try {
+      const resumeCutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
+      const now = new Date();
+      const orphaned = await this.prisma.monitorReport.findMany({
+        where: {
+          AND: [
+            {
+              OR: [
+                { executionLeaseExpiresAt: null },
+                { executionLeaseExpiresAt: { lte: now } },
+              ],
+            },
+            {
+              OR: [
+                { status: 'running' },
+                { status: 'failed', expectedChecks: { gt: 0 }, createdAt: { gte: resumeCutoff } },
+              ],
+            },
+          ],
+        },
+        include: {
+          site: { select: { id: true, name: true, url: true } },
+          querySet: { select: { queries: true, version: true } },
+        },
+      });
+
+      let recovered = 0;
+      let marked = 0;
+      let resumed = 0;
+      for (const report of orphaned) {
+        if (this.activeReportIds.has(report.id)) continue;
+        const leaseId = randomUUID();
+        const claim = await this.prisma.monitorReport.updateMany({
+          where: {
+            id: report.id,
+            status: report.status,
+            OR: [
+              { executionLeaseExpiresAt: null },
+              { executionLeaseExpiresAt: { lte: now } },
+            ],
+          },
+          data: {
+            status: 'running',
+            executionLeaseId: leaseId,
+            executionLeaseExpiresAt: this.nextLeaseExpiry(),
+          },
         });
-        recovered++;
-      } else if (
-        queries.length > 0
-        && expectedTotal === queries.length * 5
-        && Number(report.querySetVersion || 1) === Number(report.querySet?.version || 1)
-      ) {
-        await this.prisma.monitorReport.update({
-          where: { id: report.id },
-          data: { status: 'running' },
-        });
-        this.executeReport(report.id, report.site, queries, results).catch((error) =>
-          this.handleReportExecutionFailure(report.id, expectedTotal, error),
-        );
-        resumed++;
-        this.logger.warn(`Resuming report ${report.id} from ${results.length}/${expectedTotal} persisted checks`);
-      } else {
-        await this.prisma.monitorReport.update({
-          where: { id: report.id },
-          data: { status: 'failed' },
-        });
-        marked++;
+        if (claim.count !== 1) continue;
+
+        const results = Array.isArray(report.results)
+          ? report.results as unknown as ReportResult[]
+          : [];
+        const snapshot = Array.isArray(report.querySnapshot)
+          ? report.querySnapshot as unknown as QueryItem[]
+          : [];
+        const currentQueries = Array.isArray(report.querySet?.queries)
+          ? report.querySet.queries as unknown as QueryItem[]
+          : [];
+        const queries = snapshot.length > 0 ? snapshot : currentQueries;
+        const expectedTotal = report.expectedChecks || queries.length * 5;
+        const isComplete = expectedTotal > 0 && results.length >= expectedTotal;
+
+        if (isComplete) {
+          const summary = report.summary || this.computeSummary(results);
+          const completion = await this.prisma.monitorReport.updateMany({
+            where: { id: report.id, executionLeaseId: leaseId },
+            data: {
+              status: 'completed',
+              completedAt: report.completedAt || new Date(),
+              summary: summary as any,
+              executionLeaseId: null,
+              executionLeaseExpiresAt: null,
+            },
+          });
+          if (completion.count === 1) recovered++;
+        } else if (
+          queries.length > 0
+          && expectedTotal === queries.length * 5
+          && Number(report.querySetVersion || 1) === Number(report.querySet?.version || 1)
+        ) {
+          this.executeReport(report.id, report.site, queries, results, leaseId).catch((error) =>
+            this.handleReportExecutionFailure(report.id, expectedTotal, error, leaseId),
+          );
+          resumed++;
+          this.logger.warn(`Resuming report ${report.id} from ${results.length}/${expectedTotal} persisted checks`);
+        } else {
+          const incompatible = await this.prisma.monitorReport.updateMany({
+            where: { id: report.id, executionLeaseId: leaseId },
+            data: {
+              status: 'failed',
+              executionLeaseId: null,
+              executionLeaseExpiresAt: null,
+            },
+          });
+          if (incompatible.count === 1) marked++;
+        }
       }
+      if (recovered > 0) this.logger.log(`Recovered ${recovered} fully completed report(s)`);
+      if (resumed > 0) this.logger.warn(`Resumed ${resumed} durable partial report(s)`);
+      if (marked > 0) this.logger.warn(`Marked ${marked} incompatible partial report(s) as failed`);
+    } finally {
+      this.recoveryRunning = false;
     }
-    if (recovered > 0) this.logger.log(`Recovered ${recovered} fully completed report(s)`);
-    if (resumed > 0) this.logger.warn(`Resumed ${resumed} durable partial report(s)`);
-    if (marked > 0) this.logger.warn(`Marked ${marked} incompatible partial report(s) as failed`);
+  }
+
+  private nextLeaseExpiry() {
+    return new Date(Date.now() + REPORT_LEASE_MS);
   }
 
   /**
@@ -435,6 +495,7 @@ export class ClientReportService implements OnModuleInit {
     }
 
     const period = new Date().toISOString().slice(0, 7);
+    const leaseId = randomUUID();
 
     const report = await this.prisma.monitorReport.create({
       data: {
@@ -446,33 +507,54 @@ export class ClientReportService implements OnModuleInit {
         period,
         results: [],
         status: 'running',
+        executionLeaseId: leaseId,
+        executionLeaseExpiresAt: this.nextLeaseExpiry(),
       },
     });
 
     // Run in background
     const expectedTotal = (querySet.queries as any[]).length * 5;
-    this.executeReport(report.id, querySet.site, querySet.queries as unknown as QueryItem[]).catch((error) =>
-      this.handleReportExecutionFailure(report.id, expectedTotal, error),
+    this.executeReport(report.id, querySet.site, querySet.queries as unknown as QueryItem[], [], leaseId).catch((error) =>
+      this.handleReportExecutionFailure(report.id, expectedTotal, error, leaseId),
     );
 
     return { reportId: report.id };
   }
 
-  private async handleReportExecutionFailure(reportId: string, expectedTotal: number, error: unknown) {
+  private async handleReportExecutionFailure(
+    reportId: string,
+    expectedTotal: number,
+    error: unknown,
+    leaseId: string,
+  ) {
     this.logger.error(`Report ${reportId} error: ${String(error)}`);
     const current = await this.prisma.monitorReport.findUnique({ where: { id: reportId } });
+    if (current?.executionLeaseId !== leaseId) {
+      this.logger.warn(`Ignoring failure from expired lease for report ${reportId}`);
+      return;
+    }
     const results = Array.isArray(current?.results) ? current.results as any[] : [];
     if (results.length >= expectedTotal) {
       const summary = current?.summary || this.computeSummary(results);
-      await this.prisma.monitorReport.update({
-        where: { id: reportId },
-        data: { status: 'completed', completedAt: new Date(), summary: summary as any },
+      await this.prisma.monitorReport.updateMany({
+        where: { id: reportId, executionLeaseId: leaseId },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+          summary: summary as any,
+          executionLeaseId: null,
+          executionLeaseExpiresAt: null,
+        },
       });
       return;
     }
-    await this.prisma.monitorReport.update({
-      where: { id: reportId },
-      data: { status: 'failed' },
+    await this.prisma.monitorReport.updateMany({
+      where: { id: reportId, executionLeaseId: leaseId },
+      data: {
+        status: 'failed',
+        executionLeaseId: null,
+        executionLeaseExpiresAt: null,
+      },
     });
     this.logger.warn(`Report ${reportId} failed at ${results.length}/${expectedTotal} results`);
   }
@@ -482,7 +564,14 @@ export class ClientReportService implements OnModuleInit {
     site: { id: string; name: string; url: string },
     queries: QueryItem[],
     initialResults: ReportResult[] = [],
+    leaseId: string,
   ) {
+    if (this.activeReportIds.has(reportId)) {
+      this.logger.warn(`Skipped duplicate in-process execution for report ${reportId}`);
+      return;
+    }
+    this.activeReportIds.add(reportId);
+    try {
     const platforms = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'];
     const results: ReportResult[] = [...initialResults];
     const completedChecks = new Set(results.map((result) =>
@@ -547,10 +636,14 @@ export class ClientReportService implements OnModuleInit {
         }
 
         // Save after every platform call (real-time progress)
-        await this.prisma.monitorReport.update({
-          where: { id: reportId },
-          data: { results: results as any },
+        const persisted = await this.prisma.monitorReport.updateMany({
+          where: { id: reportId, executionLeaseId: leaseId },
+          data: {
+            results: results as any,
+            executionLeaseExpiresAt: this.nextLeaseExpiry(),
+          },
         });
+        if (persisted.count !== 1) throw new Error(`Report ${reportId} execution lease lost`);
 
         // Delay between calls — Claude needs more time
         const delay = platform === 'CLAUDE' ? 4000 : 2000;
@@ -581,17 +674,23 @@ export class ClientReportService implements OnModuleInit {
       byPlatform,
     };
 
-    await this.prisma.monitorReport.update({
-      where: { id: reportId },
+    const completed = await this.prisma.monitorReport.updateMany({
+      where: { id: reportId, executionLeaseId: leaseId },
       data: {
         results: results as any,
         summary: summary as any,
         status: 'completed',
         completedAt: new Date(),
+        executionLeaseId: null,
+        executionLeaseExpiresAt: null,
       },
     });
+    if (completed.count !== 1) throw new Error(`Report ${reportId} completion lease lost`);
 
     this.logger.log(`Report ${reportId} completed: ${mentionedCount}/${totalChecks} mentions (${summary.mentionRate}%)`);
+    } finally {
+      this.activeReportIds.delete(reportId);
+    }
   }
 
   /** Compute summary from results (used when recovery marks completed without summary) */

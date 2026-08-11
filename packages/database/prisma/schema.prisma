@@ -1139,11 +1139,14 @@ model MonitorReport {
   results         Json // array of { question, platform, mentioned, response }
   summary         Json? // { totalQueries, mentionedCount, mentionRate, byPlatform }
   status          String         @default("pending") // pending | running | completed
+  executionLeaseId        String?
+  executionLeaseExpiresAt DateTime?
   completedAt     DateTime?
   createdAt       DateTime       @default(now())
 
   @@index([siteId, period])
   @@index([querySetId])
+  @@index([status, executionLeaseExpiresAt])
   @@map("monitor_reports")
 }
 

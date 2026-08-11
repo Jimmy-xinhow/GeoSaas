@@ -223,7 +223,7 @@ describe('ClientReportService acceptance query sets', () => {
       position: null,
       response: 'persisted',
     }];
-    const update = jest.fn().mockResolvedValue({});
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = {
       monitorReport: {
         findMany: jest.fn().mockResolvedValue([{
@@ -235,10 +235,12 @@ describe('ClientReportService acceptance query sets', () => {
           results: persisted,
           summary: null,
           completedAt: null,
+          executionLeaseId: null,
+          executionLeaseExpiresAt: null,
           site: { id: 'site-1', name: 'Client', url: 'https://example.com' },
           querySet: { version: 2, queries: qaItems },
         }]),
-        update,
+        updateMany,
       },
     };
     const reportService = createService(prisma);
@@ -246,15 +248,56 @@ describe('ClientReportService acceptance query sets', () => {
 
     await reportService.onModuleInit();
 
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 'partial-report' },
-      data: { status: 'running' },
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'partial-report',
+        status: 'failed',
+        OR: [
+          { executionLeaseExpiresAt: null },
+          { executionLeaseExpiresAt: { lte: expect.any(Date) } },
+        ],
+      },
+      data: {
+        status: 'running',
+        executionLeaseId: expect.any(String),
+        executionLeaseExpiresAt: expect.any(Date),
+      },
     });
+    const leaseId = updateMany.mock.calls[0][0].data.executionLeaseId;
     expect((reportService as any).executeReport).toHaveBeenCalledWith(
       'partial-report',
       { id: 'site-1', name: 'Client', url: 'https://example.com' },
       qaItems,
       persisted,
+      leaseId,
     );
+  });
+
+  it('does not start a stale report when another process wins the atomic claim', async () => {
+    const prisma = {
+      monitorReport: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: 'claimed-report',
+          status: 'running',
+          expectedChecks: 500,
+          querySetVersion: 2,
+          querySnapshot: qaItems,
+          results: [],
+          summary: null,
+          completedAt: null,
+          executionLeaseId: null,
+          executionLeaseExpiresAt: null,
+          site: { id: 'site-1', name: 'Client', url: 'https://example.com' },
+          querySet: { version: 2, queries: qaItems },
+        }]),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    const reportService = createService(prisma);
+    (reportService as any).executeReport = jest.fn().mockResolvedValue(undefined);
+
+    await reportService.onModuleInit();
+
+    expect((reportService as any).executeReport).not.toHaveBeenCalled();
   });
 });
