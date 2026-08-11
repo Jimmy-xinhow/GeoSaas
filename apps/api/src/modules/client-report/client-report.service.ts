@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException, OnModuleInit } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MonitorService } from '../monitor/monitor.service';
 import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
@@ -125,15 +126,26 @@ export class ClientReportService implements OnModuleInit {
       where: { siteId, name },
     });
 
+    const contentHash = this.querySetHash(queries);
+
     if (existing) {
+      const previousQueries = Array.isArray(existing.queries)
+        ? existing.queries as unknown as QueryItem[]
+        : [];
+      const previousHash = existing.contentHash || this.querySetHash(previousQueries);
+      if (previousHash === contentHash) return existing;
       return this.prisma.clientQuerySet.update({
         where: { id: existing.id },
-        data: { queries: queries as any },
+        data: {
+          queries: queries as any,
+          contentHash,
+          version: { increment: 1 },
+        },
       });
     }
 
     return this.prisma.clientQuerySet.create({
-      data: { siteId, name, queries: queries as any },
+      data: { siteId, name, queries: queries as any, contentHash },
     });
   }
 
@@ -156,7 +168,7 @@ export class ClientReportService implements OnModuleInit {
   private async ensureClientQuerySet(siteId: string): Promise<void> {
     const existing = await this.prisma.clientQuerySet.findFirst({
       where: { siteId },
-      select: { id: true, name: true, queries: true },
+      select: { id: true, name: true, queries: true, version: true, contentHash: true },
     });
 
     const site = await this.prisma.site.findUnique({
@@ -186,10 +198,20 @@ export class ClientReportService implements OnModuleInit {
 
     // Preserve intentionally curated/manual sets. Only repair the generated
     // baseline set introduced by the lazy bootstrap when it is undersized.
-    if (
-      existing
-      && (existing.name !== querySetName || existingQueries.length >= ACCEPTANCE_QUERY_LIMIT)
-    ) return;
+    if (existing && existing.name !== querySetName) return;
+
+    if (existing && existingQueries.length >= ACCEPTANCE_QUERY_LIMIT) {
+      const contentHash = this.querySetHash(existingQueries as unknown as QueryItem[]);
+      if (existing.contentHash !== contentHash) {
+        await this.prisma.clientQuerySet.update({
+          where: { id: existing.id },
+          data: existing.contentHash
+            ? { contentHash, version: { increment: 1 } }
+            : { contentHash },
+        });
+      }
+      return;
+    }
 
     const profile = (site.profile && typeof site.profile === 'object' && !Array.isArray(site.profile))
       ? site.profile as SiteProfileForQuerySet
@@ -227,9 +249,17 @@ export class ClientReportService implements OnModuleInit {
     if (queries.length === 0) return;
 
     if (existing) {
+      const contentHash = this.querySetHash(queries);
+      const previousHash = existing.contentHash
+        || this.querySetHash(existingQueries as unknown as QueryItem[]);
+      if (previousHash === contentHash) return;
       await this.prisma.clientQuerySet.update({
         where: { id: existing.id },
-        data: { queries: queries as any },
+        data: {
+          queries: queries as any,
+          contentHash,
+          version: { increment: 1 },
+        },
       });
       this.logger.log(
         `Expanded generated acceptance query set for client site ${site.id} from ${existingQueries.length} to ${queries.length} questions`,
@@ -250,6 +280,7 @@ export class ClientReportService implements OnModuleInit {
         siteId: site.id,
         name: querySetName,
         queries: queries as any,
+        contentHash: this.querySetHash(queries),
       },
     });
     this.logger.log(`Created baseline acceptance query set for client site ${site.id} (${queries.length} questions)`);
@@ -265,6 +296,14 @@ export class ClientReportService implements OnModuleInit {
       return first?.slice(0, 80);
     }
     return undefined;
+  }
+
+  private querySetHash(queries: QueryItem[]): string {
+    const normalized = queries.map((query) => ({
+      category: String(query.category || '').trim(),
+      question: String(query.question || '').trim(),
+    }));
+    return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
   }
 
   /** Run a full report: test all questions against all 5 platforms
@@ -300,7 +339,12 @@ export class ClientReportService implements OnModuleInit {
       // Verify the cached report is actually complete
       const cachedResults = (recentReport.results as any[]) || [];
       const expectedTotal = (querySet.queries as any[]).length * 5;
-      if (cachedResults.length >= expectedTotal) {
+      const cachedExpected = recentReport.expectedChecks || cachedResults.length;
+      if (
+        cachedResults.length >= expectedTotal
+        && cachedExpected === expectedTotal
+        && (recentReport.querySetVersion || 1) === (querySet.version || 1)
+      ) {
         this.logger.log(`Report cache hit: ${recentReport.id} (${recentReport.createdAt.toISOString().slice(0, 10)})`);
         return { reportId: recentReport.id, cached: true };
       }
@@ -366,6 +410,9 @@ export class ClientReportService implements OnModuleInit {
     const report = await this.prisma.monitorReport.create({
       data: {
         querySetId,
+        querySetVersion: querySet.version || 1,
+        querySnapshot: querySet.queries as any,
+        expectedChecks: (querySet.queries as any[]).length * 5,
         siteId: querySet.siteId,
         period,
         results: [],
@@ -541,19 +588,68 @@ export class ClientReportService implements OnModuleInit {
 
   /** Get report by ID */
   async getReport(reportId: string) {
-    return this.prisma.monitorReport.findUnique({
+    const report = await this.prisma.monitorReport.findUnique({
       where: { id: reportId },
-      include: { site: { select: { name: true, url: true } }, querySet: { select: { name: true } } },
+      include: {
+        site: { select: { name: true, url: true } },
+        querySet: { select: { name: true, version: true, queries: true } },
+      },
     });
+    return report ? this.withReportFreshness(report) : null;
   }
 
   /** Get all reports for a site */
   async getReports(siteId: string) {
-    return this.prisma.monitorReport.findMany({
+    const reports = await this.prisma.monitorReport.findMany({
       where: { siteId },
       orderBy: { createdAt: 'desc' },
-      include: { querySet: { select: { name: true } } },
+      include: { querySet: { select: { name: true, version: true, queries: true } } },
     });
+    return reports.map((report) => this.withReportFreshness(report));
+  }
+
+  private withReportFreshness(report: any) {
+    const results = Array.isArray(report.results) ? report.results : [];
+    const snapshot = Array.isArray(report.querySnapshot) ? report.querySnapshot : [];
+    const summary = report.summary && typeof report.summary === 'object' ? report.summary : {};
+    const resultQuestionCount = new Set(
+      results.map((result: any) => result?.question).filter(Boolean),
+    ).size;
+    const reportQuestionCount = snapshot.length
+      || Number(summary.totalQueries || 0)
+      || resultQuestionCount;
+    const expectedChecks = report.expectedChecks > 0
+      ? report.expectedChecks
+      : reportQuestionCount * 5;
+    const currentQuestions = Array.isArray(report.querySet?.queries)
+      ? report.querySet.queries
+      : [];
+    const currentExpectedChecks = currentQuestions.length * 5;
+    const versionMismatch = Number(report.querySetVersion || 1)
+      !== Number(report.querySet?.version || 1);
+    const isStale = versionMismatch || (
+      expectedChecks > 0
+      && currentExpectedChecks > 0
+      && expectedChecks !== currentExpectedChecks
+    );
+    const querySet = report.querySet
+      ? {
+          name: report.querySet.name,
+          version: report.querySet.version,
+        }
+      : null;
+
+    return {
+      ...report,
+      querySet,
+      reportQuestionCount,
+      currentQuestionCount: currentQuestions.length,
+      expectedChecks,
+      currentExpectedChecks,
+      actualChecks: results.length,
+      isStale,
+      staleReason: isStale ? 'query_set_changed' : null,
+    };
   }
 
   /** Generate PDF-ready HTML for a report */

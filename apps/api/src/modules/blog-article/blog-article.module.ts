@@ -13,11 +13,12 @@ import { ContentQualityModule } from '../content-quality/content-quality.module'
 import { CitationReadinessModule } from '../citation-readiness/citation-readiness.module';
 import { ArticlePublishPackageService } from './article-publish-package.service';
 import { LegacyContentReplacementService } from './legacy-content-replacement.service';
+import { ContentHygieneService } from './content-hygiene.service';
 
 @Module({
   imports: [IndexNowModule, LlmsHostingModule, SitesModule, ContentQualityModule, CitationReadinessModule],
   controllers: [BlogArticleController, AdminBlogController],
-  providers: [BlogArticleService, BlogTemplateService, BrandFactService, BrandProfileService, FaqArticleService, IndustryInsightService, ArticlePublishPackageService, LegacyContentReplacementService],
-  exports: [BlogArticleService, BrandFactService, BrandProfileService, FaqArticleService, IndustryInsightService, LegacyContentReplacementService],
+  providers: [BlogArticleService, BlogTemplateService, BrandFactService, BrandProfileService, FaqArticleService, IndustryInsightService, ArticlePublishPackageService, LegacyContentReplacementService, ContentHygieneService],
+  exports: [BlogArticleService, BrandFactService, BrandProfileService, FaqArticleService, IndustryInsightService, LegacyContentReplacementService, ContentHygieneService],
 })
 export class BlogArticleModule {}

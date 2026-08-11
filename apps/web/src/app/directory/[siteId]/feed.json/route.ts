@@ -1,10 +1,12 @@
 export const dynamic = 'force-dynamic';
 
+import { createHash } from 'crypto';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { siteId: string } },
 ) {
   const { siteId } = params;
@@ -63,12 +65,28 @@ export async function GET(
     })),
   };
 
-  return new Response(JSON.stringify(feed, null, 2), {
+  const body = JSON.stringify(feed, null, 2);
+  const etag = `"${createHash('sha256').update(body).digest('hex')}"`;
+  if (req.headers.get('if-none-match') === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        ETag: etag,
+        'Last-Modified': lastModified,
+        'Cache-Control': 'public, max-age=0, must-revalidate',
+        'Access-Control-Allow-Origin': '*',
+        'X-Robots-Tag': 'noindex, follow',
+      },
+    });
+  }
+
+  return new Response(body, {
     headers: {
       'Content-Type': 'application/feed+json; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': 'public, max-age=0, must-revalidate',
       'Access-Control-Allow-Origin': '*',
       'Last-Modified': lastModified,
+      ETag: etag,
       'X-Robots-Tag': 'noindex, follow',
     },
   });

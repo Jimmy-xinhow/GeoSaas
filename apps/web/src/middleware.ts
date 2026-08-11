@@ -53,6 +53,7 @@ async function getMissingPublicBlogResponse(pathname: string): Promise<NextRespo
       const res = await fetch(`${API_URL}/api/blog/articles/${encodedSlug}`, {
         cache: 'no-store',
       });
+      if (res.status === 410) return publicGoneResponse();
       return res.status === 404 ? publicNotFoundResponse() : null;
     } catch {
       return null;
@@ -60,6 +61,17 @@ async function getMissingPublicBlogResponse(pathname: string): Promise<NextRespo
   }
 
   return null;
+}
+
+function publicGoneResponse(): NextResponse {
+  return new NextResponse('Gone', {
+    status: 410,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Robots-Tag': 'noindex, follow',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
 }
 
 async function getMissingPublicDirectoryResponse(pathname: string): Promise<NextResponse | null> {

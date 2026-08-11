@@ -1,6 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { GoogleAuth } from 'google-auth-library';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   MeasurementDateRange as DateRange,
@@ -41,6 +42,17 @@ interface Ga4ApiRow {
 interface Ga4ApiResponse {
   rows?: Ga4ApiRow[];
   rowCount?: number;
+}
+
+interface SearchPageAggregate {
+  page: string;
+  clicks: number;
+  impressions: number;
+  position: number;
+}
+
+interface SearchQueryPageAggregate extends SearchPageAggregate {
+  query: string;
 }
 
 function numeric(value?: string): number {
@@ -342,15 +354,40 @@ export class AnalyticsSyncService {
       ? Math.max(1, Math.min(Math.trunc(days), 93))
       : 28;
     const since = new Date(Date.now() - safeDays * DAY_MS);
-    const [searchPages, gaPages] = await Promise.all([
-      this.prisma.searchPerformanceDaily.groupBy({
-        by: ['page'],
-        where: { date: { gte: since } },
-        _sum: { clicks: true, impressions: true },
-        _avg: { position: true },
-        orderBy: { _sum: { impressions: 'desc' } },
-        take: 100,
-      }),
+    const [searchPages, searchQueries, gaPages] = await Promise.all([
+      this.prisma.$queryRaw<SearchPageAggregate[]>(Prisma.sql`
+        SELECT
+          "page",
+          SUM("clicks")::double precision AS "clicks",
+          SUM("impressions")::double precision AS "impressions",
+          COALESCE(
+            SUM("position" * "impressions") / NULLIF(SUM("impressions"), 0),
+            0
+          )::double precision AS "position"
+        FROM "search_performance_daily"
+        WHERE "date" >= ${since}
+        GROUP BY "page"
+        HAVING SUM("impressions") > 0
+        ORDER BY SUM("impressions") DESC
+        LIMIT 100
+      `),
+      this.prisma.$queryRaw<SearchQueryPageAggregate[]>(Prisma.sql`
+        SELECT
+          "page",
+          "query",
+          SUM("clicks")::double precision AS "clicks",
+          SUM("impressions")::double precision AS "impressions",
+          COALESCE(
+            SUM("position" * "impressions") / NULLIF(SUM("impressions"), 0),
+            0
+          )::double precision AS "position"
+        FROM "search_performance_daily"
+        WHERE "date" >= ${since} AND "query" <> ''
+        GROUP BY "page", "query"
+        HAVING SUM("impressions") > 0
+        ORDER BY SUM("impressions") DESC
+        LIMIT 1000
+      `),
       this.prisma.ga4LandingPageDaily.groupBy({
         by: ['landingPage'],
         where: { date: { gte: since } },
@@ -360,19 +397,80 @@ export class AnalyticsSyncService {
     const gaByPath = new Map(
       gaPages.map((row) => [row.landingPage.split('?')[0], row._sum]),
     );
-    return searchPages.map((row) => {
-      const clicks = row._sum.clicks || 0;
-      const impressions = row._sum.impressions || 0;
+    const queriesByPage = new Map<string, SearchQueryPageAggregate[]>();
+    for (const row of searchQueries) {
+      const rows = queriesByPage.get(row.page) || [];
+      rows.push(row);
+      queriesByPage.set(row.page, rows);
+    }
+
+    const queue = searchPages.map((row) => {
+      const clicks = Number(row.clicks || 0);
+      const impressions = Number(row.impressions || 0);
+      const position = Number(row.position || 0);
+      const ctr = impressions > 0 ? clicks / impressions : 0;
       const path = normalizeLandingPage(row.page).split('?')[0];
+      const reasonCodes: string[] = [];
+      if (clicks === 0 && impressions >= 10) reasonCodes.push('high_impressions_zero_clicks');
+      if (position > 0 && position <= 10 && ctr < 0.02) reasonCodes.push('page_one_low_ctr');
+      if (position > 10 && position <= 20) reasonCodes.push('page_two_ranking');
+      const ga4 = gaByPath.get(path) || null;
+      if (
+        ga4
+        && Number(ga4.sessions || 0) >= 10
+        && Number(ga4.engagedSessions || 0) / Number(ga4.sessions || 1) < 0.4
+      ) {
+        reasonCodes.push('low_engagement');
+      }
+      const priority = reasonCodes.includes('high_impressions_zero_clicks')
+        && (reasonCodes.includes('page_one_low_ctr') || reasonCodes.includes('page_two_ranking'))
+        ? 'high'
+        : reasonCodes.length > 0
+          ? 'medium'
+          : 'monitor';
       return {
         page: row.page,
         clicks,
         impressions,
-        ctr: impressions > 0 ? clicks / impressions : 0,
-        position: row._avg.position || 0,
-        ga4: gaByPath.get(path) || null,
+        ctr,
+        position,
+        priority,
+        reasonCodes,
+        suggestedAction: this.opportunityAction(reasonCodes),
+        topQueries: (queriesByPage.get(row.page) || [])
+          .sort((a, b) => Number(b.impressions) - Number(a.impressions))
+          .slice(0, 5)
+          .map((query) => ({
+            query: query.query,
+            clicks: Number(query.clicks || 0),
+            impressions: Number(query.impressions || 0),
+            ctr: Number(query.impressions || 0) > 0
+              ? Number(query.clicks || 0) / Number(query.impressions)
+              : 0,
+            position: Number(query.position || 0),
+          })),
+        ga4,
       };
     });
+
+    const priorityRank: Record<string, number> = { high: 0, medium: 1, monitor: 2 };
+    return queue.sort((a, b) =>
+      priorityRank[a.priority] - priorityRank[b.priority]
+      || b.impressions - a.impressions,
+    );
+  }
+
+  private opportunityAction(reasonCodes: string[]): string {
+    if (reasonCodes.includes('high_impressions_zero_clicks')) {
+      return '核對主要查詢意圖，調整 title、description 與首屏證據摘要後追蹤 CTR。';
+    }
+    if (reasonCodes.includes('page_two_ranking')) {
+      return '補強與主要查詢直接相關的可驗證內容、內部連結與結構化資料。';
+    }
+    if (reasonCodes.includes('low_engagement')) {
+      return '檢查落地頁首屏是否回答查詢，並補強下一步導覽與轉換事件。';
+    }
+    return '持續累積資料，暫不做無差別重寫。';
   }
 
   @Cron('15 4 * * *')

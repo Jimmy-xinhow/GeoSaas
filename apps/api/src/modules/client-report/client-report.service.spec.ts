@@ -151,4 +151,66 @@ describe('ClientReportService acceptance query sets', () => {
     expect(prisma.monitorReport.delete).not.toHaveBeenCalled();
     expect(prisma.monitorReport.create).toHaveBeenCalled();
   });
+
+  it('marks a historical 20-question report stale against the current 100-question set', async () => {
+    const oldResults = Array.from({ length: 100 }, (_, index) => ({
+      question: `Old question ${Math.floor(index / 5) + 1}`,
+      platform: `platform-${index % 5}`,
+    }));
+    const prisma = {
+      monitorReport: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: 'old-report',
+          querySetVersion: 1,
+          expectedChecks: 0,
+          querySnapshot: null,
+          results: oldResults,
+          summary: { totalQueries: 20, totalChecks: 100 },
+          querySet: { name: 'Client AI 驗收問題集', version: 2, queries: qaItems },
+        }]),
+      },
+    };
+
+    const reports = await createService(prisma).getReports('site-1');
+
+    expect(reports[0]).toEqual(expect.objectContaining({
+      reportQuestionCount: 20,
+      currentQuestionCount: 100,
+      expectedChecks: 100,
+      currentExpectedChecks: 500,
+      actualChecks: 100,
+      isStale: true,
+      staleReason: 'query_set_changed',
+    }));
+    expect(reports[0].querySet).toEqual({
+      name: 'Client AI 驗收問題集',
+      version: 2,
+    });
+  });
+
+  it('reuses an identical manual query set without incrementing its version', async () => {
+    const existing = {
+      id: 'set-1',
+      siteId: 'site-1',
+      name: 'Manual',
+      queries: qaItems.slice(0, 2),
+      version: 3,
+      contentHash: null,
+    };
+    const prisma = {
+      clientQuerySet: {
+        findFirst: jest.fn().mockResolvedValue(existing),
+        update: jest.fn(),
+      },
+    };
+
+    const result = await createService(prisma).upsertQuerySet(
+      'site-1',
+      'Manual',
+      qaItems.slice(0, 2),
+    );
+
+    expect(result).toBe(existing);
+    expect(prisma.clientQuerySet.update).not.toHaveBeenCalled();
+  });
 });

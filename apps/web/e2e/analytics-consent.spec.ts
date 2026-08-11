@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-const MEASUREMENT_ID = 'G-E2ETEST123';
+const MEASUREMENT_ID = process.env.E2E_GA_MEASUREMENT_ID || 'G-E2ETEST123';
 
 test('GA4 config is queued before the first page view and the page view is deduplicated', async ({
   page,
@@ -22,8 +22,13 @@ test('GA4 config is queued before the first page view and the page view is dedup
       Array.isArray(entry) ? entry : Array.from(entry as ArrayLike<unknown>),
     ),
   );
+  const commandEntryKinds = await page.evaluate(() =>
+    (window.dataLayer || [])
+      .filter((entry) => Array.from(entry as ArrayLike<unknown>).length > 0)
+      .map((entry) => Object.prototype.toString.call(entry)),
+  );
   const configIndex = calls.findIndex(
-    (entry) => entry[0] === 'config' && entry[1] === 'G-E2ETEST123',
+    (entry) => entry[0] === 'config' && entry[1] === MEASUREMENT_ID,
   );
   const pageViewIndexes = calls
     .map((entry, index) => ({ entry, index }))
@@ -31,6 +36,8 @@ test('GA4 config is queued before the first page view and the page view is dedup
     .map(({ index }) => index);
 
   expect(configIndex).toBeGreaterThanOrEqual(0);
+  expect(commandEntryKinds.length).toBeGreaterThan(0);
+  expect(commandEntryKinds.every((kind) => kind === '[object Arguments]')).toBe(true);
   expect(pageViewIndexes).toHaveLength(1);
   expect(pageViewIndexes[0]).toBeGreaterThan(configIndex);
 

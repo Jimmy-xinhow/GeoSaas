@@ -215,7 +215,13 @@ export class LegacyContentReplacementService {
           category: { not: 'case-study' },
           templateType: { in: [...LEGACY_GEO_TEMPLATE_TYPES] },
         },
-        data: { published: false, lastRegeneratedAt: new Date() },
+        data: {
+          published: false,
+          lastRegeneratedAt: new Date(),
+          retiredAt: new Date(),
+          retirementReason: 'legacy_replaced',
+          contentKey: null,
+        },
       }),
     ]);
 

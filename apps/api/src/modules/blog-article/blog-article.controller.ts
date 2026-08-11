@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, NotFoundException, Post, Delete, Patch, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, GoneException, NotFoundException, Post, Delete, Patch, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -9,6 +9,7 @@ import { IndustryInsightService, InsightType } from './industry-insight.service'
 import { GenerateInsightDto, PreviewBrandShowcaseDto } from './dto/blog-admin.dto';
 import { ArticlePublishPackageService } from './article-publish-package.service';
 import { LegacyContentReplacementService } from './legacy-content-replacement.service';
+import { ContentHygieneService } from './content-hygiene.service';
 import { BrandProfileService } from './brand-profile.service';
 
 const ALLOWED_LOCALES = new Set(['zh-TW', 'en', 'ja']);
@@ -129,7 +130,11 @@ export class BlogArticleController {
   @Get('articles/:slug')
   @ApiOperation({ summary: 'Get article by slug' })
   async getBySlug(@Param('slug') slug: string) {
-    const article = await this.service.getBySlug(normalizeRequiredText(slug, 'slug', 220));
+    const normalizedSlug = normalizeRequiredText(slug, 'slug', 220);
+    const article = await this.service.getBySlug(normalizedSlug);
+    if (!article && await this.service.isGoneSlug(normalizedSlug)) {
+      throw new GoneException('Article retired without a replacement');
+    }
     if (!article) throw new NotFoundException('Article not found');
     return article;
   }
@@ -618,6 +623,7 @@ export class AdminBlogController {
     private readonly service: BlogArticleService,
     private readonly legacyReplacement: LegacyContentReplacementService,
     private readonly brandProfile: BrandProfileService,
+    private readonly contentHygiene: ContentHygieneService,
   ) {}
 
   @Post('generate-bulk')
@@ -690,6 +696,34 @@ export class AdminBlogController {
       limit = body.limit;
     }
     return this.legacyReplacement.runBatch({ dryRun, limit });
+  }
+
+  @Get('content-hygiene/status')
+  @ApiOperation({ summary: 'Inspect description, duplicate-title, and content-identity debt' })
+  contentHygieneStatus(@Query('limit') limit?: string) {
+    return this.contentHygiene.getStatus(parseBoundedInt(limit, 'limit', 20, 1, 100));
+  }
+
+  @Post('content-hygiene/run')
+  @ApiOperation({
+    summary:
+      'Normalize descriptions, preserve duplicate URLs as aliases, demote duplicate pages, and backfill stable content identity. Defaults to dry-run.',
+  })
+  runContentHygiene(@Body() body: { dryRun?: unknown; limit?: unknown } = {}) {
+    const dryRun = body?.dryRun !== false;
+    let limit = 100;
+    if (body?.limit !== undefined) {
+      if (
+        typeof body.limit !== 'number'
+        || !Number.isSafeInteger(body.limit)
+        || body.limit < 1
+        || body.limit > 500
+      ) {
+        throw new BadRequestException('limit must be an integer between 1 and 500');
+      }
+      limit = body.limit;
+    }
+    return this.contentHygiene.runBatch({ dryRun, limit });
   }
 
   @Post('brand-profile/generate/:siteId')

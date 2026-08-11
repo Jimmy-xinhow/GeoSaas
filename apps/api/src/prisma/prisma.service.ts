@@ -1,10 +1,100 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import {
+  buildBlogArticleContentKey,
+  normalizeBlogArticleDescription,
+  normalizeBlogArticleTitle,
+  resolveBlogArticleIntent,
+} from '../modules/blog-article/blog-article-normalization';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
+
+  constructor() {
+    super();
+    this.$use(async (params, next) => {
+      if (params.model !== 'BlogArticle') return next(params);
+
+      const findDuplicate = async (contentKey: string) => {
+        const query: Record<string, any> = { where: { contentKey } };
+        if (params.args?.select) query.select = params.args.select;
+        if (params.args?.include) query.include = params.args.include;
+        return this.blogArticle.findUnique(query as any);
+      };
+
+      const normalizeData = (data: Record<string, any>, base: Record<string, any> = {}) => {
+        if (typeof data.description === 'string') {
+          data.description = normalizeBlogArticleDescription(data.description);
+        }
+        const identityChanged = ['title', 'siteId', 'templateType', 'category', 'contentIntent']
+          .some((field) => Object.prototype.hasOwnProperty.call(data, field));
+        if (!identityChanged && Object.keys(base).length === 0) return;
+        const identity = { ...base, ...data };
+        data.normalizedTitle = normalizeBlogArticleTitle(identity.title);
+        data.contentIntent = resolveBlogArticleIntent(identity);
+        data.contentKey = buildBlogArticleContentKey(identity);
+      };
+
+      if (params.action === 'create') {
+        normalizeData(params.args.data);
+        if (params.args.data.contentKey) {
+          const duplicate = await findDuplicate(params.args.data.contentKey);
+          if (duplicate) {
+            this.logger.warn(`Prevented duplicate BlogArticle create: ${duplicate.id}`);
+            return duplicate;
+          }
+        }
+      } else if (params.action === 'createMany') {
+        const rows = Array.isArray(params.args.data) ? params.args.data : [params.args.data];
+        rows.forEach((row: Record<string, any>) => normalizeData(row));
+        const seen = new Set<string>();
+        params.args.data = rows.filter((row: Record<string, any>) => {
+          if (!row.contentKey || !seen.has(row.contentKey)) {
+            if (row.contentKey) seen.add(row.contentKey);
+            return true;
+          }
+          return false;
+        });
+        params.args.skipDuplicates = true;
+      } else if (params.action === 'update') {
+        const existing = await this.blogArticle.findUnique({
+          where: params.args.where,
+          select: { siteId: true, title: true, templateType: true, category: true, contentIntent: true },
+        });
+        normalizeData(params.args.data, existing || {});
+      } else if (params.action === 'updateMany') {
+        normalizeData(params.args.data);
+      } else if (params.action === 'upsert') {
+        normalizeData(params.args.create);
+        const existing = await this.blogArticle.findUnique({
+          where: params.args.where,
+          select: { siteId: true, title: true, templateType: true, category: true, contentIntent: true },
+        });
+        normalizeData(params.args.update, existing || params.args.create);
+      }
+
+      try {
+        return await next(params);
+      } catch (error) {
+        if (
+          (params.action === 'create' || params.action === 'upsert')
+          && error instanceof Prisma.PrismaClientKnownRequestError
+          && error.code === 'P2002'
+        ) {
+          const contentKey = params.action === 'create'
+            ? params.args.data.contentKey
+            : params.args.create.contentKey;
+          if (contentKey) {
+            const duplicate = await findDuplicate(contentKey);
+            if (duplicate) return duplicate;
+          }
+        }
+        throw error;
+      }
+    });
+  }
 
   async onModuleInit() {
     if (process.env.LOCAL_OFFLINE_MODE === '1') {

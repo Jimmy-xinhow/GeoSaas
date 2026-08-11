@@ -67,3 +67,19 @@ test('directory visibility changes are never served from a stale public cache', 
   assert.match(middlewareSource, /\/api\/directory\/\$\{encodedSiteId\}/);
   assert.match(middlewareSource, /res\.status === 404 \? publicNotFoundResponse\(\) : null/);
 });
+
+test('retired blog articles return a crawler-visible 410 from middleware', () => {
+  const middlewareSource = fs.readFileSync(
+    path.join(__dirname, '../src/middleware.ts'),
+    'utf8',
+  );
+  const blogBoundary = middlewareSource.slice(
+    middlewareSource.indexOf('async function getMissingPublicBlogResponse'),
+    middlewareSource.indexOf('async function getMissingPublicDirectoryResponse'),
+  );
+
+  assert.match(blogBoundary, /res\.status === 410/);
+  assert.match(blogBoundary, /publicGoneResponse\(\)/);
+  assert.match(middlewareSource, /status:\s*410/);
+  assert.match(middlewareSource, /X-Robots-Tag': 'noindex, follow'/);
+});

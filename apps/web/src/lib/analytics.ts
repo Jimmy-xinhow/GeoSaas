@@ -25,7 +25,14 @@ const MAX_PENDING_EVENTS = 50;
 
 export function ensureAnalyticsStub() {
   window.dataLayer = window.dataLayer || [];
-  window.gtag = window.gtag || ((...args: unknown[]) => window.dataLayer?.push(args));
+  // Google Tag expects command entries to be `arguments` objects. Pushing a
+  // normal Array leaves commands visible in dataLayer but the loader silently
+  // ignores them, so no collect request is sent.
+  window.gtag =
+    window.gtag ||
+    function gtag(..._args: unknown[]) {
+      window.dataLayer?.push(arguments);
+    };
 }
 
 export function initializeAnalytics(measurementId: string): boolean {

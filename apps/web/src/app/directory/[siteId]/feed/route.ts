@@ -1,13 +1,17 @@
 export const dynamic = 'force-dynamic';
 
+import { createHash } from 'crypto';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 
 const xmlEscape = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+const cdataEscape = (s: string) => s.replace(/]]>/g, ']]]]><![CDATA[>');
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { siteId: string } },
 ) {
   const { siteId } = params;
@@ -51,9 +55,9 @@ export async function GET(
       const link = e.url ? `${SITE_URL}${e.url}` : brandUrl;
       return `
     <item>
-      <title><![CDATA[${e.title}]]></title>
-      <link>${link}</link>
-      <description><![CDATA[${e.summary}]]></description>
+      <title><![CDATA[${cdataEscape(e.title)}]]></title>
+      <link>${xmlEscape(link)}</link>
+      <description><![CDATA[${cdataEscape(e.summary)}]]></description>
       <pubDate>${new Date(e.timestamp).toUTCString()}</pubDate>
       <guid isPermaLink="false">${xmlEscape(e.id)}</guid>
       <category>${xmlEscape(e.category)}</category>
@@ -64,9 +68,9 @@ export async function GET(
   const rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title><![CDATA[${site.name} — Geovault 品牌動態]]></title>
+    <title><![CDATA[${cdataEscape(site.name)} — Geovault 品牌動態]]></title>
     <link>${brandUrl}</link>
-    <description><![CDATA[${site.name} 的 AI 可見度分數變化、新增常見問題、徽章與分析文章。由 Geovault 平台即時追蹤。]]></description>
+    <description><![CDATA[${cdataEscape(site.name)} 的 AI 可見度分數變化、新增常見問題、徽章與分析文章。由 Geovault 平台即時追蹤。]]></description>
     <language>zh-TW</language>
     <lastBuildDate>${lastModified.toUTCString()}</lastBuildDate>
     <atom:link href="${selfUrl}" rel="self" type="application/rss+xml"/>
@@ -77,12 +81,27 @@ ${items}
   </channel>
 </rss>`;
 
+  const etag = `"${createHash('sha256').update(rss).digest('hex')}"`;
+  if (req.headers.get('if-none-match') === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        ETag: etag,
+        'Last-Modified': lastModified.toUTCString(),
+        'Cache-Control': 'public, max-age=0, must-revalidate',
+        'Access-Control-Allow-Origin': '*',
+        'X-Robots-Tag': 'noindex, follow',
+      },
+    });
+  }
+
   return new Response(rss, {
     headers: {
       'Content-Type': 'application/rss+xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': 'public, max-age=0, must-revalidate',
       'Access-Control-Allow-Origin': '*',
       'Last-Modified': lastModified.toUTCString(),
+      ETag: etag,
       'X-Robots-Tag': 'noindex, follow',
     },
   });

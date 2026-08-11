@@ -1750,6 +1750,14 @@ ${args.currentDraft || '(empty draft)'}`;
     return alias;
   }
 
+  async isGoneSlug(slug: string): Promise<boolean> {
+    const retired = await this.prisma.blogArticle.findUnique({
+      where: { slug },
+      select: { retiredAt: true },
+    });
+    return Boolean(retired?.retiredAt);
+  }
+
   /** Generate an AI analysis article for a public site */
   async generateSiteAnalysis(siteId: string): Promise<{ slug: string }> {
     const site = await this.prisma.site.findUnique({

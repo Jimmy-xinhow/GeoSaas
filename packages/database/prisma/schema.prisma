@@ -739,6 +739,14 @@ model BlogArticle {
   // working via 301 redirect to the canonical slug.
   aliasSlugs String[] @default([])
 
+  // Stable content identity prevents the same site + intent + normalized title
+  // from being published repeatedly by independent generation jobs.
+  normalizedTitle  String?
+  contentIntent    String?
+  contentKey       String?   @unique
+  retiredAt        DateTime?
+  retirementReason String?
+
   // Success case relation
   successCase GeoSuccessCase?
 
@@ -756,6 +764,8 @@ model BlogArticle {
   @@index([published, createdAt])
   @@index([templateType, createdAt])
   @@index([industrySlug, createdAt])
+  @@index([siteId, contentIntent, normalizedTitle])
+  @@index([retiredAt])
   @@map("blog_articles")
 }
 
@@ -787,19 +797,19 @@ model OfficialSiteArticle {
   metaTitle       String?
   metaDescription String?
   articleSchema   Json?
-  faqSchema      Json?
+  faqSchema       Json?
 
-  firstPartySnapshot       Json?
-  qualityReport            Json?
-  similarityScore          Float?
+  firstPartySnapshot         Json?
+  qualityReport              Json?
+  similarityScore            Float?
   similarityMatchedArticleId String?
-  rejectionReason          String? @db.Text
-  publishedUrl             String?
-  generatedAt              DateTime?
-  approvedAt               DateTime?
-  exportedAt               DateTime?
-  lastVerifiedAt           DateTime?
-  verificationReport       Json?
+  rejectionReason            String?   @db.Text
+  publishedUrl               String?
+  generatedAt                DateTime?
+  approvedAt                 DateTime?
+  exportedAt                 DateTime?
+  lastVerifiedAt             DateTime?
+  verificationReport         Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1018,19 +1028,19 @@ model ScheduledTask {
 }
 
 model AiPlatformOfficialSource {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   platform      String
-  sourceType    String   @default("official_guidance")
-  url           String   @unique
+  sourceType    String    @default("official_guidance")
+  url           String    @unique
   title         String
-  enabled       Boolean  @default(true)
+  enabled       Boolean   @default(true)
   lastHash      String?
   lastFetchedAt DateTime?
   lastChangedAt DateTime?
   lastStatus    String?
-  lastError     String?  @db.Text
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  lastError     String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   snapshots AiPlatformOfficialSnapshot[]
 
@@ -1059,19 +1069,19 @@ model AiPlatformOfficialSnapshot {
 }
 
 model PublishedArticleCrawlerAudit {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   articleId    String
   slug         String
   templateType String
   publishedAt  DateTime
-  last24h      Int      @default(0)
-  last7d       Int      @default(0)
-  last30d      Int      @default(0)
+  last24h      Int       @default(0)
+  last7d       Int       @default(0)
+  last30d      Int       @default(0)
   lastVisitAt  DateTime?
   status       String
-  issues       String[] @default([])
-  fixes        String[] @default([])
-  createdAt    DateTime @default(now())
+  issues       String[]  @default([])
+  fixes        String[]  @default([])
+  createdAt    DateTime  @default(now())
 
   @@index([articleId, createdAt])
   @@index([status, createdAt])
@@ -1100,13 +1110,15 @@ model SeedSource {
 }
 
 model ClientQuerySet {
-  id        String   @id @default(cuid())
-  siteId    String
-  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  name      String // e.g. "立如整復 驗收問題集"
-  queries   Json // array of { category, question }
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name        String // e.g. "立如整復 驗收問題集"
+  queries     Json // array of { category, question }
+  version     Int      @default(1)
+  contentHash String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   reports MonitorReport[]
 
@@ -1115,17 +1127,20 @@ model ClientQuerySet {
 }
 
 model MonitorReport {
-  id          String         @id @default(cuid())
-  querySetId  String
-  querySet    ClientQuerySet @relation(fields: [querySetId], references: [id], onDelete: Cascade)
-  siteId      String
-  site        Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  period      String // e.g. "2026-03"
-  results     Json // array of { question, platform, mentioned, response }
-  summary     Json? // { totalQueries, mentionedCount, mentionRate, byPlatform }
-  status      String         @default("pending") // pending | running | completed
-  completedAt DateTime?
-  createdAt   DateTime       @default(now())
+  id              String         @id @default(cuid())
+  querySetId      String
+  querySet        ClientQuerySet @relation(fields: [querySetId], references: [id], onDelete: Cascade)
+  querySetVersion Int            @default(1)
+  querySnapshot   Json?
+  expectedChecks  Int            @default(0)
+  siteId          String
+  site            Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period          String // e.g. "2026-03"
+  results         Json // array of { question, platform, mentioned, response }
+  summary         Json? // { totalQueries, mentionedCount, mentionRate, byPlatform }
+  status          String         @default("pending") // pending | running | completed
+  completedAt     DateTime?
+  createdAt       DateTime       @default(now())
 
   @@index([siteId, period])
   @@index([querySetId])

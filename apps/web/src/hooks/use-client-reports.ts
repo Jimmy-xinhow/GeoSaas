@@ -11,6 +11,7 @@ export interface ClientQuerySet {
   siteId: string;
   name: string;
   queries: QueryItem[];
+  version: number;
   createdAt: string;
   reports?: { id: string; period: string; status: string; summary: any }[];
 }
@@ -29,10 +30,18 @@ export interface MonitorReport {
     byPlatform: Record<string, { total: number; mentioned: number; rate: number }>;
   } | null;
   status: string;
+  querySetVersion: number;
+  reportQuestionCount: number;
+  currentQuestionCount: number;
+  expectedChecks: number;
+  currentExpectedChecks: number;
+  actualChecks: number;
+  isStale: boolean;
+  staleReason: 'query_set_changed' | null;
   completedAt: string | null;
   createdAt: string;
   site?: { name: string; url: string };
-  querySet?: { name: string };
+  querySet?: { name: string; version: number };
 }
 
 export function useClientQuerySets(siteId: string) {

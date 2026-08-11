@@ -117,6 +117,24 @@ interface AutomationHealth {
   rows: AutomationRow[];
 }
 
+interface SeoOpportunity {
+  page: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+  priority: 'high' | 'medium' | 'monitor';
+  reasonCodes: string[];
+  suggestedAction: string;
+  topQueries: Array<{
+    query: string;
+    clicks: number;
+    impressions: number;
+    ctr: number;
+    position: number;
+  }>;
+}
+
 const STATUS_META: Record<AutomationStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
   healthy: {
     label: '正常',
@@ -168,6 +186,14 @@ export default function AdminContentAutomationPage() {
       return res.data;
     },
     refetchInterval: 30000,
+  });
+  const { data: seoOpportunities = [], isFetching: isFetchingSeo } = useQuery({
+    queryKey: ['admin', 'seo-opportunities', 28],
+    queryFn: async () => {
+      const res = await apiClient.get<SeoOpportunity[]>('/admin/analytics/opportunities?days=28');
+      return res.data;
+    },
+    refetchInterval: 300000,
   });
 
   const runTask = useMutation({
@@ -234,6 +260,57 @@ export default function AdminContentAutomationPage() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between gap-3 text-base">
+            <span className="flex items-center gap-2">
+              <SearchCheck className="h-4 w-4" />
+              GSC Query → Page 優化佇列（近 28 天）
+            </span>
+            {isFetchingSeo && <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {seoOpportunities.length === 0 ? (
+            <p className="text-sm text-gray-400">目前沒有可排序的 GSC 曝光資料。</p>
+          ) : (
+            <div className="space-y-3">
+              {seoOpportunities.slice(0, 10).map((item) => (
+                <div key={item.page} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className={item.priority === 'high'
+                            ? 'border-red-400/40 text-red-300'
+                            : item.priority === 'medium'
+                              ? 'border-amber-400/40 text-amber-300'
+                              : 'border-gray-500/40 text-gray-400'}
+                        >
+                          {item.priority === 'high' ? '高優先' : item.priority === 'medium' ? '中優先' : '觀察'}
+                        </Badge>
+                        <span className="truncate text-sm font-medium text-white">{item.page}</span>
+                      </div>
+                      <p className="mt-2 text-xs text-gray-400">
+                        主要查詢：{item.topQueries.map((query) => query.query).join('、') || '無查詢維度'}
+                      </p>
+                      <p className="mt-1 text-xs text-blue-200/80">{item.suggestedAction}</p>
+                    </div>
+                    <div className="grid shrink-0 grid-cols-4 gap-4 text-center text-xs">
+                      <div><p className="text-gray-500">曝光</p><p className="mt-1 text-white">{item.impressions}</p></div>
+                      <div><p className="text-gray-500">點擊</p><p className="mt-1 text-white">{item.clicks}</p></div>
+                      <div><p className="text-gray-500">CTR</p><p className="mt-1 text-white">{(item.ctr * 100).toFixed(2)}%</p></div>
+                      <div><p className="text-gray-500">加權排名</p><p className="mt-1 text-white">{item.position.toFixed(1)}</p></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

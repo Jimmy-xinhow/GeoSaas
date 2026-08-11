@@ -167,6 +167,14 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
 
   return (
     <div className="space-y-4">
+      {report?.isStale && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
+          <p className="font-semibold">這是舊版問題集報告</p>
+          <p className="mt-1 text-amber-200/80">
+            此報告使用 {report.reportQuestionCount} 題（預期 {report.expectedChecks} 次檢查）；目前問題集為 {report.currentQuestionCount} 題（預期 {report.currentExpectedChecks} 次）。請重新執行，舊報告會保留供前後比較。
+          </p>
+        </div>
+      )}
       {/* Progress Header */}
       <Card className={isRunning ? 'border-blue-200' : isCompleted ? 'border-green-200' : ''}>
         <CardContent className="p-5">
@@ -505,6 +513,11 @@ function ReportHistory({ reports, selectedSiteName, onView, onDownload }: {
                     <div className="flex items-center gap-2 mt-0.5">
                       <Badge variant="outline" className="text-[10px]">{r.period}</Badge>
                       <span className="text-[10px] text-gray-500">{totalResults} 筆查詢</span>
+                      {r.isStale && (
+                        <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-300">
+                          舊版 {r.reportQuestionCount} 題／目前 {r.currentQuestionCount} 題
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -819,7 +832,7 @@ export default function ClientReportsPage() {
               <ReportHistory
                 reports={reports}
                 selectedSiteName={(sites as any[])?.find((s: any) => s.id === selectedSiteId)?.name || ''}
-                onView={(r) => { setActiveReportId(r.id); setActiveQsLength((r.summary as any)?.totalQueries || 100); }}
+                onView={(r) => { setActiveReportId(r.id); setActiveQsLength(r.reportQuestionCount || (r.summary as any)?.totalQueries || 100); }}
                 onDownload={handleDownloadPdf}
               />
             )}

@@ -7,6 +7,7 @@ import { IndexNowService } from '../indexnow/indexnow.service';
 import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
 import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
 import { BlogArticleService } from '../blog-article/blog-article.service';
+import { toPlainTextExcerpt } from '../../common/utils/plain-text';
 import {
   getDirectorySiteSeoIssues,
   isIndexableDirectorySite,
@@ -1249,10 +1250,16 @@ export class DirectoryService {
         select: { badge: true, label: true, awardedAt: true },
       }),
       this.prisma.blogArticle.findMany({
-        where: publicBlogArticleWhere({ siteId, published: true }),
+        where: publicIndexableBlogArticleWhere({ siteId, published: true }),
         orderBy: { createdAt: 'desc' },
-        take: limit,
-        select: { slug: true, title: true, description: true, createdAt: true },
+        take: Math.min(limit * 3, 300),
+        select: {
+          slug: true,
+          title: true,
+          description: true,
+          createdAt: true,
+          site: { select: { name: true } },
+        },
       }),
     ]);
 
@@ -1299,12 +1306,12 @@ export class DirectoryService {
         category: 'badge',
       });
     }
-    for (const a of articles) {
+    for (const a of articles.filter((article) => isIndexablePublicBlogArticle(article))) {
       events.push({
         id: `article-${a.slug}`,
         type: 'article',
         title: a.title,
-        summary: (a.description ?? '').slice(0, 280),
+        summary: toPlainTextExcerpt(a.description, 280),
         url: `/blog/${a.slug}`,
         timestamp: a.createdAt,
         category: 'article',
