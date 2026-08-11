@@ -68,7 +68,7 @@ jobs:
 
       # ── Test ─────────────────────────────────────────────────
       - name: Test (apps/api)
-        run: pnpm --filter @geovault/api --fail-if-no-match test --runInBand --ci
+        run: pnpm --filter @geovault/api --fail-if-no-match run test --runInBand --ci
 
       # ── Build ────────────────────────────────────────────────
       - name: Build
