@@ -38,7 +38,8 @@ function publicNotFoundResponse(): NextResponse {
   });
 }
 
-async function getMissingPublicBlogResponse(pathname: string): Promise<NextResponse | null> {
+async function getMissingPublicBlogResponse(request: NextRequest): Promise<NextResponse | null> {
+  const pathname = request.nextUrl.pathname;
   const blogMatch = pathname.match(/^\/blog\/([^/]+)$/);
   if (blogMatch) {
     const slug = blogMatch[1];
@@ -54,7 +55,21 @@ async function getMissingPublicBlogResponse(pathname: string): Promise<NextRespo
         cache: 'no-store',
       });
       if (res.status === 410) return publicGoneResponse();
-      return res.status === 404 ? publicNotFoundResponse() : null;
+      if (res.status === 404) return publicNotFoundResponse();
+      if (!res.ok) return null;
+
+      const payload = await res.json().catch(() => null);
+      const article = payload?.data ?? payload;
+      const canonicalSlug =
+        typeof article?.slug === 'string'
+          ? encodeUrlPathSegmentOnce(article.slug)
+          : null;
+      if (canonicalSlug && article.slug !== decodedSlug) {
+        const canonicalUrl = request.nextUrl.clone();
+        canonicalUrl.pathname = `/blog/${canonicalSlug}`;
+        return NextResponse.redirect(canonicalUrl, 308);
+      }
+      return null;
     } catch {
       return null;
     }
@@ -124,7 +139,7 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     });
   }
 
-  const missingBlogResponse = await getMissingPublicBlogResponse(pathname);
+  const missingBlogResponse = await getMissingPublicBlogResponse(request);
   if (missingBlogResponse) {
     return missingBlogResponse;
   }

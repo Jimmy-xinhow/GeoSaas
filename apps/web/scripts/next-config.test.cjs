@@ -83,3 +83,19 @@ test('retired blog articles return a crawler-visible 410 from middleware', () =>
   assert.match(middlewareSource, /status:\s*410/);
   assert.match(middlewareSource, /X-Robots-Tag': 'noindex, follow'/);
 });
+
+test('legacy blog aliases redirect before Next.js starts streaming HTML', () => {
+  const middlewareSource = fs.readFileSync(
+    path.join(__dirname, '../src/middleware.ts'),
+    'utf8',
+  );
+  const blogBoundary = middlewareSource.slice(
+    middlewareSource.indexOf('async function getMissingPublicBlogResponse'),
+    middlewareSource.indexOf('async function getMissingPublicDirectoryResponse'),
+  );
+
+  assert.match(blogBoundary, /const article = payload\?\.data \?\? payload/);
+  assert.match(blogBoundary, /article\.slug !== decodedSlug/);
+  assert.match(blogBoundary, /NextResponse\.redirect\(canonicalUrl, 308\)/);
+  assert.match(middlewareSource, /getMissingPublicBlogResponse\(request\)/);
+});

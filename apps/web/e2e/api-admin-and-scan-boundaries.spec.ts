@@ -205,6 +205,12 @@ test.describe('API smoke - admin routes and scan/directory boundaries', () => {
     const admin = await loginAdmin(request);
     const site = await createSite(request, normal.token, 'Client Tag Site');
 
+    const classified = await request.patch(`${API}/api/sites/${site.id}/directory`, {
+      headers: { Authorization: `Bearer ${normal.token}` },
+      data: { isPublic: true, industry: 'E2E Industry' },
+    });
+    expect(classified.status()).toBe(200);
+
     const blocked = await request.patch(`${API}/api/sites/admin/${site.id}/toggle-client`, {
       headers: { Authorization: `Bearer ${normal.token}` },
       data: { isClient: true },
