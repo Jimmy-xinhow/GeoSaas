@@ -44,5 +44,7 @@ describe('BlogArticleService legacy alias resolution', () => {
         orderBy: { updatedAt: 'desc' },
       }),
     );
+    expect(JSON.stringify(prisma.blogArticle.findFirst.mock.calls[0][0].where))
+      .not.toContain('templateType');
   });
 });

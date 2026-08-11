@@ -42,6 +42,7 @@ import {
   getPublicBlogArticleSeoIssues,
   isIndexablePublicBlogArticle,
   isPublicSafeArticle,
+  publicBlogArticleWhere,
   publicIndexableBlogArticleWhere,
   publicSiteWhere,
 } from '../../common/utils/public-data-filter';
@@ -1739,7 +1740,11 @@ ${args.currentDraft || '(empty draft)'}`;
       return direct;
     }
     const alias = await this.prisma.blogArticle.findFirst({
-      where: publicIndexableBlogArticleWhere({ published: true, aliasSlugs: { has: slug } }),
+      // Alias resolution must match the direct public-article boundary. The
+      // stricter feed/sitemap template allowlist is not a routing rule: older
+      // public articles can remain intentionally omitted from discovery while
+      // their historical URLs still 301 to the canonical 200 page.
+      where: publicBlogArticleWhere({ published: true, aliasSlugs: { has: slug } }),
       orderBy: { updatedAt: 'desc' },
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
