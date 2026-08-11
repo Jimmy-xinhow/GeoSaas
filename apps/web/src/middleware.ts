@@ -62,6 +62,27 @@ async function getMissingPublicBlogResponse(pathname: string): Promise<NextRespo
   return null;
 }
 
+async function getMissingPublicDirectoryResponse(pathname: string): Promise<NextResponse | null> {
+  const directoryMatch = pathname.match(/^\/directory\/([^/]+)$/);
+  if (!directoryMatch) return null;
+
+  const decodedSiteId = decodeUrlPathSegmentOnce(directoryMatch[1]);
+  const encodedSiteId = encodeUrlPathSegmentOnce(directoryMatch[1]);
+  if (decodedSiteId === 'industries') return null;
+  if (!decodedSiteId || !encodedSiteId || decodedSiteId.length > 100) {
+    return publicNotFoundResponse();
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/api/directory/${encodedSiteId}`, {
+      cache: 'no-store',
+    });
+    return res.status === 404 ? publicNotFoundResponse() : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function middleware(request: NextRequest, event: NextFetchEvent) {
   if (request.nextUrl.hostname === 'geovault.app') {
     const url = request.nextUrl.clone();
@@ -94,6 +115,14 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const missingBlogResponse = await getMissingPublicBlogResponse(pathname);
   if (missingBlogResponse) {
     return missingBlogResponse;
+  }
+
+  // Next.js can stream the not-found UI after HTTP headers have already been
+  // committed as 200. Resolve public directory visibility at middleware time
+  // so removed/private sites return a crawler-visible HTTP 404.
+  const missingDirectoryResponse = await getMissingPublicDirectoryResponse(pathname);
+  if (missingDirectoryResponse) {
+    return missingDirectoryResponse;
   }
 
   // ─── Link headers for AI crawlers ───

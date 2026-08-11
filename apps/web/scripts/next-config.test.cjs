@@ -52,11 +52,18 @@ test('crawler-facing metadata only references the implemented Open Graph image r
 });
 
 test('directory visibility changes are never served from a stale public cache', () => {
-  const source = fs.readFileSync(
+  const pageSource = fs.readFileSync(
     path.join(__dirname, '../src/app/directory/[siteId]/page.tsx'),
     'utf8',
   );
+  const middlewareSource = fs.readFileSync(
+    path.join(__dirname, '../src/middleware.ts'),
+    'utf8',
+  );
 
-  assert.match(source, /cache:\s*'no-store'/);
-  assert.doesNotMatch(source, /revalidate:\s*3600/);
+  assert.match(pageSource, /cache:\s*'no-store'/);
+  assert.doesNotMatch(pageSource, /revalidate:\s*3600/);
+  assert.match(middlewareSource, /getMissingPublicDirectoryResponse/);
+  assert.match(middlewareSource, /\/api\/directory\/\$\{encodedSiteId\}/);
+  assert.match(middlewareSource, /res\.status === 404 \? publicNotFoundResponse\(\) : null/);
 });
