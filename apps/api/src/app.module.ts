@@ -60,7 +60,7 @@ import { AnalyticsSyncModule } from './modules/analytics-sync/analytics-sync.mod
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
-        limit: 60,
+        limit: process.env.E2E === '1' ? 10000 : 60,
       },
     ]),
     PrismaModule,
