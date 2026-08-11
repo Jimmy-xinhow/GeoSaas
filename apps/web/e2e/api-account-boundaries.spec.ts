@@ -356,11 +356,11 @@ test.describe('API smoke - account boundaries and commerce edges', () => {
     const publicationsPayload = await publications.json();
     expect(Array.isArray(publicationsPayload.data ?? publicationsPayload)).toBe(true);
 
-    const missingContentPublish = await request.post(`${API}/api/contents/not-a-real-content-id/publish`, {
+    const unconfiguredPlatformPublish = await request.post(`${API}/api/contents/not-a-real-content-id/publish`, {
       headers: { Authorization: `Bearer ${user.token}` },
       data: { platforms: ['medium'] },
     });
-    expect(missingContentPublish.status()).toBe(404);
+    expect(unconfiguredPlatformPublish.status()).toBe(400);
 
     const publishWithMissingPlatforms = await request.post(`${API}/api/contents/not-a-real-content-id/publish`, {
       headers: { Authorization: `Bearer ${user.token}` },
