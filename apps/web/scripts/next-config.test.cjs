@@ -50,3 +50,13 @@ test('crawler-facing metadata only references the implemented Open Graph image r
     assert.equal(source.includes('/opengraph-image'), true, relativeFile);
   }
 });
+
+test('directory visibility changes are never served from a stale public cache', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '../src/app/directory/[siteId]/page.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /cache:\s*'no-store'/);
+  assert.doesNotMatch(source, /revalidate:\s*3600/);
+});

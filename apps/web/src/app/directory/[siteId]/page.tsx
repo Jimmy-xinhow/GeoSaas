@@ -15,7 +15,7 @@ async function fetchSite(siteId: string): Promise<DirectorySiteDetail | null> {
 async function fetchSiteResult(siteId: string): Promise<{ site: DirectorySiteDetail | null; status: number | null }> {
   try {
     const res = await fetch(`${API_BASE}/api/directory/${siteId}`, {
-      next: { revalidate: 3600 },
+      cache: 'no-store',
     });
     if (!res.ok) return { site: null, status: res.status };
     const json = await res.json().catch(() => null);
