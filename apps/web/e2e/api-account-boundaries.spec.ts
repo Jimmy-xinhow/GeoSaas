@@ -64,7 +64,7 @@ test.describe('API smoke - account boundaries and commerce edges', () => {
 
     const publicText = await request.get(`${API}/api/llms/${site.id}/llms.txt`);
     expect(publicText.status()).toBe(200);
-    expect(await publicText.text()).toContain('Powered by Geovault');
+    expect(await publicText.text()).toContain('LLMS Boundary Site');
   });
 
   test('llms.txt AI generation checks ownership before deducting paid quota', async ({ request }) => {
