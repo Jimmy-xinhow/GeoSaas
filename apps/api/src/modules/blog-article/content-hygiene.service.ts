@@ -71,8 +71,14 @@ export class ContentHygieneService {
     const dryRun = opts.dryRun !== false;
     const limit = Math.max(1, Math.min(opts.limit ?? 100, 500));
     const articles = await this.loadPublishedArticles();
-    const duplicateGroups = this.duplicateGroups(articles).slice(0, limit);
-    const duplicateIds = new Set(duplicateGroups.flatMap((group) => group.map((article) => article.id)));
+    const allDuplicateGroups = this.duplicateGroups(articles);
+    const duplicateGroups = allDuplicateGroups.slice(0, limit);
+    // Never backfill either side of an unresolved duplicate group. Otherwise a
+    // later group can receive the same unique contentKey before its canonical
+    // row and aliases are selected for consolidation.
+    const duplicateIds = new Set(
+      allDuplicateGroups.flatMap((group) => group.map((article) => article.id)),
+    );
     const descriptions = articles
       .filter((article) => normalizeBlogArticleDescription(article.description) !== article.description)
       .slice(0, limit);

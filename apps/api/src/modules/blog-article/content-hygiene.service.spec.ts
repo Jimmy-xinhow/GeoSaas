@@ -51,6 +51,39 @@ describe('ContentHygieneService', () => {
     }));
   });
 
+  it('excludes unresolved duplicate groups beyond the current batch from identity backfill', async () => {
+    const laterDuplicateGroup = [
+      {
+        ...rows[0],
+        id: 'later-newer',
+        siteId: 'site-2',
+        slug: 'later-newer',
+        title: '稍後批次才會處理的重複標題',
+      },
+      {
+        ...rows[1],
+        id: 'later-older',
+        siteId: 'site-2',
+        slug: 'later-older',
+        title: '稍後批次才會處理的重複標題',
+      },
+    ];
+    const prisma = {
+      blogArticle: { findMany: jest.fn().mockResolvedValue([...rows, ...laterDuplicateGroup]) },
+    };
+
+    const result = await new ContentHygieneService(
+      prisma as any,
+      {} as any,
+      {} as any,
+    ).runBatch({ limit: 1 });
+
+    expect(result).toEqual(expect.objectContaining({
+      selectedDuplicateGroups: 1,
+      selectedIdentityBackfills: 1,
+    }));
+  });
+
   it('preserves duplicate slugs as aliases before demoting duplicate pages', async () => {
     const update = jest.fn().mockResolvedValue({ id: 'updated' });
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });
