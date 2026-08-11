@@ -34,7 +34,7 @@ export class UpsertQuerySetDto {
 
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(20)
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => ClientReportQueryDto)
   queries: ClientReportQueryDto[];

@@ -238,7 +238,7 @@ test.describe('API smoke — dashboard owned resources', () => {
       {
         siteId: site.id,
         name: 'Too many queries',
-        queries: Array.from({ length: 21 }, (_, index) => ({
+        queries: Array.from({ length: 101 }, (_, index) => ({
           category: 'brand',
           question: `What is Report E2E Site known for ${index}?`,
         })),

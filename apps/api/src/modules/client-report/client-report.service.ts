@@ -9,6 +9,7 @@ import pLimit from '@/common/utils/p-limit';
 // an entire slot. The cooldown is shorter than the existing 14-day cache
 // so cache-hit path (free re-view) still works normally.
 const QUERY_SET_COOLDOWN_MS = 4 * 60 * 60 * 1000;
+const ACCEPTANCE_QUERY_LIMIT = 100;
 
 interface QueryItem {
   category: string;
@@ -155,9 +156,8 @@ export class ClientReportService implements OnModuleInit {
   private async ensureClientQuerySet(siteId: string): Promise<void> {
     const existing = await this.prisma.clientQuerySet.findFirst({
       where: { siteId },
-      select: { id: true },
+      select: { id: true, name: true, queries: true },
     });
-    if (existing) return;
 
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
@@ -170,7 +170,7 @@ export class ClientReportService implements OnModuleInit {
         qas: {
           select: { question: true, category: true },
           orderBy: { sortOrder: 'asc' },
-          take: 20,
+          take: ACCEPTANCE_QUERY_LIMIT,
         },
       },
     });
@@ -179,13 +179,24 @@ export class ClientReportService implements OnModuleInit {
     // automatically generated acceptance set.
     if (!site?.isClient) return;
 
+    const querySetName = `${site.name} AI 驗收問題集`;
+    const existingQueries = existing && Array.isArray(existing.queries)
+      ? existing.queries
+      : [];
+
+    // Preserve intentionally curated/manual sets. Only repair the generated
+    // baseline set introduced by the lazy bootstrap when it is undersized.
+    if (
+      existing
+      && (existing.name !== querySetName || existingQueries.length >= ACCEPTANCE_QUERY_LIMIT)
+    ) return;
+
     const profile = (site.profile && typeof site.profile === 'object' && !Array.isArray(site.profile))
       ? site.profile as SiteProfileForQuerySet
       : {};
     const services = this.firstProfileValue(profile.services);
     const location = this.firstProfileValue(profile.location);
     const audience = this.firstProfileValue(profile.targetAudience ?? profile.targetAudiences);
-    const querySetName = `${site.name} AI 驗收問題集`;
 
     const baseline: QueryItem[] = [
       { category: 'brand', question: `${site.name} 是什麼品牌，主要提供哪些服務？` },
@@ -204,12 +215,27 @@ export class ClientReportService implements OnModuleInit {
         question: qa.question.trim(),
       }))
       .filter((qa) => qa.question.length >= 5);
+    const existingQuestionItems = existingQueries as unknown as QueryItem[];
 
     const queries = Array.from(
-      new Map([...baseline, ...faqQuestions].map((query) => [query.question, query])).values(),
-    ).slice(0, 20);
+      new Map(
+        [...faqQuestions, ...existingQuestionItems, ...baseline]
+          .map((query) => [query.question, query]),
+      ).values(),
+    ).slice(0, ACCEPTANCE_QUERY_LIMIT);
 
     if (queries.length === 0) return;
+
+    if (existing) {
+      await this.prisma.clientQuerySet.update({
+        where: { id: existing.id },
+        data: { queries: queries as any },
+      });
+      this.logger.log(
+        `Expanded generated acceptance query set for client site ${site.id} from ${existingQueries.length} to ${queries.length} questions`,
+      );
+      return;
+    }
 
     // Re-check immediately before create so a second request that arrived
     // while the site/FAQ query was running does not create a duplicate set.
@@ -278,9 +304,12 @@ export class ClientReportService implements OnModuleInit {
         this.logger.log(`Report cache hit: ${recentReport.id} (${recentReport.createdAt.toISOString().slice(0, 10)})`);
         return { reportId: recentReport.id, cached: true };
       }
-      // Incomplete cached report — delete it and re-run
-      this.logger.warn(`Cached report ${recentReport.id} incomplete (${cachedResults.length}/${expectedTotal}) — deleting and re-running`);
-      await this.prisma.monitorReport.delete({ where: { id: recentReport.id } });
+      // The query set may have been expanded after this report completed.
+      // Preserve the historical evidence and create a fresh report for the
+      // current question count instead of deleting the older completed run.
+      this.logger.warn(
+        `Cached report ${recentReport.id} covers ${cachedResults.length}/${expectedTotal} current checks — preserving history and re-running`,
+      );
     }
 
     // NO CACHE HIT — this run will burn LLM credits. Gate it.
