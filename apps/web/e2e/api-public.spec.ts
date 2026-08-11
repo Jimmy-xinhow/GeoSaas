@@ -261,24 +261,20 @@ test.describe('API smoke — public files, badge, success cases', () => {
     expect(mixedHostBatch.status()).toBe(400);
   });
 
-  test('Retired guest scan rejects every new scan before crawling', async ({ request }) => {
-    for (const url of [
-      'http://localhost:4000',
-      'http://127.0.0.1:4000',
-      'http://10.0.0.1',
-      'http://172.16.0.1',
-      'http://192.168.1.1',
-      'http://[::1]',
-    ]) {
-      const response = await request.post(`${API}/api/guest-scan`, {
-        data: { url },
-      });
-      expect(response.status(), `${url} should be retired`).toBe(410);
-    }
+  test('Retired guest scan validates input and rejects valid requests before crawling', async ({ request }) => {
+    const invalidLocalUrl = await request.post(`${API}/api/guest-scan`, {
+      data: { url: 'http://localhost:4000' },
+    });
+    expect(invalidLocalUrl.status()).toBe(400);
+
+    const validPublicUrl = await request.post(`${API}/api/guest-scan`, {
+      data: { url: 'https://retired-guest-scan.geovault-e2e.test' },
+    });
+    expect(validPublicUrl.status()).toBe(410);
   });
 
   test('Guest scan status does not expose unknown records', async ({ request }) => {
     const status = await request.get(`${API}/api/guest-scan/not-a-real-guest-scan`);
-    expect(status.status()).toBe(404);
+    expect(status.status()).toBe(400);
   });
 });

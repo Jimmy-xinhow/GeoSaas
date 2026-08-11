@@ -10,8 +10,15 @@ function resetTestUser() {
   TEST_USER.email = `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}@test.local`;
 }
 
+async function declineAnalyticsForFunctionalTest(page: Page) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('geovault_analytics_consent', 'denied');
+  });
+}
+
 /** Register a new account and return the page already logged in. */
 export async function registerAndLogin(page: Page) {
+  await declineAnalyticsForFunctionalTest(page);
   resetTestUser();
   await page.goto('/register');
   await page.locator('#name').fill(TEST_USER.name);
@@ -24,6 +31,7 @@ export async function registerAndLogin(page: Page) {
 
 /** Login with the most recently registered test credentials. */
 export async function login(page: Page) {
+  await declineAnalyticsForFunctionalTest(page);
   await page.goto('/login');
   await page.locator('#email').fill(TEST_USER.email);
   await page.locator('#password').fill(TEST_USER.password);
@@ -33,6 +41,7 @@ export async function login(page: Page) {
 
 /** Ensure authenticated; tries login, then falls back to a fresh registration. */
 export async function ensureAuth(page: Page) {
+  await declineAnalyticsForFunctionalTest(page);
   await page.goto('/login');
   await page.locator('#email').fill(TEST_USER.email);
   await page.locator('#password').fill(TEST_USER.password);
