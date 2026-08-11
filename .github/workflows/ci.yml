@@ -82,6 +82,30 @@ jobs:
     timeout-minutes: 30
     if: github.event_name != 'workflow_call'
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: geovault_e2e
+          POSTGRES_PASSWORD: geovault_e2e
+          POSTGRES_DB: geovault_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U geovault_e2e -d geovault_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -103,6 +127,11 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm db:generate
 
+      - name: Migrate E2E database
+        run: pnpm --filter @geovault/database --fail-if-no-match exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://geovault_e2e:geovault_e2e@127.0.0.1:5432/geovault_e2e
+
       - name: Build shared package
         run: pnpm --filter @geovault/shared --fail-if-no-match build
 
@@ -121,10 +150,10 @@ jobs:
       - name: Start API server
         run: pnpm --filter @geovault/api --fail-if-no-match start:prod > /tmp/geovault-api.log 2>&1 &
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          REDIS_HOST: ${{ secrets.REDIS_HOST }}
-          REDIS_PORT: ${{ secrets.REDIS_PORT }}
-          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          DATABASE_URL: postgresql://geovault_e2e:geovault_e2e@127.0.0.1:5432/geovault_e2e
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+          REDIS_PASSWORD: ""
           JWT_SECRET: ci-e2e-jwt-secret-not-for-production
           JWT_REFRESH_SECRET: ci-e2e-refresh-secret-not-for-production
           ADMIN_EMAIL: e2e-admin@test.local
@@ -160,10 +189,16 @@ jobs:
           E2E_BASE_URL: http://localhost:3001
           NEXT_PUBLIC_API_URL: http://localhost:4000
 
+      - name: Dump E2E server logs
+        if: failure()
+        run: |
+          cat /tmp/geovault-api.log || true
+          cat /tmp/geovault-web.log || true
+
       - name: Upload E2E report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: apps/web/playwright-report/
+          path: apps/web/test-results/
           retention-days: 7

@@ -95,6 +95,42 @@ describe('AuthService', () => {
       await expect(service.register({ email: 'TEST@test.com', password: 'password123' }))
         .rejects.toThrow(ConflictException);
     });
+
+    it('auto-verifies isolated E2E accounts without sending external email', async () => {
+      const previousE2E = process.env.E2E;
+      process.env.E2E = '1';
+      prisma.user.findFirst.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
+        id: 'e2e-user',
+        email: 'e2e@test.local',
+        name: 'E2E',
+        role: 'USER',
+        plan: 'FREE',
+        emailVerified: true,
+        createdAt: new Date(),
+      });
+
+      try {
+        const result = await service.register({
+          email: 'e2e@test.local',
+          password: 'password123',
+          name: 'E2E',
+        });
+
+        expect(result.requiresEmailVerification).toBe(false);
+        expect(result.token).toBe('mock-token');
+        expect(email.sendEmailVerification).not.toHaveBeenCalled();
+        expect(prisma.emailVerificationToken.create).not.toHaveBeenCalled();
+        expect(prisma.user.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ emailVerified: true }),
+          }),
+        );
+      } finally {
+        if (previousE2E === undefined) delete process.env.E2E;
+        else process.env.E2E = previousE2E;
+      }
+    });
   });
 
   describe('login', () => {

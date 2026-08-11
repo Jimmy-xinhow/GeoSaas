@@ -44,6 +44,7 @@ export class AuthService {
   async register(dto: RegisterDto, origin?: string) {
     const email = this.normalizeEmail(dto.email);
     const name = this.normalizeOptionalName(dto.name);
+    const isE2E = process.env.E2E === '1';
     const existing = await this.prisma.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
     });
@@ -51,24 +52,44 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
-      data: { email, passwordHash, name },
+      data: {
+        email,
+        passwordHash,
+        name,
+        ...(isE2E ? { emailVerified: true } : {}),
+      },
       select: { id: true, email: true, name: true, role: true, plan: true, planExpiresAt: true, emailVerified: true, createdAt: true },
     });
 
-    const verificationToken = await this.createEmailVerificationToken(user.id);
-    const verificationUrl = this.buildEmailVerificationUrl(verificationToken, origin);
-    await this.email.sendEmailVerification(user.email, user.name ?? undefined, verificationUrl);
+    let verificationUrl: string | undefined;
+    if (!isE2E) {
+      const verificationToken = await this.createEmailVerificationToken(user.id);
+      verificationUrl = this.buildEmailVerificationUrl(verificationToken, origin);
+      await this.email.sendEmailVerification(user.email, user.name ?? undefined, verificationUrl);
+    }
 
     // Send welcome notification + email (non-blocking)
     this.notifications.create(user.id, 'welcome', '歡迎加入 Geovault', `${user.name || '使用者'}，感謝您註冊 Geovault！`).catch(() => {});
 
     this.affiliateService.attributeSignup(user.id, dto.affiliateCode, dto.affiliateVisitorId).catch(() => {});
 
+    // E2E runs use an isolated database and cannot call an external email provider.
+    // Production registration always keeps the normal verification flow above.
+    if (isE2E) {
+      const tokens = await this.generateTokens(user.id, user.email, user.role);
+      return {
+        user,
+        ...tokens,
+        requiresEmailVerification: false,
+        message: 'E2E account auto-verified.',
+      };
+    }
+
     return {
       user,
       requiresEmailVerification: true,
       message: 'Please verify your email before logging in.',
-      ...(this.shouldExposeDevVerificationUrl(origin)
+      ...(verificationUrl && this.shouldExposeDevVerificationUrl(origin)
         ? { devVerificationUrl: verificationUrl }
         : {}),
     };
