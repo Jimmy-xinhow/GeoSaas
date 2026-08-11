@@ -34,12 +34,15 @@ RUN pnpm --filter @geovault/shared build
 # Google Client ID is public by design (origins are enforced at Google's end).
 # Override via --build-arg if rotating; otherwise the default below is used.
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=154774079870-9m0cu8ubcd9p7n4nesa1rdcbg6cm3bbs.apps.googleusercontent.com
+ARG NEXT_PUBLIC_GA_MEASUREMENT_ID=G-LL81P39R1X
 ENV NEXT_PUBLIC_API_URL=https://api.geovault.app
 ENV NEXT_PUBLIC_SITE_URL=https://www.geovault.app
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+ENV NEXT_PUBLIC_GA_MEASUREMENT_ID=${NEXT_PUBLIC_GA_MEASUREMENT_ID}
 RUN NEXT_PUBLIC_API_URL=https://api.geovault.app \
     NEXT_PUBLIC_SITE_URL=https://www.geovault.app \
     NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID} \
+    NEXT_PUBLIC_GA_MEASUREMENT_ID=${NEXT_PUBLIC_GA_MEASUREMENT_ID} \
     pnpm --filter @geovault/web build
 
 # ---------- Stage 2: Runner ----------
@@ -50,6 +53,7 @@ RUN apk add --no-cache dumb-init
 ENV NODE_ENV=production
 ENV NEXT_PUBLIC_API_URL=https://api.geovault.app
 ENV NEXT_PUBLIC_SITE_URL=https://www.geovault.app
+ENV NEXT_PUBLIC_GA_MEASUREMENT_ID=G-LL81P39R1X
 WORKDIR /app
 
 # Create non-root user

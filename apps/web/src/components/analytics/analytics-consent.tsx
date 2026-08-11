@@ -5,7 +5,9 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const STORAGE_KEY = 'geovault_analytics_consent';
-const MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || '';
+const MEASUREMENT_ID =
+  process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ||
+  (process.env.NODE_ENV === 'production' ? 'G-LL81P39R1X' : '');
 type Consent = 'pending' | 'granted' | 'denied';
 
 function applyConsent(value: Exclude<Consent, 'pending'>) {
