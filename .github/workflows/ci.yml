@@ -127,8 +127,8 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm db:generate
 
-      - name: Migrate E2E database
-        run: pnpm --filter @geovault/database --fail-if-no-match exec prisma migrate deploy
+      - name: Prepare E2E database schema
+        run: pnpm --filter @geovault/database --fail-if-no-match exec prisma db push --skip-generate
         env:
           DATABASE_URL: postgresql://geovault_e2e:geovault_e2e@127.0.0.1:5432/geovault_e2e
 
