@@ -125,7 +125,11 @@ jobs:
           REDIS_HOST: ${{ secrets.REDIS_HOST }}
           REDIS_PORT: ${{ secrets.REDIS_PORT }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_SECRET: ci-e2e-jwt-secret-not-for-production
+          JWT_REFRESH_SECRET: ci-e2e-refresh-secret-not-for-production
+          ADMIN_EMAIL: e2e-admin@test.local
+          ADMIN_PASSWORD: E2eAdmin123!@
+          E2E: "1"
           FRONTEND_URL: http://localhost:3001
           PORT: 4000
           NODE_ENV: test
