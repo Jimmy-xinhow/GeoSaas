@@ -150,11 +150,13 @@ interface AnalyticsStatus {
     gscSiteUrl: string | null;
     ga4PropertyId: string | null;
   };
-  rowCounts: { gsc: number; ga4: number };
+  rowCounts: { gsc: number; ga4: number; ga4Events: number };
   coverage: {
     gsc: { from: string | null; to: string | null };
     ga4: { from: string | null; to: string | null };
+    ga4Events: { from: string | null; to: string | null };
   };
+  ga4Events: Array<{ eventName: string; eventCount: number; keyEvents: number }>;
   states: AnalyticsSyncState[];
 }
 
@@ -329,11 +331,27 @@ export default function AdminContentAutomationPage() {
                       </Badge>
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                      <div><p className="text-gray-500">倉庫總筆數</p><p className="mt-1 text-white">{analyticsStatus.rowCounts[provider]}</p></div>
+                      <div><p className="text-gray-500">{provider === 'ga4' ? '著陸頁日資料' : '倉庫總筆數'}</p><p className="mt-1 text-white">{analyticsStatus.rowCounts[provider]}</p></div>
                       <div><p className="text-gray-500">本次同步筆數</p><p className="mt-1 text-white">{state?.lastRowCount || 0}</p></div>
                       <div><p className="text-gray-500">資料起日</p><p className="mt-1 text-white">{coverage.from ? coverage.from.slice(0, 10) : '尚無'}</p></div>
                       <div><p className="text-gray-500">資料迄日</p><p className="mt-1 text-white">{coverage.to ? coverage.to.slice(0, 10) : '尚無'}</p></div>
+                      {provider === 'ga4' && (
+                        <>
+                          <div><p className="text-gray-500">事件日資料</p><p className="mt-1 text-white">{analyticsStatus.rowCounts.ga4Events}</p></div>
+                          <div><p className="text-gray-500">事件種類</p><p className="mt-1 text-white">{analyticsStatus.ga4Events.length}</p></div>
+                        </>
+                      )}
                     </div>
+                    {provider === 'ga4' && analyticsStatus.ga4Events.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {analyticsStatus.ga4Events.slice(0, 8).map((event) => (
+                          <Badge key={event.eventName} variant="outline" className="border-white/15 text-[11px] text-gray-300">
+                            {event.eventName} {event.eventCount}
+                            {event.keyEvents > 0 ? ` / key ${event.keyEvents}` : ''}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                     <p className="mt-3 text-xs text-gray-400">最後成功：{formatDate(state?.lastSuccessAt || null)}</p>
                     {!healthy && !failed && (
                       <p className="mt-2 text-xs text-amber-200">

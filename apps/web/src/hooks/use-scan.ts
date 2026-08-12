@@ -24,6 +24,37 @@ export interface Scan {
   results?: ScanResultItem[];
 }
 
+function markAuthenticatedScanStarted(scan: Scan) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(`geovault_scan_started_${scan.id}`, '1');
+  } catch {
+    // Storage can be unavailable in hardened/private browser contexts.
+  }
+}
+
+function trackAuthenticatedScanCompletion(scan: Scan) {
+  if (typeof window === 'undefined' || scan.status !== 'COMPLETED') return;
+  const startedKey = `geovault_scan_started_${scan.id}`;
+  const completedKey = `geovault_scan_complete_${scan.id}`;
+  try {
+    if (
+      !window.sessionStorage.getItem(startedKey)
+      || window.sessionStorage.getItem(completedKey)
+    ) return;
+    if (trackEvent('scan_complete', {
+      scan_type: 'authenticated',
+      site_id: scan.siteId,
+      score: scan.totalScore,
+    })) {
+      window.sessionStorage.setItem(completedKey, '1');
+    }
+    window.sessionStorage.removeItem(startedKey);
+  } catch {
+    // The scan result remains functional even when analytics storage fails.
+  }
+}
+
 export interface DeepAnalysisPage {
   url: string;
   status: 'ok' | 'failed';
@@ -61,10 +92,14 @@ export function useTriggerScan() {
 
   return useMutation({
     mutationFn: async (siteId: string) => {
-      trackEvent('scan_start', { scan_type: 'authenticated', site_id: siteId });
+      const trackedStart = trackEvent('scan_start', {
+        scan_type: 'authenticated',
+        site_id: siteId,
+      });
       const { data } = await apiClient.post<Scan>(
         `/sites/${siteId}/scans`
       );
+      if (trackedStart) markAuthenticatedScanStarted(data);
       return data;
     },
     onSuccess: (data) => {
@@ -107,6 +142,7 @@ export function useScanHistory(siteId: string) {
       const { data } = await apiClient.get<Scan[]>(
         `/sites/${siteId}/scans`
       );
+      data.forEach(trackAuthenticatedScanCompletion);
       return data;
     },
     enabled: !!siteId,
@@ -128,6 +164,7 @@ export function useScanById(scanId: string) {
       const { data } = await apiClient.get<Scan>(
         `/scans/${scanId}`
       );
+      trackAuthenticatedScanCompletion(data);
       return data;
     },
     enabled: !!scanId,

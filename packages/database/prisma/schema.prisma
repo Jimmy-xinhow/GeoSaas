@@ -999,6 +999,25 @@ model Ga4LandingPageDaily {
   @@map("ga4_landing_page_daily")
 }
 
+// Daily GA4 event facts preserve the product funnel independently from
+// landing-page acquisition rows. User totals are daily distinct users and
+// must not be summed as cross-day unique users.
+model Ga4EventDaily {
+  id         String   @id @default(cuid())
+  date       DateTime @db.Date
+  propertyId String
+  eventName  String
+  eventCount Int      @default(0)
+  totalUsers Int      @default(0)
+  keyEvents  Float    @default(0)
+  syncedAt   DateTime @default(now())
+
+  @@unique([date, propertyId, eventName])
+  @@index([date, propertyId])
+  @@index([eventName, date])
+  @@map("ga4_event_daily")
+}
+
 // One observable checkpoint per upstream provider. Failed syncs remain visible
 // instead of silently presenting stale analytics as current.
 model AnalyticsSyncState {

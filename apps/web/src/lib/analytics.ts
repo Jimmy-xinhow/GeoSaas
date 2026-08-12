@@ -6,7 +6,13 @@ export type AnalyticsEventName =
   | 'scan_start'
   | 'scan_complete'
   | 'report_view'
-  | 'sign_up';
+  | 'sign_up'
+  | 'purchase';
+
+type AnalyticsEventParameters = Record<
+  string,
+  string | number | boolean | undefined
+>;
 
 declare global {
   interface Window {
@@ -16,7 +22,7 @@ declare global {
     __geovaultLastTrackedPage?: string;
     __geovaultPendingAnalyticsEvents?: Array<{
       name: AnalyticsEventName;
-      parameters: Record<string, string | number | boolean | undefined>;
+      parameters: AnalyticsEventParameters;
     }>;
   }
 }
@@ -57,17 +63,18 @@ export function initializeAnalytics(measurementId: string): boolean {
 
 export function trackEvent(
   name: AnalyticsEventName,
-  parameters: Record<string, string | number | boolean | undefined> = {},
-) {
-  if (typeof window === 'undefined') return;
-  if (window.localStorage.getItem('geovault_analytics_consent') !== 'granted') return;
+  parameters: AnalyticsEventParameters = {},
+): boolean {
+  if (typeof window === 'undefined') return false;
+  if (window.localStorage.getItem('geovault_analytics_consent') !== 'granted') return false;
 
   if (window.__geovaultAnalyticsInitialized && window.gtag) {
     window.gtag('event', name, parameters);
-    return;
+    return true;
   }
 
   const pending = window.__geovaultPendingAnalyticsEvents || [];
   pending.push({ name, parameters });
   window.__geovaultPendingAnalyticsEvents = pending.slice(-MAX_PENDING_EVENTS);
+  return true;
 }

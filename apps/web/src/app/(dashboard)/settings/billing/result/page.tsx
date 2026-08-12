@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { trackEvent } from '@/lib/analytics';
 import Link from 'next/link';
 
 export default function BillingResultPage() {
@@ -11,6 +13,22 @@ export default function BillingResultPage() {
   const success = searchParams.get('success') === 'true';
   const orderNo = searchParams.get('orderNo');
   const message = searchParams.get('message');
+
+  useEffect(() => {
+    if (!success || !orderNo) return;
+    const key = `geovault_purchase_${orderNo}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      if (trackEvent('purchase', {
+        transaction_id: orderNo,
+        currency: 'TWD',
+      })) {
+        window.sessionStorage.setItem(key, '1');
+      }
+    } catch {
+      // Payment confirmation must remain usable when analytics storage fails.
+    }
+  }, [orderNo, success]);
 
   return (
     <div className="max-w-md mx-auto mt-12">

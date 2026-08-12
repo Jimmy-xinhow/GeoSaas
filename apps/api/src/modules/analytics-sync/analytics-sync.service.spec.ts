@@ -21,6 +21,99 @@ describe('analytics sync date handling', () => {
   });
 });
 
+describe('AnalyticsSyncService GA4 persistence', () => {
+  const originalPropertyId = process.env.GA4_PROPERTY_ID;
+
+  afterEach(() => {
+    if (originalPropertyId === undefined) delete process.env.GA4_PROPERTY_ID;
+    else process.env.GA4_PROPERTY_ID = originalPropertyId;
+    jest.restoreAllMocks();
+  });
+
+  it('stores landing-page and event facts from independent GA4 reports', async () => {
+    process.env.GA4_PROPERTY_ID = '549460125';
+    const tx = {
+      ga4LandingPageDaily: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      ga4EventDaily: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const request = jest.fn(async (args: any) => {
+      const dimensionNames = args.data.dimensions.map((dimension: any) => dimension.name);
+      if (dimensionNames.includes('landingPagePlusQueryString')) {
+        return {
+          data: {
+            rowCount: 1,
+            rows: [{
+              dimensionValues: [
+                { value: '20260812' },
+                { value: '/cases?utm_source=gsc' },
+                { value: 'google' },
+                { value: 'organic' },
+              ],
+              metricValues: [
+                { value: '3' }, { value: '2' }, { value: '1' },
+                { value: '2' }, { value: '0.6667' }, { value: '42.5' },
+                { value: '5' }, { value: '14' }, { value: '0' },
+              ],
+            }],
+          },
+        };
+      }
+      return {
+        data: {
+          rowCount: 2,
+          rows: [
+            {
+              dimensionValues: [{ value: '20260812' }, { value: 'page_view' }],
+              metricValues: [{ value: '14' }, { value: '2' }, { value: '0' }],
+            },
+            {
+              dimensionValues: [{ value: '20260812' }, { value: 'scan_start' }],
+              metricValues: [{ value: '1' }, { value: '1' }, { value: '0' }],
+            },
+          ],
+        },
+      };
+    });
+    const service = new AnalyticsSyncService(prisma as any);
+    (service as any).auth = jest.fn().mockReturnValue({
+      getClient: jest.fn().mockResolvedValue({ request }),
+    });
+    jest.spyOn(service as any, 'markRunning').mockResolvedValue(undefined);
+    const markSuccess = jest.spyOn(service as any, 'markSuccess').mockResolvedValue(undefined);
+
+    const result = await service.syncGa4('2026-08-12', '2026-08-12');
+
+    expect(result).toEqual(expect.objectContaining({
+      rowCount: 3,
+      landingPageRowCount: 1,
+      eventRowCount: 2,
+    }));
+    expect(tx.ga4LandingPageDaily.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({
+        landingPage: '/cases?utm_source=gsc',
+        sessions: 3,
+        eventCount: 14,
+      })],
+    }));
+    expect(tx.ga4EventDaily.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.arrayContaining([
+        expect.objectContaining({ eventName: 'page_view', eventCount: 14, totalUsers: 2 }),
+        expect.objectContaining({ eventName: 'scan_start', eventCount: 1, totalUsers: 1 }),
+      ]),
+    }));
+    expect(markSuccess).toHaveBeenCalledWith('ga4', 3);
+  });
+});
+
 describe('AnalyticsSyncService opportunity queue', () => {
   it('uses impression-weighted position and returns query-to-page evidence', async () => {
     const queryRaw = jest.fn()
@@ -181,7 +274,7 @@ describe('AnalyticsSyncService opportunity queue', () => {
       ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
       blogArticle: {
         findMany: jest.fn()
-          .mockResolvedValueOnce([{ slug: 'private-site-article' }])
+          .mockResolvedValueOnce([{ slug: 'private-site-article', aliasSlugs: [] }])
           .mockResolvedValueOnce([]),
       },
     };
@@ -194,6 +287,81 @@ describe('AnalyticsSyncService opportunity queue', () => {
       priority: 'monitor',
       reasonCodes: ['not_currently_indexable'],
       suggestedAction: '目前頁面不符合公開索引門檻；先確認應退役或補齊公開證據，不做 CTR 文案優化。',
+    }));
+  });
+
+  it('resolves an encoded legacy alias and keeps its noindex article out of repair', async () => {
+    const alias = 'ettoday新聞雲-brand_reputation-mnv4vqc9';
+    const page = `https://www.geovault.app/blog/${encodeURIComponent(alias)}`;
+    const queryRaw = jest.fn()
+      .mockResolvedValueOnce([{
+        page,
+        clicks: 0,
+        impressions: 246,
+        position: 7.6,
+      }])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+      blogArticle: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([{
+            slug: 'canonical-legacy-slug',
+            aliasSlugs: [alias],
+          }])
+          .mockResolvedValueOnce([]),
+      },
+    };
+
+    const result = await new AnalyticsSyncService(prisma as any).opportunities(93);
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      page,
+      currentlyIndexable: false,
+      priority: 'monitor',
+      reasonCodes: ['not_currently_indexable'],
+    }));
+    expect(prisma.blogArticle.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      where: {
+        OR: [
+          { slug: { in: expect.arrayContaining([alias, encodeURIComponent(alias)]) } },
+          { aliasSlugs: { hasSome: expect.arrayContaining([alias, encodeURIComponent(alias)]) } },
+        ],
+      },
+    }));
+  });
+
+  it('treats an unknown generated article URL as non-indexable while preserving static slugs', async () => {
+    const generatedPage = 'https://www.geovault.app/blog/cmn8agbef0-brand-showcase-mol0n54a';
+    const staticPage = 'https://www.geovault.app/blog/what-is-geo';
+    const queryRaw = jest.fn()
+      .mockResolvedValueOnce([
+        { page: generatedPage, clicks: 0, impressions: 64, position: 2.4 },
+        { page: staticPage, clicks: 0, impressions: 12, position: 8 },
+      ])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+      blogArticle: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]),
+      },
+    };
+
+    const result = await new AnalyticsSyncService(prisma as any).opportunities(93);
+    const byPage = new Map(result.map((item) => [item.page, item]));
+
+    expect(byPage.get(generatedPage)).toEqual(expect.objectContaining({
+      currentlyIndexable: false,
+      priority: 'monitor',
+      reasonCodes: ['not_currently_indexable'],
+    }));
+    expect(byPage.get(staticPage)).toEqual(expect.objectContaining({
+      currentlyIndexable: true,
+      priority: 'high',
     }));
   });
 

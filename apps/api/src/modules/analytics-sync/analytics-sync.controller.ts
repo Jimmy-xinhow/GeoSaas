@@ -42,7 +42,7 @@ export class AnalyticsSyncController {
   }
 
   @Post('sync/ga4')
-  @ApiOperation({ summary: 'Synchronize GA4 landing-page daily facts' })
+  @ApiOperation({ summary: 'Synchronize GA4 landing-page and event daily facts' })
   syncGa4(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,

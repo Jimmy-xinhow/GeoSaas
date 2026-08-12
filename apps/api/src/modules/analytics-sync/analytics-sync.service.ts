@@ -292,43 +292,35 @@ export class AnalyticsSyncService {
       const client = await this.auth([
         'https://www.googleapis.com/auth/analytics.readonly',
       ]).getClient();
-      const rows: Ga4ApiRow[] = [];
-      const limit = 100_000;
+      const [landingRows, eventRows] = await Promise.all([
+        this.fetchGa4Rows(client, propertyId, range, [
+          'date',
+          'landingPagePlusQueryString',
+          'sessionSource',
+          'sessionMedium',
+        ], [
+          'sessions',
+          'activeUsers',
+          'newUsers',
+          'engagedSessions',
+          'engagementRate',
+          'averageSessionDuration',
+          'screenPageViews',
+          'eventCount',
+          'keyEvents',
+        ]),
+        this.fetchGa4Rows(client, propertyId, range, [
+          'date',
+          'eventName',
+        ], [
+          'eventCount',
+          'totalUsers',
+          'keyEvents',
+        ]),
+      ]);
 
-      for (let offset = 0; ; offset += limit) {
-        const response = await client.request<Ga4ApiResponse>({
-          url: `https://analyticsdata.googleapis.com/v1beta/properties/${encodeURIComponent(propertyId)}:runReport`,
-          method: 'POST',
-          data: {
-            dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
-            dimensions: [
-              { name: 'date' },
-              { name: 'landingPagePlusQueryString' },
-              { name: 'sessionSource' },
-              { name: 'sessionMedium' },
-            ],
-            metrics: [
-              { name: 'sessions' },
-              { name: 'activeUsers' },
-              { name: 'newUsers' },
-              { name: 'engagedSessions' },
-              { name: 'engagementRate' },
-              { name: 'averageSessionDuration' },
-              { name: 'screenPageViews' },
-              { name: 'eventCount' },
-              { name: 'keyEvents' },
-            ],
-            limit: String(limit),
-            offset: String(offset),
-            keepEmptyRows: false,
-          },
-        });
-        const pageRows = response.data.rows || [];
-        rows.push(...pageRows);
-        if (pageRows.length < limit || rows.length >= (response.data.rowCount || 0)) break;
-      }
-
-      const data = rows.flatMap((row) => {
+      const syncedAt = new Date();
+      const landingData = landingRows.flatMap((row) => {
         const dimensions = row.dimensionValues || [];
         const metrics = row.metricValues || [];
         const dateValue = dimensions[0]?.value || '';
@@ -348,7 +340,23 @@ export class AnalyticsSyncService {
           screenPageViews: integer(metrics[6]?.value),
           eventCount: integer(metrics[7]?.value),
           keyEvents: numeric(metrics[8]?.value),
-          syncedAt: new Date(),
+          syncedAt,
+        }];
+      });
+      const eventData = eventRows.flatMap((row) => {
+        const dimensions = row.dimensionValues || [];
+        const metrics = row.metricValues || [];
+        const dateValue = dimensions[0]?.value || '';
+        const eventName = dimensions[1]?.value || '';
+        if (!/^\d{8}$/.test(dateValue) || !eventName || eventName === '(not set)') return [];
+        return [{
+          date: parseGa4Date(dateValue),
+          propertyId,
+          eventName,
+          eventCount: integer(metrics[0]?.value),
+          totalUsers: integer(metrics[1]?.value),
+          keyEvents: numeric(metrics[2]?.value),
+          syncedAt,
         }];
       });
 
@@ -362,19 +370,70 @@ export class AnalyticsSyncService {
             },
           },
         });
-        for (let index = 0; index < data.length; index += CREATE_BATCH_SIZE) {
+        await tx.ga4EventDaily.deleteMany({
+          where: {
+            propertyId,
+            date: {
+              gte: new Date(`${range.startDate}T00:00:00.000Z`),
+              lte: new Date(`${range.endDate}T00:00:00.000Z`),
+            },
+          },
+        });
+        for (let index = 0; index < landingData.length; index += CREATE_BATCH_SIZE) {
           await tx.ga4LandingPageDaily.createMany({
-            data: data.slice(index, index + CREATE_BATCH_SIZE),
+            data: landingData.slice(index, index + CREATE_BATCH_SIZE),
+            skipDuplicates: true,
+          });
+        }
+        for (let index = 0; index < eventData.length; index += CREATE_BATCH_SIZE) {
+          await tx.ga4EventDaily.createMany({
+            data: eventData.slice(index, index + CREATE_BATCH_SIZE),
             skipDuplicates: true,
           });
         }
       }, { timeout: 120_000 });
-      await this.markSuccess(GA4_PROVIDER, data.length);
-      return { provider: GA4_PROVIDER, ...range, rowCount: data.length };
+      const rowCount = landingData.length + eventData.length;
+      await this.markSuccess(GA4_PROVIDER, rowCount);
+      return {
+        provider: GA4_PROVIDER,
+        ...range,
+        rowCount,
+        landingPageRowCount: landingData.length,
+        eventRowCount: eventData.length,
+      };
     } catch (error) {
       await this.markFailed(GA4_PROVIDER, error);
       throw error;
     }
+  }
+
+  private async fetchGa4Rows(
+    client: { request<T>(args: Record<string, unknown>): Promise<{ data: T }> },
+    propertyId: string,
+    range: DateRange,
+    dimensions: string[],
+    metrics: string[],
+  ): Promise<Ga4ApiRow[]> {
+    const rows: Ga4ApiRow[] = [];
+    const limit = 100_000;
+    for (let offset = 0; ; offset += limit) {
+      const response = await client.request<Ga4ApiResponse>({
+        url: `https://analyticsdata.googleapis.com/v1beta/properties/${encodeURIComponent(propertyId)}:runReport`,
+        method: 'POST',
+        data: {
+          dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
+          dimensions: dimensions.map((name) => ({ name })),
+          metrics: metrics.map((name) => ({ name })),
+          limit: String(limit),
+          offset: String(offset),
+          keepEmptyRows: false,
+        },
+      });
+      const nextRows = response.data.rows || [];
+      rows.push(...nextRows);
+      if (nextRows.length < limit || rows.length >= (response.data.rowCount || 0)) break;
+    }
+    return rows;
   }
 
   async syncAll(startDate?: string, endDate?: string) {
@@ -390,7 +449,7 @@ export class AnalyticsSyncService {
   }
 
   async status() {
-    const [states, gscRows, ga4Rows] = await Promise.all([
+    const [states, gscRows, ga4Rows, ga4EventRows, ga4Events] = await Promise.all([
       this.prisma.analyticsSyncState.findMany({ orderBy: { provider: 'asc' } }),
       this.prisma.searchPerformanceDaily.aggregate({
         _count: true,
@@ -402,6 +461,15 @@ export class AnalyticsSyncService {
         _min: { date: true },
         _max: { date: true },
       }),
+      this.prisma.ga4EventDaily.aggregate({
+        _count: true,
+        _min: { date: true },
+        _max: { date: true },
+      }),
+      this.prisma.ga4EventDaily.groupBy({
+        by: ['eventName'],
+        _sum: { eventCount: true, keyEvents: true },
+      }),
     ]);
     return {
       configured: {
@@ -412,11 +480,23 @@ export class AnalyticsSyncService {
         gscSiteUrl: process.env.GSC_SITE_URL || null,
         ga4PropertyId: process.env.GA4_PROPERTY_ID || null,
       },
-      rowCounts: { gsc: gscRows._count, ga4: ga4Rows._count },
+      rowCounts: {
+        gsc: gscRows._count,
+        ga4: ga4Rows._count,
+        ga4Events: ga4EventRows._count,
+      },
       coverage: {
         gsc: { from: gscRows._min.date, to: gscRows._max.date },
         ga4: { from: ga4Rows._min.date, to: ga4Rows._max.date },
+        ga4Events: { from: ga4EventRows._min.date, to: ga4EventRows._max.date },
       },
+      ga4Events: ga4Events
+        .map((row) => ({
+          eventName: row.eventName,
+          eventCount: row._sum.eventCount || 0,
+          keyEvents: row._sum.keyEvents || 0,
+        }))
+        .sort((a, b) => b.eventCount - a.eventCount),
       states,
     };
   }
@@ -628,7 +708,7 @@ export class AnalyticsSyncService {
     pages: string[],
   ): Promise<Map<string, boolean>> {
     const result = new Map<string, boolean>();
-    const blogRefs: Array<{ path: string; slug: string }> = [];
+    const blogRefs: Array<{ path: string; candidates: string[] }> = [];
     const directoryRefs: Array<{ path: string; siteId: string }> = [];
 
     for (const page of pages) {
@@ -636,7 +716,13 @@ export class AnalyticsSyncService {
       const blogMatch = path.match(/^\/blog\/([^/]+)$/);
       if (blogMatch) {
         try {
-          blogRefs.push({ path, slug: decodeURIComponent(blogMatch[1]) });
+          blogRefs.push({
+            path,
+            candidates: [...new Set([
+              blogMatch[1],
+              decodeURIComponent(blogMatch[1]),
+            ])],
+          });
         } catch {
           result.set(path, false);
         }
@@ -652,23 +738,32 @@ export class AnalyticsSyncService {
       }
     }
 
-    const blogSlugs = [...new Set(blogRefs.map((ref) => ref.slug))];
+    const blogSlugs = [...new Set(blogRefs.flatMap((ref) => ref.candidates))];
     const directoryIds = [...new Set(directoryRefs.map((ref) => ref.siteId))];
     const [knownBlogs, indexableBlogs, directorySites] = await Promise.all([
       blogSlugs.length > 0
         ? this.prisma.blogArticle.findMany({
-            where: { slug: { in: blogSlugs } },
-            select: { slug: true },
+            where: {
+              OR: [
+                { slug: { in: blogSlugs } },
+                { aliasSlugs: { hasSome: blogSlugs } },
+              ],
+            },
+            select: { slug: true, aliasSlugs: true },
           })
         : Promise.resolve([]),
       blogSlugs.length > 0
         ? this.prisma.blogArticle.findMany({
             where: publicIndexableBlogArticleWhere({
-              slug: { in: blogSlugs },
               published: true,
+              OR: [
+                { slug: { in: blogSlugs } },
+                { aliasSlugs: { hasSome: blogSlugs } },
+              ],
             }),
             select: {
               slug: true,
+              aliasSlugs: true,
               title: true,
               description: true,
               templateType: true,
@@ -702,15 +797,25 @@ export class AnalyticsSyncService {
         : Promise.resolve([]),
     ]);
 
-    const knownBlogSlugs = new Set(knownBlogs.map((article) => article.slug));
+    const knownBlogSlugs = new Set(
+      knownBlogs.flatMap((article) => [article.slug, ...(article.aliasSlugs || [])]),
+    );
     const indexableBlogSlugs = new Set(
       indexableBlogs
         .filter((article) => isIndexablePublicBlogArticle(article))
-        .map((article) => article.slug),
+        .flatMap((article) => [article.slug, ...(article.aliasSlugs || [])]),
     );
     for (const ref of blogRefs) {
-      if (knownBlogSlugs.has(ref.slug)) {
-        result.set(ref.path, indexableBlogSlugs.has(ref.slug));
+      if (ref.candidates.some((candidate) => knownBlogSlugs.has(candidate))) {
+        result.set(
+          ref.path,
+          ref.candidates.some((candidate) => indexableBlogSlugs.has(candidate)),
+        );
+      } else if (ref.candidates.some((candidate) => this.isGeneratedBlogSlug(candidate))) {
+        // A generated URL that no longer maps to a durable article is a 404,
+        // not a CTR opportunity. Unknown human-readable slugs may still be
+        // static frontend posts, so only fail closed for generator signatures.
+        result.set(ref.path, false);
       }
     }
 
@@ -730,6 +835,12 @@ export class AnalyticsSyncService {
     }
 
     return result;
+  }
+
+  private isGeneratedBlogSlug(slug: string): boolean {
+    return /^cm[a-z0-9]{8,}-/i.test(slug)
+      || /_(?:geo_overview|score_breakdown|competitor_comparison|improvement_tips|industry_benchmark|brand_reputation)-/i.test(slug)
+      || /-(?:brand-showcase|brand-profile|faq-deepdive)-/i.test(slug);
   }
 
   @Cron('15 4 * * *')
