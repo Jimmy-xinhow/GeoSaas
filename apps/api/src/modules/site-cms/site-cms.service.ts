@@ -14,6 +14,7 @@ import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   CreateSiteCmsArticleDto,
+  SiteCmsArticlePreviewDto,
   SiteCmsArticleQueryDto,
   SiteCmsChangePasswordDto,
   SiteCmsLoginDto,
@@ -21,6 +22,7 @@ import {
   SiteCmsSourceDto,
   UpdateSiteCmsArticleDto,
 } from './dto';
+import { SiteCmsContentFormat, SiteCmsContentService } from './site-cms-content.service';
 import { evaluateSiteCmsArticle } from './site-cms-quality';
 import { SiteCmsContext } from './site-cms.types';
 
@@ -31,7 +33,10 @@ const SESSION_HOURS = 8;
 
 @Injectable()
 export class SiteCmsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly contentService: SiteCmsContentService,
+  ) {}
 
   async login(siteId: string, dto: SiteCmsLoginDto) {
     const account = await this.prisma.siteCmsAccount.findUnique({
@@ -192,6 +197,15 @@ export class SiteCmsService {
     return { ...article, quality: evaluateSiteCmsArticle(this.qualityInput(article)) };
   }
 
+  previewArticle(context: SiteCmsContext, dto: SiteCmsArticlePreviewDto) {
+    this.assertReady(context);
+    return this.contentService.renderPreview(
+      dto.content,
+      dto.contentFormat as SiteCmsContentFormat,
+      dto.customCss,
+    );
+  }
+
   async createArticle(context: SiteCmsContext, dto: CreateSiteCmsArticleDto) {
     this.assertReady(context);
     const data = this.normalizeArticleData(dto);
@@ -203,6 +217,8 @@ export class SiteCmsService {
           slug: dto.slug.trim().toLowerCase(),
           description: data.description || '',
           content: data.content || '',
+          contentFormat: data.contentFormat || 'markdown',
+          customCss: data.customCss || null,
           category: data.category || 'brand-news',
           tags: data.tags || [],
           keywords: data.keywords || [],
@@ -236,7 +252,10 @@ export class SiteCmsService {
     if (existing.status === 'published' && dto.slug && dto.slug !== existing.slug) {
       throw new BadRequestException('已發布文章不可變更網址代稱，請先下架。');
     }
-    const normalized = this.normalizeArticleData(dto);
+    if (dto.contentFormat && dto.contentFormat !== existing.contentFormat && dto.content === undefined) {
+      throw new BadRequestException('切換文章格式時必須同時提交文章正文。');
+    }
+    const normalized = this.normalizeArticleData(dto, existing.contentFormat as SiteCmsContentFormat);
     const result = await this.prisma.siteCmsArticle.updateMany({
       where: { id, siteId: context.siteId, version: dto.version },
       data: {
@@ -378,16 +397,22 @@ export class SiteCmsService {
     return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
   }
 
-  private normalizeArticleData(dto: Partial<CreateSiteCmsArticleDto>) {
+  private normalizeArticleData(
+    dto: Partial<CreateSiteCmsArticleDto>,
+    fallbackFormat: SiteCmsContentFormat = 'markdown',
+  ) {
     const stringValue = (value: string | undefined) =>
       value === undefined ? undefined : value.trim();
+    const contentFormat = (dto.contentFormat || fallbackFormat) as SiteCmsContentFormat;
     const faq = dto.faq?.map((item) => ({ question: item.question.trim(), answer: item.answer.trim() }));
     const sources = dto.sources?.map((item) => ({ label: item.label.trim(), url: item.url.trim() }));
     return {
       ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
       ...(dto.slug !== undefined ? { slug: dto.slug.trim().toLowerCase() } : {}),
       ...(dto.description !== undefined ? { description: stringValue(dto.description) || '' } : {}),
-      ...(dto.content !== undefined ? { content: dto.content.trim() } : {}),
+      ...(dto.content !== undefined ? { content: this.contentService.sanitizeContent(dto.content, contentFormat) } : {}),
+      ...(dto.contentFormat !== undefined ? { contentFormat } : {}),
+      ...(dto.customCss !== undefined ? { customCss: this.contentService.sanitizeCss(dto.customCss) || null } : {}),
       ...(dto.category !== undefined ? { category: dto.category } : {}),
       ...(dto.tags !== undefined ? { tags: this.normalizeList(dto.tags) || [] } : {}),
       ...(dto.keywords !== undefined ? { keywords: this.normalizeList(dto.keywords) || [] } : {}),
@@ -418,6 +443,8 @@ export class SiteCmsService {
       title: true,
       description: true,
       content: true,
+      contentFormat: true,
+      customCss: true,
       category: true,
       tags: true,
       keywords: true,

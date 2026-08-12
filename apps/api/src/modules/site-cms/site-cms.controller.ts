@@ -19,6 +19,7 @@ import { Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import {
   CreateSiteCmsArticleDto,
+  SiteCmsArticlePreviewDto,
   SiteCmsArticleQueryDto,
   SiteCmsArticleVersionDto,
   SiteCmsChangePasswordDto,
@@ -80,6 +81,12 @@ export class SiteCmsController {
   @UseGuards(SiteCmsAuthGuard)
   createArticle(@CurrentSiteCms() current: SiteCmsContext, @Body() dto: CreateSiteCmsArticleDto) {
     return this.service.createArticle(current, dto);
+  }
+
+  @Post('articles/preview')
+  @UseGuards(SiteCmsAuthGuard)
+  previewArticle(@CurrentSiteCms() current: SiteCmsContext, @Body() dto: SiteCmsArticlePreviewDto) {
+    return this.service.previewArticle(current, dto);
   }
 
   @Get('articles/:articleId')

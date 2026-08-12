@@ -354,6 +354,8 @@ model SiteCmsArticle {
   title         String
   description   String
   content       String         @db.Text
+  contentFormat String         @default("markdown") // markdown | html
+  customCss     String?        @db.Text
   category      String
   tags          String[]       @default([])
   keywords      String[]       @default([])

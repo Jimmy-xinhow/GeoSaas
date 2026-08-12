@@ -29,6 +29,8 @@ export const SITE_CMS_CATEGORIES = [
   'brand-news',
 ] as const;
 
+export const SITE_CMS_CONTENT_FORMATS = ['markdown', 'html'] as const;
+
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 const lower = ({ value }: { value: unknown }) =>
@@ -53,10 +55,10 @@ export class SiteCmsChangePasswordDto {
   currentPassword!: string;
 
   @IsString()
-  @MinLength(12)
-  @MaxLength(72)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/, {
-    message: 'newPassword must include upper-case, lower-case, number, and symbol',
+  @MinLength(8)
+  @MaxLength(8)
+  @Matches(/^\d{8}$/, {
+    message: 'newPassword must contain exactly 8 digits',
   })
   newPassword!: string;
 }
@@ -111,6 +113,15 @@ export class CreateSiteCmsArticleDto {
   @IsString()
   @MaxLength(60000)
   content?: string;
+
+  @IsOptional()
+  @IsIn(SITE_CMS_CONTENT_FORMATS)
+  contentFormat?: (typeof SITE_CMS_CONTENT_FORMATS)[number];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(12000)
+  customCss?: string;
 
   @IsOptional()
   @IsIn(SITE_CMS_CATEGORIES)
@@ -182,6 +193,20 @@ export class UpdateSiteCmsArticleDto extends PartialType(CreateSiteCmsArticleDto
   @IsInt()
   @Min(1)
   version!: number;
+}
+
+export class SiteCmsArticlePreviewDto {
+  @IsString()
+  @MaxLength(60000)
+  content!: string;
+
+  @IsIn(SITE_CMS_CONTENT_FORMATS)
+  contentFormat!: (typeof SITE_CMS_CONTENT_FORMATS)[number];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(12000)
+  customCss?: string;
 }
 
 export class SiteCmsArticleVersionDto {

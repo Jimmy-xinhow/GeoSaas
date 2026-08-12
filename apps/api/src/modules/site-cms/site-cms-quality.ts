@@ -5,6 +5,8 @@ export interface SiteCmsQualityInput {
   slug?: string | null;
   description?: string | null;
   content?: string | null;
+  contentFormat?: string | null;
+  customCss?: string | null;
   category?: string | null;
   tags?: string[] | null;
   keywords?: string[] | null;
@@ -31,8 +33,17 @@ const inRange = (value: string | null | undefined, min: number, max: number) => 
   return size >= min && size <= max;
 };
 
-const hasUnsafeMarkdown = (content: string) => {
+const hasUnsafeContent = (content: string, format: string) => {
   const normalized = content.toLowerCase();
+  if (format === 'html') {
+    return (
+      /<\s*\/?\s*(script|iframe|object|embed|form|style|svg|math|link|meta)\b/i.test(content)
+      || /\bon[a-z]+\s*=/i.test(content)
+      || /\bstyle\s*=/i.test(content)
+      || normalized.includes('javascript:')
+      || normalized.includes('data:text/html')
+    );
+  }
   return (
     /<\s*\/?\s*(script|iframe|object|embed|form|style|svg|math)\b/i.test(content)
     || /\bon[a-z]+\s*=/i.test(content)
@@ -41,6 +52,11 @@ const hasUnsafeMarkdown = (content: string) => {
     || /<\s*[a-z][^>]*>/i.test(content)
   );
 };
+
+const plainContent = (content: string, format: string) =>
+  format === 'html'
+    ? content.replace(/<[^>]*>/g, ' ').replace(/&[a-z0-9#]+;/gi, ' ')
+    : content;
 
 const publicLeakTerms = [
   'system prompt',
@@ -75,9 +91,18 @@ export function evaluateSiteCmsArticle(input: SiteCmsQualityInput): SiteCmsQuali
   add('sources', Array.isArray(input.sources) && input.sources.length >= 1 && input.sources.length <= 10, '可信資料來源需有 1–10 筆。');
 
   const content = String(input.content || '').trim();
-  add('contentLength', countChars(content) >= 800, '文章正文至少需要 800 個字。');
-  add('headingStructure', (content.match(/^##\s+.+$/gm) || []).length >= 2, '正文至少需要兩個 H2 小標題。');
-  add('safeMarkdown', !hasUnsafeMarkdown(content), '正文不可包含原始 HTML、事件屬性或可執行網址。');
+  const format = input.contentFormat === 'html' ? 'html' : 'markdown';
+  add('contentLength', countChars(plainContent(content, format)) >= 800, '文章正文至少需要 800 個字。');
+  const headingCount = format === 'html'
+    ? (content.match(/<h2(?:\s[^>]*)?>[\s\S]*?<\/h2>/gi) || []).length
+    : (content.match(/^##\s+.+$/gm) || []).length;
+  add('headingStructure', headingCount >= 2, '正文至少需要兩個 H2 小標題。');
+  add('safeContent', !hasUnsafeContent(content, format), '正文包含不安全的 HTML、事件屬性或可執行網址。');
+  add(
+    'safeCss',
+    !/@|url\s*\(|expression\s*\(|javascript\s*:|position\s*:\s*(fixed|sticky)/i.test(input.customCss || ''),
+    '自訂 CSS 包含不允許的外部載入、定位或可執行內容。',
+  );
   const normalizedPublicText = `${input.title || ''}\n${input.description || ''}\n${content}`.toLowerCase();
   const leak = publicLeakTerms.find((term) => normalizedPublicText.includes(term.toLowerCase()));
   add('publicSafety', !leak, leak ? `公開內容含禁止字詞：${leak}` : '公開內容安全。');
@@ -104,4 +129,3 @@ export function evaluateSiteCmsArticle(input: SiteCmsQualityInput): SiteCmsQuali
   const score = Math.round((passedCount / Math.max(1, Object.keys(checks).length)) * 100);
   return { passed: issues.length === 0, score, issues, checks };
 }
-

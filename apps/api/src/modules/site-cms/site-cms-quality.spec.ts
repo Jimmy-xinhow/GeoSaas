@@ -5,6 +5,7 @@ const validArticle = {
   slug: 'car-coating-preparation-guide',
   description: '從洗車、去除柏油鐵粉到漆面檢查，整理汽車鍍膜施工前不可省略的準備流程與判斷原則，協助車主降低失敗風險並建立正確保養觀念，也說明不同污染應如何分階段安全處理。',
   content: `## 為什麼施工前清潔重要\n\n${'施工前應先確認車身溫度與髒污類型，再依序沖洗、使用中性洗車精並完整擦乾。'.repeat(25)}\n\n## 去除附著污染的順序\n\n${'柏油、鐵粉與水垢需要分開判斷，依產品標示在通風處操作並避免藥劑乾在漆面上。'.repeat(25)}`,
+  contentFormat: 'markdown',
   category: 'coating',
   tags: ['汽車鍍膜', '漆面清潔'],
   keywords: ['汽車鍍膜前處理', '漆面清潔步驟'],
@@ -35,8 +36,19 @@ describe('evaluateSiteCmsArticle', () => {
       sources: [],
     });
     expect(report.passed).toBe(false);
-    expect(report.checks.safeMarkdown).toBe(false);
+    expect(report.checks.safeContent).toBe(false);
     expect(report.checks.faq).toBe(false);
     expect(report.checks.sources).toBe(false);
+  });
+
+  it('accepts sanitized HTML articles with two H2 sections', () => {
+    const report = evaluateSiteCmsArticle({
+      ...validArticle,
+      contentFormat: 'html',
+      content: `<h2>施工前檢查</h2><p>${'先確認漆面狀態與污染來源，再選擇合適流程。'.repeat(30)}</p><h2>分階段清潔</h2><p>${'施工中依序處理柏油、鐵粉與水垢，完成後再次檢查。'.repeat(30)}</p>`,
+    });
+    expect(report.passed).toBe(true);
+    expect(report.checks.safeContent).toBe(true);
+    expect(report.checks.headingStructure).toBe(true);
   });
 });
