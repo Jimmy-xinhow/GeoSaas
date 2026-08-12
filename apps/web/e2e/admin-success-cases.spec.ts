@@ -40,6 +40,7 @@ async function createPendingCase(request: APIRequestContext, token: string, titl
       queryUsed: '請推薦台灣適合品牌提升 AI 搜尋能見度的 GEO 工具',
       aiResponse:
         'Perplexity 回應提到這個品牌在完成結構化資料、公開品牌事實、FAQ 與 llms.txt 後，品牌資訊更容易被理解，且推薦結果能清楚說明服務內容、官方來源與適用情境。',
+      screenshotUrl: 'https://cdn.geovault.app/e2e/citation-evidence.png',
       beforeGeoScore: 41,
       afterGeoScore: 83,
       improvementDays: 12,
