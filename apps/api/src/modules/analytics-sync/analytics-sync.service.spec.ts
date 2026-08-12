@@ -49,6 +49,10 @@ describe('AnalyticsSyncService opportunity queue', () => {
     const querySql = queryRaw.mock.calls[1][0].strings.join(' ');
     expect(pageSql).toContain('SUM("position" * "impressions")');
     expect(querySql).toContain('SUM("position" * "impressions")');
+    expect(pageSql).toContain('"query" = \'\'');
+    expect(pageSql).toContain('"country" = \'(all)\'');
+    expect(querySql).toContain('"query" <> \'\'');
+    expect(querySql).toContain('"device" = \'(all)\'');
     expect(result).toEqual([expect.objectContaining({
       page: 'https://www.geovault.app/cases',
       clicks: 0,
@@ -307,5 +311,97 @@ describe('AnalyticsSyncService opportunity queue', () => {
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: 'empty', lastRowCount: 0 }),
     }));
+  });
+});
+
+describe('AnalyticsSyncService GSC aggregation levels', () => {
+  const originalSiteUrl = process.env.GSC_SITE_URL;
+
+  afterEach(() => {
+    if (originalSiteUrl === undefined) delete process.env.GSC_SITE_URL;
+    else process.env.GSC_SITE_URL = originalSiteUrl;
+    jest.restoreAllMocks();
+  });
+
+  it('persists page totals separately from privacy-filtered query evidence', async () => {
+    process.env.GSC_SITE_URL = 'https://www.geovault.app/';
+    const request = jest.fn()
+      .mockResolvedValueOnce({
+        data: {
+          rows: [{
+            keys: ['2026-08-10', 'https://www.geovault.app/guide'],
+            clicks: 3,
+            impressions: 100,
+            ctr: 0.03,
+            position: 8,
+          }],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          rows: [{
+            keys: ['2026-08-10', 'https://www.geovault.app/guide', 'geo guide'],
+            clicks: 1,
+            impressions: 20,
+            ctr: 0.05,
+            position: 7,
+          }],
+        },
+      });
+    const createMany = jest.fn().mockResolvedValue({ count: 2 });
+    const tx = {
+      searchPerformanceDaily: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany,
+      },
+    };
+    const prisma = {
+      analyticsSyncState: {
+        upsert: jest.fn().mockResolvedValue(undefined),
+        update: jest.fn().mockResolvedValue(undefined),
+      },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const service = new AnalyticsSyncService(prisma as any);
+    jest.spyOn(service as any, 'auth').mockReturnValue({
+      getClient: jest.fn().mockResolvedValue({ request }),
+    });
+
+    await expect(service.syncSearchConsole('2026-08-10', '2026-08-10')).resolves.toEqual({
+      provider: 'gsc',
+      startDate: '2026-08-10',
+      endDate: '2026-08-10',
+      rowCount: 2,
+      pageRowCount: 1,
+      queryRowCount: 1,
+    });
+
+    expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      data: expect.objectContaining({ dimensions: ['date', 'page'] }),
+    }));
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      data: expect.objectContaining({ dimensions: ['date', 'page', 'query'] }),
+    }));
+    expect(createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          page: 'https://www.geovault.app/guide',
+          query: '',
+          country: '(all)',
+          device: '(all)',
+          clicks: 3,
+          impressions: 100,
+        }),
+        expect.objectContaining({
+          page: 'https://www.geovault.app/guide',
+          query: 'geo guide',
+          country: '(all)',
+          device: '(all)',
+          clicks: 1,
+          impressions: 20,
+        }),
+      ],
+      skipDuplicates: true,
+    });
   });
 });

@@ -21,6 +21,7 @@ const DAY_MS = 86_400_000;
 const CREATE_BATCH_SIZE = 1_000;
 const MIN_ACTIONABLE_GSC_IMPRESSIONS = 10;
 const LOW_CTR_THRESHOLD = 0.02;
+const GSC_ALL_DIMENSION_VALUE = '(all)';
 
 interface GscApiRow {
   keys?: string[];
@@ -164,47 +165,60 @@ export class AnalyticsSyncService {
       const client = await this.auth([
         'https://www.googleapis.com/auth/webmasters.readonly',
       ]).getClient();
-      const rows: GscApiRow[] = [];
-      const rowLimit = 25_000;
-
-      for (let startRow = 0; ; startRow += rowLimit) {
-        const response = await client.request<GscApiResponse>({
-          url: `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
-          method: 'POST',
-          data: {
-            startDate: range.startDate,
-            endDate: range.endDate,
-            dimensions: ['date', 'page', 'query', 'country', 'device'],
-            dataState: 'all',
-            type: 'web',
-            rowLimit,
-            startRow,
-          },
-        });
-        const pageRows = response.data.rows || [];
-        rows.push(...pageRows);
-        if (pageRows.length < rowLimit) break;
-      }
-
-      const data = rows.flatMap((row) => {
+      // GSC suppresses anonymized queries. A query-dimensional response can
+      // therefore contain only a fraction of the real clicks/impressions and
+      // must never be used as a page total. Fetch page totals and disclosed
+      // query evidence independently, then distinguish them with explicit
+      // aggregate dimension sentinels in the existing schema.
+      const [pageRows, queryRows] = await Promise.all([
+        this.fetchSearchConsoleRows(client, siteUrl, range, ['date', 'page']),
+        this.fetchSearchConsoleRows(client, siteUrl, range, ['date', 'page', 'query']),
+      ]);
+      const syncedAt = new Date();
+      const pageData = pageRows.flatMap((row) => {
         const keys = row.keys || [];
-        if (keys.length < 5 || !/^\d{4}-\d{2}-\d{2}$/.test(keys[0])) return [];
+        if (keys.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(keys[0]) || !keys[1]) return [];
         return [{
           date: new Date(`${keys[0]}T00:00:00.000Z`),
           siteUrl,
           page: keys[1] || '',
-          query: keys[2] || '',
-          country: keys[3] || '',
-          device: keys[4] || '',
+          query: '',
+          country: GSC_ALL_DIMENSION_VALUE,
+          device: GSC_ALL_DIMENSION_VALUE,
           searchType: 'web',
           clicks: row.clicks || 0,
           impressions: row.impressions || 0,
           ctr: row.ctr || 0,
           position: row.position || 0,
           dataState: 'all',
-          syncedAt: new Date(),
+          syncedAt,
         }];
       });
+      const queryData = queryRows.flatMap((row) => {
+        const keys = row.keys || [];
+        if (
+          keys.length < 3
+          || !/^\d{4}-\d{2}-\d{2}$/.test(keys[0])
+          || !keys[1]
+          || !keys[2]
+        ) return [];
+        return [{
+          date: new Date(`${keys[0]}T00:00:00.000Z`),
+          siteUrl,
+          page: keys[1],
+          query: keys[2],
+          country: GSC_ALL_DIMENSION_VALUE,
+          device: GSC_ALL_DIMENSION_VALUE,
+          searchType: 'web',
+          clicks: row.clicks || 0,
+          impressions: row.impressions || 0,
+          ctr: row.ctr || 0,
+          position: row.position || 0,
+          dataState: 'all',
+          syncedAt,
+        }];
+      });
+      const data = [...pageData, ...queryData];
 
       await this.prisma.$transaction(async (tx) => {
         await tx.searchPerformanceDaily.deleteMany({
@@ -224,11 +238,46 @@ export class AnalyticsSyncService {
         }
       }, { timeout: 120_000 });
       await this.markSuccess(GSC_PROVIDER, data.length);
-      return { provider: GSC_PROVIDER, ...range, rowCount: data.length };
+      return {
+        provider: GSC_PROVIDER,
+        ...range,
+        rowCount: data.length,
+        pageRowCount: pageData.length,
+        queryRowCount: queryData.length,
+      };
     } catch (error) {
       await this.markFailed(GSC_PROVIDER, error);
       throw error;
     }
+  }
+
+  private async fetchSearchConsoleRows(
+    client: { request<T>(args: Record<string, unknown>): Promise<{ data: T }> },
+    siteUrl: string,
+    range: DateRange,
+    dimensions: string[],
+  ): Promise<GscApiRow[]> {
+    const rows: GscApiRow[] = [];
+    const rowLimit = 25_000;
+    for (let startRow = 0; ; startRow += rowLimit) {
+      const response = await client.request<GscApiResponse>({
+        url: `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
+        method: 'POST',
+        data: {
+          startDate: range.startDate,
+          endDate: range.endDate,
+          dimensions,
+          dataState: 'all',
+          type: 'web',
+          rowLimit,
+          startRow,
+        },
+      });
+      const nextRows = response.data.rows || [];
+      rows.push(...nextRows);
+      if (nextRows.length < rowLimit) break;
+    }
+    return rows;
   }
 
   async syncGa4(startDate?: string, endDate?: string) {
@@ -391,6 +440,9 @@ export class AnalyticsSyncService {
           )::double precision AS "position"
         FROM "search_performance_daily"
         WHERE "date" >= ${since}
+          AND "query" = ''
+          AND "country" = '(all)'
+          AND "device" = '(all)'
         GROUP BY "page"
         HAVING SUM("impressions") > 0
         ORDER BY SUM("impressions") DESC
@@ -407,7 +459,10 @@ export class AnalyticsSyncService {
             0
           )::double precision AS "position"
         FROM "search_performance_daily"
-        WHERE "date" >= ${since} AND "query" <> ''
+        WHERE "date" >= ${since}
+          AND "query" <> ''
+          AND "country" = '(all)'
+          AND "device" = '(all)'
         GROUP BY "page", "query"
         HAVING SUM("impressions") > 0
         ORDER BY SUM("impressions") DESC
