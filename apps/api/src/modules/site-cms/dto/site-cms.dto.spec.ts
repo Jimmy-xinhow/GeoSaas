@@ -1,5 +1,23 @@
 import { validate } from 'class-validator';
-import { SiteCmsChangePasswordDto } from './site-cms.dto';
+import { SiteCmsChangePasswordDto, SiteCmsLoginDto } from './site-cms.dto';
+
+describe('SiteCmsLoginDto', () => {
+  async function errorsFor(username: string) {
+    const dto = Object.assign(new SiteCmsLoginDto(), {
+      username,
+      password: '90852466',
+    });
+    return validate(dto);
+  }
+
+  it.each(['mio', 'admin@geovault.app'])('accepts a supported login identifier: %s', async (username) => {
+    await expect(errorsFor(username)).resolves.toEqual([]);
+  });
+
+  it.each(['ad', 'bad email', '@geovault.app', 'admin@localhost'])('rejects an invalid login identifier: %s', async (username) => {
+    expect(await errorsFor(username)).not.toEqual([]);
+  });
+});
 
 describe('SiteCmsChangePasswordDto', () => {
   async function errorsFor(newPassword: string) {

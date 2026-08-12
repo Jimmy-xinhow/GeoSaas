@@ -39,7 +39,10 @@ const lower = ({ value }: { value: unknown }) =>
 export class SiteCmsLoginDto {
   @Transform(lower)
   @IsString()
-  @Matches(/^[a-z0-9][a-z0-9-]{2,31}$/)
+  @Matches(
+    /^(?:[a-z0-9][a-z0-9-]{2,31}|[a-z0-9](?:[a-z0-9._%+-]{0,62})@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$/,
+    { message: 'username must be a CMS username or a verified admin email' },
+  )
   username!: string;
 
   @IsString()

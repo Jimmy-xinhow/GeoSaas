@@ -39,18 +39,47 @@ export class SiteCmsService {
   ) {}
 
   async login(siteId: string, dto: SiteCmsLoginDto) {
-    const account = await this.prisma.siteCmsAccount.findUnique({
+    let account = await this.prisma.siteCmsAccount.findUnique({
       where: { siteId_username: { siteId, username: dto.username } },
       include: { site: { select: { id: true, name: true, url: true, isPublic: true } } },
     });
+
+    // A verified platform ADMIN/SUPER_ADMIN may use the platform email to
+    // enter this site-scoped CMS. The CMS session remains tied to the site's
+    // admin account so article permissions and existing audit relations stay
+    // unchanged.
+    let platformAdmin: { id: string; email: string; passwordHash: string } | null = null;
+    if (!account && dto.username.includes('@')) {
+      platformAdmin = await this.prisma.user.findFirst({
+        where: {
+          email: { equals: dto.username, mode: 'insensitive' },
+          role: { in: ['ADMIN', 'SUPER_ADMIN'] },
+          emailVerified: true,
+          passwordHash: { not: null },
+        },
+        select: { id: true, email: true, passwordHash: true },
+      }) as { id: string; email: string; passwordHash: string } | null;
+
+      if (platformAdmin) {
+        account = await this.prisma.siteCmsAccount.findFirst({
+          where: { siteId, role: 'admin', isActive: true },
+          include: { site: { select: { id: true, name: true, url: true, isPublic: true } } },
+        });
+      }
+    }
 
     if (account?.lockedUntil && account.lockedUntil > new Date()) {
       throw new HttpException('帳號暫時鎖定，請於 15 分鐘後再試。', HttpStatus.TOO_MANY_REQUESTS);
     }
 
-    const passwordValid = await bcrypt.compare(dto.password, account?.passwordHash || DUMMY_PASSWORD_HASH);
+    const passwordValid = await bcrypt.compare(
+      dto.password,
+      platformAdmin?.passwordHash || account?.passwordHash || DUMMY_PASSWORD_HASH,
+    );
     if (!account || !passwordValid || !account.isActive) {
-      if (account?.isActive) await this.recordFailedLogin(account.id, account.failedLoginCount);
+      if (account?.isActive && !platformAdmin) {
+        await this.recordFailedLogin(account.id, account.failedLoginCount);
+      }
       throw new UnauthorizedException('帳號或密碼錯誤。');
     }
 
@@ -65,7 +94,9 @@ export class SiteCmsService {
     });
 
     const session = await this.createSession(account.id);
-    await this.audit(siteId, account.id, 'auth.login');
+    await this.audit(siteId, account.id, 'auth.login', null, platformAdmin
+      ? { loginMethod: 'platform-admin-email', platformUserId: platformAdmin.id, email: platformAdmin.email }
+      : undefined);
     return {
       token: session.token,
       expiresAt: session.expiresAt,
