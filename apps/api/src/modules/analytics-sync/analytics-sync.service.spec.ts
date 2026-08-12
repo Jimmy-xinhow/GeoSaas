@@ -332,12 +332,56 @@ describe('AnalyticsSyncService opportunity queue', () => {
     }));
   });
 
+  it('classifies an indexable replacement alias as a canonical redirect', async () => {
+    const alias = 'old-improvement-tips';
+    const canonicalSlug = 'acme-brand-profile';
+    const page = `https://www.geovault.app/blog/${alias}`;
+    const queryRaw = jest.fn()
+      .mockResolvedValueOnce([{
+        page,
+        clicks: 0,
+        impressions: 80,
+        position: 6,
+      }])
+      .mockResolvedValueOnce([]);
+    const replacement = {
+      slug: canonicalSlug,
+      aliasSlugs: [alias],
+      title: 'Acme AI 搜尋品牌資料與可驗證 GEO 分析',
+      description: '這是一段足以通過公開文章品質門檻的摘要，完整說明 Acme 的品牌事實、網站證據、GEO 分析方式與可驗證資料來源，供搜尋使用者快速判斷內容價值，並清楚交代資料更新時間、適用範圍、評估限制、後續查證方式與讀者可以採取的具體行動。',
+      templateType: 'brand_profile',
+      site: { name: 'Acme', url: 'https://acme.example' },
+    };
+    const prisma = {
+      $queryRaw: queryRaw,
+      ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+      blogArticle: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([{ slug: canonicalSlug, aliasSlugs: [alias] }])
+          .mockResolvedValueOnce([replacement]),
+      },
+    };
+
+    const result = await new AnalyticsSyncService(prisma as any).opportunities(93);
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      page,
+      currentlyIndexable: false,
+      redirectTarget: `/blog/${canonicalSlug}`,
+      priority: 'monitor',
+      reasonCodes: ['redirected_to_canonical'],
+      suggestedAction: '舊網址目前已永久轉址至替代文章；等待搜尋訊號整併，不在舊網址重複改文案。',
+    }));
+  });
+
   it('treats an unknown generated article URL as non-indexable while preserving static slugs', async () => {
     const generatedPage = 'https://www.geovault.app/blog/cmn8agbef0-brand-showcase-mol0n54a';
+    const textualGeneratedPage = 'https://www.geovault.app/blog/example-brand_reputation-mnpewmrf';
     const staticPage = 'https://www.geovault.app/blog/what-is-geo';
     const queryRaw = jest.fn()
       .mockResolvedValueOnce([
         { page: generatedPage, clicks: 0, impressions: 64, position: 2.4 },
+        { page: textualGeneratedPage, clicks: 0, impressions: 32, position: 9 },
         { page: staticPage, clicks: 0, impressions: 12, position: 8 },
       ])
       .mockResolvedValueOnce([]);
@@ -355,6 +399,11 @@ describe('AnalyticsSyncService opportunity queue', () => {
     const byPage = new Map(result.map((item) => [item.page, item]));
 
     expect(byPage.get(generatedPage)).toEqual(expect.objectContaining({
+      currentlyIndexable: false,
+      priority: 'monitor',
+      reasonCodes: ['not_currently_indexable'],
+    }));
+    expect(byPage.get(textualGeneratedPage)).toEqual(expect.objectContaining({
       currentlyIndexable: false,
       priority: 'monitor',
       reasonCodes: ['not_currently_indexable'],

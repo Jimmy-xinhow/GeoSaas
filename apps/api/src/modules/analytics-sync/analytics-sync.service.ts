@@ -64,6 +64,11 @@ interface SearchQueryPageAggregate extends SearchPageAggregate {
   query: string;
 }
 
+interface DynamicPageState {
+  indexable: boolean;
+  redirectTarget?: string;
+}
+
 function numeric(value?: string): number {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -554,7 +559,7 @@ export class AnalyticsSyncService {
         _sum: { sessions: true, engagedSessions: true, keyEvents: true },
       }),
     ]);
-    const dynamicPageIndexability = await this.getDynamicPageIndexability(
+    const dynamicPageStates = await this.getDynamicPageIndexability(
       searchPages.map((row) => row.page),
     );
     const gaByPath = new Map<string, {
@@ -587,10 +592,14 @@ export class AnalyticsSyncService {
       const position = Number(row.position || 0);
       const ctr = impressions > 0 ? clicks / impressions : 0;
       const path = normalizeLandingPage(row.page).split('?')[0];
-      const currentlyIndexable = dynamicPageIndexability.get(path) !== false;
+      const pageState = dynamicPageStates.get(path);
+      const currentlyIndexable = pageState?.indexable !== false;
+      const redirectTarget = pageState?.redirectTarget || null;
       const reasonCodes: string[] = [];
       const hasActionableSearchSample = impressions >= MIN_ACTIONABLE_GSC_IMPRESSIONS;
-      if (!currentlyIndexable) {
+      if (redirectTarget) {
+        reasonCodes.push('redirected_to_canonical');
+      } else if (!currentlyIndexable) {
         reasonCodes.push('not_currently_indexable');
       }
       if (
@@ -656,6 +665,7 @@ export class AnalyticsSyncService {
         ctr,
         position,
         currentlyIndexable,
+        redirectTarget,
         priority,
         reasonCodes,
         suggestedAction: this.opportunityAction(reasonCodes),
@@ -683,6 +693,9 @@ export class AnalyticsSyncService {
   }
 
   private opportunityAction(reasonCodes: string[]): string {
+    if (reasonCodes.includes('redirected_to_canonical')) {
+      return '舊網址目前已永久轉址至替代文章；等待搜尋訊號整併，不在舊網址重複改文案。';
+    }
     if (reasonCodes.includes('not_currently_indexable')) {
       return '目前頁面不符合公開索引門檻；先確認應退役或補齊公開證據，不做 CTR 文案優化。';
     }
@@ -706,8 +719,8 @@ export class AnalyticsSyncService {
 
   private async getDynamicPageIndexability(
     pages: string[],
-  ): Promise<Map<string, boolean>> {
-    const result = new Map<string, boolean>();
+  ): Promise<Map<string, DynamicPageState>> {
+    const result = new Map<string, DynamicPageState>();
     const blogRefs: Array<{ path: string; candidates: string[] }> = [];
     const directoryRefs: Array<{ path: string; siteId: string }> = [];
 
@@ -724,7 +737,7 @@ export class AnalyticsSyncService {
             ])],
           });
         } catch {
-          result.set(path, false);
+          result.set(path, { indexable: false });
         }
         continue;
       }
@@ -797,25 +810,35 @@ export class AnalyticsSyncService {
         : Promise.resolve([]),
     ]);
 
-    const knownBlogSlugs = new Set(
-      knownBlogs.flatMap((article) => [article.slug, ...(article.aliasSlugs || [])]),
-    );
-    const indexableBlogSlugs = new Set(
-      indexableBlogs
-        .filter((article) => isIndexablePublicBlogArticle(article))
-        .flatMap((article) => [article.slug, ...(article.aliasSlugs || [])]),
+    const qualityIndexableBlogs = indexableBlogs.filter((article) =>
+      isIndexablePublicBlogArticle(article),
     );
     for (const ref of blogRefs) {
-      if (ref.candidates.some((candidate) => knownBlogSlugs.has(candidate))) {
-        result.set(
-          ref.path,
-          ref.candidates.some((candidate) => indexableBlogSlugs.has(candidate)),
-        );
+      const directIndexable = qualityIndexableBlogs.find((article) =>
+        ref.candidates.includes(article.slug),
+      );
+      const redirectArticle = qualityIndexableBlogs.find((article) =>
+        (article.aliasSlugs || []).some((alias) => ref.candidates.includes(alias)),
+      );
+      const knownArticle = knownBlogs.find((article) =>
+        ref.candidates.includes(article.slug)
+        || (article.aliasSlugs || []).some((alias) => ref.candidates.includes(alias)),
+      );
+
+      if (directIndexable) {
+        result.set(ref.path, { indexable: true });
+      } else if (redirectArticle) {
+        result.set(ref.path, {
+          indexable: false,
+          redirectTarget: `/blog/${encodeURIComponent(redirectArticle.slug)}`,
+        });
+      } else if (knownArticle) {
+        result.set(ref.path, { indexable: false });
       } else if (ref.candidates.some((candidate) => this.isGeneratedBlogSlug(candidate))) {
         // A generated URL that no longer maps to a durable article is a 404,
         // not a CTR opportunity. Unknown human-readable slugs may still be
         // static frontend posts, so only fail closed for generator signatures.
-        result.set(ref.path, false);
+        result.set(ref.path, { indexable: false });
       }
     }
 
@@ -831,7 +854,7 @@ export class AnalyticsSyncService {
         .map((site) => site.id),
     );
     for (const ref of directoryRefs) {
-      result.set(ref.path, indexableDirectoryIds.has(ref.siteId));
+      result.set(ref.path, { indexable: indexableDirectoryIds.has(ref.siteId) });
     }
 
     return result;
@@ -839,7 +862,7 @@ export class AnalyticsSyncService {
 
   private isGeneratedBlogSlug(slug: string): boolean {
     return /^cm[a-z0-9]{8,}-/i.test(slug)
-      || /_(?:geo_overview|score_breakdown|competitor_comparison|improvement_tips|industry_benchmark|brand_reputation)-/i.test(slug)
+      || /(?:^|[-_])(?:geo[-_]overview|score[-_]breakdown|competitor[-_]comparison|improvement[-_]tips|industry[-_]benchmark|brand[-_]reputation)(?:[-_]|$)/i.test(slug)
       || /-(?:brand-showcase|brand-profile|faq-deepdive)-/i.test(slug);
   }
 
