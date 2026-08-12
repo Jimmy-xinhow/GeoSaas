@@ -97,6 +97,69 @@ describe('AnalyticsSyncService opportunity queue', () => {
     }));
   });
 
+  it('keeps low-sample page-one and page-two rows in monitor status', async () => {
+    const queryRaw = jest.fn()
+      .mockResolvedValueOnce([
+        {
+          page: 'https://www.geovault.app/blog/low-sample-page-one',
+          clicks: 0,
+          impressions: 7,
+          position: 8,
+        },
+        {
+          page: 'https://www.geovault.app/blog/low-sample-page-two',
+          clicks: 0,
+          impressions: 5,
+          position: 15,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+    };
+
+    const result = await new AnalyticsSyncService(prisma as any).opportunities(28);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        page: 'https://www.geovault.app/blog/low-sample-page-one',
+        priority: 'monitor',
+        reasonCodes: [],
+        suggestedAction: '持續累積資料，暫不做無差別重寫。',
+      }),
+      expect.objectContaining({
+        page: 'https://www.geovault.app/blog/low-sample-page-two',
+        priority: 'monitor',
+        reasonCodes: [],
+        suggestedAction: '持續累積資料，暫不做無差別重寫。',
+      }),
+    ]);
+  });
+
+  it('returns a matching action for a sufficiently sampled page-one low CTR', async () => {
+    const queryRaw = jest.fn()
+      .mockResolvedValueOnce([{
+        page: 'https://www.geovault.app/cases',
+        clicks: 1,
+        impressions: 100,
+        position: 7,
+      }])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+    };
+
+    const result = await new AnalyticsSyncService(prisma as any).opportunities(28);
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      priority: 'medium',
+      reasonCodes: ['page_one_low_ctr'],
+      suggestedAction: '核對搜尋摘要是否直接回答主要查詢，並調整 title、description 與首屏證據摘要。',
+    }));
+  });
+
   it('records an empty upstream result distinctly from a healthy sync', async () => {
     const update = jest.fn().mockResolvedValue(undefined);
     const service = new AnalyticsSyncService({

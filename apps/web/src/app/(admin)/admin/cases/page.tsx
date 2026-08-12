@@ -107,7 +107,10 @@ export default function AdminCasesPage() {
       toast.success('已通過審核');
       invalidate();
     },
-    onError: () => toast.error('審核失敗'),
+    onError: (e: any) => {
+      const msg = e?.response?.data?.message;
+      toast.error(Array.isArray(msg) ? msg[0] : msg || '審核失敗');
+    },
   });
 
   const rejectMutation = useMutation({
@@ -284,8 +287,8 @@ export default function AdminCasesPage() {
                               size="sm"
                               className="text-green-500 hover:text-green-400"
                               onClick={() => approveMutation.mutate(c.id)}
-                              disabled={approveMutation.isPending}
-                              title="通過"
+                              disabled={approveMutation.isPending || !c.screenshotUrl}
+                              title={c.screenshotUrl ? '通過' : '缺少 AI 回應截圖證據，無法通過'}
                             >
                               <Check className="h-4 w-4" />
                             </Button>
@@ -522,6 +525,11 @@ function CaseDetailDrawer({ id, onClose }: { id: string; onClose: () => void }) 
                     className="max-w-full rounded border border-white/10"
                   />
                 </a>
+              </Section>
+            )}
+            {!data.screenshotUrl && (
+              <Section label="截圖佐證">
+                <p className="text-sm text-red-300">未提供 AI 回應截圖，不符合公開與核准門檻。</p>
               </Section>
             )}
 

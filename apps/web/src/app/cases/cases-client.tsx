@@ -146,7 +146,7 @@ export default function CasesClient() {
           GEO 成功案例
         </h1>
         <p className="mt-3 text-yellow-200/60 max-w-xl mx-auto">
-          真實品牌被 AI 引用的故事 — 看看他們如何做到的
+          只收錄經審核且附 AI 回應截圖的案例，對照實際提問、平台與優化紀錄
         </p>
       </section>
 
@@ -203,7 +203,7 @@ export default function CasesClient() {
               <Award className="h-16 w-16 text-yellow-500 mx-auto" />
               <h3 className="mt-6 text-2xl font-bold text-white">你的品牌被 AI 引用了嗎？</h3>
               <p className="text-yellow-200/60 mt-3 leading-relaxed">
-                如果你的品牌曾經被 ChatGPT、Claude、Copilot、Perplexity 或 Gemini 提及或推薦，歡迎提交你的成功案例！
+                目前尚無符合公開證據門檻的案例。如果你的品牌曾被 ChatGPT、Claude、Copilot、Perplexity 或 Gemini 提及，歡迎提交 AI 回應截圖與完整紀錄。
               </p>
               <p className="text-yellow-200/40 mt-2 text-sm">
                 經審核通過後，我們會為你的品牌生成一篇 AI 分析文章，增加更多曝光機會。
@@ -213,9 +213,7 @@ export default function CasesClient() {
                   {submitLabel}
                 </button>
               </Link>
-              <p className="text-xs text-yellow-200/40 mt-4">
-                目前已有 {cases?.total ?? 0} 個品牌正在等待審核
-              </p>
+              <p className="text-xs text-yellow-200/40 mt-4">通過人工審核後才會公開顯示</p>
             </div>
           </div>
         ) : (

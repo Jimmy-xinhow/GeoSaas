@@ -51,6 +51,7 @@ type PublicSuccessCase = {
   title?: string | null;
   queryUsed?: string | null;
   aiResponse?: string | null;
+  screenshotUrl?: string | null;
   site?: { name?: string | null; url?: string | null; isPublic?: boolean | null } | null;
 };
 
@@ -296,6 +297,9 @@ export function publicSuccessCaseWhere(where: Record<string, unknown> = {}) {
     AND: [
       where,
       {
+        screenshotUrl: { not: null },
+      },
+      {
         NOT: [
           { title: { contains: 'Codex QA', mode: 'insensitive' } },
           { title: { contains: 'Admin E2E', mode: 'insensitive' } },
@@ -331,6 +335,7 @@ export function getPublicSuccessCaseSeoIssues(item: PublicSuccessCase): string[]
   if (!item.title || item.title.trim().length < 10) issues.push('short-title');
   if (!item.queryUsed || item.queryUsed.trim().length < 8) issues.push('short-query');
   if (!item.aiResponse || item.aiResponse.trim().length < 80) issues.push('thin-ai-response');
+  if (!item.screenshotUrl) issues.push('missing-citation-evidence');
   if (/Codex QA|Admin E2E|E2E|皜祈岫|example\.com|localhost/i.test(text)) issues.push('test-content');
   if (!isPublicSafeSite(item.site)) issues.push('unsafe-test-site');
   if (item.site && item.site.isPublic === false) issues.push('non-public-site');
@@ -348,6 +353,7 @@ export function unsafePublicSuccessCaseWhere(where: Record<string, unknown> = {}
       where,
       {
         OR: [
+          { screenshotUrl: null },
           { title: { contains: 'Codex QA', mode: 'insensitive' } },
           { title: { contains: 'Admin E2E', mode: 'insensitive' } },
           { title: { contains: 'E2E 成功案例', mode: 'insensitive' } },

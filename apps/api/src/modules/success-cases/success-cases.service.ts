@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -68,6 +74,7 @@ export class SuccessCasesService {
         beforeGeoScore: true,
         afterGeoScore: true,
         improvementDays: true,
+        screenshotUrl: true,
         industry: true,
         tags: true,
         viewCount: true,
@@ -79,7 +86,9 @@ export class SuccessCasesService {
 
     const filtered = rows.filter((item) => isIndexablePublicSuccessCase(item));
     const total = filtered.length;
-    const items = filtered.slice((page - 1) * limit, page * limit).map(({ aiResponse, ...item }) => item);
+    const items = filtered
+      .slice((page - 1) * limit, page * limit)
+      .map(({ aiResponse, screenshotUrl, ...item }) => item);
 
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
@@ -179,6 +188,7 @@ export class SuccessCasesService {
         aiResponse: true,
         beforeGeoScore: true,
         afterGeoScore: true,
+        screenshotUrl: true,
         tags: true,
         createdAt: true,
         site: { select: { name: true, url: true, isPublic: true } },
@@ -187,7 +197,7 @@ export class SuccessCasesService {
     return rows
       .filter((item) => isIndexablePublicSuccessCase(item))
       .slice(0, 12)
-      .map(({ aiResponse, ...item }) => item);
+      .map(({ aiResponse, screenshotUrl, ...item }) => item);
   }
 
   async findById(id: string) {
@@ -236,6 +246,7 @@ export class SuccessCasesService {
         aiResponse: true,
         beforeGeoScore: true,
         afterGeoScore: true,
+        screenshotUrl: true,
         industry: true,
         tags: true,
         createdAt: true,
@@ -246,7 +257,7 @@ export class SuccessCasesService {
     const similarCases = similarRows
       .filter((row) => isIndexablePublicSuccessCase(row))
       .slice(0, 3)
-      .map(({ aiResponse, ...row }) => row);
+      .map(({ aiResponse, screenshotUrl, ...row }) => row);
 
     return { ...item, similarCases };
   }
@@ -278,6 +289,9 @@ export class SuccessCasesService {
   async approve(caseId: string) {
     const existing = await this.prisma.geoSuccessCase.findUnique({ where: { id: caseId } });
     if (!existing) throw new NotFoundException('Case not found');
+    if (!existing.screenshotUrl) {
+      throw new BadRequestException('核准前必須提供可檢視的 AI 回應截圖證據');
+    }
 
     const updated = await this.prisma.geoSuccessCase.update({
       where: { id: caseId },
@@ -338,6 +352,9 @@ export class SuccessCasesService {
     if (!existing) throw new NotFoundException('Case not found');
     if (existing.status !== 'approved') {
       throw new ForbiddenException('Only approved cases can be featured');
+    }
+    if (!existing.screenshotUrl) {
+      throw new ForbiddenException('Only cases with citation evidence can be featured');
     }
 
     return this.prisma.geoSuccessCase.update({

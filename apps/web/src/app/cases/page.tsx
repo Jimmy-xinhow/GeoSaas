@@ -17,23 +17,23 @@ async function getCaseSnapshot() {
 }
 
 export const metadata: Metadata = {
-  title: 'GEO 成功案例 — 真實品牌被 AI 引用的故事',
+  title: 'GEO 成功案例庫｜附 AI 回應證據的品牌引用紀錄',
   description:
-    '真實品牌被 ChatGPT、Claude、Perplexity、Gemini、Copilot 主動推薦的成功案例。看看他們如何透過 GEO 優化提升 AI 搜尋能見度。',
+    '收錄經審核且附 AI 回應截圖的 GEO 案例，整理實際提問、AI 平台、回應摘要與優化前後分數，供品牌查核 AI 引用成效。',
   keywords: ['GEO 成功案例', 'AI 引用', 'ChatGPT 推薦', 'AI SEO 案例', '品牌被 AI 推薦'],
   alternates: {
     canonical: `${SITE_URL}/cases`,
   },
   openGraph: {
-    title: 'GEO 成功案例 — 真實品牌被 AI 引用的故事',
-    description: '看看各行各業的品牌如何被 5 大 AI 平台主動推薦。',
+    title: 'GEO 成功案例庫｜附 AI 回應證據的品牌引用紀錄',
+    description: '查看經審核且附 AI 回應截圖的品牌引用案例與優化紀錄。',
     url: `${SITE_URL}/cases`,
     type: 'website',
     images: [{ url: OG_IMAGE, width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'GEO 成功案例 — 真實品牌被 AI 引用的故事',
+    title: 'GEO 成功案例庫｜附 AI 回應證據的品牌引用紀錄',
     images: [OG_IMAGE],
   },
 };
@@ -42,7 +42,7 @@ const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
   name: 'GEO 成功案例',
-  description: '真實品牌被 AI 引用的成功故事合集',
+  description: '經審核且附 AI 回應證據的品牌引用案例合集',
   url: `${SITE_URL}/cases`,
   isPartOf: { '@type': 'WebSite', name: 'Geovault', url: SITE_URL },
   publisher: { '@type': 'Organization', name: 'Geovault', url: SITE_URL },
@@ -79,7 +79,8 @@ export default async function CasesPage() {
         <div className="space-y-4 text-sm leading-7 text-gray-300">
           <p>
             Geovault 的成功案例庫聚焦在「品牌是否真的被 AI 回答引用」，而不是只展示一般 SEO 排名。
-            每個案例都會記錄使用者實際提問、AI 平台、回應摘要、優化前後 GEO 分數，以及可能影響引用結果的技術項目。
+            公開案例必須通過人工審核並附 AI 回應截圖，同時記錄實際提問、AI 平台、回應摘要、優化前後 GEO 分數，
+            以及可能影響引用結果的技術項目。
           </p>
           <p>
             對正在建立 AI 搜尋能見度的品牌來說，這些案例可以用來比對三件事：第一，AI 是否能理解品牌提供的服務；

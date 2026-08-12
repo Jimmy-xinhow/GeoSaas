@@ -13,6 +13,8 @@ const GSC_PROVIDER = 'gsc';
 const GA4_PROVIDER = 'ga4';
 const DAY_MS = 86_400_000;
 const CREATE_BATCH_SIZE = 1_000;
+const MIN_ACTIONABLE_GSC_IMPRESSIONS = 10;
+const LOW_CTR_THRESHOLD = 0.02;
 
 interface GscApiRow {
   keys?: string[];
@@ -442,9 +444,21 @@ export class AnalyticsSyncService {
       const ctr = impressions > 0 ? clicks / impressions : 0;
       const path = normalizeLandingPage(row.page).split('?')[0];
       const reasonCodes: string[] = [];
-      if (clicks === 0 && impressions >= 10) reasonCodes.push('high_impressions_zero_clicks');
-      if (position > 0 && position <= 10 && ctr < 0.02) reasonCodes.push('page_one_low_ctr');
-      if (position > 10 && position <= 20) reasonCodes.push('page_two_ranking');
+      const hasActionableSearchSample = impressions >= MIN_ACTIONABLE_GSC_IMPRESSIONS;
+      if (clicks === 0 && hasActionableSearchSample) {
+        reasonCodes.push('high_impressions_zero_clicks');
+      }
+      if (
+        hasActionableSearchSample
+        && position > 0
+        && position <= 10
+        && ctr < LOW_CTR_THRESHOLD
+      ) {
+        reasonCodes.push('page_one_low_ctr');
+      }
+      if (hasActionableSearchSample && position > 10 && position <= 20) {
+        reasonCodes.push('page_two_ranking');
+      }
       const ga4 = gaByPath.get(path) || null;
       if (
         ga4
@@ -494,6 +508,9 @@ export class AnalyticsSyncService {
   private opportunityAction(reasonCodes: string[]): string {
     if (reasonCodes.includes('high_impressions_zero_clicks')) {
       return '核對主要查詢意圖，調整 title、description 與首屏證據摘要後追蹤 CTR。';
+    }
+    if (reasonCodes.includes('page_one_low_ctr')) {
+      return '核對搜尋摘要是否直接回答主要查詢，並調整 title、description 與首屏證據摘要。';
     }
     if (reasonCodes.includes('page_two_ranking')) {
       return '補強與主要查詢直接相關的可驗證內容、內部連結與結構化資料。';

@@ -227,6 +227,7 @@ export class DirectoryService {
           title: true,
           queryUsed: true,
           aiResponse: true,
+          screenshotUrl: true,
           createdAt: true,
           site: { select: { name: true, url: true, isPublic: true } },
         },
