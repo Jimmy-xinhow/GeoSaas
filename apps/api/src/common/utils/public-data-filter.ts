@@ -11,6 +11,8 @@ const articleExclusions = [
   { title: { contains: 'Codex QA', mode: 'insensitive' } },
   { description: { contains: 'Codex QA', mode: 'insensitive' } },
   { slug: { contains: 'codex-qa', mode: 'insensitive' } },
+  { content: { contains: 'localhost', mode: 'insensitive' } },
+  { content: { contains: '127.0.0.1', mode: 'insensitive' } },
 ];
 
 const indexableBlogTemplateTypes = [
@@ -43,6 +45,7 @@ type PublicBlogSeoArticle = {
   title?: string | null;
   description?: string | null;
   slug?: string | null;
+  content?: string | null;
   templateType?: string | null;
   site?: { name?: string | null; url?: string | null } | null;
 };
@@ -269,6 +272,9 @@ export function getPublicBlogArticleSeoIssues(article: PublicBlogSeoArticle): st
   if (!isPublicSafeArticle(article)) issues.push('unsafe-test-article');
   if (!article.title || article.title.trim().length < 10) issues.push('short-title');
   if (!article.description || article.description.trim().length < 80) issues.push('thin-description');
+  if (/https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|\b)/i.test(article.content || '')) {
+    issues.push('non-public-source-url');
+  }
   if (isLikelyEditorialDirectoryName(article.site?.name)) issues.push('editorial-site-name');
   return issues;
 }

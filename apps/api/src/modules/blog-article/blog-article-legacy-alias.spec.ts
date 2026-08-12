@@ -137,7 +137,7 @@ describe('BlogArticleService legacy alias resolution', () => {
     };
 
     expect((service as any).clientDailyPublicBlockers(article))
-      .toContain('non_public_source_url');
+      .toContain('seo:non-public-source-url');
     expect((service as any).isClientDailyArticleSafe(article)).toBe(false);
   });
 });

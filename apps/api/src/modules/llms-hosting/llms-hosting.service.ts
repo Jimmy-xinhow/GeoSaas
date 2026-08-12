@@ -4,7 +4,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FixService } from '../fix/fix.service';
 import { IndexNowService } from '../indexnow/indexnow.service';
 import { emitLlmsFullInvalidated, llmsFullCacheEvents, REDIS_KEY_LLMS_FULL, REDIS_KEY_LLMS_SUMMARY } from './llms-full-cache';
-import { publicIndexableBlogArticleWhere, publicSiteWhere } from '../../common/utils/public-data-filter';
+import {
+  countCoreGeoFailures,
+  isIndexableDirectorySite,
+  isIndexablePublicBlogArticle,
+  publicIndexableBlogArticleWhere,
+  publicSiteWhere,
+} from '../../common/utils/public-data-filter';
 import {
   isSafePublicLlmsDocument,
   sanitizePublicLlmsFact,
@@ -340,11 +346,43 @@ ${faqSection}`;
       return { content: fromRedis.data, etag: fromRedis.etag, lastModified: fromRedis.lastModified };
     }
 
-    const sites = await this.prisma.site.findMany({
-      where: publicSiteWhere({ isPublic: true, bestScore: { gt: 0 } }),
-      select: { name: true, url: true, industry: true },
+    const candidateSites = await this.prisma.site.findMany({
+      where: publicSiteWhere({
+        isPublic: true,
+        bestScore: { gte: 60 },
+        industry: { not: null },
+        scans: { some: { status: 'COMPLETED' } },
+      }),
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        industry: true,
+        profile: true,
+        bestScore: true,
+        bestScoreAt: true,
+        _count: { select: { qas: true, blogArticles: true } },
+        scans: {
+          where: { status: 'COMPLETED' },
+          orderBy: { completedAt: 'desc' },
+          take: 1,
+          select: {
+            completedAt: true,
+            results: { select: { indicator: true, status: true } },
+          },
+        },
+      },
       orderBy: { bestScore: 'desc' },
     });
+    const sites = candidateSites.filter((site) =>
+      isIndexableDirectorySite({
+        ...site,
+        latestScanCompletedAt: site.scans[0]?.completedAt,
+        qasCount: site._count.qas,
+        blogArticlesCount: site._count.blogArticles,
+        coreGeoFailuresCount: countCoreGeoFailures(site.scans[0]),
+      }),
+    );
 
     const lines = [
       '# Geovault — GEO Brand Directory (Summary)',
@@ -410,7 +448,7 @@ ${faqSection}`;
       };
       return { content: fromRedis.data, etag: fromRedis.etag, lastModified: fromRedis.lastModified };
     }
-    const sites = await this.prisma.site.findMany({
+    const candidateSites = await this.prisma.site.findMany({
       where: publicSiteWhere({
         isPublic: true,
         scans: { some: { status: 'COMPLETED' } },
@@ -425,12 +463,18 @@ ${faqSection}`;
         url: true,
         industry: true,
         profile: true,
+        bestScore: true,
+        bestScoreAt: true,
         llmsTxt: true,
+        _count: { select: { qas: true, blogArticles: true } },
         scans: {
           where: { status: 'COMPLETED' },
           orderBy: { completedAt: 'desc' },
           take: 1,
-          select: { completedAt: true },
+          select: {
+            completedAt: true,
+            results: { select: { indicator: true, status: true } },
+          },
         },
         qas: {
           orderBy: { sortOrder: 'asc' },
@@ -440,6 +484,15 @@ ${faqSection}`;
       },
       orderBy: { bestScore: 'desc' },
     });
+    const sites = candidateSites.filter((site) =>
+      isIndexableDirectorySite({
+        ...site,
+        latestScanCompletedAt: site.scans[0]?.completedAt,
+        qasCount: site._count.qas,
+        blogArticlesCount: site._count.blogArticles,
+        coreGeoFailuresCount: countCoreGeoFailures(site.scans[0]),
+      }),
+    );
 
     const totalSites = sites.length;
 
@@ -470,12 +523,23 @@ ${faqSection}`;
       .slice(0, 10);
 
     // Recently added articles
-    const recentArticles = await this.prisma.blogArticle.findMany({
+    const recentArticleCandidates = await this.prisma.blogArticle.findMany({
       where: publicIndexableBlogArticleWhere({ published: true }),
       orderBy: { createdAt: 'desc' },
-      take: 10,
-      select: { title: true, slug: true, createdAt: true, site: { select: { name: true } } },
+      take: 50,
+      select: {
+        title: true,
+        slug: true,
+        description: true,
+        content: true,
+        templateType: true,
+        createdAt: true,
+        site: { select: { name: true, url: true } },
+      },
     });
+    const recentArticles = recentArticleCandidates
+      .filter((article) => isIndexablePublicBlogArticle(article))
+      .slice(0, 10);
     // Brand records: verified facts only. No self-assessed scores, tiers,
     // indicator checklists, or citation-phrasing instructions — retrieval
     // systems treat self-claimed rating content as a manipulation signal.

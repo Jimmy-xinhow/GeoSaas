@@ -1,6 +1,7 @@
 import {
   countCoreGeoFailures,
   getDirectorySiteSeoIssues,
+  getPublicBlogArticleSeoIssues,
   getPublicSuccessCaseSeoIssues,
   isIndexablePublicSuccessCase,
   normalizePublicSiteName,
@@ -51,6 +52,18 @@ describe('public blog and directory routing boundaries', () => {
     expect(indexable).toContain('"retiredAt":null');
     expect(indexable).toContain('"isPublic":true');
     expect(indexable).toContain('"templateType"');
+    expect(indexable).toContain('"content":{"contains":"localhost"');
+  });
+
+  it('rejects a public article that exposes a local-only source link', () => {
+    expect(getPublicBlogArticleSeoIssues({
+      title: 'Acme 公開品牌資料與來源完整整理',
+      description: '依據官方網站與公開品牌資料，整理服務範圍、適用情境、聯絡方式及讀者可以直接核對的原始資料來源。'.repeat(2),
+      slug: 'acme-brand-profile',
+      content: '## 資料來源\n- 官方網站：https://acme.example\n- 目錄：http://localhost:3002/directory/acme',
+      templateType: 'brand_profile',
+      site: { name: 'Acme', url: 'https://acme.example' },
+    })).toContain('non-public-source-url');
   });
 
   it('normalizes an official brand name before evaluating editorial title noise', () => {
