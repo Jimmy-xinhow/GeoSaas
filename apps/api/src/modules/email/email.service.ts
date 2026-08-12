@@ -40,7 +40,7 @@ export class EmailService {
         <p style="font-size: 48px; font-weight: bold; color: ${data.score >= 80 ? '#22c55e' : data.score >= 60 ? '#3b82f6' : '#ef4444'};">${data.score}/100</p>
         <p><a href="https://www.geovault.app/sites/${data.url}" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">查看詳細報告</a></p>
         <hr/>
-        <p style="color: #9ca3af; font-size: 12px;">Geovault — The APAC Authority on AI Search Optimization</p>
+        <p style="color: #9ca3af; font-size: 12px;">Geovault — AI Search Optimization and Citation Measurement</p>
       `,
     });
   }
@@ -55,7 +55,7 @@ export class EmailService {
         <p>您的網站 <strong>${data.siteName}</strong> 獲得了 <strong>「${data.badgeLabel}」</strong> 徽章。</p>
         <p><a href="https://www.geovault.app" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">前往查看</a></p>
         <hr/>
-        <p style="color: #9ca3af; font-size: 12px;">Geovault — The APAC Authority on AI Search Optimization</p>
+        <p style="color: #9ca3af; font-size: 12px;">Geovault — AI Search Optimization and Citation Measurement</p>
       `,
     });
   }
@@ -70,7 +70,7 @@ export class EmailService {
         <p>${data.changes}</p>
         <p><a href="https://www.geovault.app/monitor" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">查看監控儀表板</a></p>
         <hr/>
-        <p style="color: #9ca3af; font-size: 12px;">Geovault — The APAC Authority on AI Search Optimization</p>
+        <p style="color: #9ca3af; font-size: 12px;">Geovault — AI Search Optimization and Citation Measurement</p>
       `,
     });
   }
@@ -82,7 +82,7 @@ export class EmailService {
       subject: '歡迎加入 Geovault！',
       html: `
         <h2>歡迎加入 Geovault，${name}！</h2>
-        <p>感謝您註冊 Geovault — APAC 領先的 AI 搜尋優化平台。</p>
+        <p>感謝您註冊 Geovault — AI 搜尋優化與引用驗收平台。</p>
         <h3>接下來你可以：</h3>
         <ol>
           <li>🔍 免費掃描您的網站 AI 能見度</li>
@@ -92,7 +92,7 @@ export class EmailService {
         </ol>
         <p><a href="https://www.geovault.app/dashboard" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">開始使用</a></p>
         <hr/>
-        <p style="color: #9ca3af; font-size: 12px;">Geovault — The APAC Authority on AI Search Optimization</p>
+        <p style="color: #9ca3af; font-size: 12px;">Geovault — AI Search Optimization and Citation Measurement</p>
       `,
     });
   }
@@ -107,7 +107,7 @@ export class EmailService {
         <p><a href="${resetUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">重設密碼</a></p>
         <p style="color:#6b7280;font-size:13px;">如果你沒有提出此要求，可以忽略這封信。</p>
         <hr/>
-        <p style="color:#9ca3af;font-size:12px;">Geovault — The APAC Authority on AI Search Optimization</p>
+        <p style="color:#9ca3af;font-size:12px;">Geovault — AI Search Optimization and Citation Measurement</p>
       `,
     });
   }
@@ -123,7 +123,7 @@ export class EmailService {
         <p><a href="${verificationUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Verify email</a></p>
         <p style="color:#6b7280;font-size:13px;">This link expires in 24 hours. If you did not create a Geovault account, you can ignore this email.</p>
         <hr/>
-        <p style="color:#9ca3af;font-size:12px;">Geovault - The APAC Authority on AI Search Optimization</p>
+        <p style="color:#9ca3af;font-size:12px;">Geovault - AI Search Optimization and Citation Measurement</p>
       `,
     });
   }

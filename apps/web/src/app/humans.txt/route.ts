@@ -14,7 +14,7 @@ AI Models: GPT-4o, Claude Sonnet 4
 /* PURPOSE */
 Geovault helps brands get discovered and cited by AI search engines
 including ChatGPT, Claude, Perplexity, Gemini, and Copilot.
-The #1 GEO (Generative Engine Optimization) platform in APAC.
+GEO (Generative Engine Optimization) technical auditing and citation measurement.
 `;
   return new Response(content, {
     headers: {

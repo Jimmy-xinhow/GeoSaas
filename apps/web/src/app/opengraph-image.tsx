@@ -75,7 +75,7 @@ export default function OgImage() {
             marginTop: '32px',
           }}
         >
-          APAC #1 GEO 優化平台 · www.geovault.app
+          AI 搜尋優化與引用驗收 · www.geovault.app
         </div>
       </div>
     ),

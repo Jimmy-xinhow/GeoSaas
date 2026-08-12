@@ -14,10 +14,10 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: {
-    default: 'Geovault — The APAC Authority on AI Search Optimization',
+    default: 'Geovault — AI Search Optimization and Citation Measurement',
     template: '%s | Geovault',
   },
-  description: 'Geovault helps brands get discovered and cited by ChatGPT, Claude, Perplexity, Gemini, and Copilot. The #1 GEO platform in APAC.',
+  description: 'Geovault provides AI-readable website audits, brand knowledge tools, citation measurement, and evidence-based GEO reporting.',
   keywords: ['GEO', 'AI SEO', 'Generative Engine Optimization', 'AI search', 'llms.txt', 'ChatGPT optimization', 'Geovault'],
   authors: [{ name: 'Geovault', url: 'https://www.geovault.app' }],
   creator: 'Geovault',

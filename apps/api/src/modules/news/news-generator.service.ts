@@ -268,7 +268,7 @@ export class NewsGeneratorService {
         messages: [
           {
             role: 'system',
-            content: `你是 Geovault 的資深編輯，擅長用生動有趣的方式解讀 AI 搜尋產業趨勢。Geovault 是 APAC 領先的 GEO（Generative Engine Optimization）平台。
+            content: `你是 Geovault 的資深編輯，擅長用生動有趣的方式解讀 AI 搜尋產業趨勢。Geovault 提供 GEO（Generative Engine Optimization）技術檢測與引用驗收工具。
 
 你的任務是根據提供的新聞素材，撰寫一篇有溫度、有觀點的原創分析文章。
 

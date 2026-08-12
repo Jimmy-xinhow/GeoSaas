@@ -1,8 +1,46 @@
 import { Metadata } from 'next';
-import HomeClient from './home-client';
+import HomeClient, { type HomepageEvidenceCase } from './home-client';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
 const HOME_URL = SITE_URL.endsWith('/') ? SITE_URL : `${SITE_URL}/`;
+
+async function getFeaturedEvidenceCases(): Promise<HomepageEvidenceCase[]> {
+  try {
+    const response = await fetch(`${API_URL}/api/success-cases/featured`, {
+      next: { revalidate: 3600 },
+    });
+    if (!response.ok) return [];
+    const json = await response.json();
+    const rows = Array.isArray(json?.data)
+      ? json.data
+      : Array.isArray(json)
+        ? json
+        : [];
+    return rows
+      .filter((item: any) => (
+        typeof item?.id === 'string'
+        && typeof item?.title === 'string'
+        && typeof item?.aiPlatform === 'string'
+        && typeof item?.queryUsed === 'string'
+      ))
+      .slice(0, 3)
+      .map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        aiPlatform: item.aiPlatform,
+        queryUsed: item.queryUsed,
+        beforeGeoScore: Number.isFinite(item.beforeGeoScore) ? item.beforeGeoScore : null,
+        afterGeoScore: Number.isFinite(item.afterGeoScore) ? item.afterGeoScore : null,
+        tags: Array.isArray(item.tags)
+          ? item.tags.filter((tag: unknown): tag is string => typeof tag === 'string').slice(0, 4)
+          : [],
+        site: typeof item.site?.name === 'string' ? { name: item.site.name } : null,
+      }));
+  } catch {
+    return [];
+  }
+}
 
 export const metadata: Metadata = {
   title: 'Geovault — AI 搜尋優化平台與代營運服務',
@@ -51,7 +89,7 @@ const jsonLdWebSite = {
   name: 'Geovault',
   url: SITE_URL,
   description:
-    'Geovault helps brands get discovered and cited by ChatGPT, Claude, Perplexity, Gemini, and Copilot. The #1 GEO platform in APAC.',
+    'Geovault provides AI-readable website audits, brand knowledge tools, citation measurement, and evidence-based GEO reporting.',
   potentialAction: {
     '@type': 'SearchAction',
     target: {
@@ -67,12 +105,8 @@ const jsonLdOrg = {
   '@type': 'Organization',
   name: 'Geovault',
   url: SITE_URL,
-  logo: `${SITE_URL}/logo.png`,
-  description: 'The APAC Authority on Generative Engine Optimization (GEO)',
-  sameAs: [
-    'https://twitter.com/geovault',
-    'https://www.linkedin.com/company/geovault',
-  ],
+  logo: `${SITE_URL}/icon.svg`,
+  description: 'AI search optimization and citation measurement platform',
   foundingDate: '2026',
   knowsAbout: [
     'GEO',
@@ -92,7 +126,7 @@ const jsonLdFaq = {
       name: 'GEO 和 SEO 有什麼不同？',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'SEO 優化的是 Google 搜尋排名，GEO 優化的是 AI 搜尋引用。當用戶問 ChatGPT「推薦一間好的餐廳」，AI 只會推薦 1-3 個品牌——GEO 就是確保你的品牌在這 1-3 個之中。',
+        text: 'SEO 著重搜尋引擎的抓取、索引與排名；GEO 著重讓公開品牌資料更容易被生成式 AI 正確理解、提及與引用。兩者都需要持續監測，GEO 不保證特定平台一定推薦品牌。',
       },
     },
     {
@@ -162,7 +196,7 @@ const jsonLdApp = {
   operatingSystem: 'Web',
   url: SITE_URL,
   description:
-    'AI 搜尋優化平台，幫助品牌被 ChatGPT、Claude、Perplexity、Gemini、Copilot 主動推薦。提供 9 項 AI 可讀性掃描、自動修復、品牌知識庫、AI 引用監控。',
+    'AI 搜尋優化平台，提供 9 項 AI 可讀性掃描、自動修復、品牌知識庫、AI 引用監控與證據式驗收報告。',
   offers: [
     {
       '@type': 'Offer',
@@ -260,7 +294,8 @@ const jsonLdDataset = {
   spatialCoverage: { '@type': 'Place', name: 'APAC' },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const featuredCases = await getFeaturedEvidenceCases();
   return (
     <>
       {/* JSON-LD rendered server-side for crawlers */}
@@ -286,7 +321,7 @@ export default function HomePage() {
       />
 
       {/* Client interactive component */}
-      <HomeClient />
+      <HomeClient featuredCases={featuredCases} />
     </>
   );
 }

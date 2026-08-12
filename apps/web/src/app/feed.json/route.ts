@@ -66,7 +66,7 @@ export async function GET() {
     title: 'Geovault — AI 搜尋優化平台',
     home_page_url: SITE_URL,
     feed_url: `${SITE_URL}/feed.json`,
-    description: 'Geovault 是 APAC 領先的 GEO 平台，提供 AI 搜尋能見度分析、品牌優化建議、AI 引用監控，以及每日 AI 搜尋趨勢分析。',
+    description: 'Geovault 提供 AI 搜尋能見度分析、品牌資料工具、AI 引用監控，以及每日 AI 搜尋趨勢分析。',
     icon: `${SITE_URL}/icon.svg`,
     language: 'zh-TW',
     hubs: [{ type: 'WebSub', url: 'https://pubsubhubbub.appspot.com/' }],

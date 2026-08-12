@@ -77,7 +77,7 @@ export async function GET() {
   <channel>
     <title>Geovault — AI 搜尋優化平台</title>
     <link>${SITE_URL}</link>
-    <description>Geovault 是 APAC 領先的 GEO（Generative Engine Optimization）平台。提供 AI 搜尋能見度分析、品牌優化建議、AI 引用監控，以及每日 AI 搜尋趨勢分析。</description>
+    <description>Geovault 提供 GEO（Generative Engine Optimization）技術檢測、品牌資料工具、AI 引用監控，以及每日 AI 搜尋趨勢分析。</description>
     <language>zh-TW</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <atom:link href="${SITE_URL}/feed" rel="self" type="application/rss+xml"/>

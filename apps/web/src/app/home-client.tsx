@@ -113,6 +113,27 @@ const aiPlatforms = [
   { name: 'Copilot', color: 'from-cyan-400 to-cyan-600', bg: 'bg-[#0078d4]', logo: '/logos/copilot.jpg' },
 ]
 
+export type HomepageEvidenceCase = {
+  id: string
+  title: string
+  aiPlatform: string
+  queryUsed: string
+  beforeGeoScore: number | null
+  afterGeoScore: number | null
+  tags: string[]
+  site: { name: string } | null
+}
+
+function getPlatformPresentation(platform: string) {
+  const normalized = platform.trim().toLowerCase()
+  return aiPlatforms.find(item => item.name.toLowerCase() === normalized) || {
+    name: platform || 'AI 平台',
+    color: 'from-gray-400 to-gray-600',
+    bg: 'bg-gray-600',
+    logo: '/logos/chatgpt.png',
+  }
+}
+
 /* ─── Pricing Data ─── */
 const pricingPlans = [
   {
@@ -281,7 +302,7 @@ const managedAudiences = [
 const faqItems = [
   {
     q: 'GEO 和 SEO 有什麼不同？',
-    a: 'SEO 優化的是 Google 搜尋排名，讓你出現在搜尋結果頁面上。GEO 優化的是 AI 搜尋引用，讓 ChatGPT、Claude 等 AI 在回答問題時主動推薦你的品牌。兩者可以同時進行，互不衝突。',
+    a: 'SEO 著重搜尋引擎的抓取、索引與排名；GEO 著重讓公開品牌資料更容易被生成式 AI 正確理解、提及與引用。兩者可以同時進行，但都需要持續監測，GEO 不保證特定平台一定推薦品牌。',
   },
   {
     q: '多久能看到效果？',
@@ -318,7 +339,11 @@ const faqItems = [
 ]
 
 /* ─── Main Page ─── */
-export default function HomeClient() {
+export default function HomeClient({
+  featuredCases,
+}: {
+  featuredCases: HomepageEvidenceCase[]
+}) {
   const [scanUrl, setScanUrl] = useState('')
   const [isYearly, setIsYearly] = useState(false)
   const [managedBillingCycle, setManagedBillingCycle] = useState<'monthly' | 'yearly'>('monthly')
@@ -433,9 +458,9 @@ export default function HomeClient() {
           </h1>
 
           <p className="mt-6 text-lg sm:text-xl text-blue-200/90 max-w-2xl mx-auto leading-relaxed">
-            <strong className="text-white">70% 的消費者</strong>已經開始用 AI 取代 Google 搜尋。
+            使用者已開始透過生成式 AI 比較服務、整理選項與查找品牌資訊。
             <br />
-            如果你的品牌沒有被 AI 收錄，<strong className="text-orange-300">你正在流失這些客戶。</strong>
+            如果公開資料不完整，AI 可能<strong className="text-orange-300">無法正確理解或提及你的品牌。</strong>
           </p>
 
           {/* Scan input */}
@@ -508,8 +533,8 @@ export default function HomeClient() {
                 ))}
               </div>
               <div className="bg-white/5 rounded-xl p-4 text-center">
-                <p className="text-2xl font-bold text-gray-500">10 個結果</p>
-                <p className="text-sm text-gray-500 mt-1">點擊率分散，每個只拿到 2-10%</p>
+                <p className="text-lg font-bold text-gray-400">搜尋結果清單</p>
+                <p className="text-sm text-gray-500 mt-1">使用者開啟並比較多個網站連結</p>
               </div>
             </div>
 
@@ -528,12 +553,12 @@ export default function HomeClient() {
                 <p className="text-sm text-gray-400 mb-4">問 ChatGPT「推薦台北整復」</p>
                 <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-xl p-4 border border-blue-500/20">
                   <p className="text-sm text-gray-300 leading-relaxed">
-                    <span className="text-gray-500">AI：</span>根據評價和專業度，我推薦以下幾間：
+                    <span className="text-gray-500">回答示意：</span>AI 會綜合可取得的公開資料整理選項與理由。
                   </p>
                   <div className="mt-3 space-y-2">
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-blue-400 font-bold">1.</span>
-                      <span className="font-semibold text-green-400 bg-green-500/20 px-2 py-0.5 rounded">你的品牌 ✓</span>
+                      <span className="font-semibold text-green-400 bg-green-500/20 px-2 py-0.5 rounded">具備可驗證資料的品牌</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <span>2.</span><div className="h-3 bg-white/10 rounded w-24" />
@@ -545,8 +570,8 @@ export default function HomeClient() {
                 </div>
               </div>
               <div className="bg-blue-500/10 rounded-xl p-4 text-center">
-                <p className="text-2xl font-bold text-blue-400">只推薦 1-3 個</p>
-                <p className="text-sm text-blue-400/70 mt-1">被選中 = 獨佔高意願流量</p>
+                <p className="text-lg font-bold text-blue-400">生成式回答</p>
+                <p className="text-sm text-blue-400/70 mt-1">品牌可能被提及，也可能因資料不足而未出現</p>
               </div>
             </div>
           </div>
@@ -555,7 +580,7 @@ export default function HomeClient() {
             <div className="inline-flex items-center gap-3 bg-orange-500/10 border border-orange-500/20 rounded-2xl px-6 py-4">
               <AlertTriangle className="h-5 w-5 text-orange-400 shrink-0" />
               <p className="text-orange-300 font-medium">
-                在 AI 搜尋時代，<strong>不被推薦 = 不存在</strong>。你的競爭對手可能已經在優化了。
+                GEO 的第一步不是宣稱「一定被推薦」，而是先讓品牌資料<strong>可抓取、可理解、可核對</strong>。
               </p>
             </div>
           </div>
@@ -572,7 +597,7 @@ export default function HomeClient() {
               簡單三步驟
             </span>
             <h2 className="text-3xl sm:text-4xl font-bold">
-              讓 AI 主動推薦你的品牌
+              建立 AI 可正確理解的品牌資料
             </h2>
             <p className="mt-4 text-lg text-gray-400">
               不需要技術背景，3 分鐘即可開始
@@ -591,7 +616,7 @@ export default function HomeClient() {
               </div>
               <h3 className="mt-6 text-xl font-bold">掃描檢測</h3>
               <p className="mt-3 text-gray-400 leading-relaxed">
-                輸入網址，<strong className="text-gray-200">9 項 AI 可讀性指標</strong>全面檢測。立即知道你的品牌在 AI 眼中的「可見度分數」。
+                輸入網址，檢查 <strong className="text-gray-200">9 項 AI 可讀性技術指標</strong>。分數反映網站訊號完整度，不等同於 AI 平台的實際推薦率。
               </p>
               <div className="mt-6 inline-flex items-center gap-2 bg-white/10 rounded-xl px-4 py-3">
                 <div className="w-12 h-12 rounded-full border-4 border-blue-500 flex items-center justify-center">
@@ -611,7 +636,7 @@ export default function HomeClient() {
               </div>
               <h3 className="mt-6 text-xl font-bold">AI 自動優化</h3>
               <p className="mt-3 text-gray-400 leading-relaxed">
-                一鍵生成 <strong className="text-gray-200">JSON-LD、llms.txt、FAQ Schema</strong>，AI 自動建立品牌知識庫，讓 AI 真正「認識」你。
+                依品牌提供的資料生成 <strong className="text-gray-200">JSON-LD、llms.txt、FAQ Schema</strong> 與知識庫草稿，發布前仍可核對事實與適用範圍。
               </p>
               <div className="mt-6 bg-black/30 rounded-xl p-3 text-left overflow-hidden border border-white/5">
                 <div className="flex items-center gap-1.5 mb-2">
@@ -622,7 +647,7 @@ export default function HomeClient() {
                 <code className="text-[10px] leading-relaxed text-green-400 font-mono block">
                   {'{'}&quot;@type&quot;: &quot;LocalBusiness&quot;,{'\n'}
                   &nbsp;&quot;name&quot;: &quot;你的品牌&quot;,{'\n'}
-                  &nbsp;&quot;geo&quot;: {'{'}&quot;score&quot;: 92{'}'}
+                  &nbsp;&quot;url&quot;: &quot;https://example.com&quot;
                   {'}'}
                 </code>
               </div>
@@ -635,14 +660,14 @@ export default function HomeClient() {
               </div>
               <h3 className="mt-6 text-xl font-bold">即時驗證</h3>
               <p className="mt-3 text-gray-400 leading-relaxed">
-                <strong className="text-gray-200">5 大 AI 平台即時監控</strong>，看到 ChatGPT、Claude 真的在推薦你。產出驗收報告，證明效果。
+                依約定問題集檢測 <strong className="text-gray-200">5 大 AI 平台</strong>，逐題保存提及、未提及、回應與錯誤狀態，產出可重跑的驗收報告。
               </p>
               <div className="mt-6 space-y-2">
                 {['ChatGPT', 'Claude', 'Perplexity'].map((name) => (
                   <div key={name} className="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2">
                     <span className="text-xs font-medium text-gray-300">{name}</span>
-                    <span className="flex items-center gap-1 text-xs text-green-400 font-medium">
-                      <CheckCircle2 className="h-3 w-3" />已引用
+                    <span className="flex items-center gap-1 text-xs text-blue-300 font-medium">
+                      <ClipboardCheck className="h-3 w-3" />逐題檢測
                     </span>
                   </div>
                 ))}
@@ -653,270 +678,120 @@ export default function HomeClient() {
       </section>
 
       {/* ════════════════════════════════════════════════════════
-          SECTION 4 — CASES: Social Proof (real + simulated)
+          SECTION 4 — VERIFIED CASE EVIDENCE
          ════════════════════════════════════════════════════════ */}
       <section className="py-20 lg:py-28 bg-gradient-to-b from-gray-900 to-gray-800 text-white">
         <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
+          <div className="text-center mb-12">
             <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-green-500/20 text-green-400 mb-4">
-              成功案例
+              可驗證案例
             </span>
             <h2 className="text-3xl sm:text-4xl font-bold">
-              各行各業，都在被 AI 推薦
+              只公開附 AI 回應證據的案例
             </h2>
-            <p className="mt-4 text-lg text-gray-400">
-              從在地商家到連鎖品牌，Geovault 幫助不同產業被 AI 搜尋引擎主動推薦
+            <p className="mt-4 text-lg text-gray-400 max-w-3xl mx-auto">
+              每筆公開案例都必須經人工審核，並附實際提問、AI 平台與回應截圖。GEO 分數與技術訊號用來說明優化紀錄，不等同於保證 AI 推薦。
             </p>
           </div>
 
-          {/* Row 1: 3 cards */}
-          <div className="grid md:grid-cols-3 gap-6 mb-6">
-            {/* Case 1 - 整復推拿 */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-green-500/30 transition-all group">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold">立如整復</h3>
-                  <p className="text-xs text-gray-400">整復推拿 · 台北</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span className="text-gray-500">32</span>
-                  <ArrowRight className="h-3 w-3 text-green-400" />
-                  <span className="font-bold text-green-400">56</span>
-                </div>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="w-4 h-4 rounded bg-[#10a37f]/20 flex items-center justify-center">
-                    <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-2.5 w-2.5" />
-                  </div>
-                  <span className="text-[10px] text-green-400 font-medium">ChatGPT 回覆</span>
-                </div>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  「推薦<span className="text-green-400 font-semibold">立如整復</span>，位於台北中山區，專長傳統整復推拿，以非醫療的自然手法著稱...」
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-3 w-3" />ChatGPT
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/perplexity.png" alt="Perplexity" className="h-3 w-3" />Perplexity
-                </span>
-                <span className="text-[10px] text-gray-500 ml-auto">產業排名 #1</span>
+          {featuredCases.length > 0 ? (
+            <div className="grid gap-6 md:grid-cols-3">
+              {featuredCases.map(item => {
+                const platform = getPlatformPresentation(item.aiPlatform)
+                const hasScoreChange =
+                  item.beforeGeoScore !== null && item.afterGeoScore !== null
+                return (
+                  <Link
+                    key={item.id}
+                    href={`/cases/${item.id}`}
+                    prefetch={false}
+                    className="group rounded-2xl border border-white/10 bg-white/5 p-6 transition-all hover:border-green-500/30 hover:bg-white/[0.07]"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs text-gray-400">
+                          {item.site?.name || '已審核品牌案例'}
+                        </p>
+                        <h3 className="mt-1 font-bold text-white group-hover:text-green-300">
+                          {item.title}
+                        </h3>
+                      </div>
+                      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-white ${platform.bg}`}>
+                        <PlatformLogo
+                          src={platform.logo}
+                          alt={platform.name}
+                          className="h-3.5 w-3.5"
+                        />
+                        {platform.name}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 rounded-xl border border-white/5 bg-black/10 p-4">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                        實際提問
+                      </p>
+                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-300">
+                        {item.queryUsed}
+                      </p>
+                    </div>
+
+                    {hasScoreChange && (
+                      <div className="mt-4 flex items-center gap-2 text-sm">
+                        <span className="text-gray-400">GEO 分數紀錄</span>
+                        <span className="font-semibold text-white">{item.beforeGeoScore}</span>
+                        <ArrowRight className="h-3.5 w-3.5 text-green-400" />
+                        <span className="font-semibold text-green-400">{item.afterGeoScore}</span>
+                      </div>
+                    )}
+
+                    {item.tags.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {item.tags.map(tag => (
+                          <span
+                            key={tag}
+                            className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-gray-300"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="mt-5 flex items-center text-xs font-medium text-green-300">
+                      查看截圖與完整驗收紀錄
+                      <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                    </p>
+                  </Link>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-white/5 p-8 text-center sm:p-10">
+              <Shield className="mx-auto h-10 w-10 text-green-400" />
+              <h3 className="mt-4 text-xl font-bold">目前沒有通過公開證據門檻的案例</h3>
+              <p className="mt-3 leading-7 text-gray-400">
+                尚未附 AI 回應截圖或未經人工審核的資料不會顯示為成功案例。待首批證據完成審核後，首頁會自動顯示可查核的提問、平台、分數紀錄與完整案例。
+              </p>
+              <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+                <Link href="/cases" prefetch={false}>
+                  <Button className="w-full rounded-xl bg-white font-semibold text-gray-900 hover:bg-gray-100 sm:w-auto">
+                    查看案例審核標準
+                  </Button>
+                </Link>
+                <Link href="/dashboard/submit-case" prefetch={false}>
+                  <Button variant="outline" className="w-full rounded-xl border-white/20 bg-transparent text-white hover:bg-white/10 sm:w-auto">
+                    提交附證據案例
+                  </Button>
+                </Link>
               </div>
             </div>
+          )}
 
-            {/* Case 2 - 汽車美容 */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-green-500/30 transition-all group">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold">詹大汽車精品</h3>
-                  <p className="text-xs text-gray-400">汽車美容 · 全台</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span className="text-gray-500">18</span>
-                  <ArrowRight className="h-3 w-3 text-green-400" />
-                  <span className="font-bold text-green-400">73</span>
-                </div>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="w-4 h-4 rounded bg-[#d97757]/20 flex items-center justify-center">
-                    <PlatformLogo src="/logos/claude.jpg" alt="Claude" className="h-2.5 w-2.5" />
-                  </div>
-                  <span className="text-[10px] text-orange-400 font-medium">Claude 回覆</span>
-                </div>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  「<span className="text-green-400 font-semibold">詹大汽車精品</span>提供專業汽車美容產品與施工教學，在汽車美容領域深耕多年...」
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-3 w-3" />ChatGPT
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/claude.jpg" alt="Claude" className="h-3 w-3" />Claude
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-blue-400 ml-auto">
-                  <TrendingUp className="h-3 w-3" />+305%
-                </span>
-              </div>
-            </div>
-
-            {/* Case 3 - 咖啡廳 (模擬) */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-green-500/30 transition-all group">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold">森林咖啡工坊</h3>
-                  <p className="text-xs text-gray-400">咖啡茶飲 · 台中</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span className="text-gray-500">25</span>
-                  <ArrowRight className="h-3 w-3 text-green-400" />
-                  <span className="font-bold text-green-400">81</span>
-                </div>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="w-4 h-4 rounded bg-[#1a73e8]/20 flex items-center justify-center">
-                    <PlatformLogo src="/logos/perplexity.png" alt="Perplexity" className="h-2.5 w-2.5" />
-                  </div>
-                  <span className="text-[10px] text-blue-400 font-medium">Perplexity 回覆</span>
-                </div>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  「台中精品咖啡推薦<span className="text-green-400 font-semibold">森林咖啡工坊</span>，自家烘焙豆、手沖單品，是在地人私藏的口袋名單...」
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/perplexity.png" alt="Perplexity" className="h-3 w-3" />Perplexity
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/gemini.jpg" alt="Gemini" className="h-3 w-3" />Gemini
-                </span>
-                <span className="text-[10px] text-gray-500 ml-auto">7 天見效</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Row 2: 3 cards */}
-          <div className="grid md:grid-cols-3 gap-6 mb-6">
-            {/* Case 4 - 美容美髮 (模擬) */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-green-500/30 transition-all group">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold">慕光髮藝</h3>
-                  <p className="text-xs text-gray-400">美容美髮 · 新北</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span className="text-gray-500">15</span>
-                  <ArrowRight className="h-3 w-3 text-green-400" />
-                  <span className="font-bold text-green-400">68</span>
-                </div>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="w-4 h-4 rounded bg-[#10a37f]/20 flex items-center justify-center">
-                    <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-2.5 w-2.5" />
-                  </div>
-                  <span className="text-[10px] text-green-400 font-medium">ChatGPT 回覆</span>
-                </div>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  「新北板橋染燙推薦<span className="text-green-400 font-semibold">慕光髮藝</span>，擅長日系透明感髮色、結構式護髮，評價高達 4.9 星...」
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-3 w-3" />ChatGPT
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/copilot.jpg" alt="Copilot" className="h-3 w-3" />Copilot
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-blue-400 ml-auto">
-                  <TrendingUp className="h-3 w-3" />+353%
-                </span>
-              </div>
-            </div>
-
-            {/* Case 5 - 健身 (模擬) */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-green-500/30 transition-all group">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold">鐵人健身工廠</h3>
-                  <p className="text-xs text-gray-400">健身教練 · 高雄</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span className="text-gray-500">22</span>
-                  <ArrowRight className="h-3 w-3 text-green-400" />
-                  <span className="font-bold text-green-400">77</span>
-                </div>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="w-4 h-4 rounded bg-[#8e44ef]/20 flex items-center justify-center">
-                    <PlatformLogo src="/logos/gemini.jpg" alt="Gemini" className="h-2.5 w-2.5" />
-                  </div>
-                  <span className="text-[10px] text-purple-400 font-medium">Gemini 回覆</span>
-                </div>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  「高雄私人教練推薦<span className="text-green-400 font-semibold">鐵人健身工廠</span>，提供一對一訓練課程，教練團隊擁有國際認證...」
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/gemini.jpg" alt="Gemini" className="h-3 w-3" />Gemini
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-3 w-3" />ChatGPT
-                </span>
-                <span className="text-[10px] text-gray-500 ml-auto">10 天見效</span>
-              </div>
-            </div>
-
-            {/* Case 6 - 寵物 (模擬) */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-green-500/30 transition-all group">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold">毛孩星球</h3>
-                  <p className="text-xs text-gray-400">寵物美容 · 桃園</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span className="text-gray-500">30</span>
-                  <ArrowRight className="h-3 w-3 text-green-400" />
-                  <span className="font-bold text-green-400">85</span>
-                </div>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/5 mb-3">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="w-4 h-4 rounded bg-[#0078d4]/20 flex items-center justify-center">
-                    <PlatformLogo src="/logos/copilot.jpg" alt="Copilot" className="h-2.5 w-2.5" />
-                  </div>
-                  <span className="text-[10px] text-cyan-400 font-medium">Copilot 回覆</span>
-                </div>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  「桃園寵物美容推薦<span className="text-green-400 font-semibold">毛孩星球</span>，專業寵物 SPA、造型修剪，環境乾淨溫馨，毛小孩首選...」
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/copilot.jpg" alt="Copilot" className="h-3 w-3" />Copilot
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-green-400">
-                  <PlatformLogo src="/logos/claude.jpg" alt="Claude" className="h-3 w-3" />Claude
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-blue-400 ml-auto">
-                  <TrendingUp className="h-3 w-3" />+183%
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Industry coverage strip */}
-          <div className="bg-white/5 rounded-2xl p-6 border border-white/10 mb-8">
-            <p className="text-center text-sm text-gray-400 mb-4">已涵蓋 22 個行業類別</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {['整復推拿', '汽車美容', '咖啡茶飲', '美容美髮', '健身教練', '寵物美容', '牙醫診所', '餐廳美食', '法律事務所', '室內設計', '婚禮攝影', '親子教育', '居家清潔', '花藝設計'].map(industry => (
-                <span key={industry} className="px-3 py-1 rounded-full text-xs bg-white/5 text-gray-300 border border-white/10">
-                  {industry}
-                </span>
-              ))}
-              <span className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-300 border border-blue-500/20">
-                +8 更多行業
-              </span>
-            </div>
-          </div>
-
-          <div className="text-center">
-            <Link href="/cases" prefetch={false}>
-              <Button className="bg-white text-gray-900 hover:bg-gray-100 rounded-xl font-semibold">
-                查看更多成功案例
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </Link>
-          </div>
+          <p className="mt-8 text-center text-xs leading-6 text-gray-500">
+            案例只證明特定提問、平台與檢測時間下的觀察結果，不代表所有使用者或後續回答都會得到相同推薦。
+          </p>
         </div>
       </section>
-
       {/* ════════════════════════════════════════════════════════
           SECTION 5 — FEATURES: Deep Dive (6 features)
          ════════════════════════════════════════════════════════ */}
@@ -1009,7 +884,7 @@ export default function HomeClient() {
               </div>
               <h3 className="text-lg font-bold mb-2">客戶驗收報告</h3>
               <p className="text-gray-400 text-sm leading-relaxed mb-4">
-                一鍵生成 5 平台 AI 引用檢測報告，匯出 PDF。用數據向老闆或客戶證明優化成效。
+                生成跨平台 AI 引用檢測報告並匯出 PDF，保留每題的提及、未提及、回應與錯誤證據。
               </p>
               <div className="flex items-center gap-2 text-sm text-cyan-400">
                 <FileText className="h-4 w-4" />
@@ -1024,7 +899,7 @@ export default function HomeClient() {
               </div>
               <h3 className="text-lg font-bold mb-2">品牌公開目錄</h3>
               <p className="text-gray-400 text-sm leading-relaxed mb-4">
-                你的品牌被收錄到 Geovault 目錄，持續被 AI 爬蟲收錄。越多曝光，AI 越容易找到你。
+                公開且符合收錄條件的品牌可進入 GeoVault 目錄，提供穩定、可索引的品牌資料頁。
               </p>
               <div className="flex items-center gap-2 text-sm text-indigo-400">
                 <BarChart3 className="h-4 w-4" />
@@ -1036,60 +911,64 @@ export default function HomeClient() {
       </section>
 
       {/* ════════════════════════════════════════════════════════
-          SECTION 6 — ROI: Why it's worth it
+          SECTION 6 — EVIDENCE-BASED VALUE
          ════════════════════════════════════════════════════════ */}
       <section className="py-20 lg:py-28 bg-gradient-to-b from-gray-800 to-gray-900 text-white">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="text-center mb-16">
+          <div className="text-center mb-14">
             <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium bg-green-500/20 text-green-400 mb-4">
-              投資報酬率
+              可驗證價值
             </span>
             <h2 className="text-3xl sm:text-4xl font-bold">
-              一次 AI 推薦的價值是多少？
+              把 GEO 投入變成可檢查的工作與紀錄
             </h2>
+            <p className="mx-auto mt-4 max-w-3xl text-lg leading-8 text-gray-400">
+              平台提供技術檢測、問題集執行與證據式報告；實際提及結果依 AI 平台、問題、時間與可取得資料而異。
+            </p>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-6 mb-12">
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 text-center border border-white/10 hover:border-red-500/30 transition-all">
-              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
-                <Search className="h-6 w-6 text-red-400" />
+          <div className="grid gap-6 sm:grid-cols-3">
+            {[
+              {
+                icon: Search,
+                title: '先找出技術缺口',
+                body: '檢查結構化資料、llms.txt、metadata 與其他機器可讀訊號，逐項顯示通過、警告或失敗。',
+              },
+              {
+                icon: BookOpen,
+                title: '固定問題集重跑',
+                body: '用事前約定的問題與平台範圍重複檢測，避免用單一回答或臨時挑選問題宣稱成效。',
+              },
+              {
+                icon: ClipboardCheck,
+                title: '保存驗收證據',
+                body: '記錄檢測時間、回應、提及狀態與錯誤，讓報告可以回查，也能區分沒有提及與執行失敗。',
+              },
+            ].map(item => (
+              <div
+                key={item.title}
+                className="rounded-2xl border border-white/10 bg-white/5 p-7"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/15">
+                  <item.icon className="h-6 w-6 text-green-300" />
+                </div>
+                <h3 className="mt-5 text-lg font-bold">{item.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-gray-400">{item.body}</p>
               </div>
-              <p className="text-3xl font-bold">NT$15-50</p>
-              <p className="text-sm text-gray-400 mt-2">Google Ads<br />單次點擊費用</p>
-            </div>
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 text-center border border-white/10 hover:border-green-500/30 transition-all relative">
-              <div className="absolute -top-2 -right-2">
-                <span className="bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full">FREE</span>
-              </div>
-              <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
-                <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-6 w-6" />
-              </div>
-              <p className="text-3xl font-bold text-green-400">$0</p>
-              <p className="text-sm text-gray-400 mt-2">AI 推薦一次<br />免費且最高信任度曝光</p>
-            </div>
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 text-center border border-white/10 hover:border-blue-500/30 transition-all">
-              <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-4">
-                <TrendingUp className="h-6 w-6 text-blue-400" />
-              </div>
-              <p className="text-3xl font-bold">NT$36</p>
-              <p className="text-sm text-gray-400 mt-2">每天不到一杯咖啡<br />換取持續 AI 曝光</p>
-            </div>
+            ))}
           </div>
 
-          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 max-w-2xl mx-auto text-center">
-            <p className="text-lg leading-relaxed">
-              每月 <span className="text-3xl font-bold text-blue-400">NT$1,090</span> 的 Pro 方案
+          <div className="mx-auto mt-10 max-w-3xl rounded-2xl border border-blue-400/20 bg-blue-400/10 p-6 text-center">
+            <p className="text-sm leading-7 text-blue-100">
+              GEO 分數衡量的是 GeoVault 定義的網站訊號完整度；它不是 Google、ChatGPT 或其他 AI 平台公布的推薦分數，也不構成排名或流量保證。
             </p>
-            <p className="mt-3 text-gray-400">
-              = 每天約 NT$36 = 讓你的品牌在 <strong className="text-gray-200">ChatGPT、Claude、Perplexity、Gemini、Copilot</strong> 上被主動推薦
-            </p>
-            <p className="mt-4 text-sm text-gray-500">
-              一個 AI 推薦帶來的高意願客戶，遠比 10 次 Google Ads 點擊更有價值
-            </p>
+            <Link href="/#pricing" className="mt-4 inline-flex items-center text-sm font-semibold text-blue-300 hover:text-blue-200">
+              查看工具與代營運範圍
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Link>
           </div>
         </div>
       </section>
-
       {/* ════════════════════════════════════════════════════════
           SECTION 7 — PLATFORM STATS (Social Proof Numbers)
          ════════════════════════════════════════════════════════ */}
@@ -1107,7 +986,7 @@ export default function HomeClient() {
 
           <div className="relative z-20 max-w-5xl mx-auto px-6">
             <div className="text-center mb-10">
-              <h2 className="text-2xl sm:text-3xl font-bold text-white">被台灣品牌信賴的 GEO 平台</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white">GeoVault 公開資料概況</h2>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div ref={brandCount.ref} className="bg-white/10 backdrop-blur-md rounded-2xl p-6 text-center border border-white/20 hover:bg-white/15 transition-colors">
@@ -1198,7 +1077,7 @@ export default function HomeClient() {
                   {isPopular && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                       <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
-                        最受歡迎
+                        建議方案
                       </span>
                     </div>
                   )}
@@ -1645,54 +1524,22 @@ export default function HomeClient() {
       </section>
 
       {/* ════════════════════════════════════════════════════════
-          SECTION 10 — FINAL CTA: AI Platform Recommendation
+          SECTION 10 — FINAL CTA
          ════════════════════════════════════════════════════════ */}
       <section className="py-20 lg:py-28 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white relative overflow-hidden">
         <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl" />
 
         <div className="relative max-w-4xl mx-auto px-6 text-center">
-          {/* Simulated AI conversation */}
-          <div className="max-w-lg mx-auto mb-12">
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 text-left">
-              {/* User question */}
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-7 h-7 rounded-full bg-blue-500/30 flex items-center justify-center shrink-0 mt-0.5">
-                  <span className="text-xs">U</span>
-                </div>
-                <div className="bg-blue-500/10 rounded-xl rounded-tl-none px-4 py-2.5">
-                  <p className="text-sm text-blue-200">推薦我一間好的 ______</p>
-                </div>
-              </div>
-              {/* AI response */}
-              <div className="flex items-start gap-3">
-                <div className="w-7 h-7 rounded-full bg-[#10a37f]/30 flex items-center justify-center shrink-0 mt-0.5">
-                  <PlatformLogo src="/logos/chatgpt.png" alt="ChatGPT" className="h-3.5 w-3.5" />
-                </div>
-                <div className="bg-white/5 rounded-xl rounded-tl-none px-4 py-2.5 flex-1">
-                  <p className="text-sm text-gray-300 leading-relaxed">
-                    好的！我推薦{' '}
-                    <span className="bg-green-500/20 text-green-400 font-bold px-1.5 py-0.5 rounded">你的品牌名稱</span>
-                    ，因為他們在這個領域有豐富的專業經驗，而且客戶評價非常好...
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight">
-            下一個被 AI 推薦的
+            先讓 AI 能找到並理解
             <br />
             <span className="bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
-              就是你的品牌
+              你的公開品牌資料
             </span>
           </h2>
           <p className="mt-6 text-lg text-blue-200/80 max-w-xl mx-auto">
-            ChatGPT、Claude、Perplexity、Gemini、Copilot
-            <br />
-            <strong className="text-white">5 大 AI 平台，每天數百萬次推薦機會。</strong>
-            <br />
-            <span className="text-blue-300/60">你只需要讓 AI「認識」你。</span>
+            整理可驗證的品牌事實與機器可讀訊號，再用固定問題集跨平台重複檢測，留下提及、未提及與執行失敗的完整證據。
           </p>
 
           {/* AI platform logos */}
@@ -1717,7 +1564,7 @@ export default function HomeClient() {
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </Link>
-            <p className="text-sm text-blue-300/50">30 秒註冊，無需信用卡</p>
+            <p className="text-sm text-blue-300/50">免費方案無需信用卡</p>
           </div>
         </div>
       </section>
@@ -1799,7 +1646,7 @@ export default function HomeClient() {
             <div>
               <GeovaultLogoCompactDark className="h-7 w-auto mb-3" />
               <p className="text-sm text-gray-500 leading-relaxed">
-                APAC 領先的 AI 搜尋優化平台，讓品牌被 AI 主動推薦。
+                AI 搜尋優化與引用驗收平台，協助品牌整理可被檢查的公開資料。
               </p>
             </div>
             <div>
