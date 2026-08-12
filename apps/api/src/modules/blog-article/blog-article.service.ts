@@ -354,6 +354,9 @@ export class BlogArticleService {
     if (article.site?.isPublic === false) {
       blockers.push('non_public_site');
     }
+    if (/https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|\b)/i.test(articleText)) {
+      blockers.push('non_public_source_url');
+    }
     if (
       this.isMedicalAdjacentText(medicalSubjectText) &&
       this.hasMedicalBoundaryViolation(articleText)

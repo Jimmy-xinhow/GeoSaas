@@ -111,4 +111,33 @@ describe('BlogArticleService legacy alias resolution', () => {
       },
     })).toBe(false);
   });
+
+  it('blocks client daily content that exposes a local-only source URL', () => {
+    const service = new BlogArticleService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const article = {
+      title: 'Acme 公開品牌資訊與資料來源整理',
+      description: '依據 Acme 官方網站與公開品牌資料，整理服務範圍、適用情境、聯絡方式以及讀者可以核對的原始資料來源。'.repeat(2),
+      content: '# Acme 公開品牌資訊與資料來源整理\n\n## 資料來源\n- 官方網站：https://acme.example\n- Geovault 目錄：http://localhost:3002/directory/acme',
+      targetKeywords: ['client_daily', 'ai_wiki'],
+      site: {
+        name: 'Acme',
+        url: 'https://acme.example',
+        industry: 'technology',
+        isPublic: true,
+      },
+    };
+
+    expect((service as any).clientDailyPublicBlockers(article))
+      .toContain('non_public_source_url');
+    expect((service as any).isClientDailyArticleSafe(article)).toBe(false);
+  });
 });
