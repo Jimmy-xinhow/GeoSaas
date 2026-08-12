@@ -8,6 +8,12 @@ import {
   normalizeMeasurementDateRange,
   parseGa4Date,
 } from './analytics-sync.utils';
+import {
+  countCoreGeoFailures,
+  getDirectorySiteSeoIssues,
+  isIndexablePublicBlogArticle,
+  publicIndexableBlogArticleWhere,
+} from '../../common/utils/public-data-filter';
 
 const GSC_PROVIDER = 'gsc';
 const GA4_PROVIDER = 'ga4';
@@ -413,6 +419,9 @@ export class AnalyticsSyncService {
         _sum: { sessions: true, engagedSessions: true, keyEvents: true },
       }),
     ]);
+    const dynamicPageIndexability = await this.getDynamicPageIndexability(
+      searchPages.map((row) => row.page),
+    );
     const gaByPath = new Map<string, {
       sessions: number;
       engagedSessions: number;
@@ -443,42 +452,75 @@ export class AnalyticsSyncService {
       const position = Number(row.position || 0);
       const ctr = impressions > 0 ? clicks / impressions : 0;
       const path = normalizeLandingPage(row.page).split('?')[0];
+      const currentlyIndexable = dynamicPageIndexability.get(path) !== false;
       const reasonCodes: string[] = [];
       const hasActionableSearchSample = impressions >= MIN_ACTIONABLE_GSC_IMPRESSIONS;
-      if (clicks === 0 && hasActionableSearchSample) {
+      if (!currentlyIndexable) {
+        reasonCodes.push('not_currently_indexable');
+      }
+      if (
+        currentlyIndexable
+        && clicks === 0
+        && hasActionableSearchSample
+        && position > 0
+        && position <= 20
+      ) {
         reasonCodes.push('high_impressions_zero_clicks');
       }
       if (
-        hasActionableSearchSample
+        currentlyIndexable
+        && hasActionableSearchSample
+        && position > 20
+        && position <= 50
+      ) {
+        reasonCodes.push('ranking_beyond_page_two');
+      }
+      if (
+        currentlyIndexable
+        && hasActionableSearchSample
         && position > 0
         && position <= 10
         && ctr < LOW_CTR_THRESHOLD
       ) {
         reasonCodes.push('page_one_low_ctr');
       }
-      if (hasActionableSearchSample && position > 10 && position <= 20) {
+      if (
+        currentlyIndexable
+        && hasActionableSearchSample
+        && position > 10
+        && position <= 20
+      ) {
         reasonCodes.push('page_two_ranking');
       }
       const ga4 = gaByPath.get(path) || null;
       if (
-        ga4
+        currentlyIndexable
+        && ga4
         && Number(ga4.sessions || 0) >= 10
         && Number(ga4.engagedSessions || 0) / Number(ga4.sessions || 1) < 0.4
       ) {
         reasonCodes.push('low_engagement');
       }
-      const priority = reasonCodes.includes('high_impressions_zero_clicks')
-        && (reasonCodes.includes('page_one_low_ctr') || reasonCodes.includes('page_two_ranking'))
-        ? 'high'
-        : reasonCodes.length > 0
-          ? 'medium'
-          : 'monitor';
+      const priority = !currentlyIndexable
+        ? 'monitor'
+        : (
+            reasonCodes.includes('high_impressions_zero_clicks')
+            && (
+              reasonCodes.includes('page_one_low_ctr')
+              || reasonCodes.includes('page_two_ranking')
+            )
+          )
+          ? 'high'
+          : reasonCodes.length > 0
+            ? 'medium'
+            : 'monitor';
       return {
         page: row.page,
         clicks,
         impressions,
         ctr,
         position,
+        currentlyIndexable,
         priority,
         reasonCodes,
         suggestedAction: this.opportunityAction(reasonCodes),
@@ -506,6 +548,9 @@ export class AnalyticsSyncService {
   }
 
   private opportunityAction(reasonCodes: string[]): string {
+    if (reasonCodes.includes('not_currently_indexable')) {
+      return '目前頁面不符合公開索引門檻；先確認應退役或補齊公開證據，不做 CTR 文案優化。';
+    }
     if (reasonCodes.includes('high_impressions_zero_clicks')) {
       return '核對主要查詢意圖，調整 title、description 與首屏證據摘要後追蹤 CTR。';
     }
@@ -515,10 +560,121 @@ export class AnalyticsSyncService {
     if (reasonCodes.includes('page_two_ranking')) {
       return '補強與主要查詢直接相關的可驗證內容、內部連結與結構化資料。';
     }
+    if (reasonCodes.includes('ranking_beyond_page_two')) {
+      return '先核對搜尋意圖與內容事實，再補強可驗證主題內容、內部連結與來源，而不是只改搜尋摘要。';
+    }
     if (reasonCodes.includes('low_engagement')) {
       return '檢查落地頁首屏是否回答查詢，並補強下一步導覽與轉換事件。';
     }
     return '持續累積資料，暫不做無差別重寫。';
+  }
+
+  private async getDynamicPageIndexability(
+    pages: string[],
+  ): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    const blogRefs: Array<{ path: string; slug: string }> = [];
+    const directoryRefs: Array<{ path: string; siteId: string }> = [];
+
+    for (const page of pages) {
+      const path = normalizeLandingPage(page).split('?')[0];
+      const blogMatch = path.match(/^\/blog\/([^/]+)$/);
+      if (blogMatch) {
+        try {
+          blogRefs.push({ path, slug: decodeURIComponent(blogMatch[1]) });
+        } catch {
+          result.set(path, false);
+        }
+        continue;
+      }
+      const directoryMatch = path.match(/^\/directory\/([^/]+)$/);
+      if (
+        directoryMatch
+        && directoryMatch[1] !== 'industry'
+        && directoryMatch[1] !== 'industries'
+      ) {
+        directoryRefs.push({ path, siteId: directoryMatch[1] });
+      }
+    }
+
+    const blogSlugs = [...new Set(blogRefs.map((ref) => ref.slug))];
+    const directoryIds = [...new Set(directoryRefs.map((ref) => ref.siteId))];
+    const [knownBlogs, indexableBlogs, directorySites] = await Promise.all([
+      blogSlugs.length > 0
+        ? this.prisma.blogArticle.findMany({
+            where: { slug: { in: blogSlugs } },
+            select: { slug: true },
+          })
+        : Promise.resolve([]),
+      blogSlugs.length > 0
+        ? this.prisma.blogArticle.findMany({
+            where: publicIndexableBlogArticleWhere({
+              slug: { in: blogSlugs },
+              published: true,
+            }),
+            select: {
+              slug: true,
+              title: true,
+              description: true,
+              templateType: true,
+              site: { select: { name: true, url: true } },
+            },
+          })
+        : Promise.resolve([]),
+      directoryIds.length > 0
+        ? this.prisma.site.findMany({
+            where: { id: { in: directoryIds }, isPublic: true },
+            select: {
+              id: true,
+              name: true,
+              url: true,
+              industry: true,
+              bestScore: true,
+              bestScoreAt: true,
+              profile: true,
+              scans: {
+                where: { status: 'COMPLETED' },
+                orderBy: { completedAt: 'desc' },
+                take: 1,
+                select: {
+                  completedAt: true,
+                  results: { select: { indicator: true, status: true } },
+                },
+              },
+              _count: { select: { qas: true, blogArticles: true } },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const knownBlogSlugs = new Set(knownBlogs.map((article) => article.slug));
+    const indexableBlogSlugs = new Set(
+      indexableBlogs
+        .filter((article) => isIndexablePublicBlogArticle(article))
+        .map((article) => article.slug),
+    );
+    for (const ref of blogRefs) {
+      if (knownBlogSlugs.has(ref.slug)) {
+        result.set(ref.path, indexableBlogSlugs.has(ref.slug));
+      }
+    }
+
+    const indexableDirectoryIds = new Set(
+      directorySites
+        .filter((site) => getDirectorySiteSeoIssues({
+          ...site,
+          latestScanCompletedAt: site.scans[0]?.completedAt,
+          qasCount: site._count.qas,
+          blogArticlesCount: site._count.blogArticles,
+          coreGeoFailuresCount: countCoreGeoFailures(site.scans[0]),
+        }).length === 0)
+        .map((site) => site.id),
+    );
+    for (const ref of directoryRefs) {
+      result.set(ref.path, indexableDirectoryIds.has(ref.siteId));
+    }
+
+    return result;
   }
 
   @Cron('15 4 * * *')

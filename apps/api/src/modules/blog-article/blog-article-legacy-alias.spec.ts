@@ -2,15 +2,6 @@ import { BlogArticleService } from './blog-article.service';
 
 describe('BlogArticleService legacy alias resolution', () => {
   it('falls through from an unpublished legacy record to its published replacement alias', async () => {
-    const oldArticle = {
-      slug: 'old-score-page',
-      title: 'Acme 舊型 GEO 分數分析頁面',
-      description: '這是已下架的舊型內容。'.repeat(10),
-      content: 'legacy',
-      templateType: 'score_breakdown',
-      published: false,
-      site: { name: 'Acme', url: 'https://acme.example', bestScore: 80, industry: 'software' },
-    };
     const replacement = {
       slug: 'acme-brand-profile',
       title: 'Acme 品牌公開資訊與服務範圍完整介紹',
@@ -22,8 +13,9 @@ describe('BlogArticleService legacy alias resolution', () => {
     };
     const prisma = {
       blogArticle: {
-        findUnique: jest.fn().mockResolvedValue(oldArticle),
-        findFirst: jest.fn().mockResolvedValue(replacement),
+        findFirst: jest.fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(replacement),
       },
     };
     const service = new BlogArticleService(
@@ -38,13 +30,32 @@ describe('BlogArticleService legacy alias resolution', () => {
     );
 
     await expect(service.getBySlug('old-score-page')).resolves.toBe(replacement);
-    expect(prisma.blogArticle.findFirst).toHaveBeenCalledWith(
+    expect(prisma.blogArticle.findFirst).toHaveBeenLastCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ AND: expect.any(Array) }),
         orderBy: { updatedAt: 'desc' },
       }),
     );
-    expect(JSON.stringify(prisma.blogArticle.findFirst.mock.calls[0][0].where))
+    expect(JSON.stringify(prisma.blogArticle.findFirst.mock.calls[1][0].where))
       .not.toContain('templateType');
+  });
+
+  it('does not route a published article linked to a non-public site', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const service = new BlogArticleService(
+      { blogArticle: { findFirst } } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect(service.getBySlug('private-site-article')).resolves.toBeNull();
+    const where = JSON.stringify(findFirst.mock.calls[0][0].where);
+    expect(where).toContain('"retiredAt":null');
+    expect(where).toContain('"isPublic":true');
   });
 });

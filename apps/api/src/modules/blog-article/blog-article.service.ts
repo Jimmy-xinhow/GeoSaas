@@ -44,6 +44,7 @@ import {
   isPublicSafeArticle,
   publicBlogArticleWhere,
   publicIndexableBlogArticleWhere,
+  publicRoutableBlogArticleWhere,
   publicSiteWhere,
 } from '../../common/utils/public-data-filter';
 import { assertSiteAccess } from '../../common/auth/site-access';
@@ -1727,8 +1728,8 @@ ${args.currentDraft || '(empty draft)'}`;
    * for issuing the redirect when `slug !== article.slug`.
    */
   async getBySlug(slug: string) {
-    const direct = await this.prisma.blogArticle.findUnique({
-      where: { slug },
+    const direct = await this.prisma.blogArticle.findFirst({
+      where: publicRoutableBlogArticleWhere({ slug, published: true }),
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });
     if (
@@ -1744,7 +1745,7 @@ ${args.currentDraft || '(empty draft)'}`;
       // stricter feed/sitemap template allowlist is not a routing rule: older
       // public articles can remain intentionally omitted from discovery while
       // their historical URLs still 301 to the canonical 200 page.
-      where: publicBlogArticleWhere({ published: true, aliasSlugs: { has: slug } }),
+      where: publicRoutableBlogArticleWhere({ published: true, aliasSlugs: { has: slug } }),
       orderBy: { updatedAt: 'desc' },
       include: { site: { select: { name: true, url: true, bestScore: true, industry: true } } },
     });

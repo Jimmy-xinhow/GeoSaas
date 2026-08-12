@@ -40,6 +40,7 @@ describe('AnalyticsSyncService opportunity queue', () => {
     const prisma = {
       $queryRaw: queryRaw,
       ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+      blogArticle: { findMany: jest.fn().mockResolvedValue([]) },
     };
 
     const result = await new AnalyticsSyncService(prisma as any).opportunities(28);
@@ -117,6 +118,7 @@ describe('AnalyticsSyncService opportunity queue', () => {
     const prisma = {
       $queryRaw: queryRaw,
       ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+      blogArticle: { findMany: jest.fn().mockResolvedValue([]) },
     };
 
     const result = await new AnalyticsSyncService(prisma as any).opportunities(28);
@@ -157,6 +159,140 @@ describe('AnalyticsSyncService opportunity queue', () => {
       priority: 'medium',
       reasonCodes: ['page_one_low_ctr'],
       suggestedAction: '核對搜尋摘要是否直接回答主要查詢，並調整 title、description 與首屏證據摘要。',
+    }));
+  });
+
+  it('keeps a known non-indexable dynamic article out of the CTR repair queue', async () => {
+    const page = 'https://www.geovault.app/blog/private-site-article';
+    const queryRaw = jest.fn()
+      .mockResolvedValueOnce([{
+        page,
+        clicks: 0,
+        impressions: 83,
+        position: 22,
+      }])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+      blogArticle: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([{ slug: 'private-site-article' }])
+          .mockResolvedValueOnce([]),
+      },
+    };
+
+    const result = await new AnalyticsSyncService(prisma as any).opportunities(28);
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      page,
+      currentlyIndexable: false,
+      priority: 'monitor',
+      reasonCodes: ['not_currently_indexable'],
+      suggestedAction: '目前頁面不符合公開索引門檻；先確認應退役或補齊公開證據，不做 CTR 文案優化。',
+    }));
+  });
+
+  it('applies the public article quality gate after the routable database filter', async () => {
+    const page = 'https://www.geovault.app/blog/thin-article';
+    const queryRaw = jest.fn()
+      .mockResolvedValueOnce([{
+        page,
+        clicks: 0,
+        impressions: 25,
+        position: 9,
+      }])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+      blogArticle: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([{ slug: 'thin-article' }])
+          .mockResolvedValueOnce([{
+            slug: 'thin-article',
+            title: '太短',
+            description: '內容不足',
+            templateType: 'brand_profile',
+            site: null,
+          }]),
+      },
+    };
+
+    const result = await new AnalyticsSyncService(prisma as any).opportunities(28);
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      currentlyIndexable: false,
+      priority: 'monitor',
+      reasonCodes: ['not_currently_indexable'],
+    }));
+  });
+
+  it('uses current directory quality gates before recommending CTR work', async () => {
+    const siteId = 'low-quality-directory-site';
+    const page = `https://www.geovault.app/directory/${siteId}`;
+    const queryRaw = jest.fn()
+      .mockResolvedValueOnce([{
+        page,
+        clicks: 0,
+        impressions: 41,
+        position: 39.5,
+      }])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+      site: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: siteId,
+          name: '台北運動健身中心',
+          url: 'https://www.tpegym.com.tw',
+          industry: 'fitness',
+          bestScore: 51,
+          bestScoreAt: new Date(),
+          profile: null,
+          scans: [{
+            completedAt: new Date(),
+            results: [
+              { indicator: 'JSON-LD', status: 'fail' },
+              { indicator: 'Meta Description', status: 'fail' },
+            ],
+          }],
+          _count: { qas: 0, blogArticles: 0 },
+        }]),
+      },
+    };
+
+    const result = await new AnalyticsSyncService(prisma as any).opportunities(28);
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      page,
+      currentlyIndexable: false,
+      priority: 'monitor',
+      reasonCodes: ['not_currently_indexable'],
+    }));
+  });
+
+  it('uses ranking work instead of CTR work beyond page two', async () => {
+    const queryRaw = jest.fn()
+      .mockResolvedValueOnce([{
+        page: 'https://www.geovault.app/guide',
+        clicks: 0,
+        impressions: 40,
+        position: 31,
+      }])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      ga4LandingPageDaily: { groupBy: jest.fn().mockResolvedValue([]) },
+    };
+
+    const result = await new AnalyticsSyncService(prisma as any).opportunities(28);
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      priority: 'medium',
+      reasonCodes: ['ranking_beyond_page_two'],
+      suggestedAction: '先核對搜尋意圖與內容事實，再補強可驗證主題內容、內部連結與來源，而不是只改搜尋摘要。',
     }));
   });
 

@@ -9,6 +9,7 @@ import { ProfileEnrichmentService } from '../sites/profile-enrichment.service';
 import { BlogArticleService } from '../blog-article/blog-article.service';
 import { toPlainTextExcerpt } from '../../common/utils/plain-text';
 import {
+  countCoreGeoFailures,
   getDirectorySiteSeoIssues,
   isIndexableDirectorySite,
   publicBlogArticleWhere,
@@ -77,21 +78,6 @@ export class DirectoryService {
       data.about ??
       '';
     return typeof value === 'string' ? value.trim() : String(value || '').trim();
-  }
-
-  private countCoreGeoFailures(scan?: {
-    results?: Array<{ indicator?: string | null; status?: string | null }>;
-  } | null): number {
-    return (scan?.results || []).filter((result) => {
-      const indicator = String(result.indicator || '').toLowerCase();
-      return (
-        result.status === 'fail' &&
-        (indicator.includes('json') ||
-          indicator.includes('llms') ||
-          indicator.includes('schema') ||
-          indicator.includes('meta'))
-      );
-    }).length;
   }
 
   private withPublicDisplayName<T extends { name: string | null }>(site: T): T {
@@ -242,7 +228,7 @@ export class DirectoryService {
         latestScanCompletedAt: s.scans[0]?.completedAt,
         qasCount: s._count.qas,
         blogArticlesCount: s._count.blogArticles,
-        coreGeoFailuresCount: this.countCoreGeoFailures(s.scans[0]),
+        coreGeoFailuresCount: countCoreGeoFailures(s.scans[0]),
       }),
     );
     for (const s of indexableSites) {
@@ -1064,6 +1050,7 @@ export class DirectoryService {
       latestScanCompletedAt: scans[0]?.completedAt,
       qasCount: _count.qas,
       blogArticlesCount: _count.blogArticles,
+      coreGeoFailuresCount: countCoreGeoFailures(scans[0]),
     });
 
     return {

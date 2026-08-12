@@ -55,6 +55,10 @@ type PublicSuccessCase = {
   site?: { name?: string | null; url?: string | null; isPublic?: boolean | null } | null;
 };
 
+type CoreGeoScan = {
+  results?: Array<{ indicator?: string | null; status?: string | null }>;
+};
+
 function getProfileDescription(profile: unknown): string {
   if (!profile || typeof profile !== 'object') return '';
   const data = profile as Record<string, unknown>;
@@ -89,7 +93,7 @@ export function normalizePublicSiteName(name?: string | null): string {
   }
 
   const separators = ['｜', '|', '－', '-', ':', '：', '，', '、'];
-  const promoWords = /推薦|首選|排名|排行|清單|精選|主頁|服務範圍|課程|優惠|免費|最優質|人氣|專業|一對一|訂房|自由行|機票/;
+  const promoWords = /推薦|首選|排名|排行|清單|精選|主頁|服務範圍|課程|優惠|免費|最優質|人氣|專業|一對一|健身房|訂房|自由行|機票/;
   for (const separator of separators) {
     const index = text.indexOf(separator);
     if (index <= 1) continue;
@@ -221,17 +225,41 @@ export function publicBlogArticleWhere(where: Record<string, unknown> = {}) {
   };
 }
 
-export function publicIndexableBlogArticleWhere(where: Record<string, unknown> = {}) {
+export function countCoreGeoFailures(scan?: CoreGeoScan | null): number {
+  return (scan?.results || []).filter((result) => {
+    const indicator = String(result.indicator || '').toLowerCase();
+    return (
+      result.status === 'fail'
+      && (
+        indicator.includes('json')
+        || indicator.includes('llms')
+        || indicator.includes('schema')
+        || indicator.includes('meta')
+      )
+    );
+  }).length;
+}
+
+export function publicRoutableBlogArticleWhere(where: Record<string, unknown> = {}) {
   return {
     AND: [
       publicBlogArticleWhere(where),
-      { templateType: { in: indexableBlogTemplateTypes } },
+      { retiredAt: null },
       {
         OR: [
           { siteId: null },
           { site: { is: { isPublic: true } } },
         ],
       },
+    ],
+  };
+}
+
+export function publicIndexableBlogArticleWhere(where: Record<string, unknown> = {}) {
+  return {
+    AND: [
+      publicRoutableBlogArticleWhere(where),
+      { templateType: { in: indexableBlogTemplateTypes } },
     ],
   };
 }
@@ -263,7 +291,9 @@ export function getDirectorySiteSeoIssues(site: DirectorySeoSite): string[] {
   if ((site.qasCount || 0) < 2) issues.push('weak-knowledge');
   if (supportCount < 1) issues.push('missing-supporting-content');
   if ((site.coreGeoFailuresCount || 0) >= 2) issues.push('core-geo-failures');
-  if (isLikelyEditorialDirectoryName(site.name)) issues.push('editorial-title-name');
+  if (isLikelyEditorialDirectoryName(normalizePublicSiteName(site.name))) {
+    issues.push('editorial-title-name');
+  }
 
   return issues;
 }

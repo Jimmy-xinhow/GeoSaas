@@ -1,6 +1,11 @@
 import {
+  countCoreGeoFailures,
+  getDirectorySiteSeoIssues,
   getPublicSuccessCaseSeoIssues,
   isIndexablePublicSuccessCase,
+  normalizePublicSiteName,
+  publicIndexableBlogArticleWhere,
+  publicRoutableBlogArticleWhere,
   publicSuccessCaseWhere,
 } from './public-data-filter';
 
@@ -33,5 +38,47 @@ describe('public success case evidence gate', () => {
     expect(publicSuccessCaseWhere({ status: 'approved' })).toEqual(expect.objectContaining({
       AND: expect.arrayContaining([{ screenshotUrl: { not: null } }]),
     }));
+  });
+});
+
+describe('public blog and directory routing boundaries', () => {
+  it('requires linked sites to be public and articles to be active', () => {
+    const routable = JSON.stringify(publicRoutableBlogArticleWhere({ published: true }));
+    const indexable = JSON.stringify(publicIndexableBlogArticleWhere({ published: true }));
+
+    expect(routable).toContain('"retiredAt":null');
+    expect(routable).toContain('"isPublic":true');
+    expect(indexable).toContain('"retiredAt":null');
+    expect(indexable).toContain('"isPublic":true');
+    expect(indexable).toContain('"templateType"');
+  });
+
+  it('normalizes an official brand name before evaluating editorial title noise', () => {
+    const rawName = '台北運動健身中心: 台北24hr健身房、中山區計時健身房/計次 ...';
+
+    expect(normalizePublicSiteName(rawName)).toBe('台北運動健身中心');
+    expect(getDirectorySiteSeoIssues({
+      name: rawName,
+      url: 'https://www.tpegym.com.tw',
+      industry: 'fitness',
+      bestScore: 80,
+      bestScoreAt: new Date(),
+      latestScanCompletedAt: new Date(),
+      profile: { description: '官方網站提供二十四小時健身、分鐘計費、計次方案、私人教練與包月自主訓練等公開資訊。' },
+      qasCount: 2,
+      blogArticlesCount: 0,
+      coreGeoFailuresCount: 0,
+    })).not.toContain('editorial-title-name');
+  });
+
+  it('uses the same core GEO failure count for detail pages and sitemap gates', () => {
+    expect(countCoreGeoFailures({
+      results: [
+        { indicator: 'JSON-LD', status: 'fail' },
+        { indicator: 'Meta Description', status: 'fail' },
+        { indicator: 'OG Tags', status: 'fail' },
+        { indicator: 'llms.txt', status: 'pass' },
+      ],
+    })).toBe(2);
   });
 });

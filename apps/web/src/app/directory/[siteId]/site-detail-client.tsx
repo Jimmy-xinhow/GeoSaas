@@ -300,20 +300,20 @@ export default function SiteDetailClient({
         </Card>
       )}
 
-      {/* Why AI Recommends This Brand */}
+      {/* Signals that help AI understand this brand */}
       {siteData.latestScan && (() => {
         return passedIndicators.length > 0 ? (
           <Card className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
                 <Bot className="h-5 w-5 text-blue-400" />
-                為什麼 AI 會推薦 {siteData.name}？
+                哪些訊號有助於 AI 理解 {siteData.name}？
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-gray-300 text-sm">
                 根據 Geovault 分析，{siteData.name} 的 AI 可讀性指標通過率為 <strong className="text-white">{passRate}%</strong>（{passedIndicators.length}/{totalIndicators} 項），
-                這意味著 AI 搜尋引擎能有效理解並推薦此品牌。
+                這表示公開頁面已提供部分可被 AI 搜尋引擎讀取的技術訊號，但不代表任何 AI 平台已實際推薦此品牌。
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {passedIndicators.slice(0, 3).map((r) => (
@@ -463,10 +463,10 @@ export default function SiteDetailClient({
       {/* CTA */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-center text-white">
         <h2 className="text-2xl font-bold">
-          想像 {siteData.name} 一樣被 AI 主動推薦？
+          想讓你的品牌更容易被 AI 正確理解？
         </h2>
         <p className="mt-2 text-blue-100">
-          免費掃描你的網站，3 分鐘內查看 AI 能見度分數，開始讓 ChatGPT、Claude、Perplexity 推薦你的品牌。
+          免費掃描你的網站，查看 AI 能見度分數與可驗證的改善項目，再逐步補齊品牌資料與引用依據。
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
           <Link href="/register">
