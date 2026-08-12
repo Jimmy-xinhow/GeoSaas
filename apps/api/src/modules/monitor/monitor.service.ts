@@ -8,6 +8,7 @@ import { ClaudeDetector } from './platforms/claude.detector';
 import { PerplexityDetector } from './platforms/perplexity.detector';
 import { GeminiDetector } from './platforms/gemini.detector';
 import { CopilotDetector } from './platforms/copilot.detector';
+import { DetectorResult } from './platforms/detector-error';
 import { CreditService } from '../billing/credit.service';
 
 @Injectable()
@@ -95,7 +96,7 @@ export class MonitorService {
       this.credits.assertAllowed(creditCheck);
     }
 
-    let result: { mentioned: boolean; position: number | null; response: string };
+    let result: DetectorResult;
     switch (monitor.platform) {
       case 'CHATGPT':
         result = await this.chatgptDetector.detect(monitor.query, monitor.site.name, monitor.site.url);
@@ -115,10 +116,14 @@ export class MonitorService {
         break;
     }
 
-    return this.prisma.monitor.update({
+    const updated = await this.prisma.monitor.update({
       where: { id },
       data: { mentioned: result.mentioned, position: result.position, response: result.response, checkedAt: new Date() },
     });
+    // MonitorReport stores the structured failure inside its JSON result. Keep
+    // the relational Monitor schema stable while returning the metadata to the
+    // report executor in the same process.
+    return { ...updated, failure: result.failure ?? null };
   }
 
   async getDashboard(userId: string, role?: string) {

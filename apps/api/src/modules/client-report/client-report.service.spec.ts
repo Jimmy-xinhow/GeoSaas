@@ -339,4 +339,65 @@ describe('ClientReportService acceptance query sets', () => {
 
     expect((reportService as any).executeReport).not.toHaveBeenCalled();
   });
+
+  it('opens a provider circuit after a permanent quota failure and records skipped checks', async () => {
+    const platformByMonitorId = new Map<string, string>();
+    let monitorSequence = 0;
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      monitor: {
+        create: jest.fn().mockImplementation(async ({ data }: any) => {
+          const id = `monitor-${++monitorSequence}`;
+          platformByMonitorId.set(id, data.platform);
+          return { id };
+        }),
+        delete: jest.fn().mockResolvedValue({}),
+      },
+      monitorReport: { updateMany },
+    };
+    const quotaFailure = {
+      provider: 'Perplexity',
+      kind: 'quota',
+      retryable: false,
+      status: 401,
+      code: 'insufficient_quota',
+      message: 'Perplexity 服務額度已用盡，請確認該 AI 服務帳戶的用量與計費設定',
+    };
+    const monitorService = {
+      checkCitation: jest.fn().mockImplementation(async (monitorId: string) => {
+        const platform = platformByMonitorId.get(monitorId);
+        if (platform === 'PERPLEXITY') {
+          return {
+            mentioned: false,
+            position: null,
+            response: `[Error] ${quotaFailure.message}`,
+            failure: quotaFailure,
+          };
+        }
+        return { mentioned: false, position: null, response: 'No mention', failure: null };
+      }),
+    };
+    const reportService = new ClientReportService(prisma as any, monitorService as any, {} as any);
+    (reportService as any).pause = jest.fn().mockResolvedValue(undefined);
+
+    await (reportService as any).executeReport(
+      'report-1',
+      { id: 'site-1', name: 'Client', url: 'https://example.com' },
+      qaItems.slice(0, 2),
+      [],
+      'lease-1',
+    );
+
+    expect(monitorService.checkCitation).toHaveBeenCalledTimes(9);
+    const finalUpdate = updateMany.mock.calls.at(-1)?.[0].data;
+    expect(finalUpdate.status).toBe('completed_with_errors');
+    expect(finalUpdate.summary).toEqual(expect.objectContaining({
+      errorCount: 2,
+      skippedChecks: 1,
+      failuresByPlatform: { PERPLEXITY: { quota: 2 } },
+    }));
+    expect(finalUpdate.results.filter((result: any) =>
+      result.platform === 'PERPLEXITY' && result.skipped,
+    )).toHaveLength(1);
+  });
 });

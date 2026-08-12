@@ -1,7 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { matchBrand } from './match-brand';
-import { classifyDetectorError, withDetectorRetry } from './detector-error';
+import {
+  classifyDetectorError,
+  detectorFailureResult,
+  DetectorResult,
+  missingDetectorConfiguration,
+  withDetectorRetry,
+} from './detector-error';
 
 // Gemini retires model ids too (gemini-2.0-flash was pulled and returned a
 // 404 NOT_FOUND), so keep this overridable via env — a rotation is then a
@@ -19,8 +25,8 @@ export class GeminiDetector {
     this.model = this.config.get<string>('MONITOR_GEMINI_MODEL') || DEFAULT_GEMINI_MODEL;
   }
 
-  async detect(query: string, brandName: string, brandUrl: string): Promise<{ mentioned: boolean; position: number | null; response: string }> {
-    if (!this.apiKey) return { mentioned: false, position: null, response: '[Error] GEMINI_API_KEY 未設定' };
+  async detect(query: string, brandName: string, brandUrl: string): Promise<DetectorResult> {
+    if (!this.apiKey) return missingDetectorConfiguration('Gemini', 'GEMINI_API_KEY');
     try {
       const text = await withDetectorRetry(async () => {
         const res = await fetch(
@@ -58,7 +64,7 @@ export class GeminiDetector {
     } catch (error) {
       const info = classifyDetectorError(error, 'Gemini');
       this.logger.error(`Gemini detection failed: ${info.logLine}`);
-      return { mentioned: false, position: null, response: `[Error] ${info.userMessage}` };
+      return detectorFailureResult(error, 'Gemini');
     }
   }
 }

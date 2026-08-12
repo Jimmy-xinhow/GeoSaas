@@ -2,7 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { matchBrand } from './match-brand';
-import { classifyDetectorError, withDetectorRetry } from './detector-error';
+import {
+  classifyDetectorError,
+  detectorFailureResult,
+  DetectorResult,
+  missingDetectorConfiguration,
+  withDetectorRetry,
+} from './detector-error';
 
 @Injectable()
 export class CopilotDetector {
@@ -36,9 +42,9 @@ export class CopilotDetector {
     }
   }
 
-  async detect(query: string, brandName: string, brandUrl: string): Promise<{ mentioned: boolean; position: number | null; response: string }> {
+  async detect(query: string, brandName: string, brandUrl: string): Promise<DetectorResult> {
     if (!this.client) {
-      return { mentioned: false, position: null, response: '[Error] AZURE_OPENAI_API_KEY 或 OPENAI_API_KEY 未設定' };
+      return missingDetectorConfiguration('Copilot', 'AZURE_OPENAI_API_KEY 或 OPENAI_API_KEY');
     }
 
     try {
@@ -64,7 +70,7 @@ export class CopilotDetector {
     } catch (error) {
       const info = classifyDetectorError(error, 'Copilot');
       this.logger.error(`Copilot detection failed: ${info.logLine}`);
-      return { mentioned: false, position: null, response: `[Error] ${info.userMessage}` };
+      return detectorFailureResult(error, 'Copilot');
     }
   }
 }

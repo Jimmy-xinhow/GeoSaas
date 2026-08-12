@@ -5,6 +5,11 @@ import { MonitorService } from '../monitor/monitor.service';
 import { PlanUsageService, PLAN_LIMITS } from '../../common/guards/plan.guard';
 import pLimit from '@/common/utils/p-limit';
 import { Cron } from '@nestjs/schedule';
+import {
+  classifyDetectorError,
+  DetectorFailure,
+  toDetectorFailure,
+} from '../monitor/platforms/detector-error';
 
 // 4-hour cooldown between runs of the SAME query set. Even with plan-level
 // monthly quota, a client that hits the button accidentally shouldn't burn
@@ -13,6 +18,14 @@ import { Cron } from '@nestjs/schedule';
 const QUERY_SET_COOLDOWN_MS = 4 * 60 * 60 * 1000;
 const ACCEPTANCE_QUERY_LIMIT = 100;
 const REPORT_LEASE_MS = 2 * 60 * 1000;
+const REPORT_PLATFORMS = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'] as const;
+const REPORT_PLATFORM_LABELS: Record<string, string> = {
+  CHATGPT: 'ChatGPT',
+  CLAUDE: 'Claude',
+  PERPLEXITY: 'Perplexity',
+  GEMINI: 'Gemini',
+  COPILOT: 'Copilot',
+};
 
 interface QueryItem {
   category: string;
@@ -33,6 +46,9 @@ interface ReportResult {
   mentioned: boolean;
   position: number | null;
   response: string;
+  failure?: DetectorFailure;
+  /** True when the provider was not called because a permanent failure already occurred. */
+  skipped?: boolean;
 }
 
 @Injectable()
@@ -133,7 +149,7 @@ export class ClientReportService implements OnModuleInit {
           const completion = await this.prisma.monitorReport.updateMany({
             where: { id: report.id, executionLeaseId: leaseId },
             data: {
-              status: 'completed',
+              status: this.terminalReportStatus(results),
               completedAt: report.completedAt || new Date(),
               summary: summary as any,
               executionLeaseId: null,
@@ -543,7 +559,7 @@ export class ClientReportService implements OnModuleInit {
       await this.prisma.monitorReport.updateMany({
         where: { id: reportId, executionLeaseId: leaseId },
         data: {
-          status: 'completed',
+          status: this.terminalReportStatus(results),
           completedAt: new Date(),
           summary: summary as any,
           executionLeaseId: null,
@@ -576,11 +592,17 @@ export class ClientReportService implements OnModuleInit {
     }
     this.activeReportIds.add(reportId);
     try {
-    const platforms = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'];
+    const platforms = REPORT_PLATFORMS;
     const results: ReportResult[] = [...initialResults];
     const completedChecks = new Set(results.map((result) =>
       `${result.category}\u0000${result.question}\u0000${result.platform}`,
     ));
+    const permanentPlatformFailures = new Map<string, DetectorFailure>();
+    for (const result of results) {
+      if (result.failure && !result.failure.retryable) {
+        permanentPlatformFailures.set(result.platform, result.failure);
+      }
+    }
 
     for (let qi = 0; qi < queries.length; qi++) {
       const q = queries[qi];
@@ -590,21 +612,45 @@ export class ClientReportService implements OnModuleInit {
         const checkKey = `${q.category}\u0000${q.question}\u0000${platform}`;
         if (completedChecks.has(checkKey)) continue;
         let success = false;
+        let skippedByCircuit = false;
+
+        const blockedFailure = permanentPlatformFailures.get(platform);
+        if (blockedFailure) {
+          results.push({
+            question: q.question,
+            category: q.category,
+            platform,
+            mentioned: false,
+            position: null,
+            response: `[Error] ${blockedFailure.message}`,
+            failure: blockedFailure,
+            skipped: true,
+          });
+          completedChecks.add(checkKey);
+          success = true;
+          skippedByCircuit = true;
+        }
 
         // Retry up to 2 times on failure (rate limit recovery)
         for (let attempt = 0; attempt < 2 && !success; attempt++) {
+          let monitorId: string | null = null;
           try {
             const monitor = await this.prisma.monitor.create({
               data: { siteId: site.id, platform, query: q.question, checkedAt: new Date() },
             });
+            monitorId = monitor.id;
 
-            const timeoutPromise = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('timeout')), 30000),
-            );
-            const checked = await Promise.race([
+            const checked = await this.withTimeout(
               this.monitorService.checkCitation(monitor.id),
-              timeoutPromise,
-            ]);
+              30000,
+            );
+
+            const failure = checked.failure ?? undefined;
+            if (failure?.retryable && attempt === 0) {
+              this.logger.warn(`${platform} transient ${failure.kind}; waiting 10s before retry`);
+              await this.pause(10000);
+              continue;
+            }
 
             results.push({
               question: q.question,
@@ -613,17 +659,25 @@ export class ClientReportService implements OnModuleInit {
               mentioned: checked.mentioned,
               position: checked.position,
               response: checked.response?.slice(0, 500) || '',
+              failure,
             });
             completedChecks.add(checkKey);
 
-            await this.prisma.monitor.delete({ where: { id: monitor.id } }).catch(() => {});
+            if (failure && !failure.retryable) {
+              permanentPlatformFailures.set(platform, failure);
+              this.logger.error(
+                `Report ${reportId}: circuit opened for ${platform} kind=${failure.kind} status=${failure.status ?? '?'} code=${failure.code ?? '?'}`,
+              );
+            }
+
             success = true;
           } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            if (attempt === 0 && (errMsg.includes('429') || errMsg.includes('rate') || errMsg.includes('overloaded'))) {
-              // Rate limited — wait longer and retry
-              this.logger.warn(`Rate limited on ${platform}, waiting 10s before retry...`);
-              await new Promise((r) => setTimeout(r, 10000));
+            const providerLabel = REPORT_PLATFORM_LABELS[platform] || platform;
+            const errorInfo = classifyDetectorError(err, providerLabel);
+            const failure = toDetectorFailure(errorInfo, providerLabel);
+            if (attempt === 0 && failure.retryable) {
+              this.logger.warn(`${platform} transient ${failure.kind}; waiting 10s before retry`);
+              await this.pause(10000);
               continue;
             }
             results.push({
@@ -632,10 +686,16 @@ export class ClientReportService implements OnModuleInit {
               platform,
               mentioned: false,
               position: null,
-              response: `[Error] ${errMsg}`,
+              response: `[Error] ${failure.message}`,
+              failure,
             });
             completedChecks.add(checkKey);
+            if (!failure.retryable) permanentPlatformFailures.set(platform, failure);
             success = true; // Don't retry on non-rate-limit errors
+          } finally {
+            if (monitorId) {
+              await this.prisma.monitor.delete({ where: { id: monitorId } }).catch(() => {});
+            }
           }
         }
 
@@ -650,40 +710,21 @@ export class ClientReportService implements OnModuleInit {
         if (persisted.count !== 1) throw new Error(`Report ${reportId} execution lease lost`);
 
         // Delay between calls — Claude needs more time
-        const delay = platform === 'CLAUDE' ? 4000 : 2000;
-        await new Promise((r) => setTimeout(r, delay));
+        const delay = skippedByCircuit ? 0 : platform === 'CLAUDE' ? 4000 : 2000;
+        if (delay > 0) await this.pause(delay);
       }
     }
 
     // Calculate summary
-    const totalChecks = results.filter((r) => !r.response.startsWith('[Error]')).length;
-    const mentionedCount = results.filter((r) => r.mentioned).length;
-    const byPlatform: Record<string, { total: number; mentioned: number; rate: number }> = {};
-
-    for (const platform of platforms) {
-      const pResults = results.filter((r) => r.platform === platform && !r.response.startsWith('[Error]'));
-      const pMentioned = pResults.filter((r) => r.mentioned).length;
-      byPlatform[platform] = {
-        total: pResults.length,
-        mentioned: pMentioned,
-        rate: pResults.length > 0 ? Math.round((pMentioned / pResults.length) * 100) : 0,
-      };
-    }
-
-    const summary = {
-      totalQueries: queries.length,
-      totalChecks,
-      mentionedCount,
-      mentionRate: totalChecks > 0 ? Math.round((mentionedCount / totalChecks) * 100) : 0,
-      byPlatform,
-    };
+    const summary = this.computeSummary(results);
+    const terminalStatus = this.terminalReportStatus(results);
 
     const completed = await this.prisma.monitorReport.updateMany({
       where: { id: reportId, executionLeaseId: leaseId },
       data: {
         results: results as any,
         summary: summary as any,
-        status: 'completed',
+        status: terminalStatus,
         completedAt: new Date(),
         executionLeaseId: null,
         executionLeaseExpiresAt: null,
@@ -691,7 +732,9 @@ export class ClientReportService implements OnModuleInit {
     });
     if (completed.count !== 1) throw new Error(`Report ${reportId} completion lease lost`);
 
-    this.logger.log(`Report ${reportId} completed: ${mentionedCount}/${totalChecks} mentions (${summary.mentionRate}%)`);
+    this.logger.log(
+      `Report ${reportId} ${terminalStatus}: ${summary.mentionedCount}/${summary.totalChecks} mentions (${summary.mentionRate}%), errors=${summary.errorCount}, skipped=${summary.skippedChecks}`,
+    );
     } finally {
       this.activeReportIds.delete(reportId);
     }
@@ -699,9 +742,17 @@ export class ClientReportService implements OnModuleInit {
 
   /** Compute summary from results (used when recovery marks completed without summary) */
   private computeSummary(results: any[]) {
-    const platforms = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'];
+    const platforms = REPORT_PLATFORMS;
     const totalChecks = results.filter((r) => !r.response?.startsWith('[Error]')).length;
     const mentionedCount = results.filter((r) => r.mentioned).length;
+    const errorResults = results.filter((r) => r.response?.startsWith('[Error]'));
+    const failuresByPlatform: Record<string, Record<string, number>> = {};
+    for (const result of errorResults) {
+      const kind = result.failure?.kind ?? 'unknown';
+      failuresByPlatform[result.platform] ||= {};
+      failuresByPlatform[result.platform][kind] =
+        (failuresByPlatform[result.platform][kind] ?? 0) + 1;
+    }
     const questions = new Set(results.map((r) => r.question));
     const byPlatform: Record<string, { total: number; mentioned: number; rate: number }> = {};
 
@@ -721,7 +772,34 @@ export class ClientReportService implements OnModuleInit {
       mentionedCount,
       mentionRate: totalChecks > 0 ? Math.round((mentionedCount / totalChecks) * 100) : 0,
       byPlatform,
+      errorCount: errorResults.length,
+      skippedChecks: results.filter((result) => result.skipped).length,
+      failuresByPlatform,
     };
+  }
+
+  private terminalReportStatus(results: ReportResult[]): 'completed' | 'completed_with_errors' {
+    return results.some((result) => result.response?.startsWith('[Error]'))
+      ? 'completed_with_errors'
+      : 'completed';
+  }
+
+  private async pause(milliseconds: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, milliseconds));
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('timeout')), milliseconds);
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
   }
 
   /** Delete report */
@@ -990,7 +1068,7 @@ export class ClientReportService implements OnModuleInit {
 
     // Latest completed citation report for this site (may be none)
     const latestCitation = await this.prisma.monitorReport.findFirst({
-      where: { siteId, status: 'completed' },
+      where: { siteId, status: { in: ['completed', 'completed_with_errors'] } },
       orderBy: { createdAt: 'desc' },
       include: { querySet: { select: { name: true } } },
     });
@@ -1190,7 +1268,7 @@ export class ClientReportService implements OnModuleInit {
   async getCompleteReportCsv(siteId: string): Promise<string> {
     const geo = await this.getGeoComprehensive(siteId);
     const latestCitation = await this.prisma.monitorReport.findFirst({
-      where: { siteId, status: 'completed' },
+      where: { siteId, status: { in: ['completed', 'completed_with_errors'] } },
       orderBy: { createdAt: 'desc' },
       include: { querySet: { select: { name: true } } },
     });

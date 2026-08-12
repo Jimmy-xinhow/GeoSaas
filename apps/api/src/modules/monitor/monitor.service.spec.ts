@@ -114,6 +114,27 @@ describe('MonitorService', () => {
       expect(perplexityDetector.detect).toHaveBeenCalled();
     });
 
+    it('returns structured detector failure metadata to the report executor', async () => {
+      const failure = {
+        provider: 'Perplexity',
+        kind: 'quota',
+        retryable: false,
+        status: 401,
+        code: 'insufficient_quota',
+        message: 'Perplexity 服務額度已用盡',
+      };
+      prisma.monitor.findUnique.mockResolvedValue(mockMonitor('PERPLEXITY'));
+      perplexityDetector.detect.mockResolvedValue({
+        mentioned: false,
+        position: null,
+        response: `[Error] ${failure.message}`,
+        failure,
+      });
+      prisma.monitor.update.mockResolvedValue({ id: 'm1', response: `[Error] ${failure.message}` });
+
+      await expect(service.checkCitation('m1')).resolves.toEqual(expect.objectContaining({ failure }));
+    });
+
     it('should use Gemini detector for GEMINI platform', async () => {
       prisma.monitor.findUnique.mockResolvedValue(mockMonitor('GEMINI'));
       geminiDetector.detect.mockResolvedValue({ mentioned: false, position: null, response: 'No mention' });

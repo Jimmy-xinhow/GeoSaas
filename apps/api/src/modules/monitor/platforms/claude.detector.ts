@@ -2,7 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { matchBrand } from './match-brand';
-import { classifyDetectorError, withDetectorRetry } from './detector-error';
+import {
+  classifyDetectorError,
+  detectorFailureResult,
+  DetectorResult,
+  missingDetectorConfiguration,
+  withDetectorRetry,
+} from './detector-error';
 
 // Model IDs rotate and retired ones return 404 (not a quota/auth error), so
 // keep this overridable via env — the previously hardcoded
@@ -20,9 +26,9 @@ export class ClaudeDetector {
     this.model = this.config.get<string>('MONITOR_CLAUDE_MODEL') || DEFAULT_CLAUDE_MODEL;
   }
 
-  async detect(query: string, brandName: string, brandUrl: string): Promise<{ mentioned: boolean; position: number | null; response: string }> {
+  async detect(query: string, brandName: string, brandUrl: string): Promise<DetectorResult> {
     const key = this.config.get('ANTHROPIC_API_KEY');
-    if (!key) return { mentioned: false, position: null, response: '[Error] ANTHROPIC_API_KEY 未設定' };
+    if (!key) return missingDetectorConfiguration('Claude', 'ANTHROPIC_API_KEY');
     try {
       const response = await withDetectorRetry(
         () =>
@@ -40,7 +46,7 @@ export class ClaudeDetector {
     } catch (error) {
       const info = classifyDetectorError(error, 'Claude');
       this.logger.error(`Claude detection failed: ${info.logLine}`);
-      return { mentioned: false, position: null, response: `[Error] ${info.userMessage}` };
+      return detectorFailureResult(error, 'Claude');
     }
   }
 }

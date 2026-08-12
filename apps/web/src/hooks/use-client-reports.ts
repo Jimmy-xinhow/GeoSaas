@@ -28,6 +28,9 @@ export interface MonitorReport {
     mentionedCount: number;
     mentionRate: number;
     byPlatform: Record<string, { total: number; mentioned: number; rate: number }>;
+    errorCount?: number;
+    skippedChecks?: number;
+    failuresByPlatform?: Record<string, Record<string, number>>;
   } | null;
   status: string;
   querySetVersion: number;
@@ -77,7 +80,9 @@ export function useReport(reportId: string) {
     refetchInterval: (query) => {
       const report = query.state.data;
       if (!report) return 3000;
-      return report.status === 'completed' ? false : 5000;
+      return ['completed', 'completed_with_errors', 'failed'].includes(report.status)
+        ? false
+        : 5000;
     },
   });
 }

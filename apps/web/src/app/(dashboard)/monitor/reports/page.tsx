@@ -22,6 +22,30 @@ const PLATFORM_LABELS: Record<string, string> = {
   CHATGPT: 'ChatGPT', CLAUDE: 'Claude', PERPLEXITY: 'Perplexity', GEMINI: 'Gemini', COPILOT: 'Copilot',
 };
 const PLATFORMS = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI', 'COPILOT'];
+const TERMINAL_REPORT_STATUSES = new Set(['completed', 'completed_with_errors', 'failed']);
+const FAILURE_LABELS: Record<string, string> = {
+  quota: '額度用盡',
+  rate: '請求限流',
+  rate_limit: '請求限流',
+  timeout: '服務逾時',
+  auth: '金鑰／授權',
+  configuration: '服務未設定',
+  server: '供應商 5xx',
+  server_5xx: '供應商 5xx',
+  bad_request: '請求格式',
+  unknown: '未分類',
+};
+
+function classifyHistoricalFailure(response: string): string {
+  if (/insufficient_quota|quota|額度|配額|計費/i.test(response)) return 'quota';
+  if (/429|rate.?limit|請求限流|暫時繁忙/i.test(response)) return 'rate';
+  if (/timeout|timed?.?out|ETIMEDOUT|逾時/i.test(response)) return 'timeout';
+  if (/未設定|尚未設定|missing.?configuration/i.test(response)) return 'configuration';
+  if (/401|403|unauthori[sz]ed|forbidden|api.?key|金鑰|未授權/i.test(response)) return 'auth';
+  if (/5\d\d|server.?error|bad.?gateway|伺服器錯誤|暫時無法使用/i.test(response)) return 'server';
+  if (/400|bad.?request|請求格式/i.test(response)) return 'bad_request';
+  return 'unknown';
+}
 
 async function openHtmlExport(path: string) {
   const res = await apiClient.get(path, { responseType: 'blob' });
@@ -45,6 +69,8 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
   const results = useMemo(() => (report?.results as any[]) || [], [report?.results]);
   const isRunning = report?.status === 'running';
   const isCompleted = report?.status === 'completed';
+  const isCompletedWithErrors = report?.status === 'completed_with_errors';
+  const isTerminal = report?.status ? TERMINAL_REPORT_STATUSES.has(report.status) : false;
 
   // Calculate progress
   const totalCalls = totalQuestions * 5;
@@ -142,13 +168,10 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
     results.forEach((r: any) => {
       const resp = typeof r.response === 'string' ? r.response : '';
       if (!resp.startsWith('[Error]')) return;
-      // Try to bucket common patterns: [Error] 429 / timeout / 401 / other
-      let bucket = 'other';
-      if (/429|rate.?limit|quota/i.test(resp)) bucket = 'rate_limit';
-      else if (/timeout|timed?.?out|ETIMEDOUT/i.test(resp)) bucket = 'timeout';
-      else if (/401|403|unauthori[sz]ed|forbidden|api.?key/i.test(resp)) bucket = 'auth';
-      else if (/5\d\d|server.?error|bad.?gateway/i.test(resp)) bucket = 'server_5xx';
-      else if (/400|bad.?request/i.test(resp)) bucket = 'bad_request';
+      // New reports carry the provider's structured failure kind. Historical
+      // reports are classified only from the exact safe message we persisted.
+      const structuredKind = typeof r.failure?.kind === 'string' ? r.failure.kind : '';
+      const bucket = structuredKind || classifyHistoricalFailure(resp);
       buckets[bucket] = (buckets[bucket] ?? 0) + 1;
     });
     return Object.entries(buckets)
@@ -176,12 +199,14 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
         </div>
       )}
       {/* Progress Header */}
-      <Card className={isRunning ? 'border-blue-200' : isCompleted ? 'border-green-200' : ''}>
+      <Card className={isRunning ? 'border-blue-200' : isCompletedWithErrors ? 'border-amber-400/60' : isCompleted ? 'border-green-200' : ''}>
         <CardContent className="p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               {isRunning ? (
                 <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+              ) : isCompletedWithErrors ? (
+                <XCircle className="h-5 w-5 text-amber-400" />
               ) : isCompleted ? (
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
               ) : (
@@ -189,7 +214,7 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
               )}
               <div>
                 <p className="font-semibold text-white">
-                  {isRunning ? '報告生成中...' : isCompleted ? '報告完成' : '等待中'}
+                  {isRunning ? '報告生成中...' : isCompletedWithErrors ? '報告完成（含平台錯誤）' : isCompleted ? '報告完成' : '等待中'}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {report?.period} · {completedQuestions}/{totalQuestions} 題 · {completedCalls}/{totalCalls} 次查詢
@@ -203,7 +228,7 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
                   預估 {formatEta(etaSeconds)}
                 </div>
               )}
-              {isCompleted && (
+              {isTerminal && (
                 <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
                   <Download className="h-4 w-4 mr-1" />
                   下載 PDF
@@ -215,7 +240,7 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
           {/* Progress Bar */}
           <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${isCompleted ? 'bg-green-500' : 'bg-blue-500'}`}
+              className={`h-full rounded-full transition-all duration-500 ${isCompletedWithErrors ? 'bg-amber-500' : isCompleted ? 'bg-green-500' : 'bg-blue-500'}`}
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -310,13 +335,13 @@ function LiveReport({ reportId, totalQuestions }: { reportId: string; totalQuest
             <div className="flex flex-wrap gap-2">
               {errorStats.map((e) => (
                 <div key={e.name} className="px-3 py-1.5 rounded-md bg-red-500/10 border border-red-500/20 text-sm">
-                  <span className="text-red-300">{e.name}</span>
+                  <span className="text-red-300">{FAILURE_LABELS[e.name] ?? e.name}</span>
                   <span className="text-red-200 ml-2 font-semibold">{e.count}</span>
                 </div>
               ))}
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              rate_limit=429 配額、timeout=逾時、auth=API 金鑰、server_5xx=伺服器錯誤、bad_request=請求格式問題
+              額度用盡需補充供應商點數或更換有效金鑰；請求限流、逾時與 5xx 才會自動重試。後續同平台查詢若標記為略過，是為避免持續消耗無效請求。
             </p>
           </CardContent>
         </Card>
@@ -503,6 +528,8 @@ function ReportHistory({ reports, selectedSiteName, onView, onDownload }: {
                 >
                   {r.status === 'completed' ? (
                     <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                  ) : r.status === 'completed_with_errors' ? (
+                    <XCircle className="h-4 w-4 text-amber-400 shrink-0" />
                   ) : r.status === 'running' ? (
                     <Loader2 className="h-4 w-4 text-blue-500 animate-spin shrink-0" />
                   ) : (
@@ -512,6 +539,11 @@ function ReportHistory({ reports, selectedSiteName, onView, onDownload }: {
                     <p className="text-sm font-medium text-white truncate">{title}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <Badge variant="outline" className="text-[10px]">{r.period}</Badge>
+                      {r.status === 'completed_with_errors' && (
+                        <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-300">
+                          含平台錯誤 {(r.summary as any)?.errorCount ?? ''}
+                        </Badge>
+                      )}
                       <span className="text-[10px] text-gray-500">{totalResults} 筆查詢</span>
                       {r.isStale && (
                         <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-300">
@@ -527,7 +559,7 @@ function ReportHistory({ reports, selectedSiteName, onView, onDownload }: {
                       {mentionRate}%
                     </span>
                   )}
-                  {r.status === 'completed' && (
+                  {TERMINAL_REPORT_STATUSES.has(r.status) && (
                     <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDownload(r.id); }} title="下載 PDF">
                       <Download className="h-3.5 w-3.5" />
                     </Button>

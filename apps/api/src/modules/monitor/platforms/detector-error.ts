@@ -13,13 +13,35 @@
 export type DetectorErrorKind =
   | 'quota' // account/project out of quota or credit — permanent, do not retry
   | 'auth' // invalid/unauthorized key — permanent, do not retry
+  | 'configuration' // required provider configuration is absent — permanent
   | 'rate' // rate limited / overloaded — transient, retry
+  | 'timeout' // provider request exceeded the caller deadline — transient, retry
   | 'server' // 5xx from provider — transient, retry
+  | 'bad_request' // provider rejected the request contract — permanent
   | 'unknown';
+
+export interface DetectorFailure {
+  provider: string;
+  kind: DetectorErrorKind;
+  retryable: boolean;
+  status: number | null;
+  code: string | null;
+  /** Safe localized message. Raw provider detail belongs in structured logs only. */
+  message: string;
+}
+
+export interface DetectorResult {
+  mentioned: boolean;
+  position: number | null;
+  response: string;
+  failure?: DetectorFailure;
+}
 
 export interface DetectorErrorInfo {
   kind: DetectorErrorKind;
   retryable: boolean;
+  status?: number;
+  code?: string;
   /** Short, safe message for the user-facing monitor table. */
   userMessage: string;
   /** Structured, non-leaky detail for server logs. */
@@ -36,15 +58,18 @@ interface StructuredError {
 // Google-REST error shape. Falls back to the stringified message.
 function extractStructured(error: unknown): StructuredError {
   const e = error as Record<string, any> | null | undefined;
-  const status: number | undefined =
-    e?.status ?? e?.statusCode ?? e?.response?.status ?? e?.error?.code;
-  const code: string | undefined =
-    e?.code ?? e?.error?.code ?? e?.error?.type ?? e?.type ?? e?.error?.status;
+  const status = [e?.status, e?.statusCode, e?.response?.status, e?.error?.code]
+    .find((value) => typeof value === 'number') as number | undefined;
+  // Some OpenAI-compatible providers expose a numeric top-level `code` and a
+  // semantic `error.type`. Pick the first STRING candidate so a numeric 401
+  // cannot hide `insufficient_quota`.
+  const code = [e?.code, e?.error?.code, e?.error?.type, e?.type, e?.error?.status]
+    .find((value) => typeof value === 'string') as string | undefined;
   const message: string =
     e?.error?.message ?? e?.message ?? (typeof error === 'string' ? error : String(error));
   return {
-    status: typeof status === 'number' ? status : undefined,
-    code: typeof code === 'string' ? code : undefined,
+    status,
+    code,
     message,
   };
 }
@@ -94,7 +119,17 @@ export function classifyDetectorError(
     has('rate_limit') ||
     has('overloaded');
 
+  const isTimeout =
+    status === 408 ||
+    status === 504 ||
+    codeLc === 'etimedout' ||
+    codeLc === 'timeout' ||
+    has('timeout') ||
+    has('timed out') ||
+    has('deadline exceeded');
+
   const isServer = status !== undefined && status >= 500 && status < 600;
+  const isBadRequest = status === 400 || codeLc === 'bad_request';
 
   const logLine = `status=${status ?? '?'} code=${code ?? '?'} msg=${message.slice(0, 300)}`;
 
@@ -102,6 +137,8 @@ export function classifyDetectorError(
     return {
       kind: 'quota',
       retryable: false,
+      status,
+      code,
       userMessage: `${providerLabel} 服務額度已用盡，請確認該 AI 服務帳戶的用量與計費設定`,
       logLine,
     };
@@ -110,6 +147,8 @@ export function classifyDetectorError(
     return {
       kind: 'auth',
       retryable: false,
+      status,
+      code,
       userMessage: `${providerLabel} 服務金鑰無效或未授權，請確認 API 金鑰設定`,
       logLine,
     };
@@ -118,7 +157,19 @@ export function classifyDetectorError(
     return {
       kind: 'rate',
       retryable: true,
+      status,
+      code,
       userMessage: `${providerLabel} 服務暫時繁忙，請稍後再試`,
+      logLine,
+    };
+  }
+  if (isTimeout) {
+    return {
+      kind: 'timeout',
+      retryable: true,
+      status,
+      code,
+      userMessage: `${providerLabel} 服務回應逾時，請稍後再試`,
       logLine,
     };
   }
@@ -126,15 +177,76 @@ export function classifyDetectorError(
     return {
       kind: 'server',
       retryable: true,
+      status,
+      code,
       userMessage: `${providerLabel} 服務暫時無法使用，請稍後再試`,
+      logLine,
+    };
+  }
+  if (isBadRequest) {
+    return {
+      kind: 'bad_request',
+      retryable: false,
+      status,
+      code,
+      userMessage: `${providerLabel} 服務拒絕目前的請求格式，請由系統管理員檢查模型與參數設定`,
       logLine,
     };
   }
   return {
     kind: 'unknown',
     retryable: false,
+    status,
+    code,
     userMessage: `${providerLabel} 服務暫時無法使用，請稍後再試`,
     logLine,
+  };
+}
+
+export function toDetectorFailure(
+  info: DetectorErrorInfo,
+  provider: string,
+): DetectorFailure {
+  return {
+    provider,
+    kind: info.kind,
+    retryable: info.retryable,
+    status: info.status ?? null,
+    code: info.code ?? null,
+    message: info.userMessage,
+  };
+}
+
+export function detectorFailureResult(
+  error: unknown,
+  provider: string,
+): DetectorResult {
+  const info = classifyDetectorError(error, provider);
+  return {
+    mentioned: false,
+    position: null,
+    response: `[Error] ${info.userMessage}`,
+    failure: toDetectorFailure(info, provider),
+  };
+}
+
+export function missingDetectorConfiguration(
+  provider: string,
+  variableName: string,
+): DetectorResult {
+  const message = `${provider} 服務尚未設定，請由系統管理員確認 ${variableName}`;
+  return {
+    mentioned: false,
+    position: null,
+    response: `[Error] ${message}`,
+    failure: {
+      provider,
+      kind: 'configuration',
+      retryable: false,
+      status: null,
+      code: 'missing_configuration',
+      message,
+    },
   };
 }
 

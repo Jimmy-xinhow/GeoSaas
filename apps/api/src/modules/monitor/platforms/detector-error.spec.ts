@@ -1,4 +1,8 @@
-import { classifyDetectorError, withDetectorRetry } from './detector-error';
+import {
+  classifyDetectorError,
+  missingDetectorConfiguration,
+  withDetectorRetry,
+} from './detector-error';
 
 describe('classifyDetectorError', () => {
   it('classifies OpenAI insufficient_quota (429) as non-retryable quota', () => {
@@ -64,6 +68,48 @@ describe('classifyDetectorError', () => {
   it('reads quota from message when structured fields are absent', () => {
     const info = classifyDetectorError('Error: 429 You exceeded your current quota', 'ChatGPT');
     expect(info.kind).toBe('quota');
+  });
+
+  it('keeps nested insufficient_quota when a numeric top-level code is present', () => {
+    const info = classifyDetectorError({
+      status: 401,
+      code: 401,
+      error: {
+        type: 'insufficient_quota',
+        message: 'You exceeded your current quota',
+      },
+    }, 'Perplexity');
+
+    expect(info.kind).toBe('quota');
+    expect(info.status).toBe(401);
+    expect(info.code).toBe('insufficient_quota');
+    expect(info.retryable).toBe(false);
+  });
+
+  it('classifies timeout as retryable', () => {
+    const info = classifyDetectorError(Object.assign(new Error('request timed out'), {
+      code: 'ETIMEDOUT',
+    }), 'Perplexity');
+    expect(info.kind).toBe('timeout');
+    expect(info.retryable).toBe(true);
+  });
+
+  it('classifies a 400 request contract error as non-retryable', () => {
+    const info = classifyDetectorError(Object.assign(new Error('Bad Request'), {
+      status: 400,
+    }), 'Gemini');
+    expect(info.kind).toBe('bad_request');
+    expect(info.retryable).toBe(false);
+  });
+
+  it('returns a structured configuration failure when a provider key is missing', () => {
+    const result = missingDetectorConfiguration('Perplexity', 'PERPLEXITY_API_KEY');
+    expect(result.failure).toEqual(expect.objectContaining({
+      provider: 'Perplexity',
+      kind: 'configuration',
+      retryable: false,
+      code: 'missing_configuration',
+    }));
   });
 });
 
