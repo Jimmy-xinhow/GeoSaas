@@ -117,9 +117,20 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     return NextResponse.redirect(url, 301);
   }
 
+  const pathname = request.nextUrl.pathname;
+  const indexNowKey = process.env.INDEXNOW_API_KEY?.trim();
+  if (indexNowKey && pathname === `/${encodeURIComponent(indexNowKey)}.txt`) {
+    return new NextResponse(indexNowKey, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'public, max-age=300',
+      },
+    });
+  }
+
   const response = NextResponse.next();
   const ua = request.headers.get('user-agent') || '';
-  const pathname = request.nextUrl.pathname;
   const legacyDestination = LEGACY_PUBLIC_REDIRECTS.get(pathname);
   if (legacyDestination) {
     const url = request.nextUrl.clone();

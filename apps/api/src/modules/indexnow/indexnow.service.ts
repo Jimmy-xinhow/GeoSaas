@@ -28,7 +28,8 @@ export class IndexNowService {
 
   /** Submit a single URL to all IndexNow engines */
   async submitUrl(url: string): Promise<IndexNowResult[]> {
-    const host = new URL(url).host;
+    const parsedUrl = new URL(url);
+    const keyLocation = `${parsedUrl.origin}/${encodeURIComponent(this.apiKey)}.txt`;
     const results: IndexNowResult[] = [];
 
     for (const engine of this.engines) {
@@ -36,6 +37,7 @@ export class IndexNowService {
         const params = new URLSearchParams({
           url,
           key: this.apiKey,
+          keyLocation,
         });
         const res = await fetch(`${engine}?${params}`, { method: 'GET' });
         results.push({
@@ -59,12 +61,14 @@ export class IndexNowService {
   /** Submit multiple URLs in batch */
   async submitBatch(urls: string[], host: string): Promise<IndexNowResult[]> {
     const results: IndexNowResult[] = [];
+    const keyLocation = `${new URL(urls[0]).origin}/${encodeURIComponent(this.apiKey)}.txt`;
 
     for (const engine of this.engines) {
       try {
         const body = {
           host,
           key: this.apiKey,
+          keyLocation,
           urlList: urls.slice(0, 10000), // IndexNow max 10k per batch
         };
         const res = await fetch(engine, {
