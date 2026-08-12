@@ -52,7 +52,6 @@ const botColors: Record<string, string> = {
   GPTBot: 'bg-green-500/20 text-green-400',
   ClaudeBot: 'bg-orange-500/20 text-orange-400',
   PerplexityBot: 'bg-blue-500/20 text-blue-400',
-  'Google-Extended': 'bg-red-500/20 text-red-400',
   Bingbot: 'bg-cyan-500/20 text-cyan-400',
   CopilotBot: 'bg-purple-500/20 text-purple-400',
   Bytespider: 'bg-white/10 text-gray-300',
@@ -227,7 +226,7 @@ export default function AdminDashboard() {
             <div className="text-center p-4 bg-green-500/20 rounded-lg border border-green-500/30">
               <Eye className="h-5 w-5 mx-auto mb-1 text-green-400" />
               <p className="text-2xl font-bold text-green-400">{c?.total || 0}</p>
-              <p className="text-xs text-green-400 font-medium">真實爬蟲造訪</p>
+              <p className="text-xs text-green-400 font-medium">非模擬 UA 辨識請求</p>
             </div>
             <div className="text-center p-4 bg-blue-500/20 rounded-lg border border-blue-500/30">
               <Activity className="h-5 w-5 mx-auto mb-1 text-blue-400" />
@@ -273,7 +272,7 @@ export default function AdminDashboard() {
           {/* Bot breakdown */}
           <div>
             <h3 className="text-sm font-semibold text-green-400 mb-2 flex items-center gap-1">
-              <Eye className="h-4 w-4" /> 真實爬蟲（依 Bot）
+              <Eye className="h-4 w-4" /> UA 辨識請求（依 Bot）
             </h3>
             {(c?.realByBot?.length || 0) > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -287,14 +286,14 @@ export default function AdminDashboard() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 p-3 bg-white/5 rounded text-center">尚無真實爬蟲造訪</p>
+              <p className="text-sm text-gray-400 p-3 bg-white/5 rounded text-center">尚無非模擬 UA 辨識請求</p>
             )}
           </div>
 
           {/* Recent REAL visits */}
           <div>
             <h3 className="text-sm font-semibold text-green-400 mb-2 flex items-center gap-1">
-              <Clock className="h-4 w-4" /> 最近真實爬蟲造訪（最新 20 筆）
+              <Clock className="h-4 w-4" /> 最近 UA 辨識請求（最新 20 筆）
             </h3>
             {(c?.recentRealVisits?.length || 0) > 0 ? (
               <div className="overflow-x-auto">
@@ -331,7 +330,7 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <p className="text-sm text-gray-400 p-4 bg-white/5 rounded text-center">
-                尚無真實爬蟲造訪紀錄。當真實 AI 爬蟲（GPTBot、ClaudeBot 等）造訪收錄的網站時，會顯示在此。
+                尚無非模擬 crawler-like 請求。此表依 User-Agent 辨識，不等同供應商官方 IP 身分驗證。
               </p>
             )}
           </div>

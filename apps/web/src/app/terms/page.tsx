@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 import EmailLink from '@/components/shared/email-link';
+import { serializeJsonLd } from '@/lib/json-ld';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 
@@ -82,7 +83,7 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
 export default function TermsPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-gray-300">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
       <PublicNavbar />
 
       {/* Hero */}

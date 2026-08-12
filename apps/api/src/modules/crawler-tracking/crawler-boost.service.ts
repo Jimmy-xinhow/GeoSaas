@@ -84,7 +84,7 @@ export class CrawlerBoostService {
       },
     });
 
-    // Cold = zero real bot visits in last 14 days. `crawlerVisits` will be
+    // Cold = zero non-seeded, UA-identified requests in the last 14 days.
     // empty because we filtered by the window already.
     const cold = clients.filter((c) => c.crawlerVisits.length === 0);
 

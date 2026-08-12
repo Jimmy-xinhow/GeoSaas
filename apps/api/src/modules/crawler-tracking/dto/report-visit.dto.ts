@@ -24,11 +24,10 @@ export class ReportVisitDto {
   @MaxLength(2048)
   url: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty()
   @IsString()
   @MaxLength(500)
-  userAgent?: string;
+  userAgent: string;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -41,7 +41,7 @@ export class JsonLdIndicator implements IIndicatorAnalyzer {
       return {
         score: 0, status: 'fail',
         details: { found: false, count: 0 },
-        suggestion: '未偵測到 JSON-LD 結構化資料。建議新增 Organization 或 LocalBusiness Schema 以提升 AI 可讀性。',
+        suggestion: '未偵測到 JSON-LD 結構化資料。可新增與頁面可見內容一致的 Organization 或 LocalBusiness Schema，協助搜尋系統理解實體；結構化資料不保證排名或 AI 引用。',
         autoFixable: true,
       };
     }
@@ -53,7 +53,7 @@ export class JsonLdIndicator implements IIndicatorAnalyzer {
     return {
       score, status: score >= 70 ? 'pass' : 'warning',
       details: { found: true, count: schemas.length, types, hasContext },
-      suggestion: score < 100 ? '建議補充更多 Schema 類型（如 FAQ、Product）以完善結構化資料。' : undefined,
+      suggestion: score < 100 ? '只在頁面確實呈現對應內容時補充 Schema 類型（如 FAQ、Product），並以官方結構化資料測試工具驗證。' : undefined,
       autoFixable: true,
     };
   }

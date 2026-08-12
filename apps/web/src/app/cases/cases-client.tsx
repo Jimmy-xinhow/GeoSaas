@@ -206,7 +206,7 @@ export default function CasesClient() {
                 目前尚無符合公開證據門檻的案例。如果你的品牌曾被 ChatGPT、Claude、Copilot、Perplexity 或 Gemini 提及，歡迎提交 AI 回應截圖與完整紀錄。
               </p>
               <p className="text-yellow-200/40 mt-2 text-sm">
-                經審核通過後，我們會為你的品牌生成一篇 AI 分析文章，增加更多曝光機會。
+                經審核通過後，我們會建立附證據的公開案例頁；公開不代表任何 AI 平台一定收錄或引用。
               </p>
               <Link href={submitHref}>
                 <button className="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors">
@@ -267,8 +267,8 @@ export default function CasesClient() {
           <Award className="h-10 w-10 text-yellow-400 mx-auto mb-3" />
           <h3 className="text-xl font-bold text-white">你的品牌也被 AI 引用過嗎？</h3>
           <p className="text-sm text-gray-300 mt-2 max-w-xl mx-auto">
-            分享一筆真實案例，通過審核後 Geovault 會為你免費生成一篇 AI 分析文章，
-            曝光給 ChatGPT、Claude、Perplexity 等 AI 平台爬蟲。
+            分享一筆有完整提問、日期、平台、AI 回應與截圖的案例。通過審核後 Geovault 會建立可公開查核的案例頁，
+            但不保證任何 AI 平台後續收錄、引用或推薦。
           </p>
           <Link href={submitHref}>
             <button className="mt-5 bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors inline-flex items-center gap-2">

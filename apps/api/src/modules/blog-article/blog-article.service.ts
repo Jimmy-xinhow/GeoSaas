@@ -937,8 +937,8 @@ export class BlogArticleService {
             pulse
               ? `Geovault 最近一次觀測，${site.name} 的 AI 可見度分數為 ${pulse.geoScore}/100${pulse.industryRank ? `，在同業中排第 ${pulse.industryRank}` : ''}。`
               : `${site.name} 的 AI 可見度資料以 Geovault 目錄與官方網站為準。`,
-            pulse ? `- 近 7 天實際 AI 爬蟲造訪：${pulse.weekCrawlerVisits} 次` : undefined,
-            `這些數字代表 ${site.name} 的公開品牌資料被 AI 讀到的完整度；對讀者而言，意味著在 AI 回答裡比較容易出現可核對的品牌資訊。`,
+            pulse ? `- 近 7 天非模擬、UA 辨識的 crawler 請求：${pulse.weekCrawlerVisits} 次（未做供應商 IP 驗證）` : undefined,
+            `技術分數與 crawler-like 請求只能描述網站準備度和觀測活動，不能推論 ${site.name} 已被 AI 引用；引用結果必須另外驗收。`,
           ].filter((line): line is string => Boolean(line));
         default:
           return [`${site.name} 的公開品牌資料以官方網站與 Geovault 目錄為主要來源。`];
@@ -1950,7 +1950,7 @@ ${args.currentDraft || '(empty draft)'}`;
       '',
       `**Q: 什麼是 GEO 分數？**`,
       '',
-      `A: GEO（Generative Engine Optimization）分數是衡量網站被 AI 搜尋引擎（如 ChatGPT、Claude、Perplexity、Copilot）發現和引用的能力。分數越高，被 AI 推薦的機率越大。滿分 100 分，由 8 項 AI 可讀性指標加權計算。`,
+      `A: Geovault GEO 技術準備度分數用來檢查網站的結構化資料、可索引內容、metadata、FAQ、robots 政策與選用的 llms.txt 等九項訊號。它不是任何 AI 平台公布的推薦分數，也不能直接換算成被發現、引用或推薦的機率。`,
       '',
       `**Q: ${site.industry || '這個行業'} 的品牌需要做 GEO 優化嗎？**`,
       '',

@@ -111,7 +111,7 @@ export default function NewsClient() {
 
         {/* Bottom CTA */}
         <div className="mt-12 p-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl text-center">
-          <p className="text-white font-semibold">想讓你的品牌也被 AI 推薦？</p>
+          <p className="text-white font-semibold">想檢查品牌的 AI 搜尋技術準備度？</p>
           <p className="text-sm text-gray-400 mt-1">免費掃描你的網站，看看 AI 能見度分數</p>
           <Link href="/" className="inline-block mt-3 bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">
             免費掃描

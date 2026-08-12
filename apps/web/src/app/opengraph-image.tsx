@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 
 export const runtime = 'edge';
-export const alt = 'Geovault — 讓 AI 主動推薦你的品牌';
+export const alt = 'Geovault — AI 搜尋技術準備與引用驗收';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -56,7 +56,7 @@ export default function OgImage() {
             maxWidth: '900px',
           }}
         >
-          讓 AI 主動推薦你的品牌
+          AI 搜尋技術準備與引用驗收
         </div>
         <div
           style={{

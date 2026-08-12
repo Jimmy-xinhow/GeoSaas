@@ -25,7 +25,14 @@ describe('ContentHygieneService', () => {
   ];
 
   function service() {
-    const prisma = { blogArticle: { findMany: jest.fn().mockResolvedValue(rows) } };
+    const prisma = {
+      blogArticle: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockImplementation((args: any) => (
+          args?.where?.site ? Promise.resolve([]) : Promise.resolve(rows)
+        )),
+      },
+    };
     return new ContentHygieneService(prisma as any, {} as any, {} as any);
   }
 
@@ -43,7 +50,12 @@ describe('ContentHygieneService', () => {
   it('groups platform-level articles under the shared platform identity scope', async () => {
     const platformRows = rows.slice(0, 2).map((row) => ({ ...row, siteId: null }));
     const prisma = {
-      blogArticle: { findMany: jest.fn().mockResolvedValue(platformRows) },
+      blogArticle: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockImplementation((args: any) => (
+          args?.where?.site ? Promise.resolve([]) : Promise.resolve(platformRows)
+        )),
+      },
     };
 
     const status = await new ContentHygieneService(
@@ -141,5 +153,80 @@ describe('ContentHygieneService', () => {
     }));
     expect(llmsHosting.invalidatePlatformLlmsFull).toHaveBeenCalled();
     expect(indexNow.submitBatch).toHaveBeenCalled();
+  });
+
+  it('reports published articles whose owning site is no longer public', async () => {
+    const hiddenArticle = {
+      id: 'hidden-1',
+      siteId: 'site-hidden',
+      slug: 'hidden-article',
+      title: 'Hidden article',
+      site: { name: 'Hidden Site', isPublic: false },
+    };
+    const prisma = {
+      blogArticle: {
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockImplementation((args: any) => (
+          args?.where?.site ? Promise.resolve([hiddenArticle]) : Promise.resolve([])
+        )),
+      },
+    };
+
+    const status = await new ContentHygieneService(
+      prisma as any,
+      {} as any,
+      {} as any,
+    ).getStatus();
+
+    expect(status).toEqual(expect.objectContaining({
+      hiddenSiteArticles: 1,
+      hiddenSiteSamples: [expect.objectContaining({ id: 'hidden-1', siteName: 'Hidden Site' })],
+    }));
+  });
+
+  it('retires hidden-site articles only when the explicit flag is enabled', async () => {
+    const hiddenArticle = {
+      id: 'hidden-1',
+      siteId: 'site-hidden',
+      slug: 'hidden-article',
+      title: 'Hidden article',
+      site: { name: 'Hidden Site', isPublic: false },
+    };
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      blogArticle: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([hiddenArticle]),
+        updateMany,
+      },
+    };
+    const llmsHosting = { invalidatePlatformLlmsFull: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await new ContentHygieneService(
+      prisma as any,
+      {} as any,
+      llmsHosting as any,
+    ).runBatch({
+      dryRun: false,
+      limit: 10,
+      retireHiddenSiteArticles: true,
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      selectedHiddenSiteRetirements: 1,
+      retiredHiddenSiteArticles: 1,
+    }));
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: { in: ['hidden-1'] },
+        site: { is: { isPublic: false } },
+      }),
+      data: expect.objectContaining({
+        published: false,
+        retirementReason: 'site_not_public',
+      }),
+    }));
+    expect(llmsHosting.invalidatePlatformLlmsFull).toHaveBeenCalled();
   });
 });

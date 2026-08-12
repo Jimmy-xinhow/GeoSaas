@@ -46,7 +46,6 @@ const BOT_COLORS: Record<string, string> = {
   ClaudeBot: 'bg-orange-500/20 text-orange-300',
   GPTBot: 'bg-green-500/20 text-green-300',
   'ChatGPT-User': 'bg-green-500/20 text-green-300',
-  'Google-Extended': 'bg-blue-500/20 text-blue-300',
   Googlebot: 'bg-blue-500/20 text-blue-300',
   Bingbot: 'bg-cyan-500/20 text-cyan-300',
   CopilotBot: 'bg-teal-500/20 text-teal-300',
@@ -71,10 +70,7 @@ function BotCard({
       <CardContent className="p-4 space-y-2">
         <div className="flex items-center justify-between">
           <Badge className={colorClass}>{botName}</Badge>
-          <span className="text-xs text-green-500 flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            活躍
-          </span>
+          <span className="text-xs text-amber-300">UA 辨識</span>
         </div>
         <p className="text-2xl font-bold">{count}</p>
         <p className="text-xs text-muted-foreground">
@@ -257,14 +253,14 @@ function SnippetGuide({ siteId }: { siteId: string }) {
         {verifyMutation.data && (
           <div
             className={`flex items-start gap-3 p-4 rounded-lg border ${
-              verifyMutation.data.verified
+              verifyMutation.data.trackerVerified
                 ? 'bg-green-500/10 border-green-500/30'
                 : verifyMutation.data.installed
                 ? 'bg-yellow-500/10 border-yellow-500/30'
                 : 'bg-red-500/10 border-red-500/30'
             }`}
           >
-            {verifyMutation.data.verified ? (
+            {verifyMutation.data.trackerVerified ? (
               <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
             ) : verifyMutation.data.installed ? (
               <AlertTriangle className="h-5 w-5 text-yellow-400 shrink-0 mt-0.5" />
@@ -281,6 +277,9 @@ function SnippetGuide({ siteId }: { siteId: string }) {
                 </span>
                 <span>
                   回報記錄：{verifyMutation.data.reportsReceived} 筆
+                </span>
+                <span>
+                  官方來源已驗證：{verifyMutation.data.providerVerifiedReports} 筆
                 </span>
                 {verifyMutation.data.lastReport && (
                   <span>
@@ -340,7 +339,7 @@ export default function CrawlerPage() {
       <div>
         <PageHeader
           title="AI 爬蟲追蹤"
-          description={`${site.name} — 監控 AI 爬蟲對您網站的造訪`}
+          description={`${site.name} — 觀測符合已知 crawler User-Agent 的非模擬請求`}
           icon={Bot}
         />
       </div>
@@ -357,7 +356,7 @@ export default function CrawlerPage() {
                 <p className="text-2xl font-bold">
                   {dashboard?.totalVisits || 0}
                 </p>
-                <p className="text-xs text-muted-foreground">總造訪</p>
+                <p className="text-xs text-muted-foreground">UA 辨識請求</p>
               </div>
             </div>
           </CardContent>
@@ -372,7 +371,7 @@ export default function CrawlerPage() {
                 <p className="text-2xl font-bold">
                   {dashboard?.last24h || 0}
                 </p>
-                <p className="text-xs text-muted-foreground">24h 活動</p>
+                <p className="text-xs text-muted-foreground">24h UA 請求</p>
               </div>
             </div>
           </CardContent>
@@ -411,6 +410,12 @@ export default function CrawlerPage() {
         </Card>
       </div>
 
+      <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+        目前追蹤碼以 User-Agent、站點 Token 與 Referer 觀測 crawler-like 請求。User-Agent 可被偽造，
+        因此這些記錄不宣稱已通過 Google、OpenAI、Anthropic 或其他供應商的官方 IP 身分驗證。
+        已驗證來源：{dashboard?.verifiedVisits || 0} 筆；僅 UA 辨識：{dashboard?.uaOnlyVisits || 0} 筆。
+      </div>
+
       {/* Tabs */}
       <Tabs defaultValue="bots" className="w-full">
         <TabsList>
@@ -426,10 +431,10 @@ export default function CrawlerPage() {
               <CardContent className="py-12 text-center">
                 <Bot className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-white">
-                  尚未偵測到 AI 爬蟲
+                  尚未觀測到 crawler-like 請求
                 </h3>
                 <p className="text-muted-foreground mt-1">
-                  請先安裝追蹤碼，或等待 AI 爬蟲造訪您的網站
+                  請先安裝追蹤碼，或等待符合已知 User-Agent 的請求
                 </p>
               </CardContent>
             </Card>
@@ -451,7 +456,7 @@ export default function CrawlerPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">近期造訪記錄</CardTitle>
-              <CardDescription>最新 20 筆 AI 爬蟲造訪</CardDescription>
+              <CardDescription>最新 20 筆非模擬、以 User-Agent 辨識的請求</CardDescription>
             </CardHeader>
             <CardContent>
               {!dashboard?.recentVisits ||
@@ -468,6 +473,7 @@ export default function CrawlerPage() {
                         <th className="pb-2 font-medium">組織</th>
                         <th className="pb-2 font-medium">URL</th>
                         <th className="pb-2 font-medium">狀態碼</th>
+                        <th className="pb-2 font-medium">證據</th>
                         <th className="pb-2 font-medium">時間</th>
                       </tr>
                     </thead>
@@ -505,6 +511,11 @@ export default function CrawlerPage() {
                               '-'
                             )}
                           </td>
+                          <td className="py-2">
+                            <Badge className={v.verificationStatus === 'ua_only' ? 'bg-amber-500/20 text-amber-200' : 'bg-green-500/20 text-green-200'}>
+                              {v.verificationStatus === 'ua_only' ? 'UA 辨識' : '已驗證'}
+                            </Badge>
+                          </td>
                           <td className="py-2 text-muted-foreground whitespace-nowrap">
                             {new Date(v.visitedAt).toLocaleString('zh-TW')}
                           </td>
@@ -523,7 +534,7 @@ export default function CrawlerPage() {
             <CardHeader>
               <CardTitle className="text-base">robots.txt 分析</CardTitle>
               <CardDescription>
-                檢查您的 robots.txt 對各 AI 爬蟲的允許/封鎖狀態
+                檢查 robots.txt 對各 crawler 與控制 token 的允許/封鎖狀態
               </CardDescription>
             </CardHeader>
             <CardContent>

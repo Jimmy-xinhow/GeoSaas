@@ -1177,7 +1177,16 @@ export class DirectoryService {
         id: true,
         bestScore: true,
         bestScoreAt: true,
-        _count: { select: { crawlerVisits: { where: { isSeeded: false } } } },
+        _count: {
+          select: {
+            crawlerVisits: {
+              where: {
+                isSeeded: false,
+                verificationStatus: { in: ['verified', 'ip_verified'] },
+              },
+            },
+          },
+        },
       },
     });
 

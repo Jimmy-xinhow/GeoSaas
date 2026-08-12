@@ -7,6 +7,7 @@ import PublicFooter from '@/components/layout/public-footer';
 import PublicNavbar from '@/components/layout/public-navbar';
 import { buildSeoDescription, extractHeadings, markdownToHtml, markdownToPlainText } from './markdown';
 import { decodeUrlPathSegmentOnce, encodeUrlPathSegmentOnce } from '@geovault/shared';
+import { serializeJsonLd } from '@/lib/json-ld';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
@@ -296,12 +297,12 @@ export default async function BlogPostPage({ params }: Props) {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {articleJsonLd && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(articleJsonLd) }} />
       )}
       {faqJsonLd && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(faqJsonLd) }} />
       )}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }} />
 
       <PublicNavbar />
 
@@ -377,7 +378,7 @@ export default async function BlogPostPage({ params }: Props) {
 
         <div className="mt-12 p-8 bg-gradient-to-r from-blue-900/50 to-purple-900/50 rounded-2xl text-center border border-white/10">
           <h3 className="text-xl font-bold text-white">想優化你的 AI 能見度？</h3>
-          <p className="mt-2 text-gray-400">免費掃描你的網站，了解 AI 友善度分數</p>
+          <p className="mt-2 text-gray-400">免費掃描你的網站，了解 GEO 技術準備度與可修復項目</p>
           <Link href="/" className="inline-block mt-4 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
             免費掃描
           </Link>

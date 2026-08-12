@@ -212,7 +212,7 @@ export default function SiteContentPage() {
             </span>
             <p className="text-base font-semibold text-white">這個網站還沒有內容</p>
             <p className="mt-1.5 max-w-md text-sm leading-relaxed text-gray-400">
-              生成第一篇 AI 優化內容，讓 ChatGPT、Gemini 等更容易引用這個品牌。
+              生成第一篇可公開核對的品牌內容，再用固定問題集量測 ChatGPT、Gemini 等平台是否實際提及或引用。
             </p>
             <Link href={`/content/new?siteId=${siteId}`}>
               <Button className="mt-5 bg-blue-600 text-white hover:bg-blue-700">

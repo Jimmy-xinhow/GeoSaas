@@ -27,7 +27,7 @@ const BADGE_DEFINITIONS: BadgeDef[] = [
   { badge: 'score_80', label: 'GEO 80+', check: (ctx) => ctx.bestScore >= 80 },
   { badge: 'score_90', label: 'GEO 90+', check: (ctx) => ctx.bestScore >= 90 },
   { badge: 'score_100', label: '滿分達成', check: (ctx) => ctx.bestScore >= 100 },
-  { badge: 'crawler_visited', label: 'AI 爬蟲造訪', check: (ctx) => ctx.hasCrawlerVisits },
+  { badge: 'crawler_visited', label: 'UA 辨識 crawler 請求', check: (ctx) => ctx.hasCrawlerVisits },
   { badge: 'top_10', label: 'Top 10 排行', check: (ctx) => ctx.isTop10 },
   { badge: 'improver_10', label: '進步 10+', check: (ctx) => ctx.scoreImprovement >= 10 },
   { badge: 'improver_30', label: '進步 30+', check: (ctx) => ctx.scoreImprovement >= 30 },
@@ -270,7 +270,7 @@ export class BadgeService implements OnModuleDestroy {
     const webUrl = process.env.FRONTEND_URL || 'https://www.geovault.app';
     const score = site.bestScore;
 
-    const imgTag = `<a href="${webUrl}/directory/${siteId}" target="_blank" rel="noopener">\n  <img src="${apiUrl}/api/badge/${siteId}.svg" alt="GEO Score: ${score} | Verified by Geovault" width="148" height="20">\n</a>`;
+    const imgTag = `<a href="${webUrl}/directory/${siteId}" target="_blank" rel="noopener">\n  <img src="${apiUrl}/api/badge/${siteId}.svg" alt="Geovault technical readiness score: ${score} | Scanned by Geovault" width="148" height="20">\n</a>`;
     const iframeTag = imgTag;
     const markdownBadge = `[![GEO Score: ${score}](${apiUrl}/api/badge/${siteId}.svg)](${webUrl}/directory/${siteId})`;
 

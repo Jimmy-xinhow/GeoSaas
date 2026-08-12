@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { INDUSTRIES } from '@geovault/shared';
 import IndustryWikiClient from './industry-wiki-client';
 import type { IndustryWikiData } from '@/hooks/use-directory';
+import { serializeJsonLd } from '@/lib/json-ld';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
@@ -42,8 +43,8 @@ export async function generateMetadata({
   const industryLabel =
     INDUSTRIES.find((i) => i.value === params.industry)?.label || params.industry;
   const sites = await getIndustryDirectorySnapshot(params.industry);
-  const title = `${industryLabel} GEO 與 AI 搜尋優化完整指南`;
-  const description = `${industryLabel}行業的 AI 搜尋優化完整指南。查看行業平均 GEO 分數、品牌排行、指標通過率與 AI 可讀內容建議。`;
+  const title = `${industryLabel} GEO 技術準備度完整指南`;
+  const description = `${industryLabel}行業的 GEO 技術準備度指南。查看行業平均技術分數、公開品牌索引、指標通過率與可讀內容建議；分數不代表 AI 推薦機率。`;
 
   return {
     title,
@@ -77,8 +78,8 @@ export default async function IndustryWikiPage({ params }: { params: { industry:
   const pageJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
-    name: `${industryLabel} GEO 與 AI 搜尋優化完整指南`,
-    description: `${industryLabel}行業的品牌 GEO 分數、AI 可讀性與公開品牌索引。`,
+    name: `${industryLabel} GEO 技術準備度完整指南`,
+    description: `${industryLabel}行業的 Geovault 技術準備度分數、公開資料可讀性與品牌索引。`,
     url: `${SITE_URL}/directory/industry/${params.industry}`,
     isPartOf: { '@type': 'WebSite', name: 'Geovault', url: SITE_URL },
     about: { '@type': 'Thing', name: `${industryLabel} AI 搜尋優化` },
@@ -99,9 +100,9 @@ export default async function IndustryWikiPage({ params }: { params: { industry:
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(pageJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(pageJsonLd) }} />
       {itemListJsonLd && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(itemListJsonLd) }} />
       )}
       <IndustryWikiClient initialWiki={initialWiki} />
       {sites.length > 0 && (
@@ -112,7 +113,7 @@ export default async function IndustryWikiPage({ params }: { params: { industry:
               <a key={site.id} href={`/directory/${site.id}`} className="block rounded-lg border bg-white p-5 hover:border-blue-300 transition-colors">
                 <h3 className="font-semibold text-gray-900 truncate">{site.name}</h3>
                 <p className="text-xs text-blue-600 truncate">{site.url}</p>
-                <p className="mt-2 text-sm text-gray-600">GEO Score: {site.bestScore}/100</p>
+                <p className="mt-2 text-sm text-gray-600">GEO 技術準備度：{site.bestScore}/100</p>
               </a>
             ))}
           </div>

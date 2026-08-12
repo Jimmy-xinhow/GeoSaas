@@ -1065,7 +1065,7 @@ function GeoComprehensivePanel({ siteId }: { siteId: string }) {
         </CardHeader>
         <CardContent className="space-y-4">
           {crawler.byBot.length === 0 ? (
-            <p className="text-sm text-muted-foreground">近期沒有真實 AI 爬蟲造訪記錄</p>
+            <p className="text-sm text-muted-foreground">近期沒有非模擬、以 User-Agent 辨識的 crawler 請求記錄</p>
           ) : (
             <>
               <div>

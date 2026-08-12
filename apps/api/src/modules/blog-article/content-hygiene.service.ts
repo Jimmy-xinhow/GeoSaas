@@ -35,6 +35,14 @@ interface ArticleRow {
   createdAt: Date;
 }
 
+interface HiddenSiteArticleRow {
+  id: string;
+  siteId: string | null;
+  slug: string;
+  title: string;
+  site: { name: string; isPublic: boolean } | null;
+}
+
 @Injectable()
 export class ContentHygieneService {
   private readonly logger = new Logger(ContentHygieneService.name);
@@ -46,7 +54,12 @@ export class ContentHygieneService {
   ) {}
 
   async getStatus(sampleLimit = 20) {
-    const articles = await this.loadPublishedArticles();
+    const normalizedSampleLimit = Math.max(1, Math.min(sampleLimit, 100));
+    const [articles, hiddenSiteArticles, hiddenSiteSamples] = await Promise.all([
+      this.loadPublishedArticles(),
+      this.countHiddenSiteArticles(),
+      this.loadHiddenSiteArticles(normalizedSampleLimit),
+    ]);
     const duplicateGroups = this.duplicateGroups(articles);
     const descriptions = articles.filter(
       (article) => normalizeBlogArticleDescription(article.description) !== article.description,
@@ -59,7 +72,15 @@ export class ContentHygieneService {
       duplicateGroups: duplicateGroups.length,
       duplicateArticles: duplicateGroups.reduce((sum, group) => sum + group.length, 0),
       contentIdentityMissing: missingIdentity.length,
-      duplicateSamples: duplicateGroups.slice(0, Math.max(1, Math.min(sampleLimit, 100))).map((group) => ({
+      hiddenSiteArticles,
+      hiddenSiteSamples: hiddenSiteSamples.map((article) => ({
+        id: article.id,
+        siteId: article.siteId,
+        siteName: article.site?.name ?? null,
+        slug: article.slug,
+        title: article.title,
+      })),
+      duplicateSamples: duplicateGroups.slice(0, normalizedSampleLimit).map((group) => ({
         siteId: group[0].siteId,
         intent: resolveBlogArticleIntent(group[0]),
         normalizedTitle: normalizeBlogArticleTitle(group[0].title),
@@ -68,10 +89,18 @@ export class ContentHygieneService {
     };
   }
 
-  async runBatch(opts: { dryRun?: boolean; limit?: number } = {}) {
+  async runBatch(opts: {
+    dryRun?: boolean;
+    limit?: number;
+    retireHiddenSiteArticles?: boolean;
+  } = {}) {
     const dryRun = opts.dryRun !== false;
     const limit = Math.max(1, Math.min(opts.limit ?? 100, 500));
-    const articles = await this.loadPublishedArticles();
+    const retireHiddenSiteArticles = opts.retireHiddenSiteArticles === true;
+    const [articles, hiddenSiteArticles] = await Promise.all([
+      this.loadPublishedArticles(),
+      retireHiddenSiteArticles ? this.loadHiddenSiteArticles(limit) : Promise.resolve([]),
+    ]);
     const allDuplicateGroups = this.duplicateGroups(articles);
     const duplicateGroups = allDuplicateGroups.slice(0, limit);
     // Never backfill either side of an unresolved duplicate group. Otherwise a
@@ -93,10 +122,12 @@ export class ContentHygieneService {
         selectedDescriptionUpdates: descriptions.length,
         selectedDuplicateGroups: duplicateGroups.length,
         selectedIdentityBackfills: identities.length,
+        selectedHiddenSiteRetirements: hiddenSiteArticles.length,
         normalizedDescriptions: 0,
         demotedDuplicates: 0,
         aliasesAdded: 0,
         identityBackfills: 0,
+        retiredHiddenSiteArticles: 0,
       };
     }
 
@@ -178,7 +209,30 @@ export class ContentHygieneService {
     ));
     const identityBackfills = identityUpdates.reduce<number>((sum, count) => sum + count, 0);
 
-    if (normalizedDescriptions > 0 || demotedDuplicates > 0 || identityBackfills > 0) {
+    const hiddenSiteRetirement = hiddenSiteArticles.length > 0
+      ? await this.prisma.blogArticle.updateMany({
+          where: {
+            id: { in: hiddenSiteArticles.map((article) => article.id) },
+            published: true,
+            retiredAt: null,
+            site: { is: { isPublic: false } },
+          },
+          data: {
+            published: false,
+            retiredAt: new Date(),
+            retirementReason: 'site_not_public',
+            contentKey: null,
+          },
+        })
+      : { count: 0 };
+    const retiredHiddenSiteArticles = hiddenSiteRetirement.count;
+
+    if (
+      normalizedDescriptions > 0
+      || demotedDuplicates > 0
+      || identityBackfills > 0
+      || retiredHiddenSiteArticles > 0
+    ) {
       await this.llmsHosting.invalidatePlatformLlmsFull();
     }
     if (canonicalUrls.length > 0) {
@@ -194,10 +248,12 @@ export class ContentHygieneService {
       selectedDescriptionUpdates: descriptions.length,
       selectedDuplicateGroups: duplicateGroups.length,
       selectedIdentityBackfills: identities.length,
+      selectedHiddenSiteRetirements: hiddenSiteArticles.length,
       normalizedDescriptions,
       demotedDuplicates,
       aliasesAdded,
       identityBackfills,
+      retiredHiddenSiteArticles,
     };
   }
 
@@ -219,6 +275,37 @@ export class ContentHygieneService {
         normalizedTitle: true,
         contentIntent: true,
         createdAt: true,
+      },
+    });
+  }
+
+  private countHiddenSiteArticles(): Promise<number> {
+    return this.prisma.blogArticle.count({
+      where: {
+        published: true,
+        retiredAt: null,
+        siteId: { not: null },
+        site: { is: { isPublic: false } },
+      },
+    });
+  }
+
+  private loadHiddenSiteArticles(take: number): Promise<HiddenSiteArticleRow[]> {
+    return this.prisma.blogArticle.findMany({
+      where: {
+        published: true,
+        retiredAt: null,
+        siteId: { not: null },
+        site: { is: { isPublic: false } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: {
+        id: true,
+        siteId: true,
+        slug: true,
+        title: true,
+        site: { select: { name: true, isPublic: true } },
       },
     });
   }

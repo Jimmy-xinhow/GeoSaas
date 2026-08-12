@@ -36,7 +36,7 @@ export class CrawlerTrackingController {
   @ApiBearerAuth()
   @ApiOperation({
     summary:
-      '手動觸發爬蟲冷啟動推送 — 掃描 isClient=true 且 14 天內 0 次真實爬蟲造訪的站,對該站 URL + Geovault directory + brand_showcase + per-brand feeds 執行 IndexNow + WebSub 推送。跟排程 cron 同邏輯,同步執行方便觀察結果。',
+      '手動觸發爬蟲冷啟動推送 — 掃描 isClient=true 且 14 天內 0 次非模擬 crawler-like 請求的站，對該站 URL + Geovault directory + brand_showcase + per-brand feeds 執行 IndexNow + WebSub 推送。',
   })
   boostCrawlers() {
     return this.crawlerBoost.boostColdClients();
@@ -44,7 +44,7 @@ export class CrawlerTrackingController {
 
   @Public()
   @Post('crawler/report')
-  @ApiOperation({ summary: 'Report a crawler visit (public, token-based auth)' })
+  @ApiOperation({ summary: 'Report a User-Agent identified crawler-like request (public, token-bound)' })
   report(@Body() dto: ReportVisitDto) {
     return this.service.reportVisit(dto);
   }
@@ -98,7 +98,7 @@ export class CrawlerTrackingController {
 
   @Public()
   @Post('crawler/report-platform')
-  @ApiOperation({ summary: 'Report AI crawler visit to Geovault platform (from middleware)' })
+  @ApiOperation({ summary: 'Report a User-Agent identified crawler-like request to Geovault middleware' })
   reportPlatform(@Body() body: ReportPlatformVisitDto) {
     return this.service.reportPlatformVisit(body);
   }

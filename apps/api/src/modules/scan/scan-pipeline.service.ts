@@ -19,6 +19,7 @@ import { LlmsHostingService } from '../llms-hosting/llms-hosting.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notification-types';
 import { classifyScanFailure } from './scan-failure';
+import { SCAN_SCORE_VERSION } from '@geovault/shared';
 
 @Injectable()
 export class ScanPipelineService {
@@ -161,6 +162,7 @@ export class ScanPipelineService {
           where: { id: scanId },
           data: {
             totalScore,
+            scoreVersion: SCAN_SCORE_VERSION,
             status: 'COMPLETED',
             failureCode: null,
             failureReason: null,
@@ -174,6 +176,7 @@ export class ScanPipelineService {
             data: {
               bestScore: totalScore,
               bestScoreAt: new Date(),
+              scoreVersion: SCAN_SCORE_VERSION,
               tier,
             },
           }),

@@ -383,8 +383,8 @@ ${baseContext}
 - 介紹品牌定位、核心業務（2-3 句）
 
 ### 🤖 AI 搜尋中的品牌印象
-- 基於 GEO 分數 \`${scan.geoScore}/100\`，分析 AI 如何看待這個品牌
-- 用表格呈現各 AI 平台（ChatGPT、Claude、Perplexity）可能的引用狀況
+- 基於 GEO 技術準備度分數 \`${scan.geoScore}/100\`，分析網站有哪些可讀、可核對的公開訊號
+- 不得由技術分數推測 ChatGPT、Claude、Perplexity 的引用狀況；若沒有問題集實測資料，應明確標示「未量測」
 
 ### ✅ 品牌的 AI 可讀性優勢
 - 條列式，每個通過的指標用一句話說明對品牌的好處
@@ -393,11 +393,11 @@ ${baseContext}
 用編號列表，每題包含：
 1. **問題** — AI 目前能否正確回答（能/不能/部分）— 原因
 
-### 📊 品牌聲譽與 AI 推薦的關聯
-- 分析品牌線上聲譽如何影響 AI 推薦意願
+### 📊 品牌聲譽與可核對性的關聯
+- 分析一致、具來源的品牌資料如何降低系統理解錯誤，不可宣稱能控制 AI 推薦
 - 用表格呈現影響因素
 
-### 🚀 提升 AI 引用率的品牌策略
+### 🚀 改善公開資料可引用條件的品牌策略
 用編號列表，3 個具體可執行的建議
 
 ${this.buildDynamicFaqInstruction(site, scan, `問 AI 推薦${indLabel}品牌時會不會提到 ${site.name}、網路口碑對 AI 推薦的影響、如何讓 AI 介紹時說出正確資訊、負面評價會不會影響 AI 推薦`)}
@@ -784,7 +784,7 @@ ${sharedContext}
 【本週 Geovault 觀察到的 ${site.name} 數據】
 - 目前 GEO 分數:${pulse?.geoScore ?? '—'}/100
 - 產業排名:${pulse?.industryRank ?? '—'}(產業平均 ${pulse?.industryAvgScore ?? '—'}/100)
-- 近 7 天 AI 爬蟲造訪次數:${pulse?.weekCrawlerVisits ?? 0}
+- 近 7 天非模擬、UA 辨識 crawler 請求:${pulse?.weekCrawlerVisits ?? 0}(未做供應商 IP 驗證)
 
 【角度】用上面數據當引子,寫一篇「${site.name} 最近在 AI 搜尋世界的表現如何」。重點是**對消費者的意義**,不是 SEO 技術分析。
 【結構】

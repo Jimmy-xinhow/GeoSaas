@@ -49,7 +49,7 @@ export class CrawlerTrackingService {
   private async assertSiteAccess(siteId: string, userId: string, role?: string) {
     const site = await this.prisma.site.findUnique({
       where: { id: siteId },
-      select: { id: true, userId: true, isClient: true, crawlerToken: true },
+      select: { id: true, userId: true, isClient: true, crawlerToken: true, url: true },
     });
     if (!site) throw new NotFoundException('Site not found');
     if (!canAccessSite(site, userId, role)) {
@@ -79,6 +79,10 @@ export class CrawlerTrackingService {
 
     // Resolve bot org
     const botDef = this.getBotDefinition(dto.botName);
+    const detectedBot = matchAiBot(dto.userAgent);
+    if (!detectedBot || detectedBot.name !== botDef.name) {
+      throw new BadRequestException('Reported bot must match the User-Agent');
+    }
 
     await this.prisma.crawlerVisit.create({
       data: {
@@ -87,7 +91,10 @@ export class CrawlerTrackingService {
         botOrg: botDef.org,
         url: dto.url.slice(0, 2048),
         statusCode: dto.statusCode,
-        userAgent: dto.userAgent?.slice(0, 500),
+        userAgent: dto.userAgent.slice(0, 500),
+        source: 'javascript',
+        verificationStatus: 'ua_only',
+        verificationMethod: 'user_agent',
       },
     });
 
@@ -126,8 +133,10 @@ export class CrawlerTrackingService {
     }
 
     const botDef = matchAiBot(data.userAgent || '');
-    if (!botDef) return; // not a bot — don't pollute the table with real users
-    if (data.url && this.hostnameOf(data.url) !== this.hostnameOf(site.url)) return;
+    if (!botDef) return; // not a recognised crawler-like UA
+    // A public pixel token and a spoofable UA are not enough to bind a request
+    // to a customer site. Require a matching Referer/query URL as well.
+    if (!data.url || this.hostnameOf(data.url) !== this.hostnameOf(site.url)) return;
 
     const oneHourAgo = new Date(Date.now() - 3600000);
     const count = await this.prisma.crawlerVisit.count({
@@ -147,9 +156,12 @@ export class CrawlerTrackingService {
         statusCode: 200,
         userAgent: data.userAgent.slice(0, 500),
         isSeeded: false,
+        source: 'pixel',
+        verificationStatus: 'ua_only',
+        verificationMethod: 'user_agent_and_site_referer',
       },
     });
-    this.logger.log(`🤖 Pixel: ${botDef.name} → ${data.url || '(no url)'}`);
+    this.logger.log(`Crawler-like pixel request: ${botDef.name} → ${data.url}`);
   }
 
   /**
@@ -201,6 +213,10 @@ export class CrawlerTrackingService {
     if (count >= 500) return { ok: true, throttled: true };
 
     const botDef = this.getBotDefinition(data.botName);
+    const detectedBot = matchAiBot(data.userAgent);
+    if (!detectedBot || detectedBot.name !== botDef.name) {
+      throw new BadRequestException('Reported bot must match the User-Agent');
+    }
 
     await this.prisma.crawlerVisit.create({
       data: {
@@ -210,11 +226,14 @@ export class CrawlerTrackingService {
         url: data.url.slice(0, 2048),
         statusCode: data.statusCode,
         userAgent: data.userAgent?.slice(0, 500),
-        isSeeded: false, // real visit, not simulated
+        isSeeded: false,
+        source: 'platform_middleware',
+        verificationStatus: 'ua_only',
+        verificationMethod: 'user_agent',
       },
     });
 
-    this.logger.log(`🤖 Real AI crawler: ${data.botName} → ${data.url}`);
+    this.logger.log(`Crawler-like middleware request: ${data.botName} → ${data.url}`);
     return { ok: true };
   }
 
@@ -224,10 +243,16 @@ export class CrawlerTrackingService {
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 86400000);
 
-    const [totalVisits, last24h, botCounts, recentVisits] = await Promise.all([
+    const [totalVisits, last24h, verifiedVisits, uaOnlyVisits, botCounts, recentVisits] = await Promise.all([
       this.prisma.crawlerVisit.count({ where: { siteId, isSeeded: false } }),
       this.prisma.crawlerVisit.count({
         where: { siteId, isSeeded: false, visitedAt: { gte: oneDayAgo } },
+      }),
+      this.prisma.crawlerVisit.count({
+        where: { siteId, isSeeded: false, verificationStatus: { in: ['verified', 'ip_verified'] } },
+      }),
+      this.prisma.crawlerVisit.count({
+        where: { siteId, isSeeded: false, verificationStatus: 'ua_only' },
       }),
       this.prisma.crawlerVisit.groupBy({
         by: ['botName'],
@@ -245,6 +270,9 @@ export class CrawlerTrackingService {
           botOrg: true,
           url: true,
           statusCode: true,
+          source: true,
+          verificationStatus: true,
+          verificationMethod: true,
           visitedAt: true,
         },
       }),
@@ -261,6 +289,8 @@ export class CrawlerTrackingService {
     return {
       totalVisits,
       last24h,
+      verifiedVisits,
+      uaOnlyVisits,
       uniqueBots,
       robotsStatus: latestRobotsCheck ? 'checked' : 'unchecked',
       botStats: botCounts.map((b: any) => ({
@@ -319,7 +349,7 @@ export class CrawlerTrackingService {
 
     let site = await this.prisma.site.findUnique({
       where: { id: siteId },
-      select: { id: true, crawlerToken: true },
+      select: { id: true, crawlerToken: true, url: true },
     });
     if (!site) throw new NotFoundException('Site not found');
 
@@ -329,11 +359,11 @@ export class CrawlerTrackingService {
       site = await this.prisma.site.update({
         where: { id: siteId },
         data: { crawlerToken: token },
-        select: { id: true, crawlerToken: true },
+        select: { id: true, crawlerToken: true, url: true },
       });
     }
 
-    const snippet = this.snippetGen.generate(siteId, site.crawlerToken!);
+    const snippet = this.snippetGen.generate(siteId, site.crawlerToken!, site.url);
     return { snippet, token: site.crawlerToken };
   }
 
@@ -354,9 +384,10 @@ export class CrawlerTrackingService {
       return { installed: false, reason: 'no_token', message: '尚未產生追蹤碼，請先取得追蹤碼。' };
     }
 
-    const results: { snippetFound: boolean; reportsReceived: number; lastReport: Date | null; details: string } = {
+    const results: { snippetFound: boolean; reportsReceived: number; providerVerifiedReports: number; lastReport: Date | null; details: string } = {
       snippetFound: false,
       reportsReceived: 0,
+      providerVerifiedReports: 0,
       lastReport: null,
       details: '',
     };
@@ -397,6 +428,13 @@ export class CrawlerTrackingService {
       where: { siteId, isSeeded: false },
     });
     results.reportsReceived = reportsCount;
+    results.providerVerifiedReports = await this.prisma.crawlerVisit.count({
+      where: {
+        siteId,
+        isSeeded: false,
+        verificationStatus: { in: ['verified', 'ip_verified'] },
+      },
+    });
 
     if (reportsCount > 0) {
       const latest = await this.prisma.crawlerVisit.findFirst({
@@ -411,13 +449,15 @@ export class CrawlerTrackingService {
     if (results.snippetFound && results.reportsReceived > 0) {
       return {
         installed: true,
+        trackerVerified: true,
         verified: true,
-        message: '追蹤碼安裝正確，已收到爬蟲回報。',
+        message: '追蹤碼安裝正確，已收到 User-Agent 辨識的 crawler 請求；這不等同官方來源身分驗證。',
         ...results,
       };
     } else if (results.snippetFound) {
       return {
         installed: true,
+        trackerVerified: false,
         verified: false,
         message: '追蹤碼已安裝，但尚未收到任何 AI 爬蟲回報。這是正常的，等待 AI 爬蟲造訪即可。',
         ...results,
@@ -425,13 +465,15 @@ export class CrawlerTrackingService {
     } else if (results.reportsReceived > 0) {
       return {
         installed: true,
+        trackerVerified: true,
         verified: true,
-        message: '已收到爬蟲回報，追蹤碼運作正常。（HTML 中未直接偵測到代碼，可能是透過 Tag Manager 載入。）',
+        message: '已收到 User-Agent 辨識的 crawler 請求，追蹤回報路徑可用；HTML 中未直接找到代碼，且請求來源身分尚未經官方 IP 驗證。',
         ...results,
       };
     } else {
       return {
         installed: false,
+        trackerVerified: false,
         verified: false,
         message: results.details || '未在網站中偵測到追蹤碼，且尚未收到任何回報。請確認追蹤碼已正確貼入網站 HTML。',
         ...results,
@@ -440,7 +482,7 @@ export class CrawlerTrackingService {
   }
 
   async regenerateToken(siteId: string, userId: string, role?: string) {
-    await this.assertSiteAccess(siteId, userId, role);
+    const site = await this.assertSiteAccess(siteId, userId, role);
 
     const token = randomBytes(24).toString('hex');
     await this.prisma.site.update({
@@ -448,7 +490,7 @@ export class CrawlerTrackingService {
       data: { crawlerToken: token },
     });
 
-    const snippet = this.snippetGen.generate(siteId, token);
+    const snippet = this.snippetGen.generate(siteId, token, site.url);
     return { snippet, token };
   }
 

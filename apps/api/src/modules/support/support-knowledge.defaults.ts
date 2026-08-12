@@ -85,7 +85,7 @@ export const DEFAULT_SUPPORT_KNOWLEDGE: DefaultSupportKnowledgeItem[] = [
     category: 'integration',
     question: 'GEO Badge 可以做什麼？要怎麼放到網站？',
     answer:
-      'GEO Badge 可以把網站目前的 GEO Score 以可嵌入圖片或 Markdown 的方式放在官網、README、部落格或合作頁面。它的作用是建立可信訊號，也讓 AI 與使用者更容易知道該品牌已被 Geovault 檢測。一般 HTML 可貼在頁面區塊中，WordPress 可放在自訂 HTML 小工具，Webflow 可用 Embed 元素。',
+      'GEO Badge 可以把網站目前的 Geovault 技術準備度分數，以可嵌入圖片或 Markdown 放在官網、README、部落格或合作頁面。Badge 只代表 Geovault 已依公開技術訊號完成檢測，不是 AI 平台的認證，也不保證被推薦或引用。一般 HTML 可貼在頁面區塊中，WordPress 可放在自訂 HTML 小工具，Webflow 可用 Embed 元素。',
     tags: ['badge', 'integration', 'trust'],
     priority: 850,
   },

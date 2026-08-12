@@ -24,8 +24,8 @@
   },
   "landing": {
     "hero": {
-      "title": "讓 AI 優先推薦\n你的品牌",
-      "subtitle": "全方位 GEO（Generative Engine Optimization）解決方案，讓 ChatGPT、Claude、Perplexity 等 AI 工具主動推薦你。",
+      "title": "建立 AI 可理解、\n可驗收的品牌資料",
+      "subtitle": "從技術準備度、公開內容到固定問題集驗收，分開量測 ChatGPT、Claude、Perplexity 等平台的實際提及與來源。",
       "scanPlaceholder": "輸入您的網址，註冊後免費掃描...",
       "scanButton": "免費註冊並掃描",
       "scanLimit": "需免費註冊，登入後自動開始第一次掃描",
@@ -57,11 +57,11 @@
   },
   "directory": {
     "title": "GEO 優化目錄",
-    "subtitle": "探索已通過 AI SEO 優化認證的網站，查看分數排行與行業分類",
+    "subtitle": "探索公開網站的 GEO 技術準備度與行業分類；分數不代表 AI 平台的推薦或引用機率",
     "totalSites": "收錄網站",
     "avgScore": "平均分數",
     "goldAbove": "金牌以上",
-    "crawlerFeed": "即時 AI 爬蟲動態",
+    "crawlerFeed": "UA 辨識 crawler 請求",
     "visits24h": "24h: {count} 次造訪",
     "noCrawlerData": "尚無爬蟲活動數據",
     "leaderboard": {

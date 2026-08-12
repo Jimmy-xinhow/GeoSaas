@@ -341,7 +341,7 @@ const steps = [
       '建立免費帳號並完成 Email 驗證',
       '登入工作台後，系統自動建立網站並啟動第一次掃描',
       '系統自動檢測：JSON-LD、llms.txt、FAQ Schema、OG Tags、Meta Description、標題優化、聯絡資訊、圖片 Alt、robots.txt AI 政策',
-      '掃描完成後取得 GEO 分數（0-100 分）和各指標狀態',
+      '掃描完成後取得 GEO 技術準備度分數（0-100 分）和各指標狀態',
       '免費帳號每月可掃描 2 次',
     ],
     tip: '免費掃描會綁定在你的帳號裡，後續才能接著做修復、內容引擎、AI 監控和驗收報告。',
@@ -361,12 +361,12 @@ const steps = [
   },
   {
     step: 3, title: 'AI 自動修復', icon: Wrench, color: 'green',
-    description: '針對掃描結果中缺失的指標，AI 會自動生成修復程式碼，你只需要複製貼上。',
+    description: '針對掃描結果中缺失的技術訊號，系統產生可檢查的修復草稿，發布前仍需核對網站可見內容。',
     details: [
       '進入網站詳情頁，點擊「AI 修復」',
       '系統根據你的品牌資料，自動生成 JSON-LD 結構化資料',
-      '一鍵生成 llms.txt（讓 AI 爬蟲讀取你的品牌資訊）',
-      '生成 FAQ Schema（讓 AI 可以引用你的 Q&A）',
+      '選用 llms.txt 整理品牌摘要（不取代 robots.txt、sitemap 或可索引 HTML）',
+      '生成與頁面可見問答一致的 FAQ Schema',
       '將生成的程式碼複製到你的網站 HTML 中',
     ],
     tip: '不懂程式碼也沒關係！系統會生成完整的程式碼片段，你只需要貼到網站的 <head> 標籤裡。WordPress 用戶可使用「自訂 HTML」小工具。',
@@ -374,7 +374,7 @@ const steps = [
   },
   {
     step: 4, title: '建立品牌知識庫', icon: BookOpen, color: 'orange',
-    description: 'AI 自動生成 60+ 題品牌 Q&A，讓 ChatGPT、Claude 等 AI 真正「認識」你的品牌。',
+    description: '整理品牌 Q&A，讓服務範圍、流程、限制與證據更容易被搜尋系統正確理解。',
     details: [
       '進入網站詳情頁，點擊「知識庫」',
       '點擊「AI 生成知識庫」，系統自動分析你的網站',
@@ -382,36 +382,36 @@ const steps = [
       '每次生成約 60 題，可以多次生成來補充',
       '所有 Q&A 會自動出現在你的 llms-full.txt 中，供 AI 爬蟲抓取',
     ],
-    tip: '知識庫越豐富，AI 越容易「認識」你。建議至少生成 2-3 次，累積 100+ 題以上效果最好。',
+    tip: '題數不是成效指標。優先保留可核對、互不重複且真正回答客戶問題的內容，並定期人工更新。',
     Demo: MockKnowledgePage,
   },
   {
     step: 5, title: 'AI 內容生成', icon: Sparkles, color: 'cyan',
-    description: '自動生成 FAQ 文章、品牌分析報告、行業報告，持續餵養 AI 搜尋引擎。',
+    description: '產生 FAQ、品牌說明與行業文章草稿，持續補充可索引、可核對的第一手內容。',
     details: [
       '進入「內容引擎」頁面',
       '選擇內容類型：FAQ、文章、知識庫、新聞稿',
       'AI 根據你的品牌資料和掃描結果自動撰寫',
       '生成的內容可以直接發佈到你的網站或社群平台',
     ],
-    tip: '定期產出新內容可以保持 AI 對你品牌的「記憶」。建議每月至少生成 2-3 篇新內容。',
+    tip: '發布頻率本身不保證引用。先確保每篇內容有新資訊、清楚來源與正確更新日期，再依實際需求安排。',
     Demo: MockContentPage,
   },
   {
     step: 6, title: '再次掃描，確認分數提升', icon: BarChart3, color: 'blue',
-    description: '完成修復和內容建立後，重新掃描確認 GEO 分數是否提升。',
+    description: '完成修復後重新掃描，確認 GEO 技術準備度與各指標是否按預期改變。',
     details: [
       '回到「我的網站」，點擊「掃描」',
       '比較修復前後的分數變化',
       'Dashboard 上可以看到歷史分數趨勢圖',
       '目標：將分數提升到 70 分以上（Silver 等級以上）',
     ],
-    tip: '修復 JSON-LD 和 llms.txt 通常可以讓分數提升 20-40 分。',
+    tip: '新版算法中 JSON-LD 權重 15、llms.txt 權重 5；兩項從 0 到滿分最多影響 20 個技術準備度分，不代表引用率增加 20%。',
     Demo: null,
   },
   {
     step: 7, title: 'AI 引用監控（Pro）', icon: Eye, color: 'green',
-    description: '輸入消費者可能問 AI 的問題，即時檢查 5 大 AI 平台是否正在推薦你。',
+    description: '輸入消費者可能提出的問題，記錄 5 大 AI 平台是否提及品牌、附來源，以及來源是否為官網。',
     details: [
       '進入「AI 監控」頁面',
       '輸入問題，例如：「台北推薦整復推拿」「最好的汽車美容品牌」',
@@ -419,7 +419,7 @@ const steps = [
       '即時顯示每個平台是否有提到你的品牌',
       '也可以一鍵跑「驗收報告」，從知識庫選題批量測試並產出 PDF',
     ],
-    tip: '建議用不同的問法測試，例如「推薦」「最好的」「哪裡有」等不同說法，看哪些問法 AI 會推薦你。',
+    tip: '使用固定且有版本的問題集重複驗收，分開記錄提及、來源與官網引用，避免用單次回答推論整體成效。',
     Demo: MockMonitorPage,
   },
   {
@@ -429,16 +429,16 @@ const steps = [
       '進入「多平台佈局」頁面',
       '連接你的 Medium、LinkedIn、WordPress 帳號',
       '選擇要發佈的內容，一鍵同步到多個平台',
-      '越多平台有你的品牌資訊，AI 越容易找到你',
+      '維持各平台品牌事實一致，並追蹤哪些頁面實際被搜尋與引用',
     ],
-    tip: '外部平台的內容也會被 AI 爬蟲抓取，越多地方提到你的品牌，AI 推薦你的機率越高。',
+    tip: '外部提及只有在內容可索引、來源可信且資訊一致時才可能形成有用訊號；平台數量本身不等於推薦機率。',
     Demo: MockPublishPage,
   },
 ]
 
 const faqItems = [
   { q: '修復程式碼要貼在哪裡？', a: 'JSON-LD 和 FAQ Schema 要貼在你網站 HTML 的 <head> 標籤內。WordPress 到「外觀 > 小工具」或安裝 Insert Headers and Footers 外掛。Webflow 在 Custom Code 區域。Squarespace 到 Settings > Advanced > Code Injection。' },
-  { q: 'llms.txt 要放在哪裡？', a: 'llms.txt 需要放在你網站的根目錄，讓 AI 爬蟲可以透過 yourdomain.com/llms.txt 存取。如果你使用 Geovault 的 llms.txt 託管功能，系統會自動幫你生成並託管，不需要自己設定。' },
+  { q: 'llms.txt 要放在哪裡？', a: '若決定採用，通常放在網站根目錄，讓支援該提案的工具透過 yourdomain.com/llms.txt 存取。它是選用的內容索引，不是 robots.txt，也不取代 sitemap、可索引 HTML 或站內連結。' },
   { q: '優化後多久才能被 AI 推薦？', a: '沒有固定時程。完成基礎優化（JSON-LD + llms.txt + 知識庫）後，仍會受內容品質、平台抓取頻率、品牌資料完整度與行業競爭影響；請持續監測實際 AI 提及與引用變化。' },
   { q: '我有多個分店/品牌，怎麼管理？', a: 'Starter 和 Pro 方案支援最多 3 個網站。每個網站獨立掃描、獨立修復、獨立監控。' },
   { q: '掃描結果的指標是什麼意思？', a: '9 項指標：JSON-LD（結構化資料）、llms.txt（AI 可讀檔）、OG Tags（社群預覽）、Meta Description（頁面描述）、FAQ Schema（問答資料）、標題優化（H1 標籤）、聯絡資訊（地址/電話）、圖片 Alt（圖片說明）、robots.txt AI 政策（是否允許 AI 爬蟲）。' },
@@ -459,14 +459,14 @@ export default function GuideClient() {
             使用教學
           </span>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight">
-            從 0 到被 AI 推薦
+            從技術準備到引用驗收
             <br />
             <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-green-400 bg-clip-text text-transparent">
               完整操作指南
             </span>
           </h1>
           <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto">
-            跟著這 8 個步驟，讓你的品牌在 ChatGPT、Claude、Perplexity、Gemini、Copilot 上被主動推薦
+            跟著這 8 個步驟改善可索引性與內容證據，再用固定問題集驗收 ChatGPT、Claude、Perplexity、Gemini、Copilot 的實際提及與來源
           </p>
         </div>
       </section>
@@ -553,13 +553,14 @@ export default function GuideClient() {
       {/* Score Tiers */}
       <section className="py-16 bg-gradient-to-b from-gray-900 to-gray-800">
         <div className="max-w-4xl mx-auto px-6">
-          <h2 className="text-2xl font-bold text-center mb-10">GEO 分數等級說明</h2>
+          <h2 className="text-2xl font-bold text-center mb-3">GEO 技術準備度等級</h2>
+          <p className="text-sm text-gray-400 text-center mb-10">這是 Geovault 定義的網站訊號完整度，不是 AI 推薦或引用機率。</p>
           <div className="grid sm:grid-cols-4 gap-4">
             {[
-              { tier: 'Bronze', range: '0-39', color: 'from-amber-700 to-amber-800', desc: '基礎不足，需要全面優化' },
-              { tier: 'Silver', range: '40-69', color: 'from-gray-400 to-gray-500', desc: '有基礎，但仍有關鍵指標缺失' },
-              { tier: 'Gold', range: '70-89', color: 'from-yellow-500 to-yellow-600', desc: '良好，大部分指標已通過' },
-              { tier: 'Platinum', range: '90-100', color: 'from-blue-500 to-indigo-600', desc: '卓越，AI 高度可讀' },
+              { tier: '基礎', range: '0-59', color: 'from-gray-600 to-gray-700', desc: '仍有多項核心訊號待補' },
+              { tier: 'Bronze', range: '60-69', color: 'from-amber-700 to-amber-800', desc: '已有基礎，需處理關鍵缺口' },
+              { tier: 'Silver', range: '70-79', color: 'from-gray-400 to-gray-500', desc: '多數技術訊號已建立' },
+              { tier: 'Gold', range: '80-100', color: 'from-yellow-500 to-yellow-600', desc: '技術訊號完整度較高' },
             ].map((t) => (
               <div key={t.tier} className="bg-white/5 rounded-2xl p-5 border border-white/10 text-center">
                 <div className={`inline-block px-4 py-1 rounded-full bg-gradient-to-r ${t.color} text-white text-sm font-bold mb-3`}>{t.tier}</div>

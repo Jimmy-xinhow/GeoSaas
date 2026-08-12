@@ -3,8 +3,8 @@ import PublicFooter from '@/components/layout/public-footer'
 import PublicNavbar from '@/components/layout/public-navbar'
 
 export const metadata: Metadata = {
-  title: 'GEO 目錄 — AI SEO 優化網站排行榜',
-  description: '探索已通過 GEO 優化認證的網站，查看排行榜和行業分類。',
+  title: 'GEO 技術準備度品牌目錄',
+  description: '探索公開網站的 GEO 技術準備度與行業分類；分數不是第三方 AI 平台的認證。',
 }
 
 export default function DirectoryLayout({

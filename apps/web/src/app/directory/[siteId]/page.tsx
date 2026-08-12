@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import SiteDetailClient from './site-detail-client';
 import type { DirectorySiteDetail } from '@/hooks/use-directory';
+import { serializeJsonLd } from '@/lib/json-ld';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
@@ -52,9 +53,9 @@ export async function generateMetadata({
   const industryText = site.industry ? `，行業：${site.industry}` : '';
   const tierText = site.tier ? ` ${site.tier.toUpperCase()}` : '';
   const canonical = `${SITE_URL}/directory/${params.siteId}`;
-  const title = `${truncateTitle(site.name)} GEO ${site.bestScore}/100${tierText}`;
+  const title = `${truncateTitle(site.name)} GEO 技術準備度 ${site.bestScore}/100${tierText}`;
   const description = truncateMeta(
-    `${site.name} 的 GEO 分數為 ${site.bestScore}/100${industryText}。查看 AI 可讀性、技術強項、改善優先順序與 Geovault 品牌資料頁。`,
+    `${site.name} 的 Geovault GEO 技術準備度為 ${site.bestScore}/100${industryText}。查看公開網站訊號、改善優先順序與品牌資料；分數不代表 AI 推薦機率。`,
   );
 
   return {
@@ -105,8 +106,8 @@ export default async function SiteDetailPage({
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
-    name: `${site.name} - GEO Score ${site.bestScore}/100`,
-    description: `${site.name} AI visibility profile with GEO score ${site.bestScore}/100`,
+    name: `${site.name} - Geovault GEO technical readiness ${site.bestScore}/100`,
+    description: `${site.name} public website technical-readiness profile; this score is not an AI recommendation probability`,
     url: canonical,
     isPartOf: { '@type': 'WebSite', name: 'Geovault', url: SITE_URL },
     about: {
@@ -121,7 +122,7 @@ export default async function SiteDetailPage({
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <SiteDetailClient siteId={params.siteId} initialSite={site} />
     </>

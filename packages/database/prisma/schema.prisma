@@ -191,11 +191,12 @@ model Site {
   llmsTxtUpdatedAt DateTime?
 
   // Directory & Leaderboard
-  isPublic    Boolean   @default(false)
-  industry    String?
-  tier        String?
-  bestScore   Int       @default(0)
-  bestScoreAt DateTime?
+  isPublic     Boolean   @default(false)
+  industry     String?
+  tier         String?
+  bestScore    Int       @default(0)
+  bestScoreAt  DateTime?
+  scoreVersion Int       @default(2)
 
   // Client tagging
   isClient Boolean @default(false)
@@ -243,6 +244,7 @@ model Scan {
   siteId        String
   site          Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
   totalScore    Int        @default(0)
+  scoreVersion  Int        @default(2)
   status        ScanStatus @default(PENDING)
   failureCode   String?
   failureReason String?    @db.Text
@@ -580,22 +582,26 @@ model KnowledgeImportJob {
 }
 
 model CrawlerVisit {
-  id         String   @id @default(cuid())
-  siteId     String
-  site       Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  botName    String
-  botOrg     String
-  url        String
-  statusCode Int?
-  userAgent  String?  @db.Text
-  isSeeded   Boolean  @default(false)
-  visitedAt  DateTime @default(now())
+  id                 String   @id @default(cuid())
+  siteId             String
+  site               Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  botName            String
+  botOrg             String
+  url                String
+  statusCode         Int?
+  userAgent          String?  @db.Text
+  isSeeded           Boolean  @default(false)
+  source             String   @default("legacy")
+  verificationStatus String   @default("unverified")
+  verificationMethod String?
+  visitedAt          DateTime @default(now())
 
   @@index([siteId, visitedAt])
   @@index([siteId, botName])
   @@index([isSeeded])
   @@index([isSeeded, visitedAt])
   @@index([isSeeded, botName])
+  @@index([verificationStatus, visitedAt])
   @@map("crawler_visits")
 }
 
@@ -1127,22 +1133,22 @@ model ClientQuerySet {
 }
 
 model MonitorReport {
-  id              String         @id @default(cuid())
-  querySetId      String
-  querySet        ClientQuerySet @relation(fields: [querySetId], references: [id], onDelete: Cascade)
-  querySetVersion Int            @default(1)
-  querySnapshot   Json?
-  expectedChecks  Int            @default(0)
-  siteId          String
-  site            Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  period          String // e.g. "2026-03"
-  results         Json // array of { question, platform, mentioned, response }
-  summary         Json? // { totalQueries, mentionedCount, mentionRate, byPlatform }
-  status          String         @default("pending") // pending | running | completed
+  id                      String         @id @default(cuid())
+  querySetId              String
+  querySet                ClientQuerySet @relation(fields: [querySetId], references: [id], onDelete: Cascade)
+  querySetVersion         Int            @default(1)
+  querySnapshot           Json?
+  expectedChecks          Int            @default(0)
+  siteId                  String
+  site                    Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period                  String // e.g. "2026-03"
+  results                 Json // array of { question, platform, mentioned, response }
+  summary                 Json? // { totalQueries, mentionedCount, mentionRate, byPlatform }
+  status                  String         @default("pending") // pending | running | completed
   executionLeaseId        String?
   executionLeaseExpiresAt DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime       @default(now())
+  completedAt             DateTime?
+  createdAt               DateTime       @default(now())
 
   @@index([siteId, period])
   @@index([querySetId])

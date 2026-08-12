@@ -13,12 +13,17 @@ export interface CrawlerVisit {
   botOrg: string;
   url: string;
   statusCode: number | null;
+  source: string;
+  verificationStatus: string;
+  verificationMethod: string | null;
   visitedAt: string;
 }
 
 export interface CrawlerDashboard {
   totalVisits: number;
   last24h: number;
+  verifiedVisits: number;
+  uaOnlyVisits: number;
   uniqueBots: number;
   robotsStatus: string;
   botStats: BotStat[];
@@ -99,10 +104,12 @@ export function useCrawlerSnippet(siteId: string) {
 
 export interface VerifyResult {
   installed: boolean;
+  trackerVerified?: boolean;
   verified?: boolean;
   message: string;
   snippetFound: boolean;
   reportsReceived: number;
+  providerVerifiedReports: number;
   lastReport: string | null;
   details?: string;
 }

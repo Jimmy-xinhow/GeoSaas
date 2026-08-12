@@ -25,6 +25,7 @@ import ScanHistoryChart from '@/components/scan/scan-history-chart'
 import { useSiteDetail, type DirectorySiteDetail } from '@/hooks/use-directory'
 import { ScanIndicatorLabel, ScanIndicator } from '@geovault/shared'
 import { INDUSTRIES } from '@geovault/shared'
+import { serializeJsonLd } from '@/lib/json-ld'
 
 const TIER_CONFIG: Record<string, { label: string; color: string }> = {
   bronze: { label: '銅牌', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
@@ -93,7 +94,7 @@ function JsonLdScript({ site }: { site: DirectorySiteDetail }) {
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
     />
   )
 }
@@ -242,8 +243,8 @@ export default function SiteDetailClient({
             )}
             <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-gray-300">
               <p>
-                這個公開品牌頁整理了 {siteData.name} 在 AI 搜尋中的可讀性訊號，包含 GEO 分數、掃描結果、
-                品牌知識庫、AI 爬蟲造訪紀錄與可被大型語言模型引用的基礎資料。
+                這個公開品牌頁整理了 {siteData.name} 在 AI 搜尋中的技術準備訊號，包含 Geovault 分數、掃描結果、
+                品牌知識庫、UA 辨識的 crawler 請求紀錄與公開品牌資料。
                 {industryLabel ? ` 在「${industryLabel}」行業中，` : ' 對同類品牌來說，'}
                 這些訊號會影響 ChatGPT、Claude、Perplexity、Gemini 與 Copilot 是否能理解品牌提供的服務、
                 適合對象與可信度。
@@ -325,13 +326,13 @@ export default function SiteDetailClient({
               </div>
               {industryLabel && (
                 <p className="text-gray-400 text-xs">
-                  在「{industryLabel}」行業中，具備這些指標的品牌更容易被 ChatGPT、Claude、Perplexity 等 AI 主動推薦。
+                  這些指標只表示網站較容易被機器讀取與理解；是否被 ChatGPT、Claude、Perplexity 等平台提及，仍需用實際問題集與來源連結驗收。
                 </p>
               )}
               <div className="pt-2">
                 <Link href="/register">
                   <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-                    讓你的品牌也被 AI 推薦
+                    檢查你的技術準備度
                     <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
                   </Button>
                 </Link>
@@ -347,7 +348,7 @@ export default function SiteDetailClient({
         </CardHeader>
         <CardContent className="space-y-4 text-sm leading-7 text-gray-300">
           <p>
-            {siteData.name} 目前的 GEO 分數為 <strong className="text-white">{siteData.bestScore}/100</strong>
+            {siteData.name} 目前的 GEO 技術準備度分數為 <strong className="text-white">{siteData.bestScore}/100</strong>
             {siteData.tier ? `，屬於 ${siteData.tier.toUpperCase()} 等級` : ''}。
             {totalIndicators > 0
               ? ` 最近一次掃描共檢查 ${totalIndicators} 項 AI 可讀性指標，其中 ${passedIndicators.length} 項通過，通過率約 ${passRate}%。`
@@ -358,13 +359,12 @@ export default function SiteDetailClient({
               ? `已具備的強項包含 ${topPassed}，這些資料能幫助 AI 更快判斷品牌名稱、服務內容與頁面主題。`
               : '此品牌仍需要補齊更多可被機器理解的公開訊號，例如結構化資料、品牌描述、FAQ 與明確的服務分類。'}
             {priorityIssues
-              ? ` 後續可優先改善 ${priorityIssues}，讓 AI 在回答使用者比較或推薦問題時更容易引用此品牌。`
+              ? ` 後續可優先改善 ${priorityIssues}，降低搜尋系統理解品牌資料時的缺口；改善後仍要重新執行引用驗收。`
               : ' 目前主要任務是持續累積品牌知識庫與真實案例，讓引用依據更完整。'}
           </p>
           <p>
-            AI 搜尋不是只看單一頁面的關鍵字，而是綜合判斷公開目錄頁、官網內容、llms.txt、FAQ、結構化資料與
-            使用者問題之間是否一致。當這些資料一致且具體時，品牌更容易在「推薦哪一家」、「哪個服務適合我」、
-            「同業如何比較」等 AI 回答場景中被提及。
+            AI 搜尋結果會受可索引內容、查詢語意、來源品質與平台當下資料等多項因素影響。公開目錄頁、官網內容、FAQ 與結構化資料應保持一致；
+            llms.txt 僅是選用補充。資料完整度不能代替「推薦哪一家」等問題的實測結果。
           </p>
         </CardContent>
       </Card>

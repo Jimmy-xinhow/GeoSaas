@@ -9,7 +9,7 @@ export class ScoringService {
     let totalWeight = 0;
 
     for (const [indicator, result] of results) {
-      const weight = SCAN_WEIGHTS[indicator as ScanIndicator] || 10;
+      const weight = SCAN_WEIGHTS[indicator as ScanIndicator] ?? 10;
       totalWeightedScore += result.score * weight;
       totalWeight += weight;
     }

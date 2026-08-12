@@ -347,7 +347,7 @@ export default function DirectoryClient() {
           GEO 優化目錄
         </h1>
         <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-          探索已通過 AI SEO 優化認證的網站，查看分數排行與行業分類
+          探索公開網站的 GEO 技術準備度與行業分類；分數不代表 AI 平台的推薦或引用機率
         </p>
       </div>
 
@@ -413,7 +413,7 @@ export default function DirectoryClient() {
         <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
           <div className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-purple-400 animate-live-pulse" />
-            <span className="font-semibold text-white text-sm">即時 AI 爬蟲動態</span>
+            <span className="font-semibold text-white text-sm">UA 辨識 crawler 請求動態</span>
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 text-xs font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-live-dot" />
               LIVE

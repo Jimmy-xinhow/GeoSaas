@@ -96,7 +96,7 @@ export default function AdminDashboardPage() {
                 <CardContent className="p-5 text-center">
                   <Bot className="h-6 w-6 text-green-600 mx-auto mb-2" />
                   <p className="text-3xl font-bold text-green-600">{data.crawler.real}</p>
-                  <p className="text-sm text-green-700 font-medium">真實爬蟲</p>
+                  <p className="text-sm text-green-700 font-medium">UA 辨識請求</p>
                 </CardContent>
               </Card>
             </div>

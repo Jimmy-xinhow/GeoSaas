@@ -52,7 +52,7 @@ export default function AuthLayout({
               AI Search Visibility
             </p>
             <h1 className="mt-5 max-w-2xl text-5xl font-bold leading-tight tracking-tight xl:text-6xl">
-              讓 AI 先理解你，再推薦你的品牌。
+              先讓公開品牌資料可理解，再用問題集驗收實際提及與來源。
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-blue-100/75">
               GEOvault 協助品牌建立 AI 可讀資料、追蹤 5 大 AI 平台可見度，並用自助工具或專人代營運持續補強。

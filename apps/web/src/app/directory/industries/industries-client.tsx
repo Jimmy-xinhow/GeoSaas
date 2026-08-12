@@ -19,7 +19,7 @@ export default function IndustriesClient() {
           各行業 AI 搜尋優化現況
         </h1>
         <p className="text-gray-600 max-w-2xl mx-auto">
-          查看各行業品牌的 AI 搜尋能見度數據，了解你的行業在 GEO 優化上的現況與機會
+          查看各行業公開品牌頁面的 GEO 技術準備度資料；這些技術分數不等同於 AI 提及、引用或推薦結果
         </p>
       </div>
 

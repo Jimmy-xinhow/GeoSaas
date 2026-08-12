@@ -213,7 +213,7 @@ function buildFollowUpTasks({
     addTask({
       key: 'crawler',
       title: '確認 AI 爬蟲追蹤',
-      description: '目前還沒有真實 AI 爬蟲紀錄，建議確認追蹤碼與公開頁面是否可被存取。',
+      description: '目前還沒有可辨識的 AI 爬蟲 User-Agent 紀錄，建議確認追蹤碼與公開頁面是否可被存取。User-Agent 紀錄不等於來源身分已驗證。',
       href: `/sites/${siteId}/crawler`,
       cta: '查看追蹤',
       icon: SearchCheck,

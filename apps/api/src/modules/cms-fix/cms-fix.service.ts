@@ -431,7 +431,7 @@ export class CmsFixService {
 
     if (site.isPublic) {
       const score = site.bestScore ?? 0;
-      const html = `<a href="${this.webUrl()}/directory/${site.id}" target="_blank" rel="noopener"><img src="${this.apiPublicUrl(origin)}/api/badge/${site.id}.svg" alt="GEO Score: ${score} | Verified by Geovault" width="148" height="20"></a>`;
+      const html = `<a href="${this.webUrl()}/directory/${site.id}" target="_blank" rel="noopener"><img src="${this.apiPublicUrl(origin)}/api/badge/${site.id}.svg" alt="Geovault technical readiness score: ${score} | Scanned by Geovault" width="148" height="20"></a>`;
       actions.push({
         type: 'install_geo_badge',
         title: '安裝 GEO Score Badge',
@@ -543,20 +543,12 @@ export class CmsFixService {
     return `<!-- Geovault AI Crawler Tracker -->
 <script>
 (function() {
-  var AI_BOTS = ['ClaudeBot','GPTBot','ChatGPT-User','Google-Extended','PerplexityBot','YouBot','CCBot','Bytespider','bingbot','Googlebot'];
-  var ua = navigator.userAgent || '';
-  for (var i = 0; i < AI_BOTS.length; i++) {
-    if (ua.indexOf(AI_BOTS[i]) !== -1) {
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', '${apiUrl}/api/crawler/report', true);
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.send(JSON.stringify({ token: '${token}', botName: AI_BOTS[i], url: window.location.href, userAgent: ua }));
-      break;
-    }
-  }
+  var beacon = new Image();
+  beacon.referrerPolicy = 'strict-origin-when-cross-origin';
+  beacon.src = '${apiUrl}/api/crawler/pixel/${token}.gif?u=' + encodeURIComponent(window.location.href);
 })();
 </script>
-<img src="${apiUrl}/api/crawler/pixel/${token}.gif" alt="" width="1" height="1" style="position:absolute;left:-9999px;top:-9999px" referrerpolicy="no-referrer-when-downgrade" />`;
+<noscript><img src="${apiUrl}/api/crawler/pixel/${token}.gif" alt="" width="1" height="1" style="position:absolute;left:-9999px;top:-9999px" referrerpolicy="strict-origin-when-cross-origin" /></noscript>`;
   }
 
   private escapeHtml(value: string): string {

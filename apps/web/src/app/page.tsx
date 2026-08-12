@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import HomeClient, { type HomepageEvidenceCase } from './home-client';
+import { serializeJsonLd } from '@/lib/json-ld';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
@@ -134,7 +135,7 @@ const jsonLdFaq = {
       name: '多久能看到 GEO 優化效果？',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: '完成基礎優化（JSON-LD + llms.txt + FAQ Schema）後，成效會受網站內容、平台抓取頻率與品牌資料完整度影響；應以持續監測的實際 AI 提及變化判斷，沒有固定天數保證。',
+        text: '完成可索引內容、metadata 與符合頁面內容的結構化資料後，可視需求補充選用的 llms.txt。成效受平台抓取、來源品質與品牌資料完整度影響；應以固定問題集的實際 AI 提及變化判斷，沒有固定天數保證。',
       },
     },
     {
@@ -301,23 +302,23 @@ export default async function HomePage() {
       {/* JSON-LD rendered server-side for crawlers */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdWebSite) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLdWebSite) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdOrg) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLdOrg) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdFaq) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLdFaq) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdApp) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLdApp) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdDataset) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLdDataset) }}
       />
 
       {/* Client interactive component */}

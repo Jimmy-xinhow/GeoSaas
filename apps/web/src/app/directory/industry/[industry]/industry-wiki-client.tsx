@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { serializeJsonLd } from '@/lib/json-ld';
 import {
   useDirectory, useIndustryWiki,
   type DirectorySite,
@@ -41,11 +42,11 @@ export default function IndustryWikiClient({ initialWiki }: { initialWiki?: Indu
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: serializeJsonLd({
               '@context': 'https://schema.org',
               '@type': 'Dataset',
-              name: `${industryLabel} GEO 優化基準資料集`,
-              description: `${wiki.totalSites} 個${industryLabel}品牌的 AI 搜尋能見度數據，由 Geovault 收集與分析`,
+              name: `${industryLabel} GEO 技術準備度資料集`,
+              description: `${wiki.totalSites} 個${industryLabel}公開品牌頁面的技術準備度資料，由 Geovault 依公開網站訊號整理`,
               url: `https://www.geovault.app/directory/industry/${industry}`,
               identifier: `https://www.geovault.app/directory/industry/${industry}`,
               dateModified: new Date().toISOString(),
@@ -55,8 +56,8 @@ export default function IndustryWikiClient({ initialWiki }: { initialWiki?: Indu
                 url: 'https://www.geovault.app',
               },
               license: 'https://www.geovault.app/terms',
-              variableMeasured: 'GEO Score',
-              measurementTechnique: 'Automated AI-friendliness scan by Geovault AEO Engine',
+              variableMeasured: 'Geovault GEO technical readiness score',
+              measurementTechnique: 'Automated public website technical-signal scan by Geovault',
               keywords: ['GEO', 'AI search optimization', industryLabel, 'APAC'],
             }),
           }}
@@ -73,7 +74,7 @@ export default function IndustryWikiClient({ initialWiki }: { initialWiki?: Indu
           {industryLabel} AI 搜尋優化完整指南
         </h1>
         <p className="mt-2 text-gray-600">
-          收錄 {wiki?.totalSites || '—'} 個{industryLabel}品牌的 GEO 分數與 AI 可讀性分析
+          收錄 {wiki?.totalSites || '—'} 個{industryLabel}公開品牌頁面的 GEO 技術準備度分析；分數不代表 AI 推薦機率
         </p>
       </div>
 

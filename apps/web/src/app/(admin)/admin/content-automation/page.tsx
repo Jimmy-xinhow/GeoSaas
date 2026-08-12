@@ -255,7 +255,7 @@ export default function AdminContentAutomationPage() {
     { label: '異常', value: data.summary.critical, className: 'text-red-300' },
     { label: '需檢查', value: data.summary.warning, className: 'text-amber-300' },
     { label: '正常', value: data.summary.healthy, className: 'text-emerald-300' },
-    { label: '真實爬蟲 7 天', value: data.crawler.real7d, className: 'text-blue-300' },
+    { label: 'UA 辨識請求 7 天', value: data.crawler.real7d, className: 'text-blue-300' },
   ];
 
   return (
@@ -555,7 +555,7 @@ export default function AdminContentAutomationPage() {
 
           {data.crawler.topArticleVisits.length === 0 ? (
             <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
-              最近 30 天尚未記錄到公開文章頁面的真實 AI / 搜尋爬蟲造訪。請確認 sitemap、IndexNow、llms-full 與平台 middleware 回報是否持續正常。
+              最近 30 天尚未記錄到公開文章頁面的非模擬 UA 辨識 crawler 請求。請確認 sitemap、IndexNow、llms-full 與平台 middleware 回報是否持續正常。
             </div>
           ) : (
             <div className="overflow-x-auto">

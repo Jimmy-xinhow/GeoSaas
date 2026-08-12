@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { INDUSTRIES } from '@geovault/shared';
 import IndustriesClient from './industries-client';
+import { serializeJsonLd } from '@/lib/json-ld';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.geovault.app';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.geovault.app';
@@ -67,7 +68,7 @@ export default async function IndustriesPage() {
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(collectionJsonLd) }} />
       <IndustriesClient />
       <section className="mx-auto max-w-5xl px-4 pb-16 text-gray-700">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">AI 搜尋優化行業索引怎麼使用</h2>

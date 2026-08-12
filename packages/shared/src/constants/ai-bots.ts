@@ -22,8 +22,8 @@ export const AI_BOTS: AiBotDefinition[] = [
   // Perplexity
   { name: 'PerplexityBot', org: 'Perplexity', uaPattern: 'PerplexityBot', category: 'search-index' },
   { name: 'Perplexity-User', org: 'Perplexity', uaPattern: 'Perplexity-User', category: 'user-triggered' },
-  // Google
-  { name: 'Google-Extended', org: 'Google', uaPattern: 'Google-Extended', category: 'training' },
+  // Google. Google-Extended is a robots.txt control token and has no separate
+  // HTTP User-Agent, so it intentionally does not belong in request matching.
   { name: 'Googlebot', org: 'Google', uaPattern: 'Googlebot', category: 'search-index' },
   { name: 'GoogleOther', org: 'Google', uaPattern: 'GoogleOther', category: 'general-crawler' },
   // Microsoft

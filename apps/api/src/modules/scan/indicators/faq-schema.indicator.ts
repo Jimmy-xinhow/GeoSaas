@@ -41,7 +41,7 @@ export class FaqSchemaIndicator implements IIndicatorAnalyzer {
       return {
         score: 0, status: 'fail',
         details: { found: false, questionCount: 0 },
-        suggestion: '未偵測到 FAQ Schema。FAQ 結構化資料能大幅提升被 AI 引用的機率，建議新增常見問題。',
+        suggestion: '未偵測到 FAQ Schema。若頁面已有可見的常見問題，可加入與可見內容一致的 FAQ 結構化資料，協助搜尋系統理解；這不保證 AI 引用。',
         autoFixable: true,
       };
     }
@@ -50,7 +50,7 @@ export class FaqSchemaIndicator implements IIndicatorAnalyzer {
     return {
       score, status: score >= 70 ? 'pass' : 'warning',
       details: { found: true, schemaCount: faqSchemas.length, questionCount: totalQuestions },
-      suggestion: totalQuestions < 5 ? '建議增加更多 FAQ 問答對（至少 5 個）以提升引用率。' : undefined,
+      suggestion: totalQuestions < 5 ? '若使用者確實還有常見問題，可補充完整回答；不要為了分數堆疊沒有實際需求的問答。' : undefined,
       autoFixable: true,
     };
   }

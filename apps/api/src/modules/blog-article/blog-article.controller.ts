@@ -699,7 +699,7 @@ export class AdminBlogController {
   }
 
   @Get('content-hygiene/status')
-  @ApiOperation({ summary: 'Inspect description, duplicate-title, and content-identity debt' })
+  @ApiOperation({ summary: 'Inspect description, duplicate-title, content-identity, and hidden-site article debt' })
   contentHygieneStatus(@Query('limit') limit?: string) {
     return this.contentHygiene.getStatus(parseBoundedInt(limit, 'limit', 20, 1, 100));
   }
@@ -707,10 +707,20 @@ export class AdminBlogController {
   @Post('content-hygiene/run')
   @ApiOperation({
     summary:
-      'Normalize descriptions, preserve duplicate URLs as aliases, demote duplicate pages, and backfill stable content identity. Defaults to dry-run.',
+      'Normalize descriptions, preserve duplicate URLs as aliases, demote duplicate pages, and backfill stable content identity. Hidden-site article retirement requires retireHiddenSiteArticles=true. Defaults to dry-run.',
   })
-  runContentHygiene(@Body() body: { dryRun?: unknown; limit?: unknown } = {}) {
+  runContentHygiene(@Body() body: {
+    dryRun?: unknown;
+    limit?: unknown;
+    retireHiddenSiteArticles?: unknown;
+  } = {}) {
     const dryRun = body?.dryRun !== false;
+    if (
+      body?.retireHiddenSiteArticles !== undefined
+      && typeof body.retireHiddenSiteArticles !== 'boolean'
+    ) {
+      throw new BadRequestException('retireHiddenSiteArticles must be a boolean');
+    }
     let limit = 100;
     if (body?.limit !== undefined) {
       if (
@@ -723,7 +733,11 @@ export class AdminBlogController {
       }
       limit = body.limit;
     }
-    return this.contentHygiene.runBatch({ dryRun, limit });
+    return this.contentHygiene.runBatch({
+      dryRun,
+      limit,
+      retireHiddenSiteArticles: body.retireHiddenSiteArticles === true,
+    });
   }
 
   @Post('brand-profile/generate/:siteId')
