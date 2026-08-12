@@ -152,3 +152,14 @@ jobs:
           done
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Seed Janda CMS account once
+        run: |
+          if [ -z "$JANDA_MIO_INITIAL_PASSWORD" ]; then
+            echo "Janda CMS account seed is not requested; skipping."
+            exit 0
+          fi
+          pnpm --filter @geovault/api exec ts-node scripts/seed-janda-cms-account.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JANDA_MIO_INITIAL_PASSWORD: ${{ secrets.JANDA_MIO_INITIAL_PASSWORD }}

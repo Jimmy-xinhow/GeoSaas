@@ -229,6 +229,9 @@ model Site {
   industryAiSnapshots          IndustryAiSnapshot[]
   qualityLogs                  ArticleQualityLog[]
   cmsConnections               CmsConnection[]
+  cmsAccounts                  SiteCmsAccount[]
+  cmsArticles                  SiteCmsArticle[]
+  cmsAuditLogs                 SiteCmsAuditLog[]
   fixRuns                      SiteFixRun[]
   fixActions                   SiteFixAction[]
 
@@ -297,6 +300,105 @@ model CmsConnection {
   @@index([userId])
   @@index([status, updatedAt])
   @@map("cms_connections")
+}
+
+// Site-scoped editorial accounts for customer-owned website back offices.
+// These accounts are deliberately separate from Geovault platform users so
+// access to one customer's CMS never grants access to the Geovault dashboard.
+model SiteCmsAccount {
+  id                 String    @id @default(cuid())
+  siteId             String
+  site               Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  username           String
+  displayName        String
+  passwordHash       String
+  role               String    @default("editor") // editor | admin
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(true)
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  sessions        SiteCmsSession[]
+  createdArticles SiteCmsArticle[]  @relation("SiteCmsArticleCreatedBy")
+  updatedArticles SiteCmsArticle[]  @relation("SiteCmsArticleUpdatedBy")
+  auditLogs       SiteCmsAuditLog[]
+
+  @@unique([siteId, username])
+  @@index([siteId, isActive])
+  @@map("site_cms_accounts")
+}
+
+model SiteCmsSession {
+  id         String         @id @default(cuid())
+  accountId  String
+  account    SiteCmsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  tokenHash  String         @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastSeenAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+
+  @@index([accountId, expiresAt])
+  @@index([expiresAt, revokedAt])
+  @@map("site_cms_sessions")
+}
+
+model SiteCmsArticle {
+  id            String         @id @default(cuid())
+  siteId        String
+  site          Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  slug          String
+  title         String
+  description   String
+  content       String         @db.Text
+  category      String
+  tags          String[]       @default([])
+  keywords      String[]       @default([])
+  coverImageUrl String?
+  coverAlt      String?
+  author        String
+  reviewedBy    String?
+  keyTakeaways  String[]       @default([])
+  faq           Json           @default("[]")
+  sources       Json           @default("[]")
+  featured      Boolean        @default(false)
+  status        String         @default("draft") // draft | published | archived
+  version       Int            @default(1)
+  publishedAt   DateTime?
+  createdById   String
+  createdBy     SiteCmsAccount @relation("SiteCmsArticleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById   String
+  updatedBy     SiteCmsAccount @relation("SiteCmsArticleUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  auditLogs SiteCmsAuditLog[]
+
+  @@unique([siteId, slug])
+  @@index([siteId, status, updatedAt])
+  @@index([publishedAt])
+  @@map("site_cms_articles")
+}
+
+model SiteCmsAuditLog {
+  id        String          @id @default(cuid())
+  siteId    String
+  site      Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  accountId String?
+  account   SiteCmsAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  articleId String?
+  article   SiteCmsArticle? @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  action    String
+  metadata  Json?
+  createdAt DateTime        @default(now())
+
+  @@index([siteId, createdAt])
+  @@index([accountId, createdAt])
+  @@index([articleId, createdAt])
+  @@map("site_cms_audit_logs")
 }
 
 model SiteFixRun {

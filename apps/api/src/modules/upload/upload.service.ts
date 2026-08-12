@@ -12,6 +12,16 @@ interface PresignRequest {
   kind: 'case-screenshot';
 }
 
+interface SiteCmsImageUpload {
+  accountId: string;
+  siteId: string;
+  file: {
+    buffer: Buffer;
+    mimetype: string;
+    size: number;
+  };
+}
+
 export interface PresignResult {
   uploadUrl: string;
   publicUrl: string;
@@ -69,6 +79,25 @@ export class UploadService {
     }[contentType] ?? 'bin';
   }
 
+  private detectImageMime(buffer: Buffer): string | null {
+    if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+      return 'image/png';
+    }
+    if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+      return 'image/jpeg';
+    }
+    const signature = buffer.subarray(0, 6).toString('ascii');
+    if (signature === 'GIF87a' || signature === 'GIF89a') return 'image/gif';
+    if (
+      buffer.length >= 12
+      && buffer.subarray(0, 4).toString('ascii') === 'RIFF'
+      && buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+    ) {
+      return 'image/webp';
+    }
+    return null;
+  }
+
   async createPresign(req: PresignRequest): Promise<PresignResult> {
     if (!this.s3) {
       throw new ServiceUnavailableException(
@@ -106,6 +135,40 @@ export class UploadService {
       publicUrl: `${this.publicBaseUrl.replace(/\/$/, '')}/${key}`,
       key,
       expiresInSeconds: PRESIGN_TTL_SECONDS,
+    };
+  }
+
+  async uploadSiteCmsImage(req: SiteCmsImageUpload): Promise<{ publicUrl: string; key: string }> {
+    if (!this.s3) {
+      throw new ServiceUnavailableException('檔案上傳尚未設定，請聯絡系統管理員。');
+    }
+    if (!req.file?.buffer || req.file.size <= 0 || req.file.size > MAX_SIZE_BYTES) {
+      throw new BadRequestException('檔案大小需介於 1 byte 至 5 MB');
+    }
+    if (!ALLOWED_MIME.has(req.file.mimetype)) {
+      throw new BadRequestException('僅支援 PNG、JPEG、WebP 或 GIF 圖片');
+    }
+    const detectedMime = this.detectImageMime(req.file.buffer);
+    if (!detectedMime || detectedMime !== req.file.mimetype) {
+      throw new BadRequestException('圖片內容與檔案格式不符');
+    }
+
+    const safeSiteId = req.siteId.replace(/[^A-Za-z0-9_-]/g, '');
+    const safeAccountId = req.accountId.replace(/[^A-Za-z0-9_-]/g, '');
+    const datePart = new Date().toISOString().slice(0, 10);
+    const ext = this.extFromContentType(detectedMime);
+    const key = `site-cms/${safeSiteId}/${datePart}/${safeAccountId}-${randomBytes(12).toString('hex')}.${ext}`;
+    await this.s3.send(new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: req.file.buffer,
+      ContentType: detectedMime,
+      ContentLength: req.file.size,
+      CacheControl: 'public, max-age=31536000, immutable',
+    }));
+    return {
+      publicUrl: `${this.publicBaseUrl.replace(/\/$/, '')}/${key}`,
+      key,
     };
   }
 }

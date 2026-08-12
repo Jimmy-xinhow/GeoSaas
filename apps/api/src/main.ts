@@ -27,6 +27,7 @@ async function bootstrap() {
       : []),
     'https://geovault.app',
     'https://www.geovault.app',
+    'https://jimmy-xinhow.github.io',
     process.env.FRONTEND_URL,
   ].filter(Boolean) as string[];
 
