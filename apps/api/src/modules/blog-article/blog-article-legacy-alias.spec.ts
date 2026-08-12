@@ -58,4 +58,57 @@ describe('BlogArticleService legacy alias resolution', () => {
     expect(where).toContain('"retiredAt":null');
     expect(where).toContain('"isPublic":true');
   });
+
+  it('does not route a medical-adjacent brand showcase with unsafe claims', async () => {
+    const unsafe = {
+      slug: 'unsafe-medical-showcase',
+      title: '某整復品牌服務特色與適合對象完整介紹',
+      description: '依據官方網站公開資訊整理品牌服務、地點、聯絡方式與適用情境，供消費者核對原始資料來源。'.repeat(3),
+      content: '## 服務特色\n這項服務可以改善疼痛並促進血液循環。',
+      category: 'brand-directory',
+      templateType: 'brand_showcase',
+      published: true,
+      site: { name: '某整復品牌', url: 'https://medical.example', bestScore: 80, industry: 'traditional_medicine' },
+    };
+    const findFirst = jest.fn().mockResolvedValueOnce(unsafe).mockResolvedValueOnce(null);
+    const service = new BlogArticleService(
+      { blogArticle: { findFirst } } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect(service.getBySlug(unsafe.slug)).resolves.toBeNull();
+    expect(findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it('applies the full public blocker set to client daily route safety', () => {
+    const service = new BlogArticleService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    expect((service as any).isClientDailyArticleSafe({
+      title: '慈愛中醫診所服務說明',
+      description: '以公開品牌資料整理診所服務與聯絡方式。',
+      content: '# 慈愛中醫診所服務說明\n\n本療程可改善疼痛。',
+      targetKeywords: ['慈愛中醫', '中醫'],
+      site: {
+        name: '慈愛中醫',
+        url: 'https://medical.example',
+        industry: 'traditional_medicine',
+        isPublic: true,
+      },
+    })).toBe(false);
+  });
 });

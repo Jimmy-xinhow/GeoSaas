@@ -41,7 +41,9 @@ import pLimit from '@/common/utils/p-limit';
 import {
   getPublicBlogArticleSeoIssues,
   isIndexablePublicBlogArticle,
+  isLikelyEditorialDirectoryName,
   isPublicSafeArticle,
+  normalizePublicSiteName,
   publicBlogArticleWhere,
   publicIndexableBlogArticleWhere,
   publicRoutableBlogArticleWhere,
@@ -50,6 +52,7 @@ import {
 import { assertSiteAccess } from '../../common/auth/site-access';
 import { INDUSTRIES } from '@geovault/shared';
 import {
+  auditPublishedArticleShadow,
   isLegacyGeoGenerationEnabled,
   LEGACY_GEO_GENERATION_ENV,
   LEGACY_GEO_TEMPLATE_TYPES,
@@ -1589,11 +1592,20 @@ ${args.currentDraft || '(empty draft)'}`;
   private isClientDailyArticleSafe(article: {
     title?: string | null;
     description?: string | null;
+    slug?: string | null;
     content?: string | null;
     targetKeywords?: string[] | null;
-    site?: { industry?: string | null } | null;
+    site?: {
+      name?: string | null;
+      url?: string | null;
+      industry?: string | null;
+      isPublic?: boolean | null;
+    } | null;
   }): boolean {
-    return this.clientDailySafetyReasons(article).length === 0;
+    // Keep the direct-route boundary aligned with the publish-time gate.  The
+    // narrower text-only check missed SEO and medical-claim blockers that the
+    // generator correctly refuses to publish.
+    return this.clientDailyPublicBlockers(article).length === 0;
   }
 
   /**
@@ -1736,6 +1748,7 @@ ${args.currentDraft || '(empty draft)'}`;
       direct?.published &&
       isPublicSafeArticle(direct) &&
       isIndexablePublicBlogArticle(direct) &&
+      auditPublishedArticleShadow(direct).length === 0 &&
       (direct.templateType !== 'client_daily' || this.isClientDailyArticleSafe(direct))
     ) {
       return direct;
@@ -1753,6 +1766,7 @@ ${args.currentDraft || '(empty draft)'}`;
       return null;
     }
     if (alias && !isIndexablePublicBlogArticle(alias)) return null;
+    if (alias && auditPublishedArticleShadow(alias).length > 0) return null;
     return alias;
   }
 
@@ -2606,6 +2620,10 @@ ${args.currentDraft || '(empty draft)'}`;
       },
     });
     if (!site || !site.isPublic) return { status: 'skipped', reasons: ['not_public'] };
+    if (isLikelyEditorialDirectoryName(normalizePublicSiteName(site.name))) {
+      this.logger.warn(`brand_showcase skipped for non-brand editorial site name: ${site.name}`);
+      return { status: 'skipped', reasons: ['editorial_site_name'] };
+    }
 
     // 90-day cooldown: skip if this site already has a brand_showcase article
     // regenerated within the window. `force` bypasses for manual ops.
@@ -2846,8 +2864,10 @@ ${args.currentDraft || '(empty draft)'}`;
     const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000);
 
     // Candidates: public sites where brand_showcase is missing or stale.
-    // We fetch 3× the batch limit to account for skips/rejects in-flight.
-    const candidates = await this.prisma.site.findMany({
+    // Site-name hygiene must happen BEFORE an LLM call. Legacy seed data can
+    // contain editorial/search-result titles instead of brands; the public
+    // index layer already rejects them, so generating for them wastes cost.
+    const candidatePool = await this.prisma.site.findMany({
       where: {
         isPublic: true,
         OR: [
@@ -2866,9 +2886,20 @@ ${args.currentDraft || '(empty draft)'}`;
         ],
       },
       orderBy: { updatedAt: 'asc' }, // oldest updated first
-      take: limit * 3,
+      take: Math.max(limit * 20, 300),
       select: { id: true, name: true },
     });
+    const excludedEditorial = candidatePool.filter((site) =>
+      isLikelyEditorialDirectoryName(normalizePublicSiteName(site.name)),
+    );
+    const candidates = candidatePool.filter((site) =>
+      !isLikelyEditorialDirectoryName(normalizePublicSiteName(site.name)),
+    );
+    if (excludedEditorial.length > 0) {
+      this.logger.warn(
+        `brand_showcase eligibility gate skipped ${excludedEditorial.length} editorial site names before generation`,
+      );
+    }
 
     const queue = pLimit(2);
     const rejectedReasons: Record<string, number> = {};

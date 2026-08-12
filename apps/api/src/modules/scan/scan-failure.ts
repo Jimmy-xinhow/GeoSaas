@@ -9,6 +9,7 @@ export type ScanFailureCode =
   | 'empty_body'
   | 'blocked_target'
   | 'redirect_limit'
+  | 'interrupted'
   | 'unexpected';
 
 const MAX_FAILURE_REASON_LENGTH = 500;

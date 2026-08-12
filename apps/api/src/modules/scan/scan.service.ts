@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
   Optional,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
@@ -15,8 +16,11 @@ import { assertSiteAccess, canAccessSite, workspaceSiteWhere } from '../../commo
 import { ScanPipelineService } from './scan-pipeline.service';
 import { isScanRetryBackoffActive } from './scan-retry-policy';
 
+const STALE_SCAN_EXECUTION_MS = 10 * 60 * 1000;
+const INTERRUPTED_SCAN_REASON = 'Scan worker stopped before the scan completed';
+
 @Injectable()
-export class ScanService {
+export class ScanService implements OnModuleInit {
   private readonly logger = new Logger(ScanService.name);
 
   constructor(
@@ -25,6 +29,37 @@ export class ScanService {
     private readonly planUsage: PlanUsageService,
     @Optional() @InjectQueue('scan') private readonly scanQueue?: Queue,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    const recovered = await this.recoverInterruptedScans();
+    if (recovered > 0) {
+      this.logger.warn(`Recovered ${recovered} interrupted scan execution(s) on startup`);
+    }
+  }
+
+  /**
+   * A normal crawl is bounded to seconds. PENDING/RUNNING for ten minutes can
+   * only be an interrupted worker/process lifecycle, not a slow target. Close
+   * those durable rows with an explicit reason so dashboards do not wait
+   * forever and a later retry starts from a clean state.
+   */
+  @Cron('15 * * * *', { name: 'scan-interrupted-recovery' })
+  async recoverInterruptedScans(now = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - STALE_SCAN_EXECUTION_MS);
+    const result = await this.prisma.scan.updateMany({
+      where: {
+        status: { in: ['PENDING', 'RUNNING'] },
+        createdAt: { lt: cutoff },
+      },
+      data: {
+        status: 'FAILED',
+        failureCode: 'interrupted',
+        failureReason: INTERRUPTED_SCAN_REASON,
+        completedAt: now,
+      },
+    });
+    return result.count;
+  }
 
   async triggerScan(siteId: string, userId: string, role?: string) {
     await assertSiteAccess(this.prisma, siteId, userId, role);
@@ -201,6 +236,11 @@ export class ScanService {
             scans: {
               some: { status: 'COMPLETED', completedAt: { lt: fourteenDaysAgo } },
             },
+            NOT: {
+              scans: {
+                some: { status: 'COMPLETED', completedAt: { gte: fourteenDaysAgo } },
+              },
+            },
           },
         ],
       },
@@ -208,6 +248,7 @@ export class ScanService {
         id: true,
         url: true,
         name: true,
+        isClient: true,
         scans: {
           orderBy: { createdAt: 'desc' },
           take: 5,
@@ -217,13 +258,26 @@ export class ScanService {
     });
 
     const now = new Date();
-    const eligible = sites.filter(
-      (site) => !isScanRetryBackoffActive(site.scans, now),
-    );
-    const skippedBackoff = sites.length - eligible.length;
+    const skippedBackoff = sites.filter((site) =>
+      isScanRetryBackoffActive(site.scans, now),
+    ).length;
+    const eligible = sites.filter((site) => {
+      if (isScanRetryBackoffActive(site.scans, now)) return false;
+      if (site.isClient) return true;
+      // The query requires at least one old completed scan and excludes any
+      // completed scan inside the freshness window. This remains true even
+      // when the last five executions are all failures.
+      if (!site.scans.some((scan) => scan.status === 'COMPLETED')) return true;
+      const latestCompleted = site.scans.find((scan) => scan.status === 'COMPLETED')?.completedAt;
+      return Boolean(latestCompleted && latestCompleted < fourteenDaysAgo);
+    });
 
-    // Oldest-scanned first (null = never scanned = infinitely old)
+    // Paid clients are always serviced before the larger directory backlog;
+    // within each tier, oldest-scanned wins. Otherwise thousands of stale
+    // public seeds can permanently starve the client sites.
     const ordered = eligible.sort((a, b) => {
+      const clientPriority = Number(b.isClient) - Number(a.isClient);
+      if (clientPriority !== 0) return clientPriority;
       const aT = a.scans.find((scan) => scan.status === 'COMPLETED')?.completedAt?.getTime() ?? 0;
       const bT = b.scans.find((scan) => scan.status === 'COMPLETED')?.completedAt?.getTime() ?? 0;
       return aT - bT;
