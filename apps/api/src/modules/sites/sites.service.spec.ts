@@ -91,6 +91,9 @@ describe('SitesService', () => {
       expect(prisma.site.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { userId },
+          include: expect.objectContaining({
+            seedSource: { select: { source: true } },
+          }),
           orderBy: { createdAt: 'desc' },
         }),
       );

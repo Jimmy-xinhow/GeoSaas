@@ -42,6 +42,10 @@ export interface Site {
   url: string;
   name: string;
   status: string;
+  isClient: boolean;
+  seedSource?: {
+    source: string;
+  } | null;
   profile?: SiteProfile | null;
   createdAt: string;
   updatedAt: string;

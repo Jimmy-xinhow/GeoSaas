@@ -8,13 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/shared/page-header';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSites } from '@/hooks/use-sites';
+import { useSites, type Site } from '@/hooks/use-sites';
 import { useClientQuerySets, useRunReport, useSiteReports, useReport, useDeleteReport, useGeoComprehensive, useReportQuota, useClientDailyStats, type ClientDailyDayType } from '@/hooks/use-client-reports';
 import apiClient from '@/lib/api-client';
 
@@ -595,7 +592,7 @@ function ReportHistory({ reports, selectedSiteName, onView, onDownload }: {
 }
 
 export default function ClientReportsPage() {
-  const { data: sites } = useSites();
+  const { data: sites = [], isLoading: sitesLoading } = useSites();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -615,6 +612,25 @@ export default function ClientReportsPage() {
   const [activeReportId, setActiveReportId] = useState<string>('');
   const [activeQsLength, setActiveQsLength] = useState(0);
   const [siteSearch, setSiteSearch] = useState('');
+
+  const siteGroups = useMemo(() => {
+    const byName = (a: Site, b: Site) =>
+      a.name.localeCompare(b.name, 'zh-Hant', { sensitivity: 'base' });
+    const clientSites = sites.filter((site) => site.isClient).sort(byName);
+    const automaticSites = sites
+      .filter((site) => !site.isClient && site.seedSource?.source === 'auto_discovery')
+      .sort(byName);
+    const manualSites = sites
+      .filter((site) => !site.isClient && site.seedSource?.source !== 'auto_discovery')
+      .sort(byName);
+
+    return { automaticSites, manualSites, clientSites };
+  }, [sites]);
+
+  const siteCategoryLabel = useCallback((site: Site) => {
+    if (site.isClient) return '客戶網站';
+    return site.seedSource?.source === 'auto_discovery' ? '自動新增' : '手動新增';
+  }, []);
 
   const { data: querySets, isLoading: qsLoading } = useClientQuerySets(selectedSiteId);
   const { data: reports } = useSiteReports(selectedSiteId);
@@ -674,34 +690,36 @@ export default function ClientReportsPage() {
         <CardContent className="p-5 space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <span className="text-sm font-medium shrink-0">選擇客戶：</span>
-            <Select value={selectedSiteId} onValueChange={(v) => { setSelectedSiteId(v); setActiveReportId(''); setSiteSearch(''); }}>
-              <SelectTrigger className="w-full sm:w-[280px]">
-                <SelectValue placeholder={`下拉選擇 (共 ${(sites as any[])?.length ?? 0} 個)`} />
-              </SelectTrigger>
-              {/* Solid background so long client lists don't read through the
-                  page underneath. shadcn Select defaults to bg-popover which
-                  can be semi-transparent on dark themes — force opaque. */}
-              <SelectContent className="max-h-[400px] bg-gray-900 border-white/10">
-                {[...((sites as any[]) ?? [])]
-                  // Paid clients first (isClient=true), then alphabetical within
-                  // each group. The acceptance-report page is mostly used to
-                  // pull paying clients' progress, so keeping them up top saves
-                  // scrolling on long lists.
-                  .sort((a, b) => {
-                    const aClient = a?.isClient ? 1 : 0;
-                    const bClient = b?.isClient ? 1 : 0;
-                    if (aClient !== bClient) return bClient - aClient;
-                    return (a?.name ?? '').localeCompare(b?.name ?? '', 'zh-Hant');
-                  })
-                  .map((s: any) => (
-                    <SelectItem key={s.id} value={s.id} className="focus:bg-white/10">
-                      {s.isClient && <span className="mr-1.5 text-amber-400">⭐</span>}
-                      <span className={s.isClient ? 'text-white font-medium' : 'text-gray-300'}>{s.name}</span>
-                      {s.isClient && <span className="ml-2 text-[10px] text-amber-400/80 font-mono uppercase tracking-wider">付費</span>}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <select
+              aria-label="選擇網站"
+              value={selectedSiteId}
+              disabled={sitesLoading || sites.length === 0}
+              onChange={(event) => {
+                setSelectedSiteId(event.target.value);
+                setActiveReportId('');
+                setSiteSearch('');
+              }}
+              className="h-10 w-full rounded-md border border-white/10 bg-gray-950 px-3 text-sm text-white shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60 sm:w-[320px]"
+            >
+              <option value="">
+                {sitesLoading ? '載入網站中...' : `下拉選擇（共 ${sites.length} 個）`}
+              </option>
+              <optgroup label={`自動新增網站（${siteGroups.automaticSites.length}）`}>
+                {siteGroups.automaticSites.map((site) => (
+                  <option key={site.id} value={site.id}>{site.name}</option>
+                ))}
+              </optgroup>
+              <optgroup label={`手動新增網站（${siteGroups.manualSites.length}）`}>
+                {siteGroups.manualSites.map((site) => (
+                  <option key={site.id} value={site.id}>{site.name}</option>
+                ))}
+              </optgroup>
+              <optgroup label={`標記為客戶網站（${siteGroups.clientSites.length}）`}>
+                {siteGroups.clientSites.map((site) => (
+                  <option key={site.id} value={site.id}>★ {site.name}</option>
+                ))}
+              </optgroup>
+            </select>
             <span className="text-sm text-muted-foreground">或</span>
             <div className="relative w-full min-w-0 sm:flex-1">
               <input
@@ -715,34 +733,41 @@ export default function ClientReportsPage() {
           </div>
           {siteSearch && (
             <div className="max-h-[200px] overflow-y-auto border border-white/10 rounded-md divide-y divide-white/5">
-              {(sites as any[])
-                ?.filter((s: any) => {
+              {sites
+                .filter((s) => {
                   const q = siteSearch.toLowerCase();
                   return s.name?.toLowerCase().includes(q) || s.url?.toLowerCase().includes(q);
                 })
-                // Same paid-client-first ordering as the dropdown for consistency.
-                .sort((a: any, b: any) => {
-                  const aClient = a?.isClient ? 1 : 0;
-                  const bClient = b?.isClient ? 1 : 0;
-                  if (aClient !== bClient) return bClient - aClient;
-                  return (a?.name ?? '').localeCompare(b?.name ?? '', 'zh-Hant');
+                .sort((a, b) => {
+                  const categoryOrder = (site: Site) =>
+                    site.isClient ? 0 : site.seedSource?.source === 'auto_discovery' ? 1 : 2;
+                  const categoryDifference = categoryOrder(a) - categoryOrder(b);
+                  if (categoryDifference !== 0) return categoryDifference;
+                  return a.name.localeCompare(b.name, 'zh-Hant', { sensitivity: 'base' });
                 })
                 .slice(0, 20)
-                .map((s: any) => (
+                .map((s) => (
                   <button
                     key={s.id}
                     onClick={() => { setSelectedSiteId(s.id); setSiteSearch(''); setActiveReportId(''); }}
                     className="w-full text-left px-3 py-2 hover:bg-white/5 transition-colors"
                   >
                     <p className="text-sm font-medium text-white flex items-center gap-1.5">
-                      {s.isClient && <span className="text-amber-400">⭐</span>}
                       {s.name}
-                      {s.isClient && <span className="text-[10px] text-amber-400/80 font-mono uppercase tracking-wider">付費</span>}
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        s.isClient
+                          ? 'bg-amber-500/15 text-amber-300'
+                          : s.seedSource?.source === 'auto_discovery'
+                            ? 'bg-cyan-500/15 text-cyan-300'
+                            : 'bg-white/10 text-gray-300'
+                      }`}>
+                        {siteCategoryLabel(s)}
+                      </span>
                     </p>
                     <p className="text-xs text-gray-400 truncate">{s.url}</p>
                   </button>
                 ))}
-              {(sites as any[])?.filter((s: any) => {
+              {sites.filter((s) => {
                 const q = siteSearch.toLowerCase();
                 return s.name?.toLowerCase().includes(q) || s.url?.toLowerCase().includes(q);
               }).length === 0 && (
@@ -754,7 +779,7 @@ export default function ClientReportsPage() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-muted-foreground">已選：</span>
               <Badge variant="secondary" className="text-sm">
-                {(sites as any[])?.find((s: any) => s.id === selectedSiteId)?.name}
+                {sites.find((s) => s.id === selectedSiteId)?.name}
               </Badge>
               <button onClick={() => { setSelectedSiteId(''); setActiveReportId(''); }} className="text-xs text-gray-400 hover:text-red-500">
                 ✕ 清除

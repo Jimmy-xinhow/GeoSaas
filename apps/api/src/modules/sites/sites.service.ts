@@ -145,6 +145,7 @@ export class SitesService {
       where,
       include: {
         scans: { orderBy: { createdAt: 'desc' }, take: 1, select: { totalScore: true, status: true, createdAt: true } },
+        seedSource: { select: { source: true } },
         _count: { select: { scans: true, monitors: true } },
       },
       orderBy: { createdAt: 'desc' },
