@@ -117,10 +117,22 @@ describe('SitesService', () => {
       );
     });
 
-    it('should keep admin workspace lists scoped to owned sites', async () => {
+    it('should return every site in the super-admin workspace list', async () => {
       prisma.site.findMany.mockResolvedValue([mockSite]);
 
       await service.findAll(userId, 'SUPER_ADMIN');
+
+      expect(prisma.site.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {},
+        }),
+      );
+    });
+
+    it('should keep regular admin workspace lists scoped to owned sites', async () => {
+      prisma.site.findMany.mockResolvedValue([mockSite]);
+
+      await service.findAll(userId, 'ADMIN');
 
       expect(prisma.site.findMany).toHaveBeenCalledWith(
         expect.objectContaining({

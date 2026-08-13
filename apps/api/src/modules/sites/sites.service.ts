@@ -134,7 +134,9 @@ export class SitesService {
    * findAll — respects role-based data isolation:
    * - USER: own sites only
    * - STAFF: own sites plus client-tagged sites
-   * - ADMIN/SUPER_ADMIN: own sites only; all-site management uses admin endpoints
+   * - ADMIN: own sites only
+   * - SUPER_ADMIN: all sites, so the highest platform role can inspect every
+   *   site's workspace content and reports through the standard site picker
    */
   async findAll(userId: string, userRole?: string) {
     const where: any = workspaceSiteWhere(userId, userRole);

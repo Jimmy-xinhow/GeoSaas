@@ -23,8 +23,8 @@ describe('site access helpers', () => {
     });
   });
 
-  it('keeps admin workspace dashboards scoped to owned sites', () => {
-    expect(workspaceSiteWhere('admin-1', 'SUPER_ADMIN')).toEqual({ userId: 'admin-1' });
+  it('lets the highest admin role list every site while keeping regular admins scoped', () => {
+    expect(workspaceSiteWhere('admin-1', 'SUPER_ADMIN')).toEqual({});
     expect(workspaceSiteWhere('admin-2', 'ADMIN')).toEqual({ userId: 'admin-2' });
   });
 

@@ -109,12 +109,49 @@ describe('ClientReportService acceptance query sets', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
-      site: { findUnique: jest.fn().mockResolvedValue({ id: 'site-2', isClient: false }) },
+      site: {
+        findUnique: jest.fn().mockResolvedValue(clientSite({
+          id: 'site-2',
+          isClient: false,
+          qas: [],
+        })),
+      },
     };
 
     await createService(prisma).getQuerySets('site-2');
 
     expect(prisma.clientQuerySet.create).not.toHaveBeenCalled();
+  });
+
+  it('creates a generated set for a non-client site with persisted FAQ questions', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'new-set' });
+    const persistedQuestions = qaItems.slice(0, 97);
+    const prisma = {
+      clientQuerySet: {
+        findFirst: jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        create,
+        update: jest.fn(),
+      },
+      site: {
+        findUnique: jest.fn().mockResolvedValue(clientSite({
+          id: 'site-2',
+          name: 'Knowledge-backed site',
+          isClient: false,
+          qas: persistedQuestions,
+        })),
+      },
+    };
+
+    await createService(prisma).getQuerySets('site-2');
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        siteId: 'site-2',
+        name: 'Knowledge-backed site AI 驗收問題集',
+        queries: persistedQuestions,
+      }),
+    }));
   });
 
   it('preserves an older completed report when the query set has expanded', async () => {

@@ -30,6 +30,7 @@ export function siteAccessWhere(userId: string, role?: string | null) {
 }
 
 export function workspaceSiteWhere(userId: string, role?: string | null) {
+  if (normalizeRole(role) === 'SUPER_ADMIN') return {};
   if (isStaffRole(role)) return { OR: [{ userId }, { isClient: true }] };
   return { userId };
 }

@@ -265,10 +265,10 @@ export class ClientReportService implements OnModuleInit {
   }
 
   /**
-   * Client sites need a baseline acceptance set before the first report can
-   * run. Older client records were created before ClientQuerySet became the
-   * acceptance-report source, so create it lazily from persisted brand facts
-   * and FAQ questions when the report page is first opened.
+   * Sites with persisted FAQ questions need an acceptance set before the
+   * first report can run, even when they have not been promoted to a paid
+   * client yet. Paid/client sites additionally receive the generated brand
+   * baseline so older client records remain runnable without FAQ data.
    */
   private async ensureClientQuerySet(siteId: string): Promise<void> {
     const existing = await this.prisma.clientQuerySet.findFirst({
@@ -292,9 +292,10 @@ export class ClientReportService implements OnModuleInit {
       },
     });
 
-    // Staff can inspect any site, but only paid/client sites receive an
-    // automatically generated acceptance set.
-    if (!site?.isClient) return;
+    if (!site) return;
+
+    const hasPersistedQuestions = site.qas.length > 0;
+    if (!site.isClient && !hasPersistedQuestions) return;
 
     const querySetName = `${site.name} AI 驗收問題集`;
     const existingQueries = existing && Array.isArray(existing.queries)
@@ -346,7 +347,11 @@ export class ClientReportService implements OnModuleInit {
 
     const queries = Array.from(
       new Map(
-        [...faqQuestions, ...existingQuestionItems, ...baseline]
+        [
+          ...faqQuestions,
+          ...existingQuestionItems,
+          ...(site.isClient ? baseline : []),
+        ]
           .map((query) => [query.question, query]),
       ).values(),
     ).slice(0, ACCEPTANCE_QUERY_LIMIT);
@@ -367,7 +372,7 @@ export class ClientReportService implements OnModuleInit {
         },
       });
       this.logger.log(
-        `Expanded generated acceptance query set for client site ${site.id} from ${existingQueries.length} to ${queries.length} questions`,
+        `Expanded generated acceptance query set for site ${site.id} from ${existingQueries.length} to ${queries.length} questions`,
       );
       return;
     }
@@ -388,7 +393,7 @@ export class ClientReportService implements OnModuleInit {
         contentHash: this.querySetHash(queries),
       },
     });
-    this.logger.log(`Created baseline acceptance query set for client site ${site.id} (${queries.length} questions)`);
+    this.logger.log(`Created baseline acceptance query set for site ${site.id} (${queries.length} questions)`);
   }
 
   private firstProfileValue(value: unknown): string | undefined {
