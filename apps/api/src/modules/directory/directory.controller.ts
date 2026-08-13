@@ -42,6 +42,15 @@ export class DirectoryController {
     return this.service.listDirectory(query);
   }
 
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @Get('admin/sites')
+  @ApiOperation({ summary: 'List every site for the admin workspace, including private sites' })
+  listAdminSites(@Query() query: QueryDirectoryDto) {
+    return this.service.listAdminSites(query);
+  }
+
   @Public()
   @Get('directory/leaderboard')
   @ApiOperation({ summary: 'Get top 10 sites' })

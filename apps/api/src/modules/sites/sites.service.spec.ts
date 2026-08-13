@@ -237,19 +237,29 @@ describe('SitesService', () => {
   });
 
   describe('toggleClient', () => {
-    it('requires an industry before promoting a site to client', async () => {
-      prisma.site.findUnique.mockResolvedValue({ crawlerToken: null, industry: null });
+    it('promotes a site without requiring an industry and initializes crawler tracking', async () => {
+      prisma.site.findUnique.mockResolvedValue({ crawlerToken: null });
+      prisma.site.update.mockImplementation(({ data }) => Promise.resolve({ id: siteId, ...data }));
 
-      await expect(service.toggleClient(siteId, true)).rejects.toMatchObject({
-        response: expect.objectContaining({ code: 'CLIENT_INDUSTRY_REQUIRED' }),
+      const result = await service.toggleClient(siteId, true);
+
+      expect(prisma.site.findUnique).toHaveBeenCalledWith({
+        where: { id: siteId },
+        select: { crawlerToken: true },
       });
-      expect(prisma.site.update).not.toHaveBeenCalled();
+      expect(prisma.site.update).toHaveBeenCalledWith({
+        where: { id: siteId },
+        data: {
+          isClient: true,
+          crawlerToken: expect.stringMatching(/^[a-f0-9]{48}$/),
+        },
+      });
+      expect(result.isClient).toBe(true);
     });
 
-    it('promotes an industry-classified site without replacing its crawler token', async () => {
+    it('promotes a site without replacing its crawler token', async () => {
       prisma.site.findUnique.mockResolvedValue({
         crawlerToken: 'existing-token',
-        industry: 'healthcare',
       });
       prisma.site.update.mockResolvedValue({ id: siteId, isClient: true });
 

@@ -570,6 +570,54 @@ export class DirectoryService {
     };
   }
 
+  async listAdminSites(query: QueryDirectoryDto) {
+    const { search, industry, tier, minScore, page = 1, limit = 20 } = query;
+    const skip = (page - 1) * limit;
+    const where: any = {};
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { url: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+    if (industry) where.industry = industry;
+    if (tier) where.tier = tier;
+    if (minScore !== undefined) where.bestScore = { gte: minScore };
+
+    const [items, total] = await Promise.all([
+      this.prisma.site.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          url: true,
+          industry: true,
+          tier: true,
+          bestScore: true,
+          bestScoreAt: true,
+          isPublic: true,
+          isClient: true,
+          isVerified: true,
+          verifiedAt: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.site.count({ where }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async getLeaderboard() {
     const sites = await this.prisma.site.findMany({
       where: publicSiteWhere({ isPublic: true, bestScore: { gt: 0 } }),

@@ -41,7 +41,7 @@ export default function AdminSitesPage() {
       const params = new URLSearchParams({ page: String(page), limit: '20' });
       if (search) params.set('search', search);
       if (industry) params.set('industry', industry);
-      const { data } = await apiClient.get(`/directory?${params}`);
+      const { data } = await apiClient.get(`/admin/sites?${params}`);
       return data;
     },
   });
