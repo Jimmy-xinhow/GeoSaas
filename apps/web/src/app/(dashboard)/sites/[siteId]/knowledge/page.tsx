@@ -1169,6 +1169,11 @@ function KnowledgeImportPreviewPanel({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        {!CATEGORY_MAP[focusedItem.category] && (
+                          <SelectItem value={focusedItem.category}>
+                            {focusedItem.category}
+                          </SelectItem>
+                        )}
                         {CATEGORY_OPTIONS.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}

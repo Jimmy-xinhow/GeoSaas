@@ -146,13 +146,12 @@ function worksheetXml(rows: SheetRow[]): string {
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <dimension ref="A1:D${Math.max(rows.length, 1)}"/>
   <cols>
     <col min="1" max="1" width="8" customWidth="1"/>
-    <col min="2" max="2" width="18" customWidth="1"/>
-    <col min="3" max="3" width="18" customWidth="1"/>
-    <col min="4" max="4" width="50" customWidth="1"/>
-    <col min="5" max="5" width="80" customWidth="1"/>
-    <col min="6" max="8" width="22" customWidth="1"/>
+    <col min="2" max="2" width="22" customWidth="1"/>
+    <col min="3" max="3" width="50" customWidth="1"/>
+    <col min="4" max="4" width="80" customWidth="1"/>
   </cols>
   <sheetData>${body}</sheetData>
 </worksheet>`;
@@ -183,7 +182,7 @@ function stylesXml(): string {
 function workbookXml(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets><sheet name="Knowledge Q&amp;A" sheetId="1" r:id="rId1"/></sheets>
+  <sheets><sheet name="100題FAQ" sheetId="1" r:id="rId1"/></sheets>
 </workbook>`;
 }
 
@@ -235,12 +234,6 @@ function appXml(): string {
 </Properties>`;
 }
 
-export interface KnowledgeExportSite {
-  id: string;
-  name: string;
-  url: string;
-}
-
 export interface KnowledgeExportQa {
   id: string;
   question: string;
@@ -251,36 +244,23 @@ export interface KnowledgeExportQa {
   updatedAt: Date;
 }
 
-export function buildKnowledgeXlsx(site: KnowledgeExportSite, qas: KnowledgeExportQa[]): Buffer {
+export function buildKnowledgeXlsx(qas: KnowledgeExportQa[]): Buffer {
   const createdAt = new Date();
   const rows: SheetRow[] = [
-    { cells: [{ value: 'Geovault 知識庫問答匯出', style: 1 }] },
-    { cells: [{ value: '網站名稱', style: 1 }, { value: site.name }] },
-    { cells: [{ value: '網站 URL', style: 1 }, { value: site.url }] },
-    { cells: [{ value: '匯出時間', style: 1 }, { value: formatDate(createdAt) }] },
-    { cells: [] },
     {
       cells: [
-        { value: '序號', style: 1 },
+        { value: '#', style: 1 },
         { value: '分類', style: 1 },
-        { value: '排序', style: 1 },
         { value: '問題', style: 1 },
         { value: '答案', style: 1 },
-        { value: '建立時間', style: 1 },
-        { value: '更新時間', style: 1 },
-        { value: 'QA ID', style: 1 },
       ],
     },
     ...qas.map((qa, index) => ({
       cells: [
         { value: index + 1 },
         { value: qa.category ?? '' },
-        { value: qa.sortOrder },
         { value: qa.question },
         { value: qa.answer },
-        { value: formatDate(qa.createdAt) },
-        { value: formatDate(qa.updatedAt) },
-        { value: qa.id },
       ],
     })),
   ];

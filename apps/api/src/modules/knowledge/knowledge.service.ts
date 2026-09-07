@@ -12,13 +12,17 @@ import { assertSiteAccess } from '../../common/auth/site-access';
 import { CreateQaDto } from './dto/create-qa.dto';
 import { UpdateQaDto } from './dto/update-qa.dto';
 import { buildKnowledgeXlsx } from './knowledge-xlsx.util';
-import { extractKnowledgeText, KnowledgeImportUpload } from './knowledge-import-parser';
+import {
+  extractKnowledgeText,
+  extractStructuredKnowledgeItems,
+  KnowledgeImportUpload,
+} from './knowledge-import-parser';
 
 const MAX_QA_PER_SITE = 200;
 const WEB_URL = process.env.FRONTEND_URL ?? 'https://www.geovault.app';
 const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_IMPORT_TEXT_CHARS = 60000;
-const MAX_IMPORT_ITEMS = 50;
+const MAX_IMPORT_ITEMS = 200;
 const KNOWLEDGE_IMPORT_DEDUPE_DAYS = 30;
 const KNOWLEDGE_IMPORT_LIMITS = {
   FREE: 3,
@@ -157,14 +161,7 @@ export class KnowledgeService implements OnModuleDestroy {
 
     return {
       fileName: `${this.safeFileName(site.name || 'knowledge')}-knowledge-${new Date().toISOString().slice(0, 10)}.xlsx`,
-      buffer: buildKnowledgeXlsx(
-        {
-          id: site.id,
-          name: site.name,
-          url: site.url,
-        },
-        qas,
-      ),
+      buffer: buildKnowledgeXlsx(qas),
     };
   }
 
@@ -310,8 +307,10 @@ export class KnowledgeService implements OnModuleDestroy {
   }
 
   private normalizeCategory(category?: string | null): string {
-    const normalized = (category || '').trim().toLowerCase();
-    return IMPORT_CATEGORIES.has(normalized) ? normalized : 'product';
+    const value = (category || '').trim();
+    if (!value) return 'product';
+    const normalized = value.toLowerCase();
+    return IMPORT_CATEGORIES.has(normalized) ? normalized : value.slice(0, 50);
   }
 
   private parseImportJson(raw: string): any {
@@ -351,6 +350,7 @@ export class KnowledgeService implements OnModuleDestroy {
   private sanitizeImportDraftItems(
     parsed: any,
     existingQuestions: Set<string>,
+    maxItems: number = MAX_IMPORT_ITEMS,
   ): KnowledgeImportDraftItem[] {
     const rawItems = Array.isArray(parsed) ? parsed : parsed?.items;
     if (!Array.isArray(rawItems)) return [];
@@ -378,20 +378,42 @@ export class KnowledgeService implements OnModuleDestroy {
         sourceExcerpt: sourceExcerpt ? sourceExcerpt.slice(0, 200) : undefined,
       });
 
-      if (items.length >= MAX_IMPORT_ITEMS) break;
+      if (items.length >= maxItems) break;
     }
 
     return items;
   }
 
-  private readImportDraftJson(value: unknown): { items: KnowledgeImportDraftItem[]; warnings: string[] } {
+  private readImportDraftJson(value: unknown): {
+    items: KnowledgeImportDraftItem[];
+    warnings: string[];
+    sourceMode?: string;
+  } {
     const draft = value as any;
     return {
       items: Array.isArray(draft?.items) ? draft.items : [],
       warnings: Array.isArray(draft?.warnings)
         ? draft.warnings.filter((item: unknown) => typeof item === 'string')
         : [],
+      sourceMode: typeof draft?.sourceMode === 'string' ? draft.sourceMode : undefined,
     };
+  }
+
+  private knowledgeImportAiError(error: unknown): BadRequestException {
+    const status = Number((error as any)?.status);
+    const message = String((error as any)?.message || error || 'unknown error');
+    this.logger.error(`Knowledge import AI request failed (${status || 'unknown'}): ${message}`);
+
+    if (status === 401 || /authentication|api key/i.test(message)) {
+      return new BadRequestException('AI 匯入服務驗證失敗，請聯絡管理員檢查 API Key。');
+    }
+    if (status === 429 || /rate.?limit|quota|billing|credit/i.test(message)) {
+      return new BadRequestException('AI 匯入服務目前額度不足或請求過多，請稍後再試。');
+    }
+    if (/context|token|too large|maximum/i.test(message)) {
+      return new BadRequestException('檔案內容過多，請改用「分類、問題、答案」欄位的 Excel 格式匯入。');
+    }
+    return new BadRequestException('AI 檔案分析暫時失敗，請稍後再試。');
   }
 
   private async assertImportQuota(userId: string, role?: string): Promise<void> {
@@ -454,6 +476,21 @@ export class KnowledgeService implements OnModuleDestroy {
       throw new BadRequestException('檔案過大，單次匯入上限為 10MB。');
     }
 
+    let extracted;
+    let structuredImport;
+    try {
+      extracted = extractKnowledgeText(file);
+      structuredImport = extractStructuredKnowledgeItems(file);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : '檔案解析失敗。');
+    }
+
+    const sourceText = extracted.text.trim();
+    if (!sourceText) {
+      throw new BadRequestException('檔案內沒有可讀文字，請換成 TXT、MD、CSV、JSON、DOCX 或 XLSX。');
+    }
+
+    const sourceMode = structuredImport ? 'structured-xlsx-v1' : 'ai-v1';
     const fileHash = createHash('sha256').update(file.buffer).digest('hex');
     const dedupeAfter = new Date();
     dedupeAfter.setDate(dedupeAfter.getDate() - KNOWLEDGE_IMPORT_DEDUPE_DAYS);
@@ -469,64 +506,87 @@ export class KnowledgeService implements OnModuleDestroy {
     });
     if (cachedJob?.draftJson) {
       const draft = this.readImportDraftJson(cachedJob.draftJson);
-      return {
-        jobId: cachedJob.id,
-        reused: true,
-        quota: await this.getImportQuota(userId, role),
-        file: {
-          name: cachedJob.fileName,
-          size: cachedJob.byteSize,
-          mimeType: cachedJob.mimeType,
-          extractedChars: cachedJob.extractedChars,
-        },
-        items: draft.items,
-        warnings: draft.warnings,
-      };
+      if (draft.sourceMode === sourceMode) {
+        return {
+          jobId: cachedJob.id,
+          reused: true,
+          quota: await this.getImportQuota(userId, role),
+          file: {
+            name: cachedJob.fileName,
+            size: cachedJob.byteSize,
+            mimeType: cachedJob.mimeType,
+            extractedChars: cachedJob.extractedChars,
+          },
+          items: draft.items,
+          warnings: draft.warnings,
+        };
+      }
     }
-
-    await this.assertImportQuota(userId, role);
-    if (!this.openai) {
-      throw new BadRequestException('AI 匯入尚未設定 OPENAI_API_KEY。');
-    }
-
-    let extracted;
-    try {
-      extracted = extractKnowledgeText(file);
-    } catch (err) {
-      throw new BadRequestException(err instanceof Error ? err.message : '檔案解析失敗。');
-    }
-
-    const sourceText = extracted.text.trim();
-    if (!sourceText) {
-      throw new BadRequestException('檔案內沒有可讀文字，請換成 TXT、MD、CSV、JSON、DOCX 或 XLSX。');
-    }
-    const truncatedText =
-      sourceText.length > MAX_IMPORT_TEXT_CHARS
-        ? `${sourceText.slice(0, MAX_IMPORT_TEXT_CHARS)}\n\n[TRUNCATED]`
-        : sourceText;
 
     const existing = await this.prisma.siteQa.findMany({
       where: { siteId },
       select: { question: true },
     });
     const existingQuestions = new Set(existing.map((item) => this.normalizeQuestion(item.question)));
-    const profile = (site as any).profile ?? {};
-    const model = this.config.get<string>('KNOWLEDGE_IMPORT_AI_MODEL') || 'gpt-4o-mini';
+    const remainingCapacity = Math.max(0, MAX_QA_PER_SITE - existing.length);
+    if (remainingCapacity === 0) {
+      throw new BadRequestException(`知識庫已達 ${MAX_QA_PER_SITE} 筆上限，請先刪除不需要的問答。`);
+    }
 
-    const response = await this.openai.chat.completions.create({
-      model,
-      temperature: 0.2,
-      max_tokens: 4096,
-      response_format: { type: 'json_object' },
-      messages: [
+    let items: KnowledgeImportDraftItem[];
+    let warnings: string[];
+    let countsTowardQuota: boolean;
+
+    if (structuredImport) {
+      const structuredItems = this.sanitizeImportDraftItems(
         {
-          role: 'system',
-          content:
-            'You extract public brand/product knowledge into concise Traditional Chinese Q&A. Only use facts present in the uploaded text. Return strict JSON.',
+          items: structuredImport.items.map((item) => ({
+            question: item.question,
+            answer: item.answer,
+            category: item.category,
+            confidence: 1,
+            sourceExcerpt: `Excel 第 ${item.rowNumber} 列`,
+          })),
         },
-        {
-          role: 'user',
-          content: `請把以下客戶提供的檔案內容整理成可匯入知識庫的 Q&A 草稿。
+        existingQuestions,
+      );
+      items = structuredItems.slice(0, remainingCapacity);
+      warnings = [...structuredImport.warnings];
+      if (structuredItems.length > remainingCapacity) {
+        warnings.push(
+          `知識庫目前剩餘 ${remainingCapacity} 筆空間，已從 ${structuredItems.length} 筆新資料中載入前 ${remainingCapacity} 筆。`,
+        );
+      }
+      countsTowardQuota = false;
+    } else {
+      await this.assertImportQuota(userId, role);
+      if (!this.openai) {
+        throw new BadRequestException('AI 匯入尚未設定 OPENAI_API_KEY。');
+      }
+
+      const truncatedText =
+        sourceText.length > MAX_IMPORT_TEXT_CHARS
+          ? `${sourceText.slice(0, MAX_IMPORT_TEXT_CHARS)}\n\n[TRUNCATED]`
+          : sourceText;
+      const profile = (site as any).profile ?? {};
+      const model = this.config.get<string>('KNOWLEDGE_IMPORT_AI_MODEL') || 'gpt-4o-mini';
+
+      let response;
+      try {
+        response = await this.openai.chat.completions.create({
+          model,
+          temperature: 0.2,
+          max_tokens: 4096,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You extract public brand/product knowledge into concise Traditional Chinese Q&A. Only use facts present in the uploaded text. Return strict JSON.',
+            },
+            {
+              role: 'user',
+              content: `請把以下客戶提供的檔案內容整理成可匯入知識庫的 Q&A 草稿。
 
 限制：
 - 只使用檔案內明確出現的資訊，不要編造。
@@ -565,26 +625,31 @@ ${existing.map((item) => `- ${item.question}`).join('\n') || '(none)'}
 
 檔案內容（${extracted.sourceType}）：
 ${truncatedText}`,
-        },
-      ],
-    });
+            },
+          ],
+        });
+      } catch (err) {
+        throw this.knowledgeImportAiError(err);
+      }
 
-    const rawText = response.choices[0]?.message?.content || '{"items":[]}';
-    const parsed = this.parseImportJson(rawText);
-    const items = this.sanitizeImportDraftItems(parsed, existingQuestions);
-    const aiWarnings = Array.isArray(parsed?.warnings)
-      ? parsed.warnings.filter((item: unknown) => typeof item === 'string')
-      : [];
-    const warnings = [
-      ...extracted.warnings,
-      ...(sourceText.length > MAX_IMPORT_TEXT_CHARS
-        ? [`Only the first ${MAX_IMPORT_TEXT_CHARS} characters were analyzed.`]
-        : []),
-      ...aiWarnings,
-    ];
+      const rawText = response.choices[0]?.message?.content || '{"items":[]}';
+      const parsed = this.parseImportJson(rawText);
+      items = this.sanitizeImportDraftItems(parsed, existingQuestions, remainingCapacity);
+      const aiWarnings = Array.isArray(parsed?.warnings)
+        ? parsed.warnings.filter((item: unknown) => typeof item === 'string')
+        : [];
+      warnings = [
+        ...extracted.warnings,
+        ...(sourceText.length > MAX_IMPORT_TEXT_CHARS
+          ? [`只分析檔案前 ${MAX_IMPORT_TEXT_CHARS} 個字元。`]
+          : []),
+        ...aiWarnings,
+      ];
+      countsTowardQuota = true;
+    }
 
     if (items.length === 0) {
-      throw new BadRequestException('AI 沒有從檔案中整理出可匯入的 Q&A，請確認檔案內容是否包含商品或品牌資訊。');
+      throw new BadRequestException('檔案中沒有可匯入的新 Q&A，請確認問題與答案欄位，或檢查內容是否已存在。');
     }
 
     const job = await this.prisma.knowledgeImportJob.create({
@@ -597,9 +662,9 @@ ${truncatedText}`,
         byteSize: file.size || file.buffer.length,
         extractedChars: Math.min(sourceText.length, MAX_IMPORT_TEXT_CHARS),
         generatedCount: items.length,
-        countsTowardQuota: true,
+        countsTowardQuota,
         status: 'previewed',
-        draftJson: { items, warnings } as unknown as Prisma.InputJsonValue,
+        draftJson: { sourceMode, items, warnings } as unknown as Prisma.InputJsonValue,
       },
     });
 

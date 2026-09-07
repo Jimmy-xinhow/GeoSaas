@@ -35,7 +35,7 @@ export class CommitKnowledgeImportDto {
   @ApiProperty({ type: [CommitKnowledgeImportItemDto] })
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(50)
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => CommitKnowledgeImportItemDto)
   items: CommitKnowledgeImportItemDto[];

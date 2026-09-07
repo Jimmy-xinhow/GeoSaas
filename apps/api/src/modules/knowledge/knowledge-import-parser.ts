@@ -13,6 +13,18 @@ export interface ExtractedKnowledgeText {
   warnings: string[];
 }
 
+export interface StructuredKnowledgeItem {
+  question: string;
+  answer: string;
+  category?: string;
+  rowNumber: number;
+}
+
+export interface StructuredKnowledgeImport {
+  items: StructuredKnowledgeItem[];
+  warnings: string[];
+}
+
 interface ZipEntry {
   name: string;
   method: number;
@@ -130,7 +142,21 @@ function cellValue(cellXml: string, sharedStrings: string[]): string {
   return decodeXmlEntities(rawValue);
 }
 
-function extractXlsxText(buffer: Buffer): string {
+interface XlsxRow {
+  rowNumber: number;
+  cells: string[];
+}
+
+function columnIndexFromCellRef(cellRef: string): number {
+  const letters = cellRef.match(/^[A-Z]+/i)?.[0]?.toUpperCase() ?? '';
+  let index = 0;
+  for (const letter of letters) {
+    index = index * 26 + letter.charCodeAt(0) - 64;
+  }
+  return Math.max(0, index - 1);
+}
+
+function extractXlsxRows(buffer: Buffer): XlsxRow[] {
   const files = readZipEntries(buffer);
   const sharedStrings = files.get('xl/sharedStrings.xml')
     ? extractSharedStrings(files.get('xl/sharedStrings.xml')!.toString('utf8'))
@@ -140,19 +166,88 @@ function extractXlsxText(buffer: Buffer): string {
     .sort();
   if (sheetNames.length === 0) throw new Error('XLSX worksheet data was not found.');
 
-  const lines: string[] = [];
+  const parsedRows: XlsxRow[] = [];
   for (const sheetName of sheetNames) {
     const xml = files.get(sheetName)!.toString('utf8');
     const rows = xml.match(/<row\b[\s\S]*?<\/row>/g) ?? [];
     for (const row of rows) {
-      const cells = (row.match(/<c\b[\s\S]*?<\/c>/g) ?? [])
-        .map((cell) => cellValue(cell, sharedStrings))
-        .map((value) => value.trim())
-        .filter(Boolean);
-      if (cells.length > 0) lines.push(cells.join(' | '));
+      const rowNumber = Number(row.match(/\br="(\d+)"/)?.[1] ?? parsedRows.length + 1);
+      const cells: string[] = [];
+      const cellMatches = row.match(/<c\b[\s\S]*?<\/c>|<c\b[^>]*\/>/g) ?? [];
+      for (const cell of cellMatches) {
+        const cellRef = cell.match(/\br="([A-Z]+\d+)"/i)?.[1];
+        const columnIndex = cellRef ? columnIndexFromCellRef(cellRef) : cells.length;
+        cells[columnIndex] = cellValue(cell, sharedStrings).trim();
+      }
+      if (cells.some(Boolean)) parsedRows.push({ rowNumber, cells });
     }
   }
-  return lines.join('\n');
+  return parsedRows;
+}
+
+function extractXlsxText(buffer: Buffer): string {
+  return extractXlsxRows(buffer)
+    .map((row) => row.cells.filter(Boolean).join(' | '))
+    .filter(Boolean)
+    .join('\n');
+}
+
+function normalizeHeader(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_-]+/g, '');
+}
+
+function findHeaderIndex(row: string[], aliases: Set<string>): number {
+  return row.findIndex((value) => aliases.has(normalizeHeader(value || '')));
+}
+
+export function extractStructuredKnowledgeItems(
+  file: KnowledgeImportUpload,
+): StructuredKnowledgeImport | null {
+  if (extensionOf(file.originalname) !== '.xlsx') return null;
+
+  const rows = extractXlsxRows(file.buffer);
+  const questionHeaders = new Set(['問題', 'question', 'q']);
+  const answerHeaders = new Set(['答案', 'answer', 'a']);
+  const categoryHeaders = new Set(['分類', '類別', 'category']);
+
+  for (let headerOffset = 0; headerOffset < Math.min(rows.length, 25); headerOffset += 1) {
+    const header = rows[headerOffset];
+    const questionIndex = findHeaderIndex(header.cells, questionHeaders);
+    const answerIndex = findHeaderIndex(header.cells, answerHeaders);
+    if (questionIndex < 0 || answerIndex < 0) continue;
+
+    const categoryIndex = findHeaderIndex(header.cells, categoryHeaders);
+    const items: StructuredKnowledgeItem[] = [];
+    const incompleteRows: number[] = [];
+
+    for (const row of rows.slice(headerOffset + 1)) {
+      const question = String(row.cells[questionIndex] ?? '').trim();
+      const answer = String(row.cells[answerIndex] ?? '').trim();
+      const category = categoryIndex >= 0
+        ? String(row.cells[categoryIndex] ?? '').trim()
+        : '';
+
+      if (!question && !answer && !category) continue;
+      if (!question || !answer) {
+        incompleteRows.push(row.rowNumber);
+        continue;
+      }
+
+      items.push({
+        question,
+        answer,
+        category: category || undefined,
+        rowNumber: row.rowNumber,
+      });
+    }
+
+    const warnings = incompleteRows.length > 0
+      ? [`已略過 ${incompleteRows.length} 筆缺少問題或答案的資料（列：${incompleteRows.slice(0, 10).join('、')}）。`]
+      : [];
+    return { items, warnings };
+  }
+
+  return null;
 }
 
 function decodeText(buffer: Buffer): string {
