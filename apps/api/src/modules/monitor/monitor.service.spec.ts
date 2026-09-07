@@ -180,11 +180,23 @@ describe('MonitorService', () => {
       expect(result.queries).toHaveLength(0);
     });
 
-    it('should keep admin dashboard monitors scoped to owned sites', async () => {
+    it('should return every site in the super-admin dashboard', async () => {
       prisma.site.findMany.mockResolvedValue([]);
       prisma.monitor.findMany.mockResolvedValue([]);
 
       await service.getDashboard('admin-1', 'SUPER_ADMIN');
+
+      expect(prisma.site.findMany).toHaveBeenCalledWith({
+        where: {},
+        select: { id: true },
+      });
+    });
+
+    it('should keep regular admin dashboard monitors scoped to owned sites', async () => {
+      prisma.site.findMany.mockResolvedValue([]);
+      prisma.monitor.findMany.mockResolvedValue([]);
+
+      await service.getDashboard('admin-1', 'ADMIN');
 
       expect(prisma.site.findMany).toHaveBeenCalledWith({
         where: { userId: 'admin-1' },
