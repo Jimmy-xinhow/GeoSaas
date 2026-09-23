@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Patch, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Patch, Post, Param, Body, UseGuards, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CronManagerService } from './cron-manager.service';
@@ -98,6 +98,8 @@ function classifyTask(task: {
 @Roles('ADMIN', 'SUPER_ADMIN')
 @Controller('admin/scheduler')
 export class SchedulerController {
+  private readonly logger = new Logger(SchedulerController.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cronManager: CronManagerService,
@@ -246,7 +248,10 @@ export class SchedulerController {
         },
       })),
       limit(() => this.legacyReplacement.getStatus(20)),
-    ]);
+    ]).catch((error: unknown) => {
+      this.logger.error('Content automation health queries failed', error instanceof Error ? error.stack : String(error));
+      throw error;
+    });
 
     const legacyGenerationEnabled = isLegacyGeoGenerationEnabled(
       process.env.LEGACY_GEO_BULK_ENABLED,
