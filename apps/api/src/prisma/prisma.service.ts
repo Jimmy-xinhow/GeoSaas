@@ -14,7 +14,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    super();
+    // The API and Neon are in different regions. Prisma's default five-second
+    // connection timeout can expire while Neon wakes or opens a pooled socket.
+    // Preserve an explicitly configured timeout and leave non-Neon URLs alone.
+    const databaseUrl = process.env.DATABASE_URL;
+    let prismaOptions: Prisma.PrismaClientOptions = {};
+    if (databaseUrl) {
+      const url = new URL(databaseUrl);
+      if (url.hostname.endsWith('.neon.tech') && !url.searchParams.has('connect_timeout')) {
+        url.searchParams.set('connect_timeout', '15');
+        prismaOptions = { datasources: { db: { url: url.toString() } } };
+      }
+    }
+    super(prismaOptions);
     this.$use(async (params, next) => {
       if (params.model !== 'BlogArticle') return next(params);
 
