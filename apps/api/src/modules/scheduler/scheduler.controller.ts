@@ -300,7 +300,7 @@ export class SchedulerController {
         })
       : [];
     const actualToday = todayDayType && expectedToday.length > 0
-      ? await this.prisma.blogArticle.count({
+      ? (await this.prisma.blogArticle.findMany({
           where: {
             templateType: 'client_daily',
             published: true,
@@ -308,7 +308,9 @@ export class SchedulerController {
             targetKeywords: { has: todayDayType },
             siteId: { in: expectedToday.map((site) => site.id) },
           },
-        })
+          select: { siteId: true },
+          distinct: ['siteId'],
+        })).length
       : 0;
 
     const nonIndexablePublishedSamples = publishedArticleSamples.filter((article) => {
@@ -429,9 +431,9 @@ export class SchedulerController {
     });
 
     const clientDailyStatus: AutomationStatus =
-      todayDayType && expectedToday.length > 0 && actualToday === 0
+      todayDayType && expectedToday.length > 0 && actualToday < expectedToday.length
         ? 'critical'
-        : clientDailyUnpublishedRecent > 0 || clientDailyQualityRecentFailed > 0
+        : clientDailyUnpublishedRecent > 0
           ? 'warning'
           : 'healthy';
 
@@ -445,10 +447,10 @@ export class SchedulerController {
       lastRunAt: null,
       nextRunAt: null,
       lastResult: null,
-      evidence: `今日應產出 ${expectedToday.length} 篇，已公開 ${actualToday} 篇；近 7 天 client_daily ${clientDailyRecent} 篇，新增未公開 ${clientDailyUnpublishedRecent} 篇、品質拒絕 ${clientDailyQualityRecentFailed} 次；歷史未公開草稿 ${clientDailyUnpublished} 篇`,
+      evidence: `今日應產出 ${expectedToday.length} 篇，已公開 ${actualToday} 篇；近 7 天 client_daily ${clientDailyRecent} 篇，新增未公開 ${clientDailyUnpublishedRecent} 篇、品質閘門拒絕 ${clientDailyQualityRecentFailed} 次（嘗試次數，非未交付篇數）；歷史未公開草稿 ${clientDailyUnpublished} 篇`,
       action: clientDailyStatus === 'critical'
         ? '手動執行 client_daily_content 並檢查 ArticleQualityLog 失敗原因'
-        : clientDailyUnpublishedRecent > 0 || clientDailyQualityRecentFailed > 0
+        : clientDailyUnpublishedRecent > 0
           ? '到「為您發布的內容」審查可公開文章，或修正被擋原因'
           : '正常',
     });
