@@ -207,7 +207,7 @@ export default function AdminContentAutomationPage() {
   const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['admin', 'content-automation-health'],
     queryFn: async () => {
-      const res = await apiClient.get<AutomationHealth>('/admin/scheduler/automation-health', { timeout: 15000 });
+      const res = await apiClient.get<AutomationHealth>('/admin/scheduler/automation-health', { timeout: 30000 });
       return res.data;
     },
     retry: 1,
