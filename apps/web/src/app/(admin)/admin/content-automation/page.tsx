@@ -204,13 +204,14 @@ function formatDate(value: string | null) {
 
 export default function AdminContentAutomationPage() {
   const queryClient = useQueryClient();
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['admin', 'content-automation-health'],
     queryFn: async () => {
       const res = await apiClient.get<AutomationHealth>('/admin/scheduler/automation-health');
       return res.data;
     },
-    refetchInterval: 30000,
+    retry: 1,
+    refetchInterval: (query) => query.state.status === 'success' ? 30000 : false,
   });
   const { data: seoOpportunities = [], isFetching: isFetchingSeo } = useQuery({
     queryKey: ['admin', 'seo-opportunities', 28],
@@ -218,6 +219,7 @@ export default function AdminContentAutomationPage() {
       const res = await apiClient.get<SeoOpportunity[]>('/admin/analytics/opportunities?days=28');
       return res.data;
     },
+    enabled: Boolean(data),
     refetchInterval: 300000,
   });
   const { data: analyticsStatus, isFetching: isFetchingAnalytics } = useQuery({
@@ -226,6 +228,7 @@ export default function AdminContentAutomationPage() {
       const res = await apiClient.get<AnalyticsStatus>('/admin/analytics/status');
       return res.data;
     },
+    enabled: Boolean(data),
     refetchInterval: 300000,
   });
 
@@ -245,11 +248,26 @@ export default function AdminContentAutomationPage() {
     },
   });
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-red-500 border-t-transparent" />
       </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <Card className="border-red-400/30">
+        <CardContent className="flex flex-col items-start gap-3 p-6">
+          <p className="font-medium text-white">內容自動化狀態暫時無法載入</p>
+          <p className="text-sm text-gray-400">伺服器讀取失敗，請重新檢查。</p>
+          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+            重新檢查
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 

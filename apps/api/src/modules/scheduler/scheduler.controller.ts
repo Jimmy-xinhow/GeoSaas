@@ -23,6 +23,7 @@ import {
   LEGACY_REPLACEMENT_APPLY_ENV,
   LegacyContentReplacementService,
 } from '../blog-article/legacy-content-replacement.service';
+import pLimit from '../../common/utils/p-limit';
 
 type AutomationStatus = 'healthy' | 'warning' | 'critical';
 
@@ -119,6 +120,9 @@ export class SchedulerController {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
     const todayDayType = clientDailyDayTypeForDate(now);
+    // This page also loads analytics. Keep its many independent health queries
+    // from occupying the whole Prisma pool at once.
+    const limit = pLimit(3);
 
     const [
       tasks,
@@ -139,11 +143,11 @@ export class SchedulerController {
       qualityGatedPublished,
       legacyReplacementStatus,
     ] = await Promise.all([
-      this.prisma.scheduledTask.findMany({
+      limit(() => this.prisma.scheduledTask.findMany({
         where: { taskKey: { in: CONTENT_TASK_KEYS } },
         orderBy: { taskKey: 'asc' },
-      }),
-      this.prisma.site.findMany({
+      })),
+      limit(() => this.prisma.site.findMany({
         where: { isClient: true, isPublic: true },
         select: {
           id: true,
@@ -151,14 +155,14 @@ export class SchedulerController {
           profile: true,
           user: { select: { plan: true, role: true } },
         },
-      }),
-      this.prisma.blogArticle.count({ where: { templateType: 'client_daily' } }),
-      this.prisma.blogArticle.count({ where: { templateType: 'client_daily', published: true } }),
-      this.prisma.blogArticle.count({ where: { templateType: 'client_daily', published: false } }),
-      this.prisma.blogArticle.count({
+      })),
+      limit(() => this.prisma.blogArticle.count({ where: { templateType: 'client_daily' } })),
+      limit(() => this.prisma.blogArticle.count({ where: { templateType: 'client_daily', published: true } })),
+      limit(() => this.prisma.blogArticle.count({ where: { templateType: 'client_daily', published: false } })),
+      limit(() => this.prisma.blogArticle.count({
         where: { templateType: 'client_daily', createdAt: { gte: sevenDaysAgo } },
-      }),
-      this.prisma.articleQualityLog.count({
+      })),
+      limit(() => this.prisma.articleQualityLog.count({
         where: {
           passed: false,
           createdAt: { gte: sevenDaysAgo },
@@ -169,11 +173,11 @@ export class SchedulerController {
             { templateType: { startsWith: 'buyer_guide' } },
           ],
         },
-      }),
-      this.prisma.blogArticle.count({
+      })),
+      limit(() => this.prisma.blogArticle.count({
         where: publicIndexableBlogArticleWhere({ published: true }),
-      }),
-      this.prisma.blogArticle.findMany({
+      })),
+      limit(() => this.prisma.blogArticle.findMany({
         where: { published: true },
         orderBy: { createdAt: 'desc' },
         take: 500,
@@ -187,14 +191,14 @@ export class SchedulerController {
           createdAt: true,
           site: { select: { name: true, url: true, industry: true, isPublic: true } },
         },
-      }),
+      })),
       Promise.all([
-        this.prisma.seedSource.count(),
-        this.prisma.seedSource.count({ where: { status: 'pending' } }),
-        this.prisma.seedSource.count({ where: { status: 'failed' } }),
-        this.prisma.seedSource.count({ where: { status: 'scanned' } }),
+        limit(() => this.prisma.seedSource.count()),
+        limit(() => this.prisma.seedSource.count({ where: { status: 'pending' } })),
+        limit(() => this.prisma.seedSource.count({ where: { status: 'failed' } })),
+        limit(() => this.prisma.seedSource.count({ where: { status: 'scanned' } })),
       ]),
-      this.prisma.site.count({
+      limit(() => this.prisma.site.count({
         where: {
           isPublic: true,
           isClient: false,
@@ -202,14 +206,14 @@ export class SchedulerController {
           user: { is: { email: 'system@geovault.local' } },
           seedSource: { is: { status: 'scanned' } },
         },
-      }),
-      this.prisma.crawlerVisit.count({
+      })),
+      limit(() => this.prisma.crawlerVisit.count({
         where: { isSeeded: false, visitedAt: { gte: new Date(now.getTime() - 86400000) } },
-      }),
-      this.prisma.crawlerVisit.count({
+      })),
+      limit(() => this.prisma.crawlerVisit.count({
         where: { isSeeded: false, visitedAt: { gte: sevenDaysAgo } },
-      }),
-      this.prisma.crawlerVisit.findMany({
+      })),
+      limit(() => this.prisma.crawlerVisit.findMany({
         where: {
           isSeeded: false,
           visitedAt: { gte: thirtyDaysAgo },
@@ -225,8 +229,8 @@ export class SchedulerController {
           botOrg: true,
           visitedAt: true,
         },
-      }),
-      this.prisma.blogArticle.groupBy({
+      })),
+      limit(() => this.prisma.blogArticle.groupBy({
         by: ['templateType'],
         where: {
           published: true,
@@ -234,14 +238,14 @@ export class SchedulerController {
           templateType: { in: [...LEGACY_GEO_TEMPLATE_TYPES] },
         },
         _count: { _all: true },
-      }),
-      this.prisma.blogArticle.count({
+      })),
+      limit(() => this.prisma.blogArticle.count({
         where: {
           published: true,
           templateType: { in: [...QUALITY_GATED_TEMPLATE_TYPES] },
         },
-      }),
-      this.legacyReplacement.getStatus(20),
+      })),
+      limit(() => this.legacyReplacement.getStatus(20)),
     ]);
 
     const legacyGenerationEnabled = isLegacyGeoGenerationEnabled(
