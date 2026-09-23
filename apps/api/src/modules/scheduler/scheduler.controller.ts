@@ -132,8 +132,10 @@ export class SchedulerController {
       clientDailyTotal,
       clientDailyPublished,
       clientDailyUnpublished,
+      clientDailyUnpublishedRecent,
       clientDailyRecent,
       qualityRecentFailed,
+      clientDailyQualityRecentFailed,
       indexableArticles,
       publishedArticleSamples,
       seedCounts,
@@ -162,6 +164,9 @@ export class SchedulerController {
       limit(() => this.prisma.blogArticle.count({ where: { templateType: 'client_daily', published: true } })),
       limit(() => this.prisma.blogArticle.count({ where: { templateType: 'client_daily', published: false } })),
       limit(() => this.prisma.blogArticle.count({
+        where: { templateType: 'client_daily', published: false, createdAt: { gte: sevenDaysAgo } },
+      })),
+      limit(() => this.prisma.blogArticle.count({
         where: { templateType: 'client_daily', createdAt: { gte: sevenDaysAgo } },
       })),
       limit(() => this.prisma.articleQualityLog.count({
@@ -174,6 +179,13 @@ export class SchedulerController {
             { templateType: { startsWith: 'industry_top10' } },
             { templateType: { startsWith: 'buyer_guide' } },
           ],
+        },
+      })),
+      limit(() => this.prisma.articleQualityLog.count({
+        where: {
+          passed: false,
+          createdAt: { gte: sevenDaysAgo },
+          templateType: { startsWith: 'client_daily' },
         },
       })),
       limit(() => this.prisma.blogArticle.count({
@@ -256,6 +268,7 @@ export class SchedulerController {
     const legacyGenerationEnabled = isLegacyGeoGenerationEnabled(
       process.env.LEGACY_GEO_BULK_ENABLED,
     );
+    const industryEnrichmentEnabled = process.env.DISCOVERY_ENRICH_ENABLED === '1';
     const legacyReplacementApplyEnabled =
       process.env[LEGACY_REPLACEMENT_APPLY_ENV] === '1';
     const legacyByTemplateType = Object.fromEntries(
@@ -376,21 +389,28 @@ export class SchedulerController {
 
     const rows = tasks.map((task) => {
       const isLegacyGenerationTask = ['blog_bulk_generation', 'auto_fill_articles'].includes(task.taskKey);
+      const isSafelyDisabledIndustryEnrichment = task.taskKey === 'enrich_industry_content'
+        && !industryEnrichmentEnabled && !task.enabled;
       const status: AutomationStatus = isLegacyGenerationTask && !legacyGenerationEnabled
         ? 'healthy'
+        : isSafelyDisabledIndustryEnrichment
+          ? 'healthy'
         : classifyTask(task, now);
       return {
         key: task.taskKey,
         name: TASK_LABELS[task.taskKey] ?? task.name ?? task.taskKey,
         area: 'scheduler',
         status,
-        enabled: isLegacyGenerationTask && !legacyGenerationEnabled ? false : task.enabled,
+        enabled: (isLegacyGenerationTask && !legacyGenerationEnabled) || isSafelyDisabledIndustryEnrichment
+          ? false : task.enabled,
         cronExpr: task.cronExpr,
         lastRunAt: task.lastRunAt,
         nextRunAt: task.nextRunAt,
         lastResult: task.lastResult,
         evidence: isLegacyGenerationTask && !legacyGenerationEnabled
           ? '舊型 GEO 補文已由系統開關凍結，不會影響客戶每週文章'
+          : isSafelyDisabledIndustryEnrichment
+            ? '產業 Q&A 生成缺少品牌事實與引用來源品質閘門，排程已安全停用'
           : task.lastResult?.startsWith('error:')
           ? task.lastResult
           : task.lastRunAt
@@ -398,6 +418,8 @@ export class SchedulerController {
             : '尚無執行紀錄',
         action: isLegacyGenerationTask && !legacyGenerationEnabled
           ? '維持凍結；改由 brand_profile、FAQ 與 client_daily 品質管線產出'
+          : isSafelyDisabledIndustryEnrichment
+            ? '維持停用；使用已通過品質閘門的知識庫 Q&A 補齊'
           : status === 'critical'
           ? '檢查排程是否停用或執行錯誤，可在排程管理手動執行'
           : status === 'warning'
@@ -409,7 +431,7 @@ export class SchedulerController {
     const clientDailyStatus: AutomationStatus =
       todayDayType && expectedToday.length > 0 && actualToday === 0
         ? 'critical'
-        : clientDailyUnpublished > 0 || qualityRecentFailed > 0
+        : clientDailyUnpublishedRecent > 0 || clientDailyQualityRecentFailed > 0
           ? 'warning'
           : 'healthy';
 
@@ -423,10 +445,10 @@ export class SchedulerController {
       lastRunAt: null,
       nextRunAt: null,
       lastResult: null,
-      evidence: `今日應產出 ${expectedToday.length} 篇，已公開 ${actualToday} 篇；近 7 天 client_daily ${clientDailyRecent} 篇，未公開 ${clientDailyUnpublished} 篇`,
+      evidence: `今日應產出 ${expectedToday.length} 篇，已公開 ${actualToday} 篇；近 7 天 client_daily ${clientDailyRecent} 篇，新增未公開 ${clientDailyUnpublishedRecent} 篇、品質拒絕 ${clientDailyQualityRecentFailed} 次；歷史未公開草稿 ${clientDailyUnpublished} 篇`,
       action: clientDailyStatus === 'critical'
         ? '手動執行 client_daily_content 並檢查 ArticleQualityLog 失敗原因'
-        : clientDailyUnpublished > 0
+        : clientDailyUnpublishedRecent > 0 || clientDailyQualityRecentFailed > 0
           ? '到「為您發布的內容」審查可公開文章，或修正被擋原因'
           : '正常',
     });
@@ -485,7 +507,8 @@ export class SchedulerController {
       key: 'legacy_replacement_progress',
       name: '舊型 GEO 文章替換進度',
       area: 'content-migration',
-      status: legacyReplacementStatus.legacyPublishedWithoutReplacement > 0 ? 'warning' : 'healthy',
+      status: !legacyReplacementApplyEnabled || legacyReplacementStatus.demotionPending > 0
+        || legacyReplacementStatus.aliasBackfillPending > 0 ? 'warning' : 'healthy',
       enabled: legacyReplacementApplyEnabled,
       cronExpr: '30 7 * * *',
       lastRunAt: null,
@@ -494,9 +517,9 @@ export class SchedulerController {
       evidence: `自動套用${legacyReplacementApplyEnabled ? '已開啟' : '仍為預演'}；可立即安全替換 ${legacyReplacementStatus.legacyPublishedWithReplacement} 篇；尚缺 brand_profile 的舊文 ${legacyReplacementStatus.legacyPublishedWithoutReplacement} 篇`,
       action: !legacyReplacementApplyEnabled
         ? `先用 Admin API 套用 5 個網站並驗證舊網址，再設定 ${LEGACY_REPLACEMENT_APPLY_ENV}=1`
-        : legacyReplacementStatus.legacyPublishedWithoutReplacement > 0
-          ? '持續執行 brand_profile_rollout；只有通過 CRG 才會轉移舊網址並下架舊文'
-          : '正常',
+        : legacyReplacementStatus.demotionPending > 0 || legacyReplacementStatus.aliasBackfillPending > 0
+          ? '執行安全替換批次並驗證舊網址導向'
+          : '替換排程運作中；尚缺替代文章的舊文由 brand_profile_rollout 持續補齊並通過 CRG',
     });
 
     rows.push({

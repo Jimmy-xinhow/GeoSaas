@@ -401,6 +401,7 @@ export class SeedService {
     threshold: number;
     matched: number;
     quarantined: number;
+    retiredArticles: number;
     dryRun: boolean;
     sampleSiteIds: string[];
   }> {
@@ -421,6 +422,7 @@ export class SeedService {
         threshold: this.publicSeedScoreThreshold,
         matched: candidates.length,
         quarantined: 0,
+        retiredArticles: 0,
         dryRun,
         sampleSiteIds,
       };
@@ -430,7 +432,23 @@ export class SeedService {
       where: { id: { in: candidates.map((site) => site.id) }, isPublic: true },
       data: { isPublic: false },
     });
+    let retiredArticles = 0;
     if (result.count > 0) {
+      // Hidden seed sites must not leave articles marked as published. Keep
+      // slugs and article rows for audit and possible later restoration.
+      const retired = await this.prisma.blogArticle.updateMany({
+        where: {
+          siteId: { in: candidates.map((site) => site.id) },
+          published: true,
+          site: { is: { isPublic: false } },
+        },
+        data: {
+          published: false,
+          retiredAt: new Date(),
+          retirementReason: 'seed_quarantined',
+        },
+      });
+      retiredArticles = retired.count;
       const cacheLimit = pLimit(10);
       await Promise.all(
         candidates.map((site) => cacheLimit(() => this.badgeService.invalidateSvgBadge(site.id))),
@@ -438,12 +456,13 @@ export class SeedService {
       await this.llmsHosting.invalidatePlatformLlmsFull();
     }
     this.logger.log(
-      `Quarantined ${result.count}/${candidates.length} low-quality public auto-discovery sites below ${this.publicSeedScoreThreshold}/100`,
+      `Quarantined ${result.count}/${candidates.length} low-quality public auto-discovery sites below ${this.publicSeedScoreThreshold}/100; retired ${retiredArticles} linked articles`,
     );
     return {
       threshold: this.publicSeedScoreThreshold,
       matched: candidates.length,
       quarantined: result.count,
+      retiredArticles,
       dryRun: false,
       sampleSiteIds,
     };

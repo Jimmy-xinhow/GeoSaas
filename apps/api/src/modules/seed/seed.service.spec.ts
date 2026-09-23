@@ -6,6 +6,7 @@ describe('SeedService quarantine', () => {
       findMany: jest.fn(),
       updateMany: jest.fn(),
     },
+    blogArticle: { updateMany: jest.fn() },
   };
   const badgeService = { invalidateSvgBadge: jest.fn() };
   const llmsHosting = { invalidatePlatformLlmsFull: jest.fn() };
@@ -40,6 +41,7 @@ describe('SeedService quarantine', () => {
       select: { id: true },
     });
     expect(prisma.site.updateMany).not.toHaveBeenCalled();
+    expect(prisma.blogArticle.updateMany).not.toHaveBeenCalled();
     expect(badgeService.invalidateSvgBadge).not.toHaveBeenCalled();
     expect(llmsHosting.invalidatePlatformLlmsFull).not.toHaveBeenCalled();
     expect(result).toMatchObject({ matched: 2, quarantined: 0, dryRun: true });
@@ -48,6 +50,7 @@ describe('SeedService quarantine', () => {
   it('updates only the exact candidate IDs found by the guarded query', async () => {
     prisma.site.findMany.mockResolvedValue([{ id: 'site-1' }, { id: 'site-2' }]);
     prisma.site.updateMany.mockResolvedValue({ count: 2 });
+    prisma.blogArticle.updateMany.mockResolvedValue({ count: 3 });
 
     const result = await service.quarantineLowQualityPublicSeeds(false);
 
@@ -56,9 +59,21 @@ describe('SeedService quarantine', () => {
       data: { isPublic: false },
     });
     expect(badgeService.invalidateSvgBadge).toHaveBeenCalledTimes(2);
+    expect(prisma.blogArticle.updateMany).toHaveBeenCalledWith({
+      where: {
+        siteId: { in: ['site-1', 'site-2'] },
+        published: true,
+        site: { is: { isPublic: false } },
+      },
+      data: {
+        published: false,
+        retiredAt: expect.any(Date),
+        retirementReason: 'seed_quarantined',
+      },
+    });
     expect(badgeService.invalidateSvgBadge).toHaveBeenCalledWith('site-1');
     expect(badgeService.invalidateSvgBadge).toHaveBeenCalledWith('site-2');
     expect(llmsHosting.invalidatePlatformLlmsFull).toHaveBeenCalledTimes(1);
-    expect(result).toMatchObject({ matched: 2, quarantined: 2, dryRun: false });
+    expect(result).toMatchObject({ matched: 2, quarantined: 2, retiredArticles: 3, dryRun: false });
   });
 });

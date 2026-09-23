@@ -104,7 +104,7 @@ const DEFAULT_TASKS: Array<{
     name: '產業內容自動擴充',
     description: '每天從網路抓取產業評論/討論，AI 生成 Q&A 擴充知識庫',
     cronExpr: '0 5 * * *',
-    enabled: true,
+    enabled: false,
   },
   {
     taskKey: 'auto_fill_qa',
